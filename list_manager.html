@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- ▼ タイトルを更新 -->
-    <title>作品リスト管理 (v2.4)</title>
+    <!-- ▼ タイトルとバージョンを更新 -->
+    <title>作品リスト管理 (v2.5)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -48,6 +48,7 @@
         #works-table th {
             cursor: pointer;
             user-select: none;
+            white-space: nowrap; /* Prevent header text wrapping */
         }
         #works-table th:hover .sort-icon {
             opacity: 1;
@@ -58,10 +59,23 @@
         }
         .sort-icon.asc { transform: rotate(0deg); }
         .sort-icon.desc { transform: rotate(180deg); }
-        #works-table { font-size: 0.8rem; }
-        @media (min-width: 768px) {
+        /* ▼ スマホでのレイアウト調整 ▼ */
+        #works-table { font-size: 0.75rem; /* Slightly smaller base font */ }
+        #works-table td, #works-table th { padding: 0.5rem; /* Smaller padding */ }
+        .col-image img { width: 2.5rem; height: 2.5rem; /* Smaller image */ }
+        .col-actions button { width: 1.75rem; height: 1.75rem; /* Smaller buttons */ }
+        .col-actions button i { font-size: 0.75rem; }
+        /* Columns that benefit from nowrap */
+        .col-registeredAt, .col-lastSelectedAt, .col-selectionCount, .col-rating { white-space: nowrap; }
+        /* ▲ スマホでのレイアウト調整 ▲ */
+        @media (min-width: 768px) { /* md breakpoint and up */
             #works-table { font-size: 0.875rem; }
+            #works-table td, #works-table th { padding: 0.75rem; }
+            .col-image img { width: 3rem; height: 3rem; }
+            .col-actions button { width: 2rem; height: 2rem; }
+            .col-actions button i { font-size: 0.875rem; }
         }
+
 
         /* Inline Rating Stars */
         .inline-rating .fa-star {
@@ -120,15 +134,14 @@
         .image-compare-box img {
             max-width: 100%;
             max-height: 200px;
-            object-fit: contain;
+            object-fit: contain; /* Changed from cover */
             border-radius: 0.25rem;
         }
         .border-red-500 { border-color: #ef4444; }
 
-        /* ▼▼▼ サイトバッジCSS (index.html から移植・追加) ▼▼▼ */
         .site-badge {
             position: absolute;
-            top: 2px; /* p-3 のpadding(12px)を考慮し調整 */
+            top: 2px;
             left: 2px;
             height: 16px;
             line-height: 16px;
@@ -149,16 +162,15 @@
             font-weight: 800;
             border-radius: 4px;
             margin-right: 6px;
-            vertical-align: middle; /* テキストと高さを合わせる */
+            vertical-align: middle;
         }
-        /* ▲▲▲ サイトバッジCSS (index.html から移植・追加) ▲▲▲ */
 
     </style>
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans antialiased">
 
     <!-- ▼ バージョンを更新 -->
-    <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]">v2.4-manager</div>
+    <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]">v2.5-manager</div>
 
     <div id="debug-banner" class="hidden bg-amber-600 text-black text-center py-1 font-bold text-sm sticky top-0 z-[60]">
           デバッグモード実行中 - データは保存されません
@@ -349,7 +361,7 @@
                         </thead>
                         <tbody id="works-table-body" class="divide-y divide-gray-700">
                             <!-- JS will render rows here -->
-                            <tr><td colspan="10" class="p-8 text-center text-gray-500">データを読み込み中...</td></tr>
+                            <tr><td colspan="11" class="p-8 text-center text-gray-500">データを読み込み中...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -494,7 +506,7 @@
         const DEFAULT_APP_ID = 'r18-random-selector';
         const appId = typeof __app_id !== 'undefined' ? __app_id : DEFAULT_APP_ID;
         // ▼ バージョンを更新
-        const appVersion = 'v2.4-manager';
+        const appVersion = 'v2.5-manager';
         const MASTER_PASSWORD = '07143674';
         $('#version-display').textContent = appVersion;
 
@@ -549,7 +561,8 @@
             itemsPerPage: 50,
         };
         let selectedWorkIds = new Set();
-        let visibleColumns = new Set(['name', 'rating', 'actions']); // Default for mobile
+        // ▼ スマホ用のデフォルト表示列を調整
+        let visibleColumns = new Set(['image', 'name', 'rating', 'actions']);
 
         // --- UI Elements ---
         const loadingOverlay = $('#loading-overlay');
@@ -633,7 +646,12 @@
 
         const escapeHTML = (str) => {
             if (typeof str !== 'string') return '';
-            return str.replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            // Only escape necessary characters for HTML attributes/text
+            return str.replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;')
+                      .replace(/"/g, '&quot;')
+                      .replace(/'/g, '&#39;');
         };
 
         const isValidDate = (dateString) => {
@@ -661,7 +679,7 @@
         const showConfirm = (title, message) => {
             return new Promise((resolve) => {
                 confirmTitle.textContent = title;
-                confirmMessage.innerHTML = message;
+                confirmMessage.innerHTML = message; // Use innerHTML for <br>
                 confirmModal.classList.remove('hidden');
 
                 const okHandler = () => {
@@ -692,6 +710,7 @@
                 options.hour = '2-digit';
                 options.minute = '2-digit';
             }
+            // Use ja-JP locale for consistent formatting
             return new Intl.DateTimeFormat('ja-JP', options).format(date);
         };
 
@@ -714,12 +733,17 @@
         };
 
         const getContrastColor = (hex) => {
-            if (!hex) return '#FFFFFF';
-            const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
-            return (r * 0.299 + g * 0.587 + b * 0.114) > 186 ? '#000000' : '#FFFFFF';
+            if (!hex || hex.length < 7) return '#FFFFFF'; // Handle invalid hex
+            try {
+                const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+                // Formula to determine brightness
+                return (r * 0.299 + g * 0.587 + b * 0.114) > 186 ? '#000000' : '#FFFFFF';
+            } catch (e) {
+                console.error("Error parsing color:", hex, e);
+                return '#FFFFFF'; // Default to white on error
+            }
         };
 
-        // --- ▼▼▼ サイトバッジ用関数 (index.html から移植) ▼▼▼ ---
         const getSiteBadgeHTML = (url, isInline = false) => {
             if (!url) return '';
             let site = '';
@@ -742,7 +766,6 @@
                 return `<span class="site-badge ${classes}">${site}</span>`;
             }
         };
-        // --- ▲▲▲ サイトバッジ用関数 (index.html から移植) ▲▲▲ ---
 
         // --- Loading Timeout Logic ---
 
@@ -777,13 +800,13 @@
 
         const startLoadingTimeout = () => {
             clearTimeout(loadingTimeout);
-            loadingTimeout = setTimeout(() => handleLoadingTimeout(false), 30000);
+            loadingTimeout = setTimeout(() => handleLoadingTimeout(false), 30000); // 30 seconds
         };
 
         const handleDataFetchError = (error, type) => {
              if (isLoadComplete) return;
              console.error(`Error fetching ${type}: `, error);
-             clearTimeout(loadingTimeout);
+             clearTimeout(loadingTimeout); // Stop timeout on definite error
              clearTimeout(stallTimeout);
 
              loadingText.classList.add('hidden');
@@ -811,47 +834,53 @@
 
         // --- Generic Modal Management ---
         const openModal = (title, contentHtml, onOpen = null, options = {}) => {
-            checkModalDirtyState = () => false;
+            checkModalDirtyState = () => false; // Reset dirty check for any new modal
             const { size = 'max-w-2xl' } = options;
 
-            modalContainer.classList.remove('max-w-2xl', 'max-w-4xl', 'max-w-5xl');
-            modalContainer.classList.add(size);
+            // Ensure previous modal state is cleared if needed (e.g., charts)
+            // (Code for chart destruction could go here if applicable)
+
+            modalContainer.classList.remove('max-w-2xl', 'max-w-4xl', 'max-w-5xl'); // Remove all size classes
+            modalContainer.classList.add(size); // Add the specified size
 
             modalTitle.textContent = title;
             modalContentHost.innerHTML = contentHtml;
-            initializeDateInputs(modalContentHost);
+            initializeDateInputs(modalContentHost); // Initialize any date inputs within the new content
             modalBackdrop.classList.remove('hidden');
             modalWrapper.classList.remove('hidden');
 
             setTimeout(() => {
                 modalBackdrop.classList.add('opacity-100');
                 modalContainer.classList.remove('scale-95', 'opacity-0');
-                modalContainer.classList.add('modal-open');
-                if (onOpen) onOpen();
+                modalContainer.classList.add('modal-open'); // Add class for animation
+                if (onOpen) onOpen(); // Execute callback after modal is visually open
 
-                const firstFocusable = modalContentHost.querySelector('input, select, button');
+                // Set focus to the first interactive element
+                const firstFocusable = modalContentHost.querySelector('input:not([disabled]), select:not([disabled]), button:not([disabled]), a[href]');
                 if (firstFocusable) {
-                    setTimeout(() => firstFocusable.focus(), 100);
+                    setTimeout(() => firstFocusable.focus(), 100); // Small delay might be needed
                 }
-            }, 10);
+            }, 10); // Small delay to allow CSS transitions
         };
 
         const closeModal = async () => {
-            if (checkModalDirtyState()) {
+             // Check if there are unsaved changes
+             if (checkModalDirtyState()) {
                 const confirmed = await showConfirm("未保存の変更", "変更が保存されていません。本当に閉じますか？");
-                if (!confirmed) return;
+                if (!confirmed) return; // If user cancels, do nothing
             }
-            checkModalDirtyState = () => false;
+            checkModalDirtyState = () => false; // Reset dirty check function
 
             modalContainer.classList.add('scale-95', 'opacity-0');
-            modalContainer.classList.remove('modal-open');
+            modalContainer.classList.remove('modal-open'); // Remove animation class
             modalBackdrop.classList.remove('opacity-100');
 
             setTimeout(() => {
                 modalBackdrop.classList.add('hidden');
                 modalWrapper.classList.add('hidden');
-                modalContentHost.innerHTML = '';
-            }, 300);
+                modalContentHost.innerHTML = ''; // Clear content after fade out
+                // (Code for chart destruction could go here if applicable)
+            }, 300); // Wait for animation duration
         };
 
         // --- Loading / Auth ---
@@ -872,8 +901,8 @@
                 setTimeout(() => {
                     loadingOverlay.classList.add('opacity-0');
                     appContainer.classList.remove('opacity-0');
-                    setTimeout(() => loadingOverlay.classList.add('hidden'), 500);
-                }, 500);
+                    setTimeout(() => loadingOverlay.classList.add('hidden'), 500); // Remove overlay after fade
+                }, 500); // Delay after text change
             }
         };
 
@@ -897,18 +926,22 @@
         const setupAuthObserver = () => {
             onAuthStateChanged(auth, user => {
                 if (user) {
+                    // User is signed in (anonymously or otherwise)
                     if (!loadingStatus.auth) {
                         currentUser = user;
                         loadingStatus.auth = true;
-                        clearTimeout(stallTimeout);
-                        stallTimeout = setTimeout(() => handleLoadingTimeout(true), 15000);
+                        console.log("Auth state confirmed:", user.uid);
+                        clearTimeout(stallTimeout); // Reset stall timeout as auth succeeded
+                        stallTimeout = setTimeout(() => handleLoadingTimeout(true), 15000); // Start stall check for data
                         checkLoadingComplete();
-                        setupSyncId();
+                        setupSyncId(); // Proceed to setup sync ID
                     }
                 } else {
+                    // User is signed out, try signing in anonymously
+                    console.log("No user found, attempting anonymous sign-in...");
                     signInAnonymously(auth).catch(error => handleDataFetchError(error, '匿名認証'));
                 }
-            }, error => handleDataFetchError(error, '認証状態監視'));
+            }, error => handleDataFetchError(error, '認証状態監視')); // Handle observer errors
         };
 
         // --- Data Sync Logic ---
@@ -923,55 +956,85 @@
         };
 
         const loadDataSet = (newSyncId) => {
+            // Prevent redundant loads, but allow reload if loading wasn't complete
             if (syncId === newSyncId && isLoadComplete) return;
 
+            console.log("Loading dataset for syncId:", newSyncId);
             syncId = newSyncId;
             syncIdDisplay.value = syncId;
             localStorage.setItem('r18_sync_id', newSyncId);
 
+            // Unsubscribe from previous listeners
             unsubscribeWorks();
             unsubscribeTags();
-            works = [];
+            works = []; // Clear local data
             tags = [];
-            renderAll();
+            // Reset loading status for data
+            loadingStatus.works = false;
+            loadingStatus.tags = false;
+            isLoadComplete = false; // Reset completion flag
+            startLoadingTimeout(); // Restart loading timeout for the new dataset
 
+            renderAll(); // Initial render (will show loading/empty state)
+
+            // Subscribe to new data if not in debug mode
             if (currentUser && syncId && !isDebugMode) {
+                console.log("Subscribing to Firestore data...");
                 subscribeToWorks();
                 subscribeToTags();
             } else if (isDebugMode) {
+                // If entering debug mode, simulate loading completion
+                console.log("Debug mode: Simulating data load.");
                 loadingStatus = { auth: true, works: true, tags: true };
-                checkLoadingComplete();
+                checkLoadingComplete(); // Mark as loaded immediately
+            } else {
+                 console.log("Conditions not met for Firestore subscription (currentUser:", !!currentUser, "syncId:", syncId, "isDebugMode:", isDebugMode, ")");
             }
         };
 
         const updateSyncIdHistory = (newId) => {
             let history = JSON.parse(localStorage.getItem('r18_sync_id_history') || '[]');
+            // Add ID to history if it's new
             if (newId && !history.includes(newId)) {
                 history.unshift(newId);
-                history = history.slice(0, 10);
+                history = history.slice(0, 10); // Keep only the last 10 IDs
                 localStorage.setItem('r18_sync_id_history', JSON.stringify(history));
             }
-            renderSyncIdHistory();
+            renderSyncIdHistory(); // Update the dropdown
         };
 
         const renderSyncIdHistory = () => {
             const history = JSON.parse(localStorage.getItem('r18_sync_id_history') || '[]');
             syncIdHistoryEl.innerHTML = '<option value="">履歴から選択...</option>' +
                 history.map(id => `<option value="${id}">${id}</option>`).join('');
+            // Ensure the current syncId is selected if it's in the history
+             if (history.includes(syncId)) {
+                 syncIdHistoryEl.value = syncId;
+             } else {
+                 syncIdHistoryEl.value = ""; // Default to placeholder if not in history
+             }
         };
 
         const generateRandomId = (length = 16) => {
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
             let result = '';
-            for (let i = 0; i < length; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+            for (let i = 0; i < length; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
             return result;
         };
 
         const subscribeToWorks = () => {
-            if (isDebugMode) return;
+            if (isDebugMode || !syncId) return; // Don't subscribe if in debug or no syncId
             let isFirstLoad = true;
             const worksRef = collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`);
+            console.log("Setting up works listener for path:", worksRef.path);
+
             unsubscribeWorks = onSnapshot(worksRef, (snapshot) => {
+                console.log(`Works snapshot received (${snapshot.docChanges().length} changes)`);
+                clearTimeout(stallTimeout); // Reset stall timer on data arrival
+                stallTimeout = setTimeout(() => handleLoadingTimeout(true), 15000); // Re-start stall timer
+
                 const workChanges = snapshot.docChanges();
                 workChanges.forEach(change => {
                     const data = { id: change.doc.id, ...change.doc.data() };
@@ -982,52 +1045,79 @@
                     if (change.type === "removed") { if (index > -1) works.splice(index, 1); }
                 });
 
+                 // Sort works after applying changes initially
+                 works.sort((a, b) => (b.registeredAt?.toMillis() || 0) - (a.registeredAt?.toMillis() || 0));
+
+
                 if (isFirstLoad) {
                     isFirstLoad = false;
                     loadingStatus.works = true;
+                    console.log("Initial works load complete.");
                     checkLoadingComplete();
                 }
-                renderAll();
+                renderAll(); // Re-render the UI with updated data
             }, error => handleDataFetchError(error, '作品'));
         };
 
         const subscribeToTags = () => {
-            if (isDebugMode) return;
+            if (isDebugMode || !syncId) return; // Don't subscribe if in debug or no syncId
             let isFirstLoad = true;
             const tagsRef = collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/tags`);
+             console.log("Setting up tags listener for path:", tagsRef.path);
+
             unsubscribeTags = onSnapshot(tagsRef, (snapshot) => {
+                 console.log(`Tags snapshot received (${snapshot.docs.length} tags total)`);
+                 clearTimeout(stallTimeout); // Reset stall timer
+                 stallTimeout = setTimeout(() => handleLoadingTimeout(true), 15000); // Re-start stall timer
+
                 tags = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                  if (isFirstLoad) {
                     isFirstLoad = false;
                     loadingStatus.tags = true;
+                     console.log("Initial tags load complete.");
                     checkLoadingComplete();
                  }
-                 renderAll();
-                 if ($('#filter-tags-display')) renderActiveTagFilters();
+                 renderAll(); // Re-render UI
+                 // If a tag modal is open, refresh its list
+                 if ($('#tag-list')) $('#tag-list').dispatchEvent(new Event('refresh-tags', {bubbles:true}));
+                 if ($('#filter-tags-display')) renderActiveTagFilters(); // Update filter display
             }, error => handleDataFetchError(error, 'タグ'));
         };
 
         // --- Image Processing ---
         const processImage = (file) => {
             return new Promise((resolve, reject) => {
+                if (!file) return reject(new Error("ファイルが選択されていません。"));
                 if (file.size > 900 * 1024) return reject(new Error("ファイルサイズが900KBを超えています。"));
+
                 const reader = new FileReader();
                 reader.onload = e => {
                     const img = new Image();
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
-                        const MAX_SIZE = 512;
+                        const MAX_SIZE = 512; // Max width/height
                         let { width, height } = img;
+
                         if (width > height) {
-                            if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+                            if (width > MAX_SIZE) {
+                                height *= MAX_SIZE / width;
+                                width = MAX_SIZE;
+                            }
                         } else {
-                            if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+                            if (height > MAX_SIZE) {
+                                width *= MAX_SIZE / height;
+                                height = MAX_SIZE;
+                            }
                         }
                         canvas.width = width;
                         canvas.height = height;
-                        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // Convert to JPEG with quality 0.8
                         resolve(canvas.toDataURL('image/jpeg', 0.8));
                     };
+                    img.onerror = () => reject(new Error("画像の読み込みに失敗しました。"));
                     img.src = e.target.result;
                 };
                 reader.onerror = error => reject(error);
@@ -1042,42 +1132,54 @@
                 return false;
             }
             const name = newWorkData.name.trim();
-            if (!name) return showToast("作品名は必須です。", "error");
+            if (!name) {
+                showToast("作品名は必須です。", "error");
+                return false; // Return false on validation failure
+            }
+            // Check for duplicates (case-insensitive)
             if (works.some(w => w.name.toLowerCase() === name.toLowerCase())) {
-                if (!await showConfirm("重複警告", `"${name}" は既に存在します。登録を続けますか？`)) return false;
+                if (!await showConfirm("重複警告", `"${escapeHTML(name)}" は既に存在します。登録を続けますか？`)) {
+                    return false; // Return false if user cancels
+                }
             }
             try {
                 const worksRef = collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`);
-                await setDoc(doc(worksRef), newWorkData);
-                showToast(`"${name}" を登録しました。`);
-                return true;
+                // Use addDoc to let Firestore generate the ID
+                const docRef = await addDoc(worksRef, newWorkData);
+                console.log("Work added with ID:", docRef.id);
+                showToast(`"${escapeHTML(name)}" を登録しました。`);
+                return true; // Indicate success
             } catch (error) {
                 console.error("Error adding work: ", error);
                 showToast("作品の登録に失敗しました。", "error");
-                return false;
+                return false; // Indicate failure
             }
         };
 
         const updateWork = async (workId, updatedData) => {
             if (isDebugMode) {
+                // In debug mode, just update the local array
                 const index = works.findIndex(w => w.id === workId);
                 if (index > -1) {
+                    // Merge existing data with updated data
                     works[index] = { ...works[index], ...updatedData };
-                    renderAll();
+                    renderAll(); // Re-render UI to reflect changes
                     showToast("デバッグモード: 作品情報をローカルで更新しました。");
                     return true;
                 }
                 showToast("デバッグモード: 更新対象の作品が見つかりません。", "error");
                 return false;
             }
+            // Normal mode: Update Firestore
             try {
                 const workRef = doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, workId);
                 await updateDoc(workRef, updatedData);
-                return true;
+                // No toast here, onSnapshot will trigger re-render and implicitly confirm success
+                return true; // Indicate success
             } catch (error) {
                 console.error("Error updating work:", error);
                 showToast("作品の更新に失敗しました。", "error");
-                return false;
+                return false; // Indicate failure
             }
         };
 
@@ -1086,11 +1188,15 @@
                 showToast("デバッグモード中は作品を削除できません。", "error");
                 return;
             }
-            if (!await showConfirm("作品の削除", `「${workName}」を本当に削除しますか？<br>この操作は取り消せません。`)) return;
+            // Ask for confirmation before deleting
+            if (!await showConfirm("作品の削除", `「${escapeHTML(workName)}」を本当に削除しますか？<br>この操作は取り消せません。`)) {
+                return; // User cancelled
+            }
             try {
                 await deleteDoc(doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, workId));
-                showToast(`「${workName}」を削除しました。`);
-                selectedWorkIds.delete(workId);
+                showToast(`「${escapeHTML(workName)}」を削除しました。`);
+                selectedWorkIds.delete(workId); // Remove from selection if it was selected
+                // No need to call renderAll, onSnapshot will handle UI update
             } catch (error) {
                 console.error("Error deleting work: ", error);
                 showToast("作品の削除に失敗しました。", "error");
@@ -1103,8 +1209,11 @@
                 return;
             }
             const count = selectedWorkIds.size;
-            if (count === 0) return;
-            if (!await showConfirm("一括削除", `${count}件の作品を本当に削除しますか？<br>この操作は取り消せません。`)) return;
+            if (count === 0) return; // Nothing selected
+
+            if (!await showConfirm("一括削除", `${count}件の作品を本当に削除しますか？<br>この操作は取り消せません。`)) {
+                return; // User cancelled
+            }
 
             try {
                 const batch = writeBatch(db);
@@ -1114,7 +1223,8 @@
                 });
                 await batch.commit();
                 showToast(`${count}件の作品を削除しました。`);
-                selectedWorkIds.clear();
+                selectedWorkIds.clear(); // Clear the selection set
+                // No need to call renderAll, onSnapshot handles UI update
             } catch (error) {
                 console.error("Error bulk deleting works:", error);
                 showToast("一括削除に失敗しました。", "error");
@@ -1125,39 +1235,46 @@
 
         const renderAll = () => {
             updateFilteredAndSortedWorks();
-            renderTable();
+            renderTable(); // This now calls updateColumnVisibility
             renderPagination();
-            renderActionButtons();
-            // ▼ updateColumnVisibilityはrenderTable内で呼び出されるため不要
+            renderActionButtons(); // Handles bulk actions bar and select-all checkbox state
+            renderActiveTagFilters(); // Update the filter tags display below the filter panel
         };
 
         const updateFilteredAndSortedWorks = () => {
             let tempWorks = [...works];
 
             // 1. Filter
+            // Name Search
             if (listFilters.search) {
                 const searchLower = listFilters.search.toLowerCase();
                 tempWorks = tempWorks.filter(w => w.name.toLowerCase().includes(searchLower));
             }
+            // Genre
             if (listFilters.genres.size > 0) {
                 tempWorks = tempWorks.filter(w => listFilters.genres.has(w.genre));
             }
+            // Unrated Only
             if (listFilters.unrated) {
                 tempWorks = tempWorks.filter(w => !w.rating || w.rating === 0);
-            } else if (listFilters.ratingVal > 0) {
-                const val = listFilters.ratingVal;
-                if (listFilters.ratingOp === 'gte') tempWorks = tempWorks.filter(w => w.rating >= val);
-                else if (listFilters.ratingOp === 'lte') tempWorks = tempWorks.filter(w => w.rating <= val && w.rating > 0);
-                else if (listFilters.ratingOp === 'eq') tempWorks = tempWorks.filter(w => w.rating === val);
             }
+            // Rating Value/Operator (only if unrated is false)
+            else if (listFilters.ratingVal > 0) {
+                const val = listFilters.ratingVal;
+                if (listFilters.ratingOp === 'gte') tempWorks = tempWorks.filter(w => (w.rating || 0) >= val);
+                else if (listFilters.ratingOp === 'lte') tempWorks = tempWorks.filter(w => (w.rating || 0) <= val && (w.rating || 0) > 0); // Exclude 0 unless explicitly searching for 0
+                else if (listFilters.ratingOp === 'eq') tempWorks = tempWorks.filter(w => (w.rating || 0) === val);
+            }
+            // Date Range
             if (listFilters.dateStart && isValidDate(listFilters.dateStart)) {
-                const start = new Date(listFilters.dateStart); start.setHours(0,0,0,0);
+                const start = new Date(listFilters.dateStart.replace(/\//g, '-')); start.setHours(0,0,0,0);
                 tempWorks = tempWorks.filter(w => w.registeredAt && w.registeredAt.toDate() >= start);
             }
             if (listFilters.dateEnd && isValidDate(listFilters.dateEnd)) {
-                const end = new Date(listFilters.dateEnd); end.setHours(23,59,59,999);
+                const end = new Date(listFilters.dateEnd.replace(/\//g, '-')); end.setHours(23,59,59,999);
                 tempWorks = tempWorks.filter(w => w.registeredAt && w.registeredAt.toDate() <= end);
             }
+            // Tags
             if (listFilters.andTagIds.size > 0) {
                 tempWorks = tempWorks.filter(w => w.tagIds && [...listFilters.andTagIds].every(tid => w.tagIds.includes(tid)));
             }
@@ -1174,125 +1291,122 @@
                 const aVal = a[sortState.by];
                 const bVal = b[sortState.by];
 
+                // Handle sorting different types
                 if (sortState.by === 'name' || sortState.by === 'genre') {
+                    // LocaleCompare for strings (Japanese sensitive)
                     return (aVal || '').localeCompare(bVal || '', 'ja') * order;
                 }
                 if (sortState.by === 'registeredAt' || sortState.by === 'lastSelectedAt') {
+                    // Compare Firestore Timestamps by milliseconds
                     return ((aVal?.toMillis() || 0) - (bVal?.toMillis() || 0)) * order;
                 }
                 if (sortState.by === 'rating' || sortState.by === 'selectionCount') {
+                    // Compare numbers (defaulting null/undefined to 0)
                     return ((aVal || 0) - (bVal || 0)) * order;
                 }
-                return 0;
+                return 0; // Default: no change
             });
 
             // 3. Update state
             displayedWorks = tempWorks;
             workCountDisplay.textContent = `${displayedWorks.length} / ${works.length} 作品`;
 
+            // Adjust current page if it becomes invalid after filtering
             const totalPages = Math.ceil(displayedWorks.length / paginationState.itemsPerPage);
             if (paginationState.currentPage > totalPages && totalPages > 0) {
                 paginationState.currentPage = totalPages;
             } else if (totalPages === 0) {
-                paginationState.currentPage = 1;
+                 paginationState.currentPage = 1; // Reset to page 1 if no results
             }
         };
 
         const renderTable = () => {
+            // Update sort icons in table header
             worksTableHead.querySelectorAll('th[data-sort]').forEach(th => {
                 const icon = th.querySelector('.sort-icon');
+                if (!icon) return; // Skip if no icon found
                 if (th.dataset.sort === sortState.by) {
                     icon.style.opacity = '1';
-                    icon.className = `fas fa-sort-down sort-icon ${sortState.order}`;
+                    icon.className = `fas fa-sort-down sort-icon ${sortState.order}`; // Correctly set asc/desc class
                 } else {
                     icon.style.opacity = '0.3';
-                    icon.className = 'fas fa-sort-down sort-icon';
+                    icon.className = 'fas fa-sort-down sort-icon'; // Reset class
                 }
             });
 
+            // Calculate pagination bounds
             const { currentPage, itemsPerPage } = paginationState;
             const start = (currentPage - 1) * itemsPerPage;
             const end = start + itemsPerPage;
-            paginatedWorks = displayedWorks.slice(start, end);
+            paginatedWorks = displayedWorks.slice(start, end); // Get works for the current page
 
+            // Render table body
             if (paginatedWorks.length === 0) {
                 const colCount = worksTableHead.querySelectorAll('th').length;
                 worksTableBody.innerHTML = `<tr><td colspan="${colCount}" class="p-8 text-center text-gray-500">${works.length === 0 ? '作品が登録されていません。' : '条件に一致する作品がありません。'}</td></tr>`;
-                return;
+            } else {
+                worksTableBody.innerHTML = paginatedWorks.map(work => {
+                    const workTags = (work.tagIds || []).map(id => tags.find(t => t.id === id)).filter(Boolean);
+                    const safeName = escapeHTML(work.name); // Escape name for attribute and display
+                    const rating = work.rating || 0;
+                    const badgeImageHTML = getSiteBadgeHTML(work.sourceUrl, false);
+                    const badgeInlineHTML = getSiteBadgeHTML(work.sourceUrl, true);
+
+                    const MAX_TAGS_VISIBLE = 4; // Max tags before showing "+N"
+                    const tagsHtml = workTags.slice(0, MAX_TAGS_VISIBLE).map(t =>
+                        `<span class="tag-pill tag-pill-sm" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${escapeHTML(t.name)}</span>`
+                    ).join('');
+                    const moreTagsHtml = workTags.length > MAX_TAGS_VISIBLE
+                        ? `<span class="tag-pill tag-pill-sm tag-pill-more">+${workTags.length - MAX_TAGS_VISIBLE}</span>`
+                        : '';
+
+                    // ▼▼▼ コピーボタンを追加 ▼▼▼
+                    return `
+                        <tr class="hover:bg-gray-700/50 transition-colors" data-id="${work.id}">
+                            <td class="p-2 sm:p-3"><input type="checkbox" data-id="${work.id}" class="row-checkbox h-4 w-4 rounded bg-gray-600 text-teal-500 border-gray-500 focus:ring-teal-600" ${selectedWorkIds.has(work.id) ? 'checked' : ''}></td>
+                            <td class="p-2 sm:p-3 col-image relative" data-col="image">
+                                ${badgeImageHTML}
+                                <img src="${work.imageUrl || 'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${safeName}" class="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded-md">
+                            </td>
+                            <td class="p-2 sm:p-3 col-name" data-col="name">
+                                <div class="flex items-center gap-2 max-w-xs md:max-w-sm lg:max-w-md xl:max-w-lg min-w-0">
+                                    ${badgeInlineHTML}
+                                    <span class="font-medium truncate flex-grow">${safeName}</span>
+                                    <button data-action="copy-title" data-title="${safeName}" class="flex-shrink-0 w-6 h-6 text-gray-400 hover:text-white transition-colors" title="タイトルをコピー"><i class="fas fa-copy text-xs"></i></button>
+                                </div>
+                            </td>
+                            {/* ▲▲▲ コピーボタンを追加 ▲▲▲ */}
+                            <td class="p-2 sm:p-3 col-genre" data-col="genre">${work.genre || 'N/A'}</td>
+                            <td class="p-2 sm:p-3 col-registeredAt" data-col="registeredAt">${formatDate(work.registeredAt, false)}</td>
+                            <td class="p-2 sm:p-3 col-rating inline-rating text-lg" data-col="rating" data-id="${work.id}">
+                                ${[1,2,3,4,5].map(i => `<i class="fa-star ${i <= rating ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('')}
+                            </td>
+                            <td class="p-2 sm:p-3 col-tags max-w-xs" data-col="tags">
+                                <div class="flex flex-wrap">
+                                    ${tagsHtml}${moreTagsHtml}
+                                </div>
+                            </td>
+                            <td class="p-2 sm:p-3 col-lastSelectedAt" data-col="lastSelectedAt">
+                                ${formatDate(work.lastSelectedAt, true)}
+                            </td>
+                            <td class="p-2 sm:p-3 col-selectionCount text-center" data-col="selectionCount">
+                                ${work.selectionCount || 0}
+                            </td>
+                            <td class="p-2 sm:p-3 col-sourceUrl" data-col="sourceUrl">
+                                ${work.sourceUrl ? `<a href="${work.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-teal-400 hover:text-teal-300"><i class="fas fa-external-link-alt"></i></a>` : ''}
+                            </td>
+                            <td class="p-2 sm:p-3 col-actions" data-col="actions">
+                                <div class="flex gap-2">
+                                    <button data-action="edit" data-id="${work.id}" class="w-7 h-7 sm:w-8 sm:h-8 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center text-white" title="編集"><i class="fas fa-pencil-alt text-xs sm:text-sm"></i></button>
+                                    <button data-action="delete" data-id="${work.id}" data-name="${safeName}" class="w-7 h-7 sm:w-8 sm:h-8 bg-gray-600 hover:bg-red-600 rounded-full flex items-center justify-center text-white" title="削除"><i class="fas fa-trash-alt text-xs sm:text-sm"></i></button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
             }
 
-            worksTableBody.innerHTML = paginatedWorks.map(work => {
-                const workTags = (work.tagIds || []).map(id => tags.find(t => t.id === id)).filter(Boolean);
-                const safeName = escapeHTML(work.name);
-                const rating = work.rating || 0;
-
-                // ▼▼▼ サイトバッジ用HTMLを取得 ▼▼▼
-                const badgeImageHTML = getSiteBadgeHTML(work.sourceUrl, false);
-                const badgeInlineHTML = getSiteBadgeHTML(work.sourceUrl, true);
-                // ▲▲▲ サイトバッジ用HTMLを取得 ▲▲▲
-
-                const MAX_TAGS_VISIBLE = 4;
-                const tagsHtml = workTags.slice(0, MAX_TAGS_VISIBLE).map(t =>
-                    `<span class="tag-pill tag-pill-sm" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${t.name}</span>`
-                ).join('');
-                const moreTagsHtml = workTags.length > MAX_TAGS_VISIBLE
-                    ? `<span class="tag-pill tag-pill-sm tag-pill-more">+${workTags.length - MAX_TAGS_VISIBLE}</span>`
-                    : '';
-
-                // ▼▼▼ `{/* */}` を削除 ▼▼▼
-                return `
-                    <tr class="hover:bg-gray-700/50 transition-colors" data-id="${work.id}">
-                        <td class="p-3"><input type="checkbox" data-id="${work.id}" class="row-checkbox h-4 w-4 rounded bg-gray-600 text-teal-500 border-gray-500 focus:ring-teal-600" ${selectedWorkIds.has(work.id) ? 'checked' : ''}></td>
-
-                        <td class="p-3 col-image relative" data-col="image">
-                            ${badgeImageHTML}
-                            <img src="${work.imageUrl || 'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${safeName}" class="w-12 h-12 object-cover rounded-md">
-                        </td>
-
-                        <td class="p-3 col-name" data-col="name">
-                            <div class="flex items-center max-w-xs xl:max-w-md">
-                                ${badgeInlineHTML}
-                                <span class="font-medium truncate">${safeName}</span>
-                            </div>
-                        </td>
-
-                        <td class="p-3 col-genre" data-col="genre">${work.genre || 'N/A'}</td>
-
-                        <td class="p-3 col-registeredAt" data-col="registeredAt">${formatDate(work.registeredAt, false)}</td>
-
-                        <td class="p-3 col-rating inline-rating text-lg" data-col="rating" data-id="${work.id}">
-                            ${[1,2,3,4,5].map(i => `<i class="fa-star ${i <= rating ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('')}
-                        </td>
-
-                        <td class="p-3 col-tags max-w-xs" data-col="tags">
-                            <div class="flex flex-wrap">
-                                ${tagsHtml}${moreTagsHtml}
-                            </div>
-                        </td>
-
-                        <td class="p-3 col-lastSelectedAt" data-col="lastSelectedAt">
-                            ${formatDate(work.lastSelectedAt, true)}
-                        </td>
-
-                        <td class="p-3 col-selectionCount text-center" data-col="selectionCount">
-                            ${work.selectionCount || 0}
-                        </td>
-
-                        <td class="p-3 col-sourceUrl" data-col="sourceUrl">
-                            ${work.sourceUrl ? `<a href="${work.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-teal-400 hover:text-teal-300"><i class="fas fa-external-link-alt"></i></a>` : ''}
-                        </td>
-
-                        <td class="p-3 col-actions" data-col="actions">
-                            <div class="flex gap-2">
-                                <button data-action="edit" data-id="${work.id}" class="w-8 h-8 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center text-white" title="編集"><i class="fas fa-pencil-alt text-sm"></i></button>
-                                <button data-action="delete" data-id="${work.id}" data-name="${safeName}" class="w-8 h-8 bg-gray-600 hover:bg-red-600 rounded-full flex items-center justify-center text-white" title="削除"><i class="fas fa-trash-alt text-sm"></i></button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-                // ▲▲▲ `{/* */}` を削除 ▲▲▲
-            }).join('');
-
+            // Apply column visibility after rendering rows
             updateColumnVisibility();
         };
 
@@ -1301,13 +1415,13 @@
             const { currentPage, itemsPerPage } = paginationState;
             const totalItems = displayedWorks.length;
             const totalPages = Math.ceil(totalItems / itemsPerPage);
-            paginationContainer.innerHTML = '';
+            paginationContainer.innerHTML = ''; // Clear existing buttons
 
-            if (totalPages <= 1) return;
+            if (totalPages <= 1) return; // No pagination needed for 0 or 1 page
 
             const createBtn = (text, page, isDisabled = false, isActive = false) => {
                 const btn = document.createElement('button');
-                btn.innerHTML = text;
+                btn.innerHTML = text; // Use innerHTML for icons
                 btn.disabled = isDisabled;
                 btn.dataset.page = page;
                 btn.className = `px-3 py-1 rounded-lg text-sm font-semibold transition-colors ${
@@ -1318,53 +1432,72 @@
                 return btn;
             };
 
+            // First & Previous Buttons
             paginationContainer.appendChild(createBtn('<i class="fas fa-angle-double-left"></i>', 1, currentPage === 1));
             paginationContainer.appendChild(createBtn('<i class="fas fa-angle-left"></i>', currentPage - 1, currentPage === 1));
 
-            const maxPagesToShow = 5;
+            // Page Number Buttons (with ellipsis logic)
+            const maxPagesToShow = 5; // Max number buttons visible (e.g., 1 ... 4 5 6 ... 10)
             let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
             let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+
+            // Adjust startPage if endPage reaches the limit early
             if (endPage - startPage + 1 < maxPagesToShow) {
                 startPage = Math.max(1, endPage - maxPagesToShow + 1);
             }
 
+            // Ellipsis at the beginning
             if (startPage > 1) {
                 paginationContainer.appendChild(createBtn('1', 1));
-                if (startPage > 2) paginationContainer.appendChild(createBtn('...', 1, true));
+                if (startPage > 2) paginationContainer.appendChild(createBtn('...', 1, true)); // Disabled ellipsis
             }
 
+            // Page numbers
             for (let i = startPage; i <= endPage; i++) {
                 paginationContainer.appendChild(createBtn(i, i, false, i === currentPage));
             }
 
+            // Ellipsis at the end
             if (endPage < totalPages) {
-                if (endPage < totalPages - 1) paginationContainer.appendChild(createBtn('...', totalPages, true));
+                if (endPage < totalPages - 1) paginationContainer.appendChild(createBtn('...', totalPages, true)); // Disabled ellipsis
                 paginationContainer.appendChild(createBtn(totalPages, totalPages));
             }
 
+            // Next & Last Buttons
             paginationContainer.appendChild(createBtn('<i class="fas fa-angle-right"></i>', currentPage + 1, currentPage === totalPages));
             paginationContainer.appendChild(createBtn('<i class="fas fa-angle-double-right"></i>', totalPages, currentPage === totalPages));
         };
 
         const renderActionButtons = () => {
             const count = selectedWorkIds.size;
+            // Toggle bulk action bar visibility
             if (count > 0) {
                 bulkActionBar.classList.remove('hidden');
                 bulkSelectedCount.textContent = `${count}件選択中`;
             } else {
                 bulkActionBar.classList.add('hidden');
             }
-            // Sync select-all checkbox
-            const itemsOnPage = paginatedWorks.map(w => w.id);
-            const selectedOnPageCount = itemsOnPage.filter(id => selectedWorkIds.has(id)).length;
 
-            if (itemsOnPage.length > 0 && selectedOnPageCount === itemsOnPage.length) {
+            // Update state of the "Select All" checkbox
+            const itemsOnPageIds = paginatedWorks.map(w => w.id);
+            if (itemsOnPageIds.length === 0) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+                return;
+            }
+
+            const selectedOnPageCount = itemsOnPageIds.filter(id => selectedWorkIds.has(id)).length;
+
+            if (selectedOnPageCount === itemsOnPageIds.length) {
+                // All items on the current page are selected
                 selectAllCheckbox.checked = true;
                 selectAllCheckbox.indeterminate = false;
             } else if (selectedOnPageCount > 0) {
+                // Some (but not all) items on the current page are selected
                 selectAllCheckbox.checked = false;
                 selectAllCheckbox.indeterminate = true;
             } else {
+                // No items on the current page are selected
                 selectAllCheckbox.checked = false;
                 selectAllCheckbox.indeterminate = false;
             }
@@ -1373,40 +1506,46 @@
 
         const renderActiveTagFilters = () => {
             let html = '';
+            // Helper to render pills for a set of tag IDs
             const renderSet = (ids, className, prefix) => {
-                [...ids].map(id => tags.find(t=>t.id===id)).filter(Boolean).forEach(tag => {
-                    html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${tag.name}</span>`;
-                });
+                [...ids].map(id => tags.find(t => t.id === id)) // Get tag objects
+                         .filter(Boolean) // Filter out nulls if tag not found
+                         .forEach(tag => {
+                             html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${escapeHTML(tag.name)}</span>`;
+                         });
             };
+            // Render AND, OR, NOT tags
             renderSet(listFilters.andTagIds, 'tag-item-and text-white', 'AND');
             renderSet(listFilters.orTagIds, 'tag-item-or text-white', 'OR');
             renderSet(listFilters.notTagIds, 'tag-item-not text-white', 'NOT');
-            filterTagsDisplay.innerHTML = html || `<span class="text-xs text-gray-500">タグ未選択</span>`;
+
+            filterTagsDisplay.innerHTML = html || `<span class="text-xs text-gray-500">タグ未選択</span>`; // Show placeholder if no tags selected
         };
 
         const updateColumnVisibility = () => {
-             const savedCols = localStorage.getItem('visibleColumns');
+             const savedCols = localStorage.getItem('visibleColumns_manager'); // Use a unique key
              if (savedCols) {
                 visibleColumns = new Set(JSON.parse(savedCols));
              } else {
+                 // Different defaults based on screen size
                  if (window.innerWidth < 768) { // md breakpoint
-                     visibleColumns = new Set(['name', 'rating', 'actions']);
+                     visibleColumns = new Set(['image', 'name', 'rating', 'actions']);
                  } else {
+                     // Default for larger screens
                      visibleColumns = new Set(['image', 'name', 'genre', 'registeredAt', 'rating', 'tags', 'actions']);
                  }
              }
 
-            worksTable.querySelectorAll('th, td').forEach(el => {
+            // Apply visibility to both header (th) and body (td) cells
+            worksTable.querySelectorAll('th[data-col], td[data-col]').forEach(el => {
                 const colName = el.dataset.col;
                 if (colName) {
-                    // ▼▼▼ 表示ロジックを修正 ▼▼▼
-                    // 'table-cell' で表示、'none' で非表示
+                    // Use 'table-cell' for visibility, 'none' for hiding
                     el.style.display = visibleColumns.has(colName) ? 'table-cell' : 'none';
-                    // ▲▲▲ 表示ロジックを修正 ▲▲▲
                 }
             });
-            // Persist the current state
-            localStorage.setItem('visibleColumns', JSON.stringify(Array.from(visibleColumns)));
+            // Save the current state
+            localStorage.setItem('visibleColumns_manager', JSON.stringify(Array.from(visibleColumns)));
         };
 
         // --- External Search ---
@@ -1442,6 +1581,8 @@
                         openSearchWindow(site, query);
                     }
                 });
+                // Focus input on open
+                 $('#externalSearchInput')?.focus();
             });
         };
 
@@ -1453,8 +1594,11 @@
                 case 'fanza': url = query ? `https://www.dmm.co.jp/dc/doujin/-/list/narrow/=/word=${encodedQuery}/` : 'https://www.dmm.co.jp/dc/doujin/'; break;
                 case 'melonbooks': url = query ? `https://www.melonbooks.co.jp/search/search.php?name=${encodedQuery}&search_target=2` : 'https://www.melonbooks.co.jp/'; break;
                 case 'booth': url = query ? `https://booth.pm/ja/search/${encodedQuery}` : 'https://booth.pm/'; break;
+                default: url = null;
             }
-            if (url) window.open(url, '_blank', 'noopener,noreferrer');
+            if (url) {
+                window.open(url, '_blank', 'noopener,noreferrer');
+            }
         };
 
         // --- Event Handlers ---
@@ -1462,7 +1606,7 @@
         const setupEventListeners = () => {
             // Modals
             modalCloseBtn.addEventListener('click', closeModal);
-            modalBackdrop.addEventListener('click', closeModal);
+            modalBackdrop.addEventListener('click', closeModal); // Close on backdrop click
 
             // Sync Panel
             copySyncIdBtn.addEventListener('click', () => navigator.clipboard.writeText(syncId).then(() => showToast("同期IDをコピーしました。")));
@@ -1471,31 +1615,37 @@
                 if (newId && newId !== syncId) {
                     loadDataSet(newId);
                     updateSyncIdHistory(newId);
-                    newSyncIdInput.value = '';
+                    newSyncIdInput.value = ''; // Clear input after loading
                     showToast("データを読み込みました。");
+                } else if (!newId) {
+                    showToast("同期IDを入力してください。", "error");
                 }
             });
-            syncIdHistoryEl.addEventListener('change', e => e.target.value && loadDataSet(e.target.value));
+            syncIdHistoryEl.addEventListener('change', e => {
+                if (e.target.value) loadDataSet(e.target.value); // Load selected ID from history
+            });
             toggleDebugModeBtn.addEventListener('click', toggleDebugMode);
 
             // Filters
-            const debouncedRender = debounce(renderAll, 300);
+            const debouncedRender = debounce(renderAll, 300); // Debounce rendering for performance
 
+            // Search with Suggestions
             filterSearch.addEventListener('input', () => {
                 const query = filterSearch.value.trim();
-                listFilters.search = query;
-                paginationState.currentPage = 1;
-                debouncedRender();
+                listFilters.search = query; // Update filter state immediately
+                paginationState.currentPage = 1; // Reset page on search change
+                debouncedRender(); // Update table based on search input
 
                 const normalizedQuery = query.toLowerCase();
-                if (normalizedQuery.length < 2) {
+                if (normalizedQuery.length < 2) { // Only show suggestions for 2+ chars
                     filterSuggestions.classList.add('hidden');
                     return;
                 }
 
+                // Filter *all* works for suggestions, not just currently displayed
                 const suggestions = works.filter(work =>
                     work.name.toLowerCase().includes(normalizedQuery)
-                ).slice(0, 10);
+                ).slice(0, 10); // Limit suggestions
 
                 if (suggestions.length > 0) {
                     filterSuggestions.innerHTML = suggestions.map(work => `
@@ -1510,54 +1660,73 @@
                 }
             });
 
+            // Handle suggestion click
             filterSuggestions.addEventListener('click', (e) => {
                 const item = e.target.closest('.suggestion-item');
                 if (item) {
-                    filterSearch.value = item.dataset.name;
-                    listFilters.search = item.dataset.name;
-                    filterSuggestions.classList.add('hidden');
-                    paginationState.currentPage = 1;
-                    renderAll();
+                    const selectedName = item.dataset.name;
+                    filterSearch.value = selectedName; // Set input value
+                    listFilters.search = selectedName; // Update filter state
+                    filterSuggestions.classList.add('hidden'); // Hide suggestions
+                    paginationState.currentPage = 1; // Reset page
+                    renderAll(); // Re-render with the selected name
                 }
             });
 
+            // Hide suggestions when clicking outside
             document.addEventListener('click', (e) => {
                 if (!filterSearch.contains(e.target) && !filterSuggestions.contains(e.target)) {
                     filterSuggestions.classList.add('hidden');
                 }
             });
 
+            // Genre checkboxes
             $$('input[data-filter-genre]').forEach(cb => cb.addEventListener('change', () => {
                 if (cb.checked) listFilters.genres.add(cb.dataset.filterGenre);
                 else listFilters.genres.delete(cb.dataset.filterGenre);
                 paginationState.currentPage = 1; renderAll();
             }));
-            filterUnrated.addEventListener('change', () => { listFilters.unrated = filterUnrated.checked; paginationState.currentPage = 1; renderAll(); });
+            // Unrated checkbox
+            filterUnrated.addEventListener('change', () => {
+                 listFilters.unrated = filterUnrated.checked;
+                 // Disable/enable rating selects based on unrated state
+                 filterRatingOp.disabled = listFilters.unrated;
+                 filterRatingVal.disabled = listFilters.unrated;
+                 filterRatingOp.classList.toggle('opacity-50', listFilters.unrated);
+                 filterRatingVal.classList.toggle('opacity-50', listFilters.unrated);
+                 paginationState.currentPage = 1; renderAll();
+            });
+            // Rating selects
             [filterRatingOp, filterRatingVal].forEach(el => el.addEventListener('change', () => {
                 listFilters.ratingOp = filterRatingOp.value;
                 listFilters.ratingVal = parseInt(filterRatingVal.value, 10);
                 paginationState.currentPage = 1; renderAll();
             }));
+            // Date inputs
             [filterDateStart, filterDateEnd].forEach(el => el.addEventListener('input', () => {
                 listFilters.dateStart = filterDateStart.value;
                 listFilters.dateEnd = filterDateEnd.value;
+                // Only re-render if dates are valid or empty
                 if ((!listFilters.dateStart || isValidDate(listFilters.dateStart)) && (!listFilters.dateEnd || isValidDate(listFilters.dateEnd))) {
                      paginationState.currentPage = 1; debouncedRender();
                 }
             }));
+            // Open Tag Filter Modal button
             filterOpenTagsBtn.addEventListener('click', () => openTagFilterModal());
+             // Filter Reset button
              resetFiltersBtn.addEventListener('click', async () => {
                  if (await showConfirm("フィルターリセット", "すべての絞り込み条件をリセットしますか？")) {
-                     listFilters = getDefaultFilters();
+                     listFilters = getDefaultFilters(); // Reset state
+                     // Reset UI elements
                      filterSearch.value = '';
                      $$('input[data-filter-genre]').forEach(cb => cb.checked = false);
-                     filterRatingOp.value = 'gte';
-                     filterRatingVal.value = '0';
-                     filterUnrated.checked = false;
-                     filterDateStart.value = '';
-                     filterDateEnd.value = '';
-                     renderActiveTagFilters();
-                     paginationState.currentPage = 1;
+                     filterRatingOp.value = 'gte'; filterRatingVal.value = '0';
+                     filterUnrated.checked = false; filterRatingOp.disabled = false; filterRatingVal.disabled = false; // Re-enable rating
+                     filterRatingOp.classList.remove('opacity-50'); filterRatingVal.classList.remove('opacity-50');
+                     filterDateStart.value = ''; filterDateEnd.value = '';
+                     filterDateStart.classList.remove('border-red-500'); filterDateEnd.classList.remove('border-red-500'); // Clear validation error border
+                     renderActiveTagFilters(); // Clear tag display
+                     paginationState.currentPage = 1; // Reset page
                      renderAll();
                      showToast("フィルターをリセットしました。");
                  }
@@ -1566,66 +1735,86 @@
             // Action Bar
             itemsPerPageSelect.addEventListener('change', () => {
                 paginationState.itemsPerPage = parseInt(itemsPerPageSelect.value, 10);
-                paginationState.currentPage = 1;
+                paginationState.currentPage = 1; // Reset to page 1 when changing items per page
                 renderAll();
             });
             regNewWorkBtn.addEventListener('click', openRegistrationModal);
-            externalSearchBtn.addEventListener('click', () => openExternalSearchModal(listFilters.search));
-            manageTagsBtn.addEventListener('click', () => openTagModal({ mode: 'manage' }));
+            externalSearchBtn.addEventListener('click', () => openExternalSearchModal(listFilters.search)); // Use filter state for prefill
+            manageTagsBtn.addEventListener('click', () => openTagModal({ mode: 'manage' })); // Open tag management
             manageColumnsBtn.addEventListener('click', openColumnModal);
             bulkEditBtn.addEventListener('click', openBulkEditModal);
             bulkDeleteBtn.addEventListener('click', bulkDeleteWorks);
 
-            // Table
+            // Table Header (Sorting)
             worksTableHead.addEventListener('click', e => {
                 const th = e.target.closest('th[data-sort]');
-                if (!th) return;
+                if (!th) return; // Ignore clicks not on sortable headers
                 const newSortBy = th.dataset.sort;
+                // Toggle order or change column
                 if (sortState.by === newSortBy) {
                     sortState.order = sortState.order === 'asc' ? 'desc' : 'asc';
                 } else {
                     sortState.by = newSortBy;
-                    sortState.order = 'desc';
+                    sortState.order = (newSortBy === 'name' || newSortBy === 'genre') ? 'asc' : 'desc'; // Default asc for text, desc for others
                 }
-                paginationState.currentPage = 1;
+                paginationState.currentPage = 1; // Reset page on sort change
                 renderAll();
             });
 
+            // Table Body (Actions: Rating, Edit, Delete, Copy)
             worksTableBody.addEventListener('click', e => {
                 const target = e.target;
                 const star = target.closest('.inline-rating .fa-star');
+                const btn = target.closest('button[data-action]');
+
+                // Inline Rating Click
                 if (star) {
-                    const workId = star.closest('td').dataset.id;
+                    const workId = star.closest('td[data-id]')?.dataset.id;
+                    if (!workId) return;
                     let newRating = parseInt(star.dataset.value, 10);
                     const work = works.find(w => w.id === workId);
+                    // Click same star again to clear rating (set to 0)
                     if (work && work.rating === newRating) newRating = 0;
                     updateWork(workId, { rating: newRating });
-                    return;
+                    return; // Handled rating click
                 }
-                const btn = target.closest('button[data-action]');
+
+                // Action Button Click (Edit, Delete, Copy)
                 if (btn) {
-                    const { action, id, name } = btn.dataset;
-                    if (action === 'edit') openEditModal(id);
-                    if (action === 'delete') deleteWork(id, name);
-                    return;
+                    const { action, id, name, title } = btn.dataset; // Get data attributes
+                    if (action === 'edit' && id) openEditModal(id);
+                    if (action === 'delete' && id && name) deleteWork(id, name);
+                    // ▼▼▼ Copy Title Action ▼▼▼
+                    if (action === 'copy-title' && title) {
+                         navigator.clipboard.writeText(title).then(() => {
+                            showToast(`「${title}」をコピーしました。`);
+                         }).catch(err => {
+                             console.error('コピー失敗:', err);
+                             showToast('コピーに失敗しました。', 'error');
+                         });
+                    }
+                    // ▲▲▲ Copy Title Action ▲▲▲
+                    return; // Handled button click
                 }
             });
 
-            // Selection Checkboxes
+            // Selection Checkboxes (Select All & Individual Rows)
             selectAllCheckbox.addEventListener('change', () => {
                 const isChecked = selectAllCheckbox.checked;
-                const itemsOnPage = paginatedWorks.map(w => w.id);
+                const itemsOnPageIds = paginatedWorks.map(w => w.id); // Get IDs of currently visible items
 
+                // Update checkboxes in table body
                 worksTableBody.querySelectorAll('.row-checkbox').forEach(cb => {
                     cb.checked = isChecked;
                 });
 
+                // Update the master selection set
                 if (isChecked) {
-                    itemsOnPage.forEach(id => selectedWorkIds.add(id));
+                    itemsOnPageIds.forEach(id => selectedWorkIds.add(id));
                 } else {
-                    itemsOnPage.forEach(id => selectedWorkIds.delete(id));
+                    itemsOnPageIds.forEach(id => selectedWorkIds.delete(id));
                 }
-                renderActionButtons();
+                renderActionButtons(); // Update bulk action bar and select-all state
             });
 
             worksTableBody.addEventListener('change', e => {
@@ -1633,50 +1822,52 @@
                     const id = e.target.dataset.id;
                     if (e.target.checked) selectedWorkIds.add(id);
                     else selectedWorkIds.delete(id);
-                    renderActionButtons();
+                    renderActionButtons(); // Update bulk action bar and select-all state
                 }
             });
 
-            // Pagination
+            // Pagination Buttons
             paginationContainer.addEventListener('click', e => {
                 const btn = e.target.closest('button[data-page]');
                 if (btn && !btn.disabled) {
                     paginationState.currentPage = parseInt(btn.dataset.page, 10);
                     renderAll();
+                    // Optional: Scroll to top of table after page change
                     worksTable.scrollIntoView({ behavior: 'smooth' });
                 }
             });
 
-            // Date Inputs (Validation)
+            // Date Inputs Validation (Global initialization on load)
             initializeDateInputs(document.body);
 
             // Ad UI Events
-            document.getElementById('ad-settings-fab').addEventListener('click', () => showModal(adSettingsModal, adSettingsModalContent));
-            document.getElementById('ad-settings-modal-close').addEventListener('click', () => hideModal(adSettingsModal, adSettingsModalContent));
-            adSettingsModal.addEventListener('click', (e) => {
+            $('#ad-settings-fab')?.addEventListener('click', () => showModal(adSettingsModal, adSettingsModalContent));
+            $('#ad-settings-modal-close')?.addEventListener('click', () => hideModal(adSettingsModal, adSettingsModalContent));
+            adSettingsModal?.addEventListener('click', (e) => { // Close on backdrop click for ad modal too
                 if (e.target === adSettingsModal) hideModal(adSettingsModal, adSettingsModalContent);
             });
-            document.querySelectorAll('input[name="ad_type"]').forEach(radio => {
+            $$('input[name="ad_type"]').forEach(radio => {
                 radio.addEventListener('change', (e) => {
-                    document.getElementById('ad-period-container').style.display = e.target.value === 'ranking' ? 'block' : 'none';
+                    $('#ad-period-container').style.display = e.target.value === 'ranking' ? 'block' : 'none';
                 });
             });
-            document.getElementById('save-ad-settings-btn').addEventListener('click', () => {
+            $('#save-ad-settings-btn')?.addEventListener('click', () => {
                 saveAndReloadAd();
                 hideModal(adSettingsModal, adSettingsModalContent);
                 showToast('広告設定を保存しました。');
             });
-            window.addEventListener('resize', () => {
+            // Window Resize Listener (Adjust Ad Visibility and Columns)
+            window.addEventListener('resize', debounce(() => {
                 const settings = JSON.parse(localStorage.getItem('adSettings') || JSON.stringify(defaultAdSettings));
                 applyAdVisibility(settings.showAd);
-                updateColumnVisibility();
-                renderTable();
-            });
+                updateColumnVisibility(); // Re-evaluate visible columns on resize
+                renderTable(); // Re-render table might be needed if columns changed significantly
+            }, 200)); // Debounce resize handler
         };
 
         // --- Modal: New Registration ---
         const openRegistrationModal = () => {
-            let tempImageUrl = null;
+            let tempImageUrl = null; // Store base64 image data temporarily
             const content = `
                 <form id="reg-work-form" class="space-y-4">
                     <div>
@@ -1702,7 +1893,7 @@
                     <div>
                         <label for="reg-image" class="block text-sm font-medium text-gray-400 mb-2">画像 (任意, 900KB以下)</label>
                         <input type="file" id="reg-image" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-lime-600 file:text-white hover:file:bg-lime-700">
-                        <img id="reg-image-preview" src="" class="hidden max-w-full h-auto mx-auto rounded-lg mt-2 max-h-48">
+                        <img id="reg-image-preview" src="" class="hidden max-w-full h-auto mx-auto rounded-lg mt-2 max-h-48 object-contain"> {/* Use object-contain */}
                     </div>
                     <div class="pt-4 flex justify-end">
                         <button type="submit" class="w-full px-6 py-3 bg-lime-600 hover:bg-lime-700 rounded-lg font-bold text-lg transition-colors">登録する</button>
@@ -1711,25 +1902,27 @@
             `;
             openModal("新しい作品を登録", content, () => {
                 const dateInput = $('#reg-date');
-                dateInput.value = formatDateForInput(new Date());
+                dateInput.value = formatDateForInput(new Date()); // Default to today
 
                 $('#reg-image').addEventListener('change', async (e) => {
                     const file = e.target.files[0];
                     const preview = $('#reg-image-preview');
                     if (file) {
                         try {
-                            tempImageUrl = await processImage(file);
+                            tempImageUrl = await processImage(file); // Process and resize image
                             preview.src = tempImageUrl;
                             preview.classList.remove('hidden');
                         } catch (error) {
                             showToast(error.message, "error");
                             tempImageUrl = null;
                             preview.classList.add('hidden');
-                            e.target.value = null;
+                            e.target.value = null; // Clear file input on error
                         }
                     } else {
+                        // No file selected or selection cancelled
                         tempImageUrl = null;
                         preview.classList.add('hidden');
+                        preview.src = '';
                     }
                 });
 
@@ -1746,56 +1939,53 @@
                         genre: $('#reg-genre').value,
                         sourceUrl: $('#reg-url').value.trim(),
                         registeredAt: Timestamp.fromDate(new Date(dateStr.replace(/\//g, '-'))),
-                        imageUrl: tempImageUrl,
+                        imageUrl: tempImageUrl, // Use processed image data
                         selectionCount: 0,
                         rating: 0,
-                        tagIds: [],
+                        tagIds: [], // Start with empty tags
                         lastSelectedAt: null,
-                        selectionHistory: []
+                        selectionHistory: [] // Start with empty history
                     };
 
                     const success = await addWork(newWork);
                     if (success) {
-                        closeModal();
+                        closeModal(); // Close modal only on successful addition
                     }
                 });
             });
         };
 
-        // --- Edit Modal ---
-        const openEditModal = (workId) => {
+        // --- Edit Modal (Includes Copy Title & Open URL) ---
+        // ▼ tempState を受け取れるように変更
+        const openEditModal = (workId, tempState = null) => {
             const work = works.find(w => w.id === workId);
-            if (!work) return;
+            if (!work) return showToast("作品が見つかりません。", "error");
 
-            let currentRating = work.rating || 0;
-            let currentTagIds = new Set(work.tagIds || []);
-            let tempImageUrl = work.imageUrl || null;
+            // ▼ tempState から値を取得、なければ元の work データを使用
+            let currentRating = tempState?.rating ?? (work.rating || 0);
+            let currentTagIds = tempState?.tagIds ?? new Set(work.tagIds || []);
+            // ▲ tempState から値を取得
+            let tempImageUrl = work.imageUrl || null; // Image changes handled differently
 
             const safeName = escapeHTML(work.name);
             const safeUrl = escapeHTML(work.sourceUrl || '');
             const regDate = work.registeredAt ? formatDateForInput(work.registeredAt.toDate()) : '';
 
-            const getFormState = () => ({
-                name: $('#edit-name').value,
-                genre: $('#edit-genre').value,
-                url: $('#edit-url').value,
-                date: $('#edit-date').value,
-                rating: currentRating,
-                tags: JSON.stringify([...currentTagIds].sort()),
-                image: tempImageUrl
-            });
-
-            const initialState = {
-                name: work.name,
-                genre: work.genre,
-                url: work.sourceUrl || '',
-                date: regDate,
-                rating: currentRating,
-                tags: JSON.stringify([...currentTagIds].sort()),
-                image: work.imageUrl || null
+            // Function to get current form state for dirty checking
+             const getFormState = () => {
+                const nameInput = $('#edit-name');
+                if (!nameInput) return null; // Avoid errors if modal elements aren't ready
+                return {
+                    name: nameInput.value.trim(),
+                    genre: $('#edit-genre').value,
+                    url: $('#edit-url').value.trim(),
+                    date: $('#edit-date').value,
+                    rating: currentRating,
+                    tags: JSON.stringify([...currentTagIds].sort()), // Consistent check for tags
+                    // image change is not tracked for simple dirty check here
+                };
             };
 
-            checkModalDirtyState = () => JSON.stringify(getFormState()) !== JSON.stringify(initialState);
 
             const content = `
                 <form id="edit-work-form" class="space-y-6">
@@ -1808,7 +1998,12 @@
                         <div class="space-y-4">
                             <div>
                                 <label for="edit-name" class="block text-sm font-medium text-gray-400 mb-1">作品名 <span class="text-red-400">*</span></label>
-                                <input type="text" id="edit-name" value="${safeName}" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2" required>
+                                <!-- ▼▼▼ Copy Button Added ▼▼▼ -->
+                                <div class="flex items-center gap-2">
+                                    <input type="text" id="edit-name" value="${safeName}" class="flex-grow bg-gray-700 border border-gray-600 rounded-lg p-2" required>
+                                    <button type="button" id="copy-edit-title-btn" class="flex-shrink-0 w-10 h-10 bg-gray-600 hover:bg-gray-500 rounded-lg text-white flex items-center justify-center" title="タイトルをコピー"><i class="fas fa-copy"></i></button>
+                                </div>
+                                {/* <!-- ▲▲▲ Copy Button Added ▲▲▲ --> */}
                             </div>
                             <div>
                                 <label for="edit-genre" class="block text-sm font-medium text-gray-400 mb-1">ジャンル <span class="text-red-400">*</span></label>
@@ -1820,7 +2015,12 @@
                             </div>
                             <div>
                                 <label for="edit-url" class="block text-sm font-medium text-gray-400 mb-1">作品URL (任意)</label>
-                                <input type="url" id="edit-url" value="${safeUrl}" placeholder="https://..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2">
+                                {/* <!-- ▼▼▼ Open URL Button Added ▼▼▼ --> */}
+                                <div class="flex items-center gap-2">
+                                    <input type="url" id="edit-url" value="${safeUrl}" placeholder="https://..." class="flex-grow bg-gray-700 border border-gray-600 rounded-lg p-2">
+                                    <button type="button" id="open-url-btn" class="flex-shrink-0 w-10 h-10 bg-gray-600 hover:bg-gray-500 rounded-lg text-white flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed" title="URLを開く" ${!safeUrl ? 'disabled' : ''}><i class="fas fa-external-link-alt"></i></button>
+                                </div>
+                                {/* <!-- ▲▲▲ Open URL Button Added ▲▲▲ --> */}
                             </div>
                             <div>
                                 <label for="edit-date" class="block text-sm font-medium text-gray-400 mb-1">登録日 <span class="text-red-400">*</span></label>
@@ -1830,7 +2030,7 @@
 
                         <div class="space-y-4">
                             <div>
-                                <label for="edit-image" class="block text-sm font-medium text-gray-400 mb-2">画像 (任意, 900KB以下)</label>
+                                <label for="edit-image" class="block text-sm font-medium text-gray-400 mb-2">画像を変更 (任意, 900KB以下)</label>
                                 <input type="file" id="edit-image" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-sky-600 file:text-white hover:file:bg-sky-700">
                             </div>
 
@@ -1850,7 +2050,7 @@
 
                             <div id="initial-image-preview-container">
                                 <label class="block text-sm font-medium text-gray-400 mb-2">現在の画像</label>
-                                <img id="initial-image-preview" src="${work.imageUrl || 'https://placehold.co/400x200/1f2937/4b5563?text=No+Image'}" class="w-full h-auto max-h-48 object-contain mx-auto rounded-lg">
+                                <img id="initial-image-preview" src="${work.imageUrl || 'https://placehold.co/400x200/1f2937/4b5563?text=No+Image'}" class="w-full h-auto max-h-48 object-contain mx-auto rounded-lg"> {/* object-contain */}
                             </div>
                         </div>
                     </div>
@@ -1872,13 +2072,24 @@
             `;
 
             openModal(`「${work.name}」を編集`, content, () => {
-                let unprocessedNewImage = null;
+                let unprocessedNewImage = null; // Store processed base64 of the new image before confirmation
+
+                 // Define initial state *after* elements are available
+                 const initialState = getFormState();
+                 // Set up dirty check function
+                 checkModalDirtyState = () => {
+                     const currentState = getFormState();
+                     // Also check if image has changed but not confirmed
+                     const imageChanged = tempImageUrl !== (work.imageUrl || null);
+                     return (currentState !== null && JSON.stringify(initialState) !== JSON.stringify(currentState)) || imageChanged;
+                 };
+
 
                 const ratingStars = $('#edit-rating');
                 ratingStars.addEventListener('click', e => {
                     if (e.target.matches('.fa-star')) {
                         const newRating = parseInt(e.target.dataset.value, 10);
-                        currentRating = (currentRating === newRating) ? 0 : newRating;
+                        currentRating = (currentRating === newRating) ? 0 : newRating; // Toggle or set
                         ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= currentRating ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('');
                     }
                 });
@@ -1886,26 +2097,29 @@
                 const tagsContainer = $('#edit-tags-display');
                 const renderTags = (ids) => {
                     const objects = [...ids].map(id => tags.find(t => t.id === id)).filter(Boolean);
-                    tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="tag-pill" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`;
+                    tagsContainer.innerHTML = objects.length > 0
+                        ? objects.map(t => `<span class="tag-pill" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${escapeHTML(t.name)}</span>`).join('')
+                        : `<span class="text-xs text-gray-500">タグなし</span>`;
                 };
-                renderTags(currentTagIds);
+                renderTags(currentTagIds); // Initial render
 
                 $('#edit-assign-tags-btn').addEventListener('click', () => {
+                    // Capture current non-tag state before opening tag modal
                     const capturedState = {
                         name: $('#edit-name').value, genre: $('#edit-genre').value, url: $('#edit-url').value, date: $('#edit-date').value,
-                        rating: currentRating, imageUrl: tempImageUrl
+                        rating: currentRating, imageUrl: tempImageUrl // Pass image state too
                     };
                     openTagModal({
                         mode: 'assign', currentTagIds: currentTagIds, workName: work.name,
                         onConfirm: (newTagIds) => {
-                            openEditModal(workId); // Reopen edit modal
-                            setTimeout(() => { // Restore state after modal reopens
-                                $('#edit-name').value = capturedState.name; $('#edit-genre').value = capturedState.genre; $('#edit-url').value = capturedState.url; $('#edit-date').value = capturedState.date;
-                                currentRating = capturedState.rating; tempImageUrl = capturedState.imageUrl;
-                                $('#initial-image-preview').src = tempImageUrl || 'https://placehold.co/400x200/1f2937/4b5563?text=No+Image';
-                                ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= currentRating ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('');
-                                if (newTagIds) { currentTagIds = newTagIds; renderTags(currentTagIds); }
-                            }, 100);
+                             // ▼▼▼ If new tags were selected (not cancelled), update capturedState ▼▼▼
+                            if (newTagIds !== null) {
+                                capturedState.tagIds = newTagIds; // Update tags in captured state
+                            } else {
+                                capturedState.tagIds = currentTagIds; // Keep original tags if cancelled
+                            }
+                             // ▼▼▼ Reopen edit modal passing the full captured state ▼▼▼
+                            openEditModal(workId, capturedState);
                         }
                     });
                 });
@@ -1926,35 +2140,63 @@
                     }
                 });
                 $('#confirm-image-change-btn').addEventListener('click', () => {
-                    tempImageUrl = unprocessedNewImage; unprocessedNewImage = null;
-                    $('#initial-image-preview').src = tempImageUrl;
-                    $('#image-compare-container').classList.add('hidden'); $('#initial-image-preview-container').classList.remove('hidden');
-                    $('#edit-image').value = null;
+                    tempImageUrl = unprocessedNewImage; unprocessedNewImage = null; // Confirm change
+                    $('#initial-image-preview').src = tempImageUrl; // Update main preview
+                    $('#image-compare-container').classList.add('hidden'); // Hide compare view
+                    $('#initial-image-preview-container').classList.remove('hidden'); // Show main preview
+                    $('#edit-image').value = null; // Clear file input
                     showToast("画像が変更されました。保存ボタンを押して確定してください。");
                 });
 
-                // Form Submit
+                // Copy Title Button
+                $('#copy-edit-title-btn')?.addEventListener('click', () => {
+                    const titleInput = $('#edit-name');
+                    navigator.clipboard.writeText(titleInput.value).then(() => {
+                        showToast(`「${titleInput.value}」をコピーしました。`);
+                    }).catch(err => { console.error('Copy failed: ', err); showToast('コピーに失敗しました。', 'error'); });
+                });
+
+                // Open URL Button
+                const urlInput = $('#edit-url');
+                const openUrlBtn = $('#open-url-btn');
+                urlInput?.addEventListener('input', () => { // Enable/disable based on input
+                    openUrlBtn.disabled = !urlInput.value.trim();
+                });
+                openUrlBtn?.addEventListener('click', () => {
+                    const url = urlInput.value.trim();
+                    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                });
+
+
+                // Form Submit / Cancel
                 $('#edit-cancel-btn').addEventListener('click', closeModal);
                 $('#edit-work-form').addEventListener('submit', async (e) => {
                     e.preventDefault();
                     const name = $('#edit-name').value; const dateStr = $('#edit-date').value;
                     if (!name.trim()) return showToast("作品名は必須です。", "error");
                     if (!isValidDate(dateStr)) return showToast("登録日の形式が正しくありません (YYYY/MM/DD)。", "error");
+
                     const updatedData = {
-                        name: name.trim(), genre: $('#edit-genre').value, sourceUrl: $('#edit-url').value.trim(),
+                        name: name.trim(),
+                        genre: $('#edit-genre').value,
+                        sourceUrl: urlInput.value.trim(), // Use urlInput variable
                         registeredAt: Timestamp.fromDate(new Date(dateStr.replace(/\//g, '-'))),
-                        rating: currentRating, tagIds: Array.from(currentTagIds), imageUrl: tempImageUrl
+                        rating: currentRating,
+                        tagIds: Array.from(currentTagIds), // Convert Set back to Array
+                        imageUrl: tempImageUrl // Use the potentially updated image URL
                     };
-                    checkModalDirtyState = () => false;
+                    checkModalDirtyState = () => false; // Mark as not dirty before attempting save
                     const success = await updateWork(workId, updatedData);
                     if (success) { showToast("作品情報を更新しました。"); closeModal(); }
+                    // If updateWork fails, modal stays open, dirty state remains false (as user intended to save)
                 });
-            }, { size: 'max-w-4xl' });
+            }, { size: 'max-w-4xl' }); // Use larger modal for edit
         };
+
 
         // --- Tag Management Modal ---
         const openTagModal = (options) => {
-            const { mode = 'manage', currentTagIds = new Set(), workName = '', onConfirm } = options;
+            const { mode = 'manage', currentTagIds = new Set(), workId = null, workName = '', onConfirm } = options;
             let tempSelectedTagIds = new Set(currentTagIds);
             const titleMap = { manage: 'タグ管理', assign: `「${workName}」のタグを割り当て` };
 
@@ -1969,7 +2211,7 @@
             openModal(titleMap[mode], content, () => {
                 let tagSearchQuery = '', tagFilter = 'all', tagSort = { by: 'createdAt', order: 'desc' };
                 const tagListEl = $('#tag-list'), tagPreviewEl = $('#tag-selector-preview');
-                const renderTagPreview = () => { if(!tagPreviewEl) return; const objects = [...tempSelectedTagIds].map(id => tags.find(t => t.id === id)).filter(Boolean); tagPreviewEl.innerHTML = objects.length > 0 ? objects.map(t => `<span class="tag-pill" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグ未選択</span>`; };
+                const renderTagPreview = () => { if(!tagPreviewEl) return; const objects = [...tempSelectedTagIds].map(id => tags.find(t => t.id === id)).filter(Boolean); tagPreviewEl.innerHTML = objects.length > 0 ? objects.map(t => `<span class="tag-pill" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${escapeHTML(t.name)}</span>`).join('') : `<span class="text-xs text-gray-500">タグ未選択</span>`; };
                 const renderTagList = () => {
                     let tagsToRender = [...tags];
                     if(tagSearchQuery) tagsToRender = tagsToRender.filter(t => t.name.toLowerCase().includes(tagSearchQuery.toLowerCase()));
@@ -1978,66 +2220,117 @@
                         if (tagFilter === 'unassigned') tagsToRender = tagsToRender.filter(t => !tempSelectedTagIds.has(t.id));
                     }
                      tagsToRender.sort((a, b) => { const o = tagSort.order === 'asc' ? 1 : -1; if (tagSort.by === 'name') return a.name.localeCompare(b.name, 'ja') * o; return ((a.createdAt?.toMillis()||0) - (b.createdAt?.toMillis()||0)) * o; });
-                     tagListEl.innerHTML = tagsToRender.map(t => `<div class="tag-item flex items-center p-2 rounded-lg ${mode === 'assign' ? 'cursor-pointer hover:bg-gray-600' : ''} ${tempSelectedTagIds.has(t.id) ? 'bg-purple-900 ring-2 ring-purple-500' : 'bg-gray-700'}" data-id="${t.id}"><div class="w-4 h-4 rounded-full mr-3 shrink-0" style="background-color: ${t.color};"></div><span class="grow font-semibold truncate">${t.name}</span>${['manage', 'assign'].includes(mode) ? `<button data-action="delete-tag" data-id="${t.id}" class="ml-auto text-gray-400 hover:text-red-500 px-2 shrink-0"><i class="fas fa-trash-alt"></i></button>` : ''}</div>`).join('');
+                     tagListEl.innerHTML = tagsToRender.map(t => `<div class="tag-item flex items-center p-2 rounded-lg ${mode === 'assign' ? 'cursor-pointer hover:bg-gray-600' : ''} ${tempSelectedTagIds.has(t.id) ? 'bg-purple-900 ring-2 ring-purple-500' : 'bg-gray-700'}" data-id="${t.id}"><div class="w-4 h-4 rounded-full mr-3 shrink-0" style="background-color: ${t.color};"></div><span class="grow font-semibold truncate">${escapeHTML(t.name)}</span>${['manage', 'assign'].includes(mode) ? `<button data-action="delete-tag" data-id="${t.id}" class="ml-auto text-gray-400 hover:text-red-500 px-2 shrink-0"><i class="fas fa-trash-alt"></i></button>` : ''}</div>`).join('');
                 };
                 renderTagList(); renderTagPreview();
+                // Listen for custom event to refresh list when tags data updates
+                tagListEl.addEventListener('refresh-tags', renderTagList);
+
                 $('#tagSearchInput')?.addEventListener('input', debounce(e => { tagSearchQuery = e.target.value; renderTagList(); }, 200));
                 $('#tagFilterSelect')?.addEventListener('change', e => { tagFilter = e.target.value; renderTagList(); });
                 $('#tagSortSelect')?.addEventListener('change', e => { const [by, order] = e.target.value.split('_'); tagSort = { by, order }; renderTagList(); });
                 $('#addTagBtn')?.addEventListener('click', async () => {
                     if (isDebugMode) { showToast("デバッグモード中はタグを追加できません。", "error"); return; }
                     const nameInput = $('#newTagName');
-                    if (nameInput.value) { await addTag(nameInput.value, $('#newTagColor').value); nameInput.value = ''; }
+                    if (nameInput.value.trim()) {
+                        await addTag(nameInput.value, $('#newTagColor').value);
+                        nameInput.value = ''; // Clear input after adding
+                        // No need to manually refresh list, onSnapshot will do it
+                    } else {
+                        showToast("タグ名を入力してください。", "error");
+                    }
                 });
                 tagListEl.addEventListener('click', e => {
                     const tagItem = e.target.closest('.tag-item'), deleteBtn = e.target.closest('button[data-action="delete-tag"]');
                     if (deleteBtn) {
-                        e.stopPropagation();
+                        e.stopPropagation(); // Prevent tag item click when deleting
                         if (isDebugMode) { showToast("デバッグモード中はタグを削除できません。", "error"); return; }
                         deleteTag(deleteBtn.dataset.id); return;
                     }
-                    if (tagItem && mode === 'assign') { const tagId = tagItem.dataset.id; tempSelectedTagIds.has(tagId) ? tempSelectedTagIds.delete(tagId) : tempSelectedTagIds.add(tagId); renderTagList(); renderTagPreview(); }
+                    if (tagItem && mode === 'assign') { // Only allow selection in assign mode
+                        const tagId = tagItem.dataset.id;
+                        tempSelectedTagIds.has(tagId) ? tempSelectedTagIds.delete(tagId) : tempSelectedTagIds.add(tagId);
+                        renderTagList(); // Re-render list to show selection state change
+                        renderTagPreview(); // Update preview
+                    }
                 });
-                $('#tag-modal-confirm')?.addEventListener('click', () => onConfirm(tempSelectedTagIds));
-                $('#tag-modal-cancel')?.addEventListener('click', () => onConfirm(null));
+                $('#tag-modal-confirm')?.addEventListener('click', () => { closeModal(); onConfirm(tempSelectedTagIds); }); // Close modal *before* calling confirm
+                $('#tag-modal-cancel')?.addEventListener('click', () => { closeModal(); onConfirm(null); }); // Pass null on cancel
             });
         };
 
+
         const addTag = async (name, color) => {
+             // Debug check done in caller
              const normalizedName = name.trim().toLowerCase();
              if (tags.some(t => t.name.toLowerCase() === normalizedName)) return showToast("同じ名前のタグが既に存在します。", "error");
              const newTag = { name: name.trim(), color, createdAt: Timestamp.now() };
              try {
                 const docRef = doc(collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/tags`));
                 await setDoc(docRef, newTag);
-                showToast(`タグ「${name}」を作成しました。`);
+                showToast(`タグ「${escapeHTML(name)}」を作成しました。`);
+                // Firestore listener will update the 'tags' array and trigger re-render
              } catch (error) { console.error("Error adding tag:", error); showToast("タグの作成に失敗しました。", "error"); }
         };
         const deleteTag = async (tagId) => {
+             // Debug check done in caller
              const tagToDelete = tags.find(t => t.id === tagId);
-             if (!tagToDelete || !await showConfirm("タグの削除", `タグ「${tagToDelete.name}」を削除しますか？<br>全ての作品からこのタグが解除されます。`)) return;
+             if (!tagToDelete || !await showConfirm("タグの削除", `タグ「${escapeHTML(tagToDelete.name)}」を削除しますか？<br>全ての作品からこのタグが解除されます。`)) return;
              try {
                 const batch = writeBatch(db);
+                // Delete the tag document
                 batch.delete(doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/tags`, tagId));
-                works.filter(w => w.tagIds?.includes(tagId)).forEach(work => {
+                // Find works containing this tag and remove it from their tagIds array
+                const worksToUpdate = works.filter(w => w.tagIds?.includes(tagId));
+                worksToUpdate.forEach(work => {
                     batch.update(doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, work.id), {
-                        tagIds: (work.tagIds || []).filter(id => id !== tagId)
+                        tagIds: (work.tagIds || []).filter(id => id !== tagId) // Create new array without the tagId
                     });
                 });
                 await batch.commit();
-                showToast(`タグ「${tagToDelete.name}」を削除しました。`);
+                showToast(`タグ「${escapeHTML(tagToDelete.name)}」を削除しました。`);
+                // UI updates will happen via onSnapshot listeners
              } catch(error) { console.error("Error deleting tag:", error); showToast("タグの削除中にエラーが発生しました。", "error"); }
         };
 
-        // --- Tag Filter Modal ---
+        // --- Tag Filter Modal (Real-time Preview & Reset) ---
         const openTagFilterModal = () => {
             let tempAnd = new Set(listFilters.andTagIds), tempOr = new Set(listFilters.orTagIds), tempNot = new Set(listFilters.notTagIds);
+
+            // ▼▼▼ Moved render function outside for reuse ▼▼▼
+            const renderCombinedTagsPreview = () => {
+                const container = $('#tag-filter-preview');
+                if (!container) return;
+                let html = '';
+                const renderSet = (ids, className, prefix) => {
+                    [...ids].map(id => tags.find(t=>t.id===id)).filter(Boolean).forEach(tag => {
+                        html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${escapeHTML(tag.name)}</span>`;
+                    });
+                };
+                renderSet(tempAnd, 'tag-item-and text-white', 'AND');
+                renderSet(tempOr, 'tag-item-or text-white', 'OR');
+                renderSet(tempNot, 'tag-item-not text-white', 'NOT');
+                container.innerHTML = html || `<span class="text-xs text-gray-500">タグ未選択</span>`;
+            };
+            // ▲▲▲ Moved render function outside for reuse ▲▲▲
+
             openModal("タグの条件を選択", `
                 <div class="flex flex-col h-[70vh]">
                     <div class="flex items-center gap-2 mb-2">
                         <input type="search" id="tagSearchInput" placeholder="タグを検索..." class="w-full bg-gray-700 p-2 rounded-lg">
                     </div>
-                    <p class="text-xs text-gray-400 mb-4">クリックで変更 ( 緑: AND → 青: OR → 赤: NOT → 解除 )</p>
+                    <!-- ▼▼▼ Preview Area Added ▼▼▼ -->
+                    <div class="mb-2">
+                        <label class="block text-sm text-gray-400">選択中の条件</label>
+                        <div id="tag-filter-preview" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px]"></div>
+                    </div>
+                     <!-- ▲▲▲ Preview Area Added ▲▲▲ -->
+                    <div class="flex justify-between items-center mb-2">
+                        <p class="text-xs text-gray-400">クリックで変更 ( 緑: AND → 青: OR → 赤: NOT → 解除 )</p>
+                         {/* <!-- ▼▼▼ Reset Button Added ▼▼▼ --> */}
+                         <button type="button" id="reset-tag-filters-btn" class="text-xs text-gray-400 hover:text-white px-2 py-1 rounded hover:bg-gray-700">リセット</button>
+                         {/* <!-- ▲▲▲ Reset Button Added ▲▲▲ --> */}
+                    </div>
                     <div id="tag-list" class="flex-grow overflow-y-auto pr-2 space-y-2"></div>
                     <div class="pt-4 mt-4 border-t border-gray-700 flex justify-end space-x-3">
                         <button id="tag-modal-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
@@ -2051,38 +2344,54 @@
                     let tagsToRender = [...tags].filter(t => t.name.toLowerCase().includes(tagSearchQuery));
                     tagsToRender.sort((a,b) => a.name.localeCompare(b.name, 'ja'));
                     tagListEl.innerHTML = tagsToRender.map(t => {
-                        let stateClass = 'bg-gray-700';
+                        let stateClass = 'bg-gray-700'; // Default: Unselected
                         if (tempAnd.has(t.id)) stateClass = 'tag-item-and';
                         else if (tempOr.has(t.id)) stateClass = 'tag-item-or';
                         else if (tempNot.has(t.id)) stateClass = 'tag-item-not';
-                        return `<div class="tag-item flex items-center p-2 rounded-lg cursor-pointer hover:bg-gray-600 ${stateClass}" data-id="${t.id}"><div class="w-4 h-4 rounded-full mr-3 shrink-0" style="background-color: ${t.color};"></div><span class="grow font-semibold truncate">${t.name}</span></div>`;
+                        return `<div class="tag-item flex items-center p-2 rounded-lg cursor-pointer hover:bg-gray-600 ${stateClass}" data-id="${t.id}">
+                                    <div class="w-4 h-4 rounded-full mr-3 shrink-0" style="background-color: ${t.color};"></div>
+                                    <span class="grow font-semibold truncate">${escapeHTML(t.name)}</span>
+                                </div>`;
                     }).join('');
+                    renderCombinedTagsPreview(); // Update preview when list renders
                 };
-                renderTagList();
+                renderTagList(); // Initial render
+                // Refresh list if tags data changes while modal is open
+                tagListEl.addEventListener('refresh-tags', renderTagList);
+
                 $('#tagSearchInput').addEventListener('input', debounce(e => { tagSearchQuery = e.target.value.toLowerCase(); renderTagList(); }, 200));
                 tagListEl.addEventListener('click', e => {
                     const tagItem = e.target.closest('.tag-item');
                     if (tagItem) {
                         const tagId = tagItem.dataset.id;
+                        // Cycle through states: AND -> OR -> NOT -> Unselected
                         if (tempAnd.has(tagId)) { tempAnd.delete(tagId); tempOr.add(tagId); }
                         else if (tempOr.has(tagId)) { tempOr.delete(tagId); tempNot.add(tagId); }
                         else if (tempNot.has(tagId)) { tempNot.delete(tagId); }
-                        else { tempAnd.add(tagId); }
-                        renderTagList();
+                        else { tempAnd.add(tagId); } // Start with AND
+                        renderTagList(); // Re-render list and preview
                     }
                 });
+                 // Reset Button Handler
+                 $('#reset-tag-filters-btn')?.addEventListener('click', () => {
+                    tempAnd.clear(); tempOr.clear(); tempNot.clear();
+                    renderTagList(); // Re-render list and preview
+                 });
                 $('#tag-modal-confirm').addEventListener('click', () => {
                     listFilters.andTagIds = tempAnd; listFilters.orTagIds = tempOr; listFilters.notTagIds = tempNot;
-                    renderActiveTagFilters();
+                    renderActiveTagFilters(); // Update main UI filter display
                     paginationState.currentPage = 1; renderAll(); closeModal();
                 });
                 $('#tag-modal-cancel').addEventListener('click', closeModal);
             });
         };
 
+
         // --- Bulk Edit Modal ---
         const openBulkEditModal = () => {
             const count = selectedWorkIds.size;
+            if (count === 0) return showToast("作品が選択されていません。", "error");
+
             const content = `
                 <form id="bulk-edit-form" class="space-y-6">
                     <p class="text-lg">${count}件の作品を一括編集します。</p>
@@ -2129,8 +2438,9 @@
             openModal("一括編集", content, () => {
                 const addSelect = $('#bulk-tags-add');
                 const removeSelect = $('#bulk-tags-remove');
+                // Populate tag selects
                 const sortedTags = [...tags].sort((a,b) => a.name.localeCompare(b.name, 'ja'));
-                const optionsHtml = sortedTags.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+                const optionsHtml = sortedTags.map(t => `<option value="${t.id}">${escapeHTML(t.name)}</option>`).join('');
                 addSelect.innerHTML = optionsHtml;
                 removeSelect.innerHTML = optionsHtml;
 
@@ -2145,37 +2455,48 @@
                     const tagsToAdd = [...addSelect.selectedOptions].map(opt => opt.value);
                     const tagsToRemove = [...removeSelect.selectedOptions].map(opt => opt.value);
 
+                    // Check if any operation is selected
                     if (genreOp === 'none' && ratingOp === 'none' && tagsToAdd.length === 0 && tagsToRemove.length === 0) {
                         return showToast("変更する操作を選択してください。", "error");
+                    }
+                    // Prevent adding and removing the same tag simultaneously
+                    const commonTags = tagsToAdd.filter(tId => tagsToRemove.includes(tId));
+                     if (commonTags.length > 0) {
+                         const commonTagNames = commonTags.map(id => tags.find(t=>t.id === id)?.name || id).join(', ');
+                         return showToast(`以下のタグを追加と削除の両方で選択できません: ${commonTagNames}`, "error");
                     }
 
                     try {
                         const batch = writeBatch(db);
+                        // Get the actual work objects that are selected
                         const worksToUpdate = works.filter(w => selectedWorkIds.has(w.id));
 
                         worksToUpdate.forEach(work => {
                             const workRef = doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, work.id);
-                            let updateData = {};
+                            let updateData = {}; // Object to hold updates for this specific work
 
                             if (genreOp === 'set') updateData.genre = $('#bulk-genre-val').value;
                             if (ratingOp === 'set') updateData.rating = parseInt($('#bulk-rating-val').value, 10);
 
+                            // Calculate new tagIds if tags are being added or removed
                             if (tagsToAdd.length > 0 || tagsToRemove.length > 0) {
                                 let currentTags = new Set(work.tagIds || []);
-                                tagsToAdd.forEach(tId => currentTags.add(tId));
-                                tagsToRemove.forEach(tId => currentTags.delete(tId));
-                                updateData.tagIds = Array.from(currentTags);
+                                tagsToAdd.forEach(tId => currentTags.add(tId)); // Add tags
+                                tagsToRemove.forEach(tId => currentTags.delete(tId)); // Remove tags
+                                updateData.tagIds = Array.from(currentTags); // Store updated array
                             }
 
+                            // Only add update operation to batch if there's something to update
                             if (Object.keys(updateData).length > 0) {
                                 batch.update(workRef, updateData);
                             }
                         });
 
-                        await batch.commit();
+                        await batch.commit(); // Execute all updates
                         showToast(`${count}件の作品を更新しました。`);
-                        selectedWorkIds.clear();
+                        selectedWorkIds.clear(); // Clear selection after successful update
                         closeModal();
+                        // UI updates via onSnapshot
                     } catch (error) {
                         console.error("Error bulk updating works:", error);
                         showToast("一括更新に失敗しました。", "error");
@@ -2187,16 +2508,11 @@
         // --- Column Visibility Modal ---
         const openColumnModal = () => {
             const allCols = [
-                { id: 'image', label: '画像' },
-                { id: 'name', label: '作品名', disabled: true },
-                { id: 'genre', label: 'ジャンル' },
-                { id: 'registeredAt', label: '登録日' },
-                { id: 'rating', label: '評価' },
-                { id: 'tags', label: 'タグ' },
-                { id: 'lastSelectedAt', label: '最終抽選日' },
-                { id: 'selectionCount', label: '抽選回数' },
-                { id: 'sourceUrl', label: 'URL' },
-                { id: 'actions', label: '操作', disabled: true },
+                { id: 'image', label: '画像' }, { id: 'name', label: '作品名', disabled: true },
+                { id: 'genre', label: 'ジャンル' }, { id: 'registeredAt', label: '登録日' },
+                { id: 'rating', label: '評価' }, { id: 'tags', label: 'タグ' },
+                { id: 'lastSelectedAt', label: '最終抽選日' }, { id: 'selectionCount', label: '抽選回数' },
+                { id: 'sourceUrl', label: 'URL' }, { id: 'actions', label: '操作', disabled: true },
             ];
 
             const content = `
@@ -2204,10 +2520,10 @@
                     <p class="text-sm text-gray-400">テーブルに表示する列を選択してください。</p>
                     <div class="grid grid-cols-2 gap-3">
                         ${allCols.map(col => `
-                            <label class="flex items-center p-3 bg-gray-700 rounded-lg ${col.disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}">
+                            <label class="flex items-center p-3 bg-gray-700 rounded-lg ${col.disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-600'}">
                                 <input type="checkbox" data-col-id="${col.id}" class="h-4 w-4 rounded bg-gray-600 text-teal-500 border-gray-600 focus:ring-teal-600"
                                     ${visibleColumns.has(col.id) ? 'checked' : ''}
-                                    ${col.disabled ? 'disabled' : ''}>
+                                    ${col.disabled ? 'disabled checked' : ''}> {/* Keep disabled ones checked visually */}
                                 <span class="ml-3 text-sm">${col.label}</span>
                             </label>
                         `).join('')}
@@ -2219,14 +2535,15 @@
             `;
             openModal("表示列の管理", content, () => {
                 $('#col-modal-close').addEventListener('click', closeModal);
-                $$('input[data-col-id]').forEach(cb => {
+                $$('input[data-col-id]:not([disabled])').forEach(cb => { // Only listen to non-disabled checkboxes
                     cb.addEventListener('change', () => {
                         const colId = cb.dataset.colId;
                         if (cb.checked) visibleColumns.add(colId);
                         else visibleColumns.delete(colId);
-                        localStorage.setItem('visibleColumns', JSON.stringify(Array.from(visibleColumns)));
+                        // Save and apply immediately
+                        localStorage.setItem('visibleColumns_manager', JSON.stringify(Array.from(visibleColumns)));
                         updateColumnVisibility();
-                        renderTable(); // Re-render to apply changes
+                        renderTable(); // Re-render table is needed if structure depends on visible columns
                     });
                 });
             }, { size: 'max-w-3xl' });
@@ -2235,13 +2552,21 @@
         // --- Date Input Validation ---
         const initializeDateInputs = (container) => {
             container.querySelectorAll('.date-input').forEach(textInput => {
+                // Prevent initializing multiple times if modal content is re-rendered
                 if (textInput.dataset.initialized) return;
                 textInput.dataset.initialized = 'true';
+
                 textInput.addEventListener('input', () => {
+                    // Basic format check on input for immediate feedback
+                    if (/^\d{4}(\/\d{2}(\/\d{2}?)?)?$/.test(textInput.value) || textInput.value === '') {
+                        textInput.classList.remove('border-red-500'); // Remove error border if format looks okay or empty
+                    }
+                });
+                textInput.addEventListener('change', () => { // Validate fully on blur/change
                     if (isValidDate(textInput.value) || textInput.value === '') {
                         textInput.classList.remove('border-red-500');
                     } else {
-                        textInput.classList.add('border-red-500');
+                        textInput.classList.add('border-red-500'); // Add error border if invalid
                     }
                 });
             });
@@ -2252,25 +2577,50 @@
 
         const applyAdVisibility = (isVisible) => {
             topAdBanner.classList.toggle('hidden', !isVisible);
-            mainContent.style.paddingTop = isVisible ? '8px' : '0';
+            // Adjust main content padding dynamically if needed (might cause layout shifts)
+            // mainContent.style.paddingTop = isVisible ? 'calc(env(safe-area-inset-top, 0px) + 8px)' : 'env(safe-area-inset-top, 0px)';
         };
 
         const generateAndLoadAdScript = (settings) => {
             const container = document.getElementById('ad-script-container');
-            container.innerHTML = '';
-            if (!settings.showAd) return;
+            if (!container) return;
+            container.innerHTML = ''; // Clear previous ad
+            if (!settings.showAd) return; // Don't load if hidden
+
             const iframe = document.createElement('iframe');
-            iframe.style.width = '100%'; iframe.style.height = '100%'; iframe.style.border = 'none'; iframe.style.minHeight = '120px'; iframe.scrolling = 'no'; iframe.setAttribute('title', 'DLsite Advertisement');
+            iframe.style.width = '100%'; iframe.style.height = '100%'; iframe.style.border = 'none'; iframe.style.minHeight = '120px';
+            iframe.scrolling = 'no'; iframe.setAttribute('title', 'DLsite Advertisement');
             container.appendChild(iframe);
-            const adSettings = { base: "https://www.dlsite.com/", type: settings.type, site: settings.site, query: {}, title: settings.type === 'ranking' ? "ランキング" : "新着作品", display: "horizontal", detail: "1", column: "v", image: "small", count: "5", wrapper: "0", autorotate: true, aid: "workassist" };
+
+            const adSettings = {
+                base: "https://www.dlsite.com/", type: settings.type, site: settings.site, query: {},
+                title: settings.type === 'ranking' ? "ランキング" : "新着作品", display: "horizontal",
+                detail: "1", column: "v", image: "small", count: "5", wrapper: "0", autorotate: true,
+                aid: "workassist" // Affiliate ID
+            };
             if (settings.type === 'ranking') adSettings.query.period = settings.period;
-            const iframeContent = `<html><head><style>body { margin: 0; padding: 0; overflow-x: auto; overflow-y: hidden; } body::-webkit-scrollbar { height: 6px; } body::-webkit-scrollbar-track { background: transparent; } body::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; } .blogparts_container_Hor { white-space: nowrap; padding-bottom: 8px; }</style></head><body><script type="text/javascript">var blogparts = ${JSON.stringify(adSettings)};<\/script><script type="text/javascript" src="https://www.dlsite.com/js/blogparts.js" charset="UTF-8"><\/script></body></html>`;
-            const iframeDoc = iframe.contentWindow.document;
-            iframeDoc.open(); iframeDoc.write(iframeContent); iframeDoc.close();
+
+            // Construct iframe content carefully to avoid XSS issues if settings were user-provided (though here they are not)
+             const iframeContent = `<html><head><style>body { margin: 0; padding: 0; overflow-x: auto; overflow-y: hidden; background-color: transparent; } body::-webkit-scrollbar { height: 6px; } body::-webkit-scrollbar-track { background: transparent; } body::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; } .blogparts_container_Hor { white-space: nowrap; padding-bottom: 8px; }</style></head><body><script type="text/javascript">var blogparts = ${JSON.stringify(adSettings)};<\/script><script type="text/javascript" src="https://www.dlsite.com/js/blogparts.js" charset="UTF-8"><\/script></body></html>`;
+
+             // Write content to iframe - ensure document is ready
+             const iframeDoc = iframe.contentWindow?.document;
+             if (iframeDoc) {
+                 iframeDoc.open();
+                 iframeDoc.write(iframeContent);
+                 iframeDoc.close();
+             } else {
+                 console.error("Failed to access iframe document.");
+             }
         };
 
         const saveAndReloadAd = () => {
-            const settings = { showAd: $('#ad_visibility').checked, type: $('input[name="ad_type"]:checked').value, site: $('#ad_site').value, period: $('#ad_period').value };
+            const settings = {
+                showAd: $('#ad_visibility').checked,
+                type: $('input[name="ad_type"]:checked').value,
+                site: $('#ad_site').value,
+                period: $('#ad_period').value
+            };
             localStorage.setItem('adSettings', JSON.stringify(settings));
             applyAdVisibility(settings.showAd);
             generateAndLoadAdScript(settings);
@@ -2279,11 +2629,14 @@
         const loadAdSettings = () => {
             const saved = localStorage.getItem('adSettings');
             const settings = saved ? JSON.parse(saved) : defaultAdSettings;
+            // Apply settings to modal inputs
             $('#ad_visibility').checked = settings.showAd;
             const typeRadio = $(`input[name="ad_type"][value="${settings.type}"]`); if (typeRadio) typeRadio.checked = true;
             const siteSelect = $('#ad_site'); if (siteSelect.querySelector(`option[value="${settings.site}"]`)) siteSelect.value = settings.site;
             const periodSelect = $('#ad_period'); if (periodSelect.querySelector(`option[value="${settings.period}"]`)) periodSelect.value = settings.period;
+            // Show/hide period select based on type
             $('#ad-period-container').style.display = settings.type === 'ranking' ? 'block' : 'none';
+            // Apply visibility and load script
             applyAdVisibility(settings.showAd);
             generateAndLoadAdScript(settings);
         };
@@ -2302,46 +2655,65 @@
         };
 
         const toggleDebugMode = async () => {
-            const btn = toggleDebugModeBtn; const syncPanel = $('#sync-panel-details'); const actionButtons = [regNewWorkBtn, externalSearchBtn, manageTagsBtn, bulkEditBtn, bulkDeleteBtn];
+            const btn = toggleDebugModeBtn; const syncPanel = $('#sync-panel-details');
+            const actionButtons = [regNewWorkBtn, externalSearchBtn, manageTagsBtn, bulkEditBtn, bulkDeleteBtn]; // Buttons to disable in debug mode
+
             if (isDebugMode) {
+                // Exit Debug Mode
                 if (!await showConfirm("デバッグモード終了", "デバッグモードを終了し、データベースからデータを再読み込みしますか？")) return;
                 isDebugMode = false; debugBanner.classList.add('hidden'); btn.textContent = 'デバッグモード開始'; btn.classList.remove('bg-red-600', 'hover:bg-red-700'); btn.classList.add('bg-amber-600', 'hover:bg-amber-700');
-                syncPanel.style.opacity = '1'; syncPanel.style.pointerEvents = 'auto'; actionButtons.forEach(el => { if(el) el.disabled = false; });
-                works = []; tags = []; showToast("デバッグモードを終了しました。"); loadDataSet(syncId);
+                syncPanel.style.opacity = '1'; syncPanel.style.pointerEvents = 'auto'; // Re-enable sync panel
+                actionButtons.forEach(el => { if(el) el.disabled = false; }); // Re-enable action buttons
+                works = []; tags = []; showToast("デバッグモードを終了しました。");
+                loadDataSet(syncId); // Reload real data
             } else {
+                // Enter Debug Mode
                 if (!await showConfirm("デバッグモード開始", "デバッグモードを開始しますか？<br>現在の接続は切れ、リフレッシュするまでテストデータが表示されます。データは保存されません。")) return;
-                isDebugMode = true; unsubscribeWorks(); unsubscribeTags(); const debugData = generateDebugData(); works = debugData.works; tags = debugData.tags;
+                isDebugMode = true;
+                unsubscribeWorks(); unsubscribeTags(); // Stop listening to real data
+                const debugData = generateDebugData(); works = debugData.works; tags = debugData.tags; // Load debug data
                 debugBanner.classList.remove('hidden'); btn.textContent = 'デバッグモード終了'; btn.classList.remove('bg-amber-600', 'hover:bg-amber-700'); btn.classList.add('bg-red-600', 'hover:bg-red-700');
-                syncPanel.style.opacity = '0.5'; syncPanel.style.pointerEvents = 'none'; actionButtons.forEach(el => { if(el) el.disabled = true; });
-                showToast("デバッグモードを開始しました。"); renderAll();
+                syncPanel.style.opacity = '0.5'; syncPanel.style.pointerEvents = 'none'; // Disable sync panel
+                actionButtons.forEach(el => { if(el) el.disabled = true; }); // Disable actions that modify data
+                loadingStatus = { auth: true, works: true, tags: true }; // Simulate load complete
+                isLoadComplete = true; // Mark as loaded
+                clearTimeout(loadingTimeout); clearTimeout(stallTimeout); // Stop loading checks
+                showToast("デバッグモードを開始しました。");
+                renderAll(); // Render with debug data
             }
         };
 
         // --- App Initialization ---
         const startApp = () => {
-            updateColumnVisibility(); // Call this first
-            loadingOverlay.classList.remove('hidden');
-            initializeFirebase();
-            loadAdSettings();
-            setupEventListeners();
+            updateColumnVisibility(); // Set initial column visibility based on screen/storage
+            loadingOverlay.classList.remove('hidden'); // Show loading overlay
+            initializeFirebase(); // Start Firebase connection and auth
+            loadAdSettings(); // Load ad settings and potentially display ad
+            setupEventListeners(); // Attach all event listeners
         };
 
         document.addEventListener('DOMContentLoaded', () => {
+             // Password Check
             passwordForm.addEventListener('submit', (e) => {
                 e.preventDefault();
                 if (passwordInput.value === MASTER_PASSWORD) {
-                    localStorage.setItem('passwordAuthTimestamp', Date.now().toString());
+                    localStorage.setItem('passwordAuthTimestamp', Date.now().toString()); // Store timestamp on success
                     passwordOverlay.classList.add('hidden'); passwordError.classList.add('hidden');
-                    startApp();
+                    startApp(); // Start the main application
                 } else {
                     passwordError.textContent = 'パスワードが違います。'; passwordError.classList.remove('hidden');
                 }
             });
+
+            // Check if user is already authenticated (within 30 days)
             const authTimestamp = localStorage.getItem('passwordAuthTimestamp');
             if (authTimestamp && (Date.now() - parseInt(authTimestamp, 10) < (30 * 24 * 60 * 60 * 1000))) {
-                passwordOverlay.classList.add('hidden'); startApp();
+                passwordOverlay.classList.add('hidden'); // Skip password if authenticated recently
+                startApp();
             } else {
-                localStorage.removeItem('passwordAuthTimestamp'); passwordOverlay.classList.remove('hidden'); loadingOverlay.classList.add('hidden');
+                localStorage.removeItem('passwordAuthTimestamp'); // Clear expired timestamp
+                passwordOverlay.classList.remove('hidden'); // Show password overlay
+                loadingOverlay.classList.add('hidden'); // Hide loading overlay until password is entered
             }
         });
 
