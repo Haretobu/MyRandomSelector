@@ -1,0 +1,2130 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>作品リスト管理</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+        
+        /* Transitions */
+        .transition-all { transition: all 0.3s ease-in-out; }
+        .transition-transform { transition: transform 0.2s ease-in-out; }
+
+        /* Details/Summary */
+        summary { list-style: none; cursor: pointer; }
+        summary::-webkit-details-marker { display: none; }
+        details[open] > summary .chevron-icon { transform: rotate(180deg); }
+        .chevron-icon { transition: transform 0.2s ease-in-out; }
+
+        /* Modal Animation */
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: translateY(-20px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .modal-open { animation: modalFadeIn 0.3s ease-out forwards; }
+        .modal-content { max-height: 85vh; }
+
+        /* Toast Notification */
+        #toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 100;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.4s ease-in-out;
+        }
+        #toast.show { opacity: 1; transform: translateY(0); }
+        
+        /* Table Styles */
+        #works-table th {
+            cursor: pointer;
+            user-select: none;
+        }
+        #works-table th:hover .sort-icon {
+            opacity: 1;
+        }
+        .sort-icon {
+            opacity: 0.3;
+            transition: opacity 0.2s, transform 0.2s;
+        }
+        .sort-icon.asc { transform: rotate(0deg); }
+        .sort-icon.desc { transform: rotate(180deg); }
+        
+        /* Inline Rating Stars */
+        .inline-rating .fa-star {
+            cursor: pointer;
+            transition: color 0.1s;
+        }
+        .inline-rating .fa-star:hover {
+            color: #facc15 !important; /* yellow-400 */
+        }
+        
+        /* Tag pills */
+        .tag-pill {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 500;
+            margin: 2px;
+            white-space: nowrap;
+        }
+        .tag-item-and { background-color: #059669 !important; color: white !important; }
+        .tag-item-or { background-color: #2563eb !important; color: white !important; }
+        .tag-item-not { background-color: #be123c !important; color: white !important; text-decoration: line-through; }
+        
+        /* Filter panel */
+        .filter-group {
+            border-bottom: 1px solid #374151;
+            padding-bottom: 1rem;
+        }
+        .filter-group:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        
+        /* Image Compare */
+        .image-compare-box {
+            flex: 1;
+            padding: 0.5rem;
+            border: 2px dashed #4b5563;
+            border-radius: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 150px;
+        }
+        .image-compare-box img {
+            max-width: 100%;
+            max-height: 200px;
+            object-fit: contain;
+            border-radius: 0.25rem;
+        }
+        .border-red-500 { border-color: #ef4444; }
+
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 font-sans antialiased">
+
+    <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]">v1.0-manager</div>
+
+    <!-- Top Ad Banner (from price_comparison.html) -->
+    <div id="top-ad-banner" class="sticky top-0 z-40 w-full bg-gray-900/80 backdrop-blur-sm border-b border-gray-700/50">
+        <div class="max-w-screen-2xl mx-auto p-2 md:px-6 lg:px-8">
+            <div id="ad-script-container" class="bg-gray-800/50 rounded-lg text-center flex items-center justify-center min-h-[120px] overflow-hidden">
+                <!-- Ad script will be injected here by JS -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-gray-900 z-[100] flex items-center justify-center p-4">
+        <div id="loading-content" class="text-center transition-opacity duration-300 opacity-0">
+            <i class="fas fa-spinner fa-spin fa-3x text-teal-400"></i>
+            <p id="loading-text" class="mt-4 text-gray-400">アプリケーションを初期化中...</p>
+            <!-- Add error display area -->
+            <div id="loading-error-display" class="mt-4 hidden max-w-md mx-auto"></div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div id="app-container" class="min-h-screen p-4 md:p-6 lg:p-8 opacity-0 transition-opacity duration-500">
+        <main id="main-content" class="max-w-screen-2xl mx-auto space-y-6 transition-all duration-300">
+            
+            <!-- 1. Header & Sync Panel -->
+            <header class="space-y-4">
+                <div class="flex justify-between items-center flex-wrap gap-4">
+                    <h1 class="text-2xl md:text-3xl font-bold text-teal-400 flex items-center">
+                        <i class="fas fa-tasks mr-3"></i>
+                        作品リスト管理
+                    </h1>
+                    <a href="index.html" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors flex items-center text-sm">
+                        <i class="fas fa-dice mr-2"></i>
+                        抽選アプリに戻る
+                    </a>
+                </div>
+                
+                <details id="sync-panel-details" class="bg-gray-800 rounded-xl shadow-lg">
+                    <summary class="p-5 flex justify-between items-center">
+                        <h2 class="text-lg font-bold text-gray-300 flex items-center"><i class="fas fa-sync-alt mr-3"></i>データ同期</h2>
+                        <i class="fas fa-chevron-down chevron-icon"></i>
+                    </summary>
+                    <div class="px-5 pb-5 border-t border-gray-700">
+                        <div class="pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="space-y-3">
+                                <label class="block text-sm font-medium text-gray-400">現在の同期ID</label>
+                                <div class="flex items-center bg-gray-700 rounded-lg p-2">
+                                    <input type="text" id="syncIdDisplay" class="bg-transparent w-full text-gray-300 focus:outline-none" readonly>
+                                    <button id="copySyncIdBtn" class="ml-2 px-3 py-1 bg-teal-600 hover:bg-teal-700 rounded-md text-sm transition-colors" title="コピー"><i class="fas fa-copy"></i></button>
+                                </div>
+                            </div>
+                            <div class="space-y-3">
+                                <label for="syncIdHistory" class="block text-sm font-medium text-gray-400">同期ID履歴 / 読み込み</label>
+                                <select id="syncIdHistory" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500"></select>
+                                <div class="flex items-center">
+                                    <input type="text" id="newSyncIdInput" placeholder="新しい同期IDをペースト" class="w-full bg-gray-700 border border-gray-600 rounded-l-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
+                                    <button id="loadSyncIdBtn" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded-r-lg font-semibold transition-colors flex-shrink-0">読込</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+            </header>
+            
+            <!-- 2. Filter Panel -->
+            <details id="filter-panel-details" class="bg-gray-800 rounded-xl shadow-lg" open>
+                <summary class="p-5 flex justify-between items-center">
+                    <h2 class="text-lg font-bold text-gray-300 flex items-center"><i class="fas fa-filter mr-3"></i>検索・絞り込み</h2>
+                    <i class="fas fa-chevron-down chevron-icon"></i>
+                </summary>
+                <div class="p-5 border-t border-gray-700">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <!-- 作品名検索 -->
+                        <div class="space-y-2">
+                            <label for="filter-search" class="text-sm font-medium text-gray-400">作品名</label>
+                            <input type="search" id="filter-search" placeholder="作品名で検索..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
+                        </div>
+                        
+                        <!-- ジャンル -->
+                        <div class="space-y-2">
+                            <label class="text-sm font-medium text-gray-400">ジャンル</label>
+                            <div class="flex flex-wrap gap-x-4 gap-y-2 pt-2">
+                                <label class="flex items-center"><input type="checkbox" data-filter-genre="漫画" class="h-4 w-4 rounded bg-gray-700 text-teal-500 border-gray-600 focus:ring-teal-600"> <span class="ml-2">漫画</span></label>
+                                <label class="flex items-center"><input type="checkbox" data-filter-genre="ゲーム" class="h-4 w-4 rounded bg-gray-700 text-teal-500 border-gray-600 focus:ring-teal-600"> <span class="ml-2">ゲーム</span></label>
+                                <label class="flex items-center"><input type="checkbox" data-filter-genre="動画" class="h-4 w-4 rounded bg-gray-700 text-teal-500 border-gray-600 focus:ring-teal-600"> <span class="ml-2">動画</span></label>
+                            </div>
+                        </div>
+                        
+                        <!-- 評価 -->
+                        <div class="space-y-2">
+                            <label for="filter-rating-op" class="text-sm font-medium text-gray-400">評価</label>
+                            <div class="flex items-center gap-2">
+                                <select id="filter-rating-op" class="bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
+                                    <option value="gte">指定なし</option>
+                                    <option value="gte">★ 以上</option>
+                                    <option value="lte">★ 以下</option>
+                                    <option value="eq">★ と同じ</option>
+                                </select>
+                                <select id="filter-rating-val" class="bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
+                                    <option value="0">---</option>
+                                    <option value="1">★ 1</option>
+                                    <option value="2">★ 2</option>
+                                    <option value="3">★ 3</option>
+                                    <option value="4">★ 4</option>
+                                    <option value="5">★ 5</option>
+                                </select>
+                            </div>
+                            <label class="flex items-center pt-2"><input type="checkbox" id="filter-unrated" class="h-4 w-4 rounded bg-gray-700 text-teal-500 border-gray-600 focus:ring-teal-600"> <span class="ml-2 text-sm">未評価の作品のみ</span></label>
+                        </div>
+                        
+                        <!-- 登録日 -->
+                        <div class="space-y-2">
+                             <label class="text-sm font-medium text-gray-400">登録日</label>
+                             <div class="flex items-center gap-2">
+                                <input type="text" id="filter-date-start" placeholder="YYYY/MM/DD" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500 date-input">
+                                <span class="text-gray-500">~</span>
+                                <input type="text" id="filter-date-end" placeholder="YYYY/MM/DD" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500 date-input">
+                             </div>
+                        </div>
+                        
+                        <!-- タグ -->
+                        <div class="lg:col-span-4 space-y-2">
+                            <label class="text-sm font-medium text-gray-400">タグ</label>
+                            <div class="flex flex-wrap gap-2 items-center">
+                                <button id="filter-open-tags-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-sm transition-colors"><i class="fas fa-tags mr-2"></i>タグ条件を選択</button>
+                                <div id="filter-tags-display" class="flex flex-wrap gap-1">
+                                    <!-- Selected tag pills go here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </details>
+
+            <!-- 3. Action Bar & List Info -->
+            <section class="bg-gray-800 p-4 rounded-xl shadow-lg space-y-4">
+                <div class="flex justify-between items-center flex-wrap gap-4">
+                    <div class="flex flex-wrap gap-3">
+                        <button id="reg-new-work-btn" class="px-4 py-2 bg-lime-600 hover:bg-lime-700 rounded-lg font-semibold transition-colors flex items-center"><i class="fas fa-plus mr-2"></i>新規登録</button>
+                        <button id="manage-tags-btn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition-colors flex items-center"><i class="fas fa-tags mr-2"></i>タグ管理</button>
+                        <button id="manage-columns-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors flex items-center"><i class="fas fa-columns mr-2"></i>表示列</button>
+                    </div>
+                    <!-- Bulk Actions (hidden by default) -->
+                    <div id="bulk-action-bar" class="hidden flex flex-wrap gap-3 items-center bg-gray-700 p-3 rounded-lg">
+                        <span id="bulk-selected-count" class="text-sm font-semibold mr-2">0件選択中</span>
+                        <button id="bulk-edit-btn" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg text-sm transition-colors"><i class="fas fa-pencil-alt mr-2"></i>一括編集</button>
+                        <button id="bulk-delete-btn" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm transition-colors"><i class="fas fa-trash-alt mr-2"></i>一括削除</button>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center px-2">
+                    <span id="work-count-display" class="text-sm text-gray-400">0 作品</span>
+                    <div class="flex items-center gap-2">
+                        <label for="items-per-page" class="text-sm text-gray-400">表示件数:</label>
+                        <select id="items-per-page" class="bg-gray-700 border border-gray-600 rounded-lg p-1 text-sm focus:outline-none">
+                            <option value="20">20</option>
+                            <option value="50" selected>50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. Works Table -->
+            <section class="bg-gray-800 rounded-xl shadow-lg overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table id="works-table" class="w-full text-sm text-left">
+                        <thead class="bg-gray-700/50 text-xs text-gray-300 uppercase tracking-wider">
+                            <tr>
+                                <th class="p-3 w-12"><input type="checkbox" id="select-all-checkbox" class="h-4 w-4 rounded bg-gray-600 text-teal-500 border-gray-500 focus:ring-teal-600"></th>
+                                <th class="p-3 col-image" data-col="image" style="display: none;">画像</th>
+                                <th class="p-3 col-name" data-col="name" data-sort="name">作品名 <i class="fas fa-sort-down sort-icon"></i></th>
+                                <th class="p-3 col-genre" data-col="genre" data-sort="genre">ジャンル <i class="fas fa-sort-down sort-icon"></i></th>
+                                <th class="p-3 col-registeredAt" data-col="registeredAt" data-sort="registeredAt">登録日 <i class="fas fa-sort-down sort-icon desc"></i></th>
+                                <th class="p-3 col-rating" data-col="rating" data-sort="rating">評価 <i class="fas fa-sort-down sort-icon"></i></th>
+                                <th class="p-3 col-tags" data-col="tags">タグ</th>
+                                <th class="p-3 col-lastSelectedAt" data-col="lastSelectedAt" data-sort="lastSelectedAt" style="display: none;">最終抽選日 <i class="fas fa-sort-down sort-icon"></i></th>
+                                <th class="p-3 col-selectionCount" data-col="selectionCount" data-sort="selectionCount" style="display: none;">抽選回数 <i class="fas fa-sort-down sort-icon"></i></th>
+                                <th class="p-3 col-sourceUrl" data-col="sourceUrl" style="display: none;">URL</th>
+                                <th class="p-3 col-actions" data-col="actions">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="works-table-body" class="divide-y divide-gray-700">
+                            <!-- JS will render rows here -->
+                            <tr><td colspan="10" class="p-8 text-center text-gray-500">データを読み込み中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            
+            <!-- 5. Pagination -->
+            <section id="pagination-container" class="flex justify-center items-center gap-2 pt-4">
+                <!-- JS will render pagination buttons here -->
+            </section>
+            
+        </main>
+    </div>
+    
+    <!-- Floating Action Buttons (from price_comparison.html) -->
+    <div class="fixed bottom-6 right-6 z-50 flex flex-col gap-4">
+        <button id="ad-settings-fab" class="bg-blue-600 hover:bg-blue-500 w-16 h-16 rounded-full shadow-lg flex items-center justify-center text-2xl transition-transform hover:scale-110" title="広告設定">
+            <i class="fas fa-ad"></i>
+        </button>
+    </div>
+    
+    <!-- Ad Settings Modal (from price_comparison.html) -->
+    <div id="ad-settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[80] flex items-center justify-center p-4">
+        <div id="ad-settings-modal-content" class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-md w-full relative">
+             <button id="ad-settings-modal-close" class="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-times fa-lg"></i>
+            </button>
+            <h3 class="text-xl font-bold mb-6 text-gray-300"><i class="fas fa-ad mr-3"></i>広告設定</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" id="ad_visibility" class="h-5 w-5 rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-600">
+                        <span class="ml-3 text-sm font-medium text-gray-300">広告を表示する</span>
+                    </label>
+                </div>
+                <hr class="border-gray-600">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">表示タイプ</label>
+                    <div class="flex gap-4">
+                       <label class="flex items-center"><input type="radio" name="ad_type" value="ranking" checked class="h-4 w-4 text-blue-500 bg-gray-700 border-gray-600"> <span class="ml-2">ランキング</span></label>
+                       <label class="flex items-center"><input type="radio" name="ad_type" value="new" class="h-4 w-4 text-blue-500 bg-gray-700 border-gray-600"> <span class="ml-2">新着作品</span></label>
+                    </div>
+                </div>
+                <div>
+                    <label for="ad_site" class="block text-sm font-medium text-gray-400 mb-1">ジャンル</label>
+                    <select id="ad_site" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="maniax">同人</option>
+                        <option value="pro">美少女ゲーム</option>
+                        <option value="books">成年コミック</option>
+                        <option value="appx">スマホゲーム</option>
+                    </select>
+                </div>
+                <div id="ad-period-container">
+                    <label for="ad_period" class="block text-sm font-medium text-gray-400 mb-1">期間 (ランキング)</label>
+                    <select id="ad_period" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="24h">24時間ランキング</option>
+                        <option value="week">7日間ランキング</option>
+                        <option value="month">1ヵ月間ランキング</option>
+                        <option value="year">当年ランキング</option>
+                        <option value="total">累計ランキング</option>
+                    </select>
+                </div>
+                <div class="flex justify-end pt-4">
+                    <button id="save-ad-settings-btn" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors">
+                        設定を保存
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Generic Modal Wrapper (from index.html) -->
+    <div id="modal-backdrop" class="hidden fixed inset-0 bg-black bg-opacity-70 z-40 transition-opacity"></div>
+    <div id="modal-wrapper" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div id="modal-container" class="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-transform scale-95 opacity-0">
+             <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h3 id="modal-title" class="text-xl font-bold">Modal Title</h3>
+                <button id="modal-close-btn" class="text-gray-400 hover:text-white"><i class="fas fa-times fa-lg"></i></button>
+            </div>
+            <div id="modal-content-host" class="p-6 overflow-y-auto modal-content">
+                <!-- Modal content will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification (from index.html) -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-gray-700 text-white px-6 py-3 rounded-lg shadow-lg z-[70]">
+        <p id="toast-message">Message</p>
+    </div>
+
+    <!-- Simple Password Overlay (from index.html) -->
+    <div id="password-overlay" class="hidden fixed inset-0 bg-gray-900 bg-opacity-95 z-[90] flex items-center justify-center p-4">
+        <div class="w-full max-w-sm">
+            <form id="password-form" class="bg-gray-800 p-8 rounded-2xl shadow-2xl space-y-6">
+                <h2 class="text-2xl font-bold text-center text-gray-300">認証</h2>
+                <div id="password-error" class="hidden text-sm text-center bg-red-900 border border-red-700 text-red-300 p-2 rounded-lg"></div>
+                <div>
+                    <label for="password-input" class="block text-sm font-medium text-gray-400 mb-1">パスワード</label>
+                    <input type="password" id="password-input" required class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                </div>
+                <button type="submit" class="w-full px-4 py-3 bg-sky-600 hover:bg-sky-700 rounded-lg font-bold text-lg transition-colors">入室</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal (from index.html) -->
+    <div id="confirm-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[80] flex items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-sm w-full">
+            <h3 id="confirm-title" class="text-lg font-bold mb-4">確認</h3>
+            <p id="confirm-message" class="text-gray-300 mb-6">この操作を続けてもよろしいですか？</p>
+            <div class="flex justify-end space-x-4">
+                <button id="confirm-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors">キャンセル</button>
+                <button id="confirm-ok" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            getDoc, 
+            setDoc, 
+            updateDoc, 
+            deleteDoc, 
+            onSnapshot, 
+            collection, 
+            query, 
+            writeBatch,
+            Timestamp,
+            getDocs
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- UI Helper Functions ---
+        const $ = (selector) => document.querySelector(selector);
+        const $$ = (selector) => document.querySelectorAll(selector);
+
+        // --- App Configuration ---
+        const DEFAULT_APP_ID = 'r18-random-selector';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : DEFAULT_APP_ID;
+        const appVersion = 'v1.0-manager';
+        // (from index.html)
+        const MASTER_PASSWORD = '07143674'; 
+        $('#version-display').textContent = appVersion;
+
+        // (from index.html)
+        const firebaseConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : `{
+            "apiKey": "AIzaSyAnlTrmb0MW8yznBxpWF6B83R9luFnGVts",
+            "authDomain": "serecter222.firebaseapp.com",
+            "projectId": "serecter222",
+            "storageBucket": "serecter222.appspot.com",
+            "messagingSenderId": "1019715441654",
+            "appId": "1:1019715441654:web:6caa7779148cce46c92dd7"
+        }`;
+        
+        let firebaseApp, auth, db;
+        
+        // --- State Management ---
+        let works = []; // Master list of works
+        let tags = []; // Master list of tags
+        let unsubscribeWorks = () => {};
+        let unsubscribeTags = () => {};
+        let syncId = '';
+        let currentUser = null;
+        let loadingTimeout = null; // Add loading timeout timer
+        let stallTimeout = null; // Add data stall timer
+        let isLoadComplete = false;
+        let loadingStatus = { auth: false, works: false, tags: false };
+        let checkModalDirtyState = () => false;
+
+        // List State
+        let displayedWorks = []; // Filtered, sorted, paginated list
+        let filters = {
+            search: '',
+            genres: new Set(),
+            ratingOp: 'gte', // 'gte', 'lte', 'eq'
+            ratingVal: 0,
+            unrated: false,
+            dateStart: '',
+            dateEnd: '',
+            andTagIds: new Set(),
+            orTagIds: new Set(),
+            notTagIds: new Set()
+        };
+        let sortState = {
+            by: 'registeredAt',
+            order: 'desc',
+        };
+        let paginationState = {
+            currentPage: 1,
+            itemsPerPage: 50,
+        };
+        let selectedWorkIds = new Set();
+        let visibleColumns = new Set(['name', 'genre', 'registeredAt', 'rating', 'tags', 'actions']);
+        
+        // --- UI Elements ---
+        const loadingOverlay = $('#loading-overlay');
+        const loadingContent = $('#loading-content');
+        const loadingText = $('#loading-text'); // Get loading text
+        const loadingErrorDisplay = $('#loading-error-display'); // Get error display element
+        const appContainer = $('#app-container');
+        const mainContent = $('#main-content');
+        
+        // Sync Panel
+        const syncIdDisplay = $('#syncIdDisplay');
+        const copySyncIdBtn = $('#copySyncIdBtn');
+        const newSyncIdInput = $('#newSyncIdInput');
+        const loadSyncIdBtn = $('#loadSyncIdBtn');
+        const syncIdHistoryEl = $('#syncIdHistory');
+        
+        // Filter Panel
+        const filterSearch = $('#filter-search');
+        const filterUnrated = $('#filter-unrated');
+        const filterRatingOp = $('#filter-rating-op');
+        const filterRatingVal = $('#filter-rating-val');
+        const filterDateStart = $('#filter-date-start');
+        const filterDateEnd = $('#filter-date-end');
+        const filterOpenTagsBtn = $('#filter-open-tags-btn');
+        const filterTagsDisplay = $('#filter-tags-display');
+
+        // Action Bar
+        const regNewWorkBtn = $('#reg-new-work-btn');
+        const manageTagsBtn = $('#manage-tags-btn');
+        const manageColumnsBtn = $('#manage-columns-btn');
+        const bulkActionBar = $('#bulk-action-bar');
+        const bulkSelectedCount = $('#bulk-selected-count');
+        const bulkEditBtn = $('#bulk-edit-btn');
+        const bulkDeleteBtn = $('#bulk-delete-btn');
+        const workCountDisplay = $('#work-count-display');
+        const itemsPerPageSelect = $('#items-per-page');
+
+        // Table
+        const worksTable = $('#works-table');
+        const worksTableHead = worksTable.querySelector('thead');
+        const worksTableBody = $('#works-table-body');
+        const selectAllCheckbox = $('#select-all-checkbox');
+        
+        // Pagination
+        const paginationContainer = $('#pagination-container');
+
+        // Modals (from index.html)
+        const modalBackdrop = $('#modal-backdrop');
+        const modalWrapper = $('#modal-wrapper');
+        const modalContainer = $('#modal-container');
+        const modalTitle = $('#modal-title');
+        const modalContentHost = $('#modal-content-host');
+        const modalCloseBtn = $('#modal-close-btn');
+
+        // Auth (from index.html)
+        const passwordOverlay = $('#password-overlay');
+        const passwordForm = $('#password-form');
+        const passwordInput = $('#password-input');
+        const passwordError = $('#password-error');
+
+        // Toast & Confirm (from index.html)
+        const toastEl = $('#toast');
+        const toastMessageEl = $('#toast-message');
+        const confirmModal = $('#confirm-modal');
+        const confirmTitle = $('#confirm-title');
+        const confirmMessage = $('#confirm-message');
+        const confirmOkBtn = $('#confirm-ok');
+        const confirmCancelBtn = $('#confirm-cancel');
+        
+        // Ad UI (from price_comparison.html)
+        const topAdBanner = document.getElementById('top-ad-banner');
+        const adSettingsModal = document.getElementById('ad-settings-modal');
+        const adSettingsModalContent = document.getElementById('ad-settings-modal-content');
+        
+        // --- Utility Functions (from index.html) ---
+        
+        const escapeHTML = (str) => {
+            if (typeof str !== 'string') return '';
+            return str.replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        };
+        
+        const isValidDate = (dateString) => {
+            if (!/^\d{4}\/\d{2}\/\d{2}$/.test(dateString)) return false;
+            const d = new Date(dateString.replace(/\//g, '-'));
+            if (isNaN(d.getTime())) return false;
+            return d.toISOString().slice(0, 10).replace(/-/g, '/') === dateString;
+        };
+        
+        const showToast = (message, duration = 3000) => {
+            toastMessageEl.textContent = message;
+            toastEl.classList.add('show');
+            setTimeout(() => {
+                toastEl.classList.remove('show');
+            }, duration);
+        };
+
+        const showConfirm = (title, message) => {
+            return new Promise((resolve) => {
+                confirmTitle.textContent = title;
+                confirmMessage.innerHTML = message; // Allow HTML for emphasis
+                confirmModal.classList.remove('hidden');
+
+                const okHandler = () => {
+                    confirmModal.classList.add('hidden');
+                    cleanup();
+                    resolve(true);
+                };
+                const cancelHandler = () => {
+                    confirmModal.classList.add('hidden');
+                    cleanup();
+                    resolve(false);
+                };
+                const cleanup = () => {
+                    confirmOkBtn.removeEventListener('click', okHandler);
+                    confirmCancelBtn.removeEventListener('click', cancelHandler);
+                };
+                
+                confirmOkBtn.addEventListener('click', okHandler);
+                confirmCancelBtn.addEventListener('click', cancelHandler);
+            });
+        };
+        
+        const formatDate = (timestamp, includeTime = false) => {
+            if (!timestamp || !timestamp.toDate) return 'N/A';
+            const date = timestamp.toDate();
+            const options = { year: 'numeric', month: '2-digit', day: '2-digit' };
+            if (includeTime) {
+                options.hour = '2-digit';
+                options.minute = '2-digit';
+            }
+            return new Intl.DateTimeFormat('ja-JP', options).format(date);
+        };
+
+        const formatDateForInput = (date) => {
+            const d = date instanceof Date ? date : new Date();
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}/${month}/${day}`;
+        };
+        
+        const debounce = (func, delay) => {
+            let timer;
+            return (...args) => {
+                clearTimeout(timer);
+                timer = setTimeout(() => {
+                    func.apply(this, args);
+                }, delay);
+            };
+        };
+
+        const getContrastColor = (hex) => {
+            if (!hex) return '#FFFFFF';
+            const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+            return (r * 0.299 + g * 0.587 + b * 0.114) > 186 ? '#000000' : '#FFFFFF';
+        };
+
+        // --- Loading Timeout Logic (from index.html) ---
+        
+        const handleLoadingTimeout = (isStall = false) => {
+            if (isLoadComplete) return;
+
+            const errorCode = isStall ? 'DATA_STALL' : 'TIMEOUT_30S';
+            const errorMessageTitle = isStall ? 'データ取得の停滞' : '読み込みタイムアウト';
+            console.error(`Loading failed: ${errorCode}`);
+
+            clearTimeout(loadingTimeout);
+            clearTimeout(stallTimeout);
+
+            loadingText.classList.add('hidden'); // Hide normal loading text
+
+            const statusParts = [];
+            if (!loadingStatus.auth) statusParts.push('認証');
+            if (!loadingStatus.tags) statusParts.push('タグ');
+            if (!loadingStatus.works) statusParts.push('作品');
+
+            // Display error in the dedicated div
+            loadingErrorDisplay.innerHTML = `
+                <div class="bg-red-900 border border-red-700 rounded-lg p-4 text-left">
+                    <h3 class="text-lg font-bold text-red-300 mb-2">${errorMessageTitle}</h3>
+                    <p class="text-red-200 mb-4">データの読み込みが完了しませんでした。ネットワーク接続などを確認してください。</p>
+                    <div class="mt-4 pt-3 border-t border-red-800 text-xs font-mono text-red-300">
+                        <p>エラーコード: ${errorCode}</p>
+                        <p>未完了: ${statusParts.join(', ')}</p>
+                    </div>
+                </div>`;
+            loadingErrorDisplay.classList.remove('hidden');
+        };
+
+        const startLoadingTimeout = () => {
+            clearTimeout(loadingTimeout);
+            loadingTimeout = setTimeout(() => handleLoadingTimeout(false), 30000); // 30 seconds timeout
+        };
+
+        const handleDataFetchError = (error, type) => {
+             if (isLoadComplete) return; // Don't show error if loading already succeeded
+             console.error(`Error fetching ${type}: `, error);
+             clearTimeout(loadingTimeout); // Stop the main timeout
+             clearTimeout(stallTimeout); // Stop stall timeout
+
+             loadingText.classList.add('hidden'); // Hide normal loading text
+
+             // Display error in the dedicated div
+             loadingErrorDisplay.innerHTML = `
+                <div class="bg-red-900 border border-red-700 rounded-lg p-4 text-left">
+                    <h3 class="text-lg font-bold text-red-300 mb-2">${type}データの取得に失敗</h3>
+                    <p class="text-red-200 mb-4">データベースから情報を取得できませんでした。Firebaseのセキュリティルールが読み取りを許可しているか確認してください。</p>
+                    <div class="mt-4 pt-3 border-t border-red-800 text-xs font-mono text-red-300">
+                        <p>エラー: ${error.code || 'N/A'} - ${error.message}</p>
+                    </div>
+                </div>`;
+            loadingErrorDisplay.classList.remove('hidden');
+        };
+
+        // --- Modal Management (from index.html) ---
+        const openModal = (title, contentHtml, onOpen = null, options = {}) => {
+            checkModalDirtyState = () => false;
+            const { size = 'max-w-2xl' } = options;
+            
+            modalContainer.classList.remove('max-w-2xl', 'max-w-4xl', 'max-w-5xl');
+            modalContainer.classList.add(size);
+            
+            modalTitle.textContent = title;
+            modalContentHost.innerHTML = contentHtml;
+            initializeDateInputs(modalContentHost); 
+            modalBackdrop.classList.remove('hidden');
+            modalWrapper.classList.remove('hidden');
+            
+            setTimeout(() => {
+                modalBackdrop.classList.add('opacity-100');
+                modalContainer.classList.remove('scale-95', 'opacity-0');
+                modalContainer.classList.add('modal-open');
+                if (onOpen) onOpen();
+                
+                const firstFocusable = modalContentHost.querySelector('input, select, button');
+                if (firstFocusable) {
+                    setTimeout(() => firstFocusable.focus(), 100);
+                }
+            }, 10);
+        };
+
+        const closeModal = async () => {
+            if (checkModalDirtyState()) {
+                const confirmed = await showConfirm("未保存の変更", "変更が保存されていません。本当に閉じますか？");
+                if (!confirmed) return;
+            }
+            checkModalDirtyState = () => false;
+
+            modalContainer.classList.add('scale-95', 'opacity-0');
+            modalContainer.classList.remove('modal-open');
+            modalBackdrop.classList.remove('opacity-100');
+            
+            setTimeout(() => {
+                modalBackdrop.classList.add('hidden');
+                modalWrapper.classList.add('hidden');
+                modalContentHost.innerHTML = '';
+            }, 300);
+        };
+        
+        // --- Loading / Auth (from index.html) ---
+        
+        const checkLoadingComplete = () => {
+            if (isLoadComplete) return;
+
+            // Update loading text (no progress bar in this app)
+            loadingText.textContent = `読み込み中... (認証: ${loadingStatus.auth}, タグ: ${loadingStatus.tags}, 作品: ${loadingStatus.works})`;
+
+            if (loadingStatus.auth && loadingStatus.works && loadingStatus.tags) {
+                isLoadComplete = true;
+                clearTimeout(loadingTimeout); // Clear timeouts on success
+                clearTimeout(stallTimeout);
+                console.log("All data loaded successfully.");
+                
+                loadingText.textContent = '読み込み完了！';
+
+                setTimeout(() => {
+                    loadingOverlay.classList.add('opacity-0');
+                    appContainer.classList.remove('opacity-0');
+                    setTimeout(() => loadingOverlay.classList.add('hidden'), 500);
+                }, 500);
+            }
+        };
+
+        const initializeFirebase = () => {
+            startLoadingTimeout(); // Start the 30s timeout
+            setTimeout(() => { loadingContent.classList.remove('opacity-0'); }, 100);
+            try {
+                const firebaseConfig = JSON.parse(firebaseConfigStr);
+                firebaseApp = initializeApp(firebaseConfig);
+                auth = getAuth(firebaseApp);
+                db = getFirestore(firebaseApp);
+                setupAuthObserver();
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                // Show initialization error directly
+                loadingText.classList.add('hidden');
+                loadingErrorDisplay.innerHTML = `<p class="text-red-400">Firebaseの初期化に失敗しました。設定を確認してください。<br><span class="text-xs">${error.message}</span></p>`;
+                loadingErrorDisplay.classList.remove('hidden');
+            }
+        };
+
+        const setupAuthObserver = () => {
+            onAuthStateChanged(auth, user => {
+                if (user) {
+                    // Only process if auth hasn't completed yet
+                    if (!loadingStatus.auth) {
+                        currentUser = user;
+                        loadingStatus.auth = true;
+
+                        clearTimeout(stallTimeout); // Clear previous stall timer if any
+                        // Start a 15s stall timer after successful auth
+                        stallTimeout = setTimeout(() => handleLoadingTimeout(true), 15000);
+
+                        checkLoadingComplete(); // Update progress and check if all loaded
+                        setupSyncId(); // Proceed to load data
+                    }
+                } else {
+                    // Try to sign in anonymously, handle error if it fails
+                    signInAnonymously(auth).catch(error => handleDataFetchError(error, '匿名認証'));
+                }
+            }, error => handleDataFetchError(error, '認証状態監視')); // Handle observer errors
+        };
+
+        // --- Data Sync Logic (from index.html) ---
+        const setupSyncId = () => {
+            let currentSyncId = localStorage.getItem('r18_sync_id');
+            if (!currentSyncId) {
+                currentSyncId = generateRandomId();
+                localStorage.setItem('r18_sync_id', currentSyncId);
+            }
+            loadDataSet(currentSyncId);
+            updateSyncIdHistory(currentSyncId);
+        };
+        
+        const loadDataSet = (newSyncId) => {
+            if (syncId === newSyncId && isLoadComplete) return;
+            
+            syncId = newSyncId;
+            syncIdDisplay.value = syncId;
+            localStorage.setItem('r18_sync_id', newSyncId);
+            
+            unsubscribeWorks();
+            unsubscribeTags();
+            works = [];
+            tags = [];
+            renderAll();
+
+            if (currentUser && syncId) {
+                subscribeToWorks();
+                subscribeToTags();
+            }
+        };
+        
+        const updateSyncIdHistory = (newId) => {
+            let history = JSON.parse(localStorage.getItem('r18_sync_id_history') || '[]');
+            if (newId && !history.includes(newId)) {
+                history.unshift(newId);
+                history = history.slice(0, 10);
+                localStorage.setItem('r18_sync_id_history', JSON.stringify(history));
+            }
+            renderSyncIdHistory();
+        };
+
+        const renderSyncIdHistory = () => {
+            const history = JSON.parse(localStorage.getItem('r18_sync_id_history') || '[]');
+            syncIdHistoryEl.innerHTML = '<option value="">履歴から選択...</option>' + 
+                history.map(id => `<option value="${id}">${id}</option>`).join('');
+        };
+        
+        const generateRandomId = (length = 16) => {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let result = '';
+            for (let i = 0; i < length; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+            return result;
+        };
+        
+        const subscribeToWorks = () => {
+            let isFirstLoad = true;
+            const worksRef = collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`);
+            unsubscribeWorks = onSnapshot(worksRef, (snapshot) => {
+                const workChanges = snapshot.docChanges();
+                workChanges.forEach(change => {
+                    const data = { id: change.doc.id, ...change.doc.data() };
+                    const index = works.findIndex(w => w.id === change.doc.id);
+
+                    if (change.type === "added") { if (index === -1) works.push(data); }
+                    if (change.type === "modified") { if (index > -1) works[index] = data; }
+                    if (change.type === "removed") { if (index > -1) works.splice(index, 1); }
+                });
+
+                if (isFirstLoad) {
+                    isFirstLoad = false;
+                    loadingStatus.works = true; // Mark works as loaded
+                    checkLoadingComplete(); // Check if all data is now loaded
+                }
+                renderAll();
+            }, error => handleDataFetchError(error, '作品')); // Add error handler
+        };
+
+        const subscribeToTags = () => {
+            let isFirstLoad = true;
+            const tagsRef = collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/tags`);
+            unsubscribeTags = onSnapshot(tagsRef, (snapshot) => {
+                tags = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                 if (isFirstLoad) {
+                    isFirstLoad = false;
+                    loadingStatus.tags = true; // Mark tags as loaded
+                    checkLoadingComplete(); // Check if all data is now loaded
+                 }
+                 renderAll();
+                 // Refresh tag filter display if modal is open
+                 if ($('#filter-tags-display')) renderActiveTagFilters();
+            }, error => handleDataFetchError(error, 'タグ')); // Add error handler
+        };
+
+        // --- Image Processing (from index.html) ---
+        const processImage = (file) => {
+            return new Promise((resolve, reject) => {
+                if (file.size > 900 * 1024) return reject(new Error("ファイルサイズが900KBを超えています。"));
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_SIZE = 512;
+                        let { width, height } = img;
+                        if (width > height) {
+                            if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+                        } else {
+                            if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+                        }
+                        canvas.width = width;
+                        canvas.height = height;
+                        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.8));
+                    };
+                    img.src = e.target.result;
+                };
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+        };
+        
+        // --- CRUD Operations (Adapted from index.html) ---
+        const addWork = async (newWorkData) => {
+            const name = newWorkData.name.trim();
+            if (!name) return showToast("作品名は必須です。", "error");
+            if (works.some(w => w.name.toLowerCase() === name.toLowerCase())) {
+                if (!await showConfirm("重複警告", `"${name}" は既に存在します。登録を続けますか？`)) return false;
+            }
+            try {
+                const worksRef = collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`);
+                await setDoc(doc(worksRef), newWorkData);
+                showToast(`"${name}" を登録しました。`);
+                return true;
+            } catch (error) {
+                console.error("Error adding work: ", error);
+                showToast("作品の登録に失敗しました。", "error");
+                return false;
+            }
+        };
+
+        const updateWork = async (workId, updatedData) => {
+            try {
+                const workRef = doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, workId);
+                await updateDoc(workRef, updatedData);
+                return true;
+            } catch (error) {
+                console.error("Error updating work:", error);
+                showToast("作品の更新に失敗しました。", "error");
+                return false;
+            }
+        };
+
+        const deleteWork = async (workId, workName) => {
+            if (!await showConfirm("作品の削除", `「${workName}」を本当に削除しますか？<br>この操作は取り消せません。`)) return;
+            try {
+                await deleteDoc(doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, workId));
+                showToast(`「${workName}」を削除しました。`);
+                selectedWorkIds.delete(workId); // Deselect if it was selected
+                renderAll(); // Re-render after deletion
+            } catch (error) {
+                console.error("Error deleting work: ", error);
+                showToast("作品の削除に失敗しました。", "error");
+            }
+        };
+        
+        const bulkDeleteWorks = async () => {
+            const count = selectedWorkIds.size;
+            if (count === 0) return;
+            if (!await showConfirm("一括削除", `${count}件の作品を本当に削除しますか？<br>この操作は取り消せません。`)) return;
+            
+            try {
+                const batch = writeBatch(db);
+                selectedWorkIds.forEach(workId => {
+                    const workRef = doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, workId);
+                    batch.delete(workRef);
+                });
+                await batch.commit();
+                showToast(`${count}件の作品を削除しました。`);
+                selectedWorkIds.clear();
+                renderAll();
+            } catch (error) {
+                console.error("Error bulk deleting works: ", error);
+                showToast("一括削除に失敗しました。", "error");
+            }
+        };
+        
+        // --- Rendering Logic (New) ---
+        
+        const renderAll = () => {
+            updateFilteredAndSortedWorks();
+            renderTable();
+            renderPagination();
+            renderActionButtons();
+            updateColumnVisibility();
+        };
+
+        const updateFilteredAndSortedWorks = () => {
+            let tempWorks = [...works];
+
+            // 1. Filter
+            if (filters.search) {
+                const searchLower = filters.search.toLowerCase();
+                tempWorks = tempWorks.filter(w => w.name.toLowerCase().includes(searchLower));
+            }
+            if (filters.genres.size > 0) {
+                tempWorks = tempWorks.filter(w => filters.genres.has(w.genre));
+            }
+            if (filters.unrated) {
+                tempWorks = tempWorks.filter(w => !w.rating || w.rating === 0);
+            } else if (filters.ratingVal > 0) {
+                const val = filters.ratingVal;
+                if (filters.ratingOp === 'gte') tempWorks = tempWorks.filter(w => w.rating >= val);
+                else if (filters.ratingOp === 'lte') tempWorks = tempWorks.filter(w => w.rating <= val && w.rating > 0);
+                else if (filters.ratingOp === 'eq') tempWorks = tempWorks.filter(w => w.rating === val);
+            }
+            if (filters.dateStart && isValidDate(filters.dateStart)) {
+                const start = new Date(filters.dateStart); start.setHours(0,0,0,0);
+                tempWorks = tempWorks.filter(w => w.registeredAt && w.registeredAt.toDate() >= start);
+            }
+            if (filters.dateEnd && isValidDate(filters.dateEnd)) {
+                const end = new Date(filters.dateEnd); end.setHours(23,59,59,999);
+                tempWorks = tempWorks.filter(w => w.registeredAt && w.registeredAt.toDate() <= end);
+            }
+            if (filters.andTagIds.size > 0) {
+                tempWorks = tempWorks.filter(w => w.tagIds && [...filters.andTagIds].every(tid => w.tagIds.includes(tid)));
+            }
+            if (filters.orTagIds.size > 0) {
+                tempWorks = tempWorks.filter(w => w.tagIds && [...filters.orTagIds].some(tid => w.tagIds.includes(tid)));
+            }
+            if (filters.notTagIds.size > 0) {
+                tempWorks = tempWorks.filter(w => !w.tagIds || ![...filters.notTagIds].some(tid => w.tagIds.includes(tid)));
+            }
+            
+            // 2. Sort
+            tempWorks.sort((a, b) => {
+                const order = sortState.order === 'asc' ? 1 : -1;
+                const aVal = a[sortState.by];
+                const bVal = b[sortState.by];
+
+                if (sortState.by === 'name' || sortState.by === 'genre') {
+                    return (aVal || '').localeCompare(bVal || '', 'ja') * order;
+                }
+                if (sortState.by === 'registeredAt' || sortState.by === 'lastSelectedAt') {
+                    return ((aVal?.toMillis() || 0) - (bVal?.toMillis() || 0)) * order;
+                }
+                if (sortState.by === 'rating' || sortState.by === 'selectionCount') {
+                    return ((aVal || 0) - (bVal || 0)) * order;
+                }
+                return 0;
+            });
+
+            // 3. Update state
+            displayedWorks = tempWorks;
+            workCountDisplay.textContent = `${displayedWorks.length} / ${works.length} 作品`;
+            
+            // Reset page if current page is out of bounds
+            const totalPages = Math.ceil(displayedWorks.length / paginationState.itemsPerPage);
+            if (paginationState.currentPage > totalPages && totalPages > 0) {
+                paginationState.currentPage = totalPages;
+            } else if (totalPages === 0) {
+                paginationState.currentPage = 1;
+            }
+        };
+        
+        const renderTable = () => {
+            // Update sort icons in header
+            worksTableHead.querySelectorAll('th[data-sort]').forEach(th => {
+                const icon = th.querySelector('.sort-icon');
+                if (th.dataset.sort === sortState.by) {
+                    icon.style.opacity = '1';
+                    icon.className = `fas fa-sort-down sort-icon ${sortState.order}`;
+                } else {
+                    icon.style.opacity = '0.3';
+                    icon.className = 'fas fa-sort-down sort-icon';
+                }
+            });
+            
+            // Get paginated items
+            const { currentPage, itemsPerPage } = paginationState;
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const paginatedWorks = displayedWorks.slice(start, end);
+            
+            if (paginatedWorks.length === 0) {
+                const colCount = worksTableHead.querySelectorAll('th').length;
+                worksTableBody.innerHTML = `<tr><td colspan="${colCount}" class="p-8 text-center text-gray-500">${works.length === 0 ? '作品が登録されていません。' : '条件に一致する作品がありません。'}</td></tr>`;
+                return;
+            }
+
+            worksTableBody.innerHTML = paginatedWorks.map(work => {
+                const workTags = (work.tagIds || []).map(id => tags.find(t => t.id === id)).filter(Boolean);
+                const safeName = escapeHTML(work.name);
+                const rating = work.rating || 0;
+                
+                return `
+                    <tr class="hover:bg-gray-700/50 transition-colors" data-id="${work.id}">
+                        <td class="p-3"><input type="checkbox" data-id="${work.id}" class="row-checkbox h-4 w-4 rounded bg-gray-600 text-teal-500 border-gray-500 focus:ring-teal-600" ${selectedWorkIds.has(work.id) ? 'checked' : ''}></td>
+                        
+                        <td class="p-3 col-image" data-col="image" style="display: none;">
+                            <img src="${work.imageUrl || 'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${safeName}" class="w-12 h-12 object-cover rounded-md">
+                        </td>
+                        
+                        <td class="p-3 col-name" data-col="name">
+                            <span class="font-medium">${safeName}</span>
+                        </td>
+                        
+                        <td class="p-3 col-genre" data-col="genre">${work.genre || 'N/A'}</td>
+                        
+                        <td class="p-3 col-registeredAt" data-col="registeredAt">${formatDate(work.registeredAt)}</td>
+                        
+                        <td class="p-3 col-rating inline-rating text-lg" data-col="rating" data-id="${work.id}">
+                            ${[1,2,3,4,5].map(i => `<i class="fa-star ${i <= rating ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('')}
+                        </td>
+                        
+                        <td class="p-3 col-tags" data-col="tags">
+                            <div class="flex flex-wrap max-w-xs">
+                                ${workTags.map(t => `<span class="tag-pill" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${t.name}</span>`).join('')}
+                            </div>
+                        </td>
+                        
+                        <td class="p-3 col-lastSelectedAt" data-col="lastSelectedAt" style="display: none;">
+                            ${formatDate(work.lastSelectedAt, true)}
+                        </td>
+                        
+                        <td class="p-3 col-selectionCount text-center" data-col="selectionCount" style="display: none;">
+                            ${work.selectionCount || 0}
+                        </td>
+                        
+                        <td class="p-3 col-sourceUrl" data-col="sourceUrl" style="display: none;">
+                            ${work.sourceUrl ? `<a href="${work.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-teal-400 hover:text-teal-300"><i class="fas fa-external-link-alt"></i></a>` : ''}
+                        </td>
+
+                        <td class="p-3 col-actions" data-col="actions">
+                            <div class="flex gap-2">
+                                <button data-action="edit" data-id="${work.id}" class="w-8 h-8 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center text-white" title="編集"><i class="fas fa-pencil-alt text-sm"></i></button>
+                                <button data-action="delete" data-id="${work.id}" data-name="${safeName}" class="w-8 h-8 bg-gray-600 hover:bg-red-600 rounded-full flex items-center justify-center text-white" title="削除"><i class="fas fa-trash-alt text-sm"></i></button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        };
+        
+        const renderPagination = () => {
+            const { currentPage, itemsPerPage } = paginationState;
+            const totalItems = displayedWorks.length;
+            const totalPages = Math.ceil(totalItems / itemsPerPage);
+            paginationContainer.innerHTML = '';
+            
+            if (totalPages <= 1) return;
+            
+            const createBtn = (text, page, isDisabled = false, isActive = false) => {
+                const btn = document.createElement('button');
+                btn.innerHTML = text;
+                btn.disabled = isDisabled;
+                btn.dataset.page = page;
+                btn.className = `px-3 py-1 rounded-lg text-sm font-semibold transition-colors ${
+                    isActive ? 'bg-teal-600 text-white cursor-default' : 
+                    isDisabled ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 
+                    'bg-gray-600 hover:bg-gray-500'
+                }`;
+                return btn;
+            };
+            
+            paginationContainer.appendChild(createBtn('<i class="fas fa-angle-double-left"></i>', 1, currentPage === 1));
+            paginationContainer.appendChild(createBtn('<i class="fas fa-angle-left"></i>', currentPage - 1, currentPage === 1));
+            
+            // Page number logic
+            const maxPagesToShow = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+            let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+            if (endPage - startPage + 1 < maxPagesToShow) {
+                startPage = Math.max(1, endPage - maxPagesToShow + 1);
+            }
+            
+            if (startPage > 1) {
+                paginationContainer.appendChild(createBtn('1', 1));
+                if (startPage > 2) paginationContainer.appendChild(createBtn('...', 1, true));
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                paginationContainer.appendChild(createBtn(i, i, false, i === currentPage));
+            }
+            
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) paginationContainer.appendChild(createBtn('...', totalPages, true));
+                paginationContainer.appendChild(createBtn(totalPages, totalPages));
+            }
+            
+            paginationContainer.appendChild(createBtn('<i class="fas fa-angle-right"></i>', currentPage + 1, currentPage === totalPages));
+            paginationContainer.appendChild(createBtn('<i class="fas fa-angle-double-right"></i>', totalPages, currentPage === totalPages));
+        };
+        
+        const renderActionButtons = () => {
+            const count = selectedWorkIds.size;
+            if (count > 0) {
+                bulkActionBar.classList.remove('hidden');
+                bulkSelectedCount.textContent = `${count}件選択中`;
+            } else {
+                bulkActionBar.classList.add('hidden');
+            }
+            // Sync select-all checkbox
+            const itemsOnPage = worksTableBody.querySelectorAll('.row-checkbox').length;
+            const selectedOnPage = worksTableBody.querySelectorAll('.row-checkbox:checked').length;
+            if (itemsOnPage > 0 && selectedOnPage === itemsOnPage) {
+                selectAllCheckbox.checked = true;
+                selectAllCheckbox.indeterminate = false;
+            } else if (selectedOnPage > 0) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = true;
+            } else {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            }
+        };
+        
+        const renderActiveTagFilters = () => {
+            let html = '';
+            const renderSet = (ids, className, prefix) => {
+                [...ids].map(id => tags.find(t=>t.id===id)).filter(Boolean).forEach(tag => {
+                    html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${tag.name}</span>`;
+                });
+            };
+            renderSet(filters.andTagIds, 'tag-item-and', 'AND');
+            renderSet(filters.orTagIds, 'tag-item-or', 'OR');
+            renderSet(filters.notTagIds, 'tag-item-not', 'NOT');
+            filterTagsDisplay.innerHTML = html || `<span class="text-xs text-gray-500">タグ未選択</span>`;
+        };
+        
+        const updateColumnVisibility = () => {
+            worksTable.querySelectorAll('th, td').forEach(el => {
+                const colName = el.dataset.col;
+                if (colName) {
+                    el.style.display = visibleColumns.has(colName) ? '' : 'none';
+                }
+            });
+        };
+
+        // --- Event Handlers (New & Adapted) ---
+        
+        const setupEventListeners = () => {
+            // Modals
+            modalCloseBtn.addEventListener('click', closeModal);
+            modalBackdrop.addEventListener('click', closeModal);
+            
+            // Sync Panel
+            copySyncIdBtn.addEventListener('click', () => navigator.clipboard.writeText(syncId).then(() => showToast("同期IDをコピーしました。")));
+            loadSyncIdBtn.addEventListener('click', () => {
+                const newId = newSyncIdInput.value.trim();
+                if (newId && newId !== syncId) {
+                    loadDataSet(newId);
+                    updateSyncIdHistory(newId);
+                    newSyncIdInput.value = '';
+                    showToast("データを読み込みました。");
+                }
+            });
+            syncIdHistoryEl.addEventListener('change', e => e.target.value && loadDataSet(e.target.value));
+
+            // Filters
+            const debouncedRender = debounce(renderAll, 300);
+            filterSearch.addEventListener('input', () => { filters.search = filterSearch.value; paginationState.currentPage = 1; debouncedRender(); });
+            $$('input[data-filter-genre]').forEach(cb => cb.addEventListener('change', () => {
+                if (cb.checked) filters.genres.add(cb.dataset.filterGenre);
+                else filters.genres.delete(cb.dataset.filterGenre);
+                paginationState.currentPage = 1; renderAll();
+            }));
+            filterUnrated.addEventListener('change', () => { filters.unrated = filterUnrated.checked; paginationState.currentPage = 1; renderAll(); });
+            [filterRatingOp, filterRatingVal].forEach(el => el.addEventListener('change', () => {
+                filters.ratingOp = filterRatingOp.value;
+                filters.ratingVal = parseInt(filterRatingVal.value, 10);
+                paginationState.currentPage = 1; renderAll();
+            }));
+            [filterDateStart, filterDateEnd].forEach(el => el.addEventListener('input', () => {
+                filters.dateStart = filterDateStart.value;
+                filters.dateEnd = filterDateEnd.value;
+                if ((!filters.dateStart || isValidDate(filters.dateStart)) && (!filters.dateEnd || isValidDate(filters.dateEnd))) {
+                     paginationState.currentPage = 1; debouncedRender();
+                }
+            }));
+            filterOpenTagsBtn.addEventListener('click', () => openTagFilterModal());
+            
+            // Action Bar
+            itemsPerPageSelect.addEventListener('change', () => {
+                paginationState.itemsPerPage = parseInt(itemsPerPageSelect.value, 10);
+                paginationState.currentPage = 1;
+                renderAll();
+            });
+            regNewWorkBtn.addEventListener('click', openRegistrationModal);
+            manageTagsBtn.addEventListener('click', () => openTagModal({ mode: 'manage' }));
+            manageColumnsBtn.addEventListener('click', openColumnModal);
+            bulkEditBtn.addEventListener('click', openBulkEditModal);
+            bulkDeleteBtn.addEventListener('click', bulkDeleteWorks);
+            
+            // Table
+            worksTableHead.addEventListener('click', e => {
+                const th = e.target.closest('th[data-sort]');
+                if (!th) return;
+                const newSortBy = th.dataset.sort;
+                if (sortState.by === newSortBy) {
+                    sortState.order = sortState.order === 'asc' ? 'desc' : 'asc';
+                } else {
+                    sortState.by = newSortBy;
+                    sortState.order = 'desc'; // Default to desc for new columns
+                }
+                paginationState.currentPage = 1;
+                renderAll();
+            });
+            
+            worksTableBody.addEventListener('click', e => {
+                const target = e.target;
+                // Inline Rating
+                const star = target.closest('.inline-rating .fa-star');
+                if (star) {
+                    const workId = star.closest('td').dataset.id;
+                    let newRating = parseInt(star.dataset.value, 10);
+                    const work = works.find(w => w.id === workId);
+                    if (work && work.rating === newRating) newRating = 0; // Toggle off
+                    updateWork(workId, { rating: newRating });
+                    return; // update will be handled by onSnapshot
+                }
+                // Edit/Delete buttons
+                const btn = target.closest('button[data-action]');
+                if (btn) {
+                    const { action, id, name } = btn.dataset;
+                    if (action === 'edit') openEditModal(id);
+                    if (action === 'delete') deleteWork(id, name);
+                    return;
+                }
+            });
+            
+            // Selection Checkboxes
+            selectAllCheckbox.addEventListener('change', () => {
+                const isChecked = selectAllCheckbox.checked;
+                const itemsOnPage = paginatedWorks.map(w => w.id);
+                worksTableBody.querySelectorAll('.row-checkbox').forEach(cb => {
+                    cb.checked = isChecked;
+                });
+                if (isChecked) {
+                    itemsOnPage.forEach(id => selectedWorkIds.add(id));
+                } else {
+                    itemsOnPage.forEach(id => selectedWorkIds.delete(id));
+                }
+                renderActionButtons();
+            });
+            
+            worksTableBody.addEventListener('change', e => {
+                if (e.target.classList.contains('row-checkbox')) {
+                    const id = e.target.dataset.id;
+                    if (e.target.checked) selectedWorkIds.add(id);
+                    else selectedWorkIds.delete(id);
+                    renderActionButtons();
+                }
+            });
+            
+            // Pagination
+            paginationContainer.addEventListener('click', e => {
+                const btn = e.target.closest('button[data-page]');
+                if (btn && !btn.disabled) {
+                    paginationState.currentPage = parseInt(btn.dataset.page, 10);
+                    renderAll();
+                    // Scroll to top of table
+                    worksTable.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+            
+            // Date Inputs (Validation)
+            initializeDateInputs(document.body);
+            
+            // Ad UI Events (from price_comparison.html)
+            document.getElementById('ad-settings-fab').addEventListener('click', () => showModal(adSettingsModal, adSettingsModalContent));
+            document.getElementById('ad-settings-modal-close').addEventListener('click', () => hideModal(adSettingsModal, adSettingsModalContent));
+            adSettingsModal.addEventListener('click', (e) => {
+                if (e.target === adSettingsModal) hideModal(adSettingsModal, adSettingsModalContent);
+            });
+            document.querySelectorAll('input[name="ad_type"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    document.getElementById('ad-period-container').style.display = e.target.value === 'ranking' ? 'block' : 'none';
+                });
+            });
+            document.getElementById('save-ad-settings-btn').addEventListener('click', () => {
+                saveAndReloadAd();
+                hideModal(adSettingsModal, adSettingsModalContent);
+                showToast('広告設定を保存しました。');
+            });
+            window.addEventListener('resize', () => {
+                const settings = JSON.parse(localStorage.getItem('adSettings') || JSON.stringify(defaultAdSettings));
+                applyAdVisibility(settings.showAd);
+            });
+        };
+        
+        // --- Modal: New Registration ---
+        const openRegistrationModal = () => {
+            let tempImageUrl = null;
+            const content = `
+                <form id="reg-work-form" class="space-y-4">
+                    <div>
+                        <label for="reg-name" class="block text-sm font-medium text-gray-400 mb-1">作品名 <span class="text-red-400">*</span></label>
+                        <input type="text" id="reg-name" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500" required>
+                    </div>
+                    <div>
+                        <label for="reg-genre" class="block text-sm font-medium text-gray-400 mb-1">ジャンル <span class="text-red-400">*</span></label>
+                        <select id="reg-genre" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500" required>
+                            <option value="漫画">漫画</option>
+                            <option value="ゲーム">ゲーム</option>
+                            <option value="動画">動画</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="reg-url" class="block text-sm font-medium text-gray-400 mb-1">作品URL (任意)</label>
+                        <input type="url" id="reg-url" placeholder="https://..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500">
+                    </div>
+                    <div>
+                        <label for="reg-date" class="block text-sm font-medium text-gray-400 mb-1">登録日 <span class="text-red-400">*</span></label>
+                        <input type="text" id="reg-date" placeholder="YYYY/MM/DD" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500 date-input" required>
+                    </div>
+                    <div>
+                        <label for="reg-image" class="block text-sm font-medium text-gray-400 mb-2">画像 (任意, 900KB以下)</label>
+                        <input type="file" id="reg-image" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-lime-600 file:text-white hover:file:bg-lime-700">
+                        <img id="reg-image-preview" src="" class="hidden max-w-full h-auto mx-auto rounded-lg mt-2 max-h-48">
+                    </div>
+                    <div class="pt-4 flex justify-end">
+                        <button type="submit" class="w-full px-6 py-3 bg-lime-600 hover:bg-lime-700 rounded-lg font-bold text-lg transition-colors">登録する</button>
+                    </div>
+                </form>
+            `;
+            openModal("新しい作品を登録", content, () => {
+                const dateInput = $('#reg-date');
+                dateInput.value = formatDateForInput(new Date());
+                
+                $('#reg-image').addEventListener('change', async (e) => {
+                    const file = e.target.files[0];
+                    const preview = $('#reg-image-preview');
+                    if (file) {
+                        try {
+                            tempImageUrl = await processImage(file);
+                            preview.src = tempImageUrl;
+                            preview.classList.remove('hidden');
+                        } catch (error) {
+                            showToast(error.message, "error");
+                            tempImageUrl = null;
+                            preview.classList.add('hidden');
+                            e.target.value = null; // Reset file input
+                        }
+                    } else {
+                        tempImageUrl = null;
+                        preview.classList.add('hidden');
+                    }
+                });
+                
+                $('#reg-work-form').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const name = $('#reg-name').value;
+                    const dateStr = $('#reg-date').value;
+                    if (!isValidDate(dateStr)) {
+                        return showToast("登録日の形式が正しくありません (YYYY/MM/DD)。", "error");
+                    }
+                    
+                    const newWork = {
+                        name: name.trim(),
+                        genre: $('#reg-genre').value,
+                        sourceUrl: $('#reg-url').value.trim(),
+                        registeredAt: Timestamp.fromDate(new Date(dateStr.replace(/\//g, '-'))),
+                        imageUrl: tempImageUrl,
+                        selectionCount: 0,
+                        rating: 0,
+                        tagIds: [],
+                        lastSelectedAt: null,
+                        selectionHistory: []
+                    };
+                    
+                    const success = await addWork(newWork);
+                    if (success) {
+                        closeModal();
+                    }
+                });
+            });
+        };
+        
+        // --- Modal: Edit (with Image Compare) ---
+        const openEditModal = (workId) => {
+            const work = works.find(w => w.id === workId);
+            if (!work) return;
+            
+            let currentRating = work.rating || 0;
+            let currentTagIds = new Set(work.tagIds || []);
+            let tempImageUrl = work.imageUrl || null; // This will hold the *new* image URL if changed
+            
+            const safeName = escapeHTML(work.name);
+            const safeUrl = escapeHTML(work.sourceUrl || '');
+            const regDate = work.registeredAt ? formatDateForInput(work.registeredAt.toDate()) : '';
+            
+            const getFormState = () => ({
+                name: $('#edit-name').value,
+                genre: $('#edit-genre').value,
+                url: $('#edit-url').value,
+                date: $('#edit-date').value,
+                rating: currentRating,
+                tags: JSON.stringify([...currentTagIds].sort()),
+                image: tempImageUrl // Compare against the new temp image
+            });
+            
+            const initialState = {
+                name: work.name,
+                genre: work.genre,
+                url: work.sourceUrl || '',
+                date: regDate,
+                rating: currentRating,
+                tags: JSON.stringify([...currentTagIds].sort()),
+                image: work.imageUrl || null // Compare against original image
+            };
+            
+            checkModalDirtyState = () => JSON.stringify(getFormState()) !== JSON.stringify(initialState);
+            
+            const content = `
+                <form id="edit-work-form" class="space-y-6">
+                    <!-- SPEC: Save button on top -->
+                    <div class="flex justify-end gap-3">
+                        <button type="button" id="edit-cancel-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
+                        <button type="submit" class="px-6 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold">保存</button>
+                    </div>
+                
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Left Column: Details -->
+                        <div class="space-y-4">
+                            <div>
+                                <label for="edit-name" class="block text-sm font-medium text-gray-400 mb-1">作品名 <span class="text-red-400">*</span></label>
+                                <input type="text" id="edit-name" value="${safeName}" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2" required>
+                            </div>
+                            <div>
+                                <label for="edit-genre" class="block text-sm font-medium text-gray-400 mb-1">ジャンル <span class="text-red-400">*</span></label>
+                                <select id="edit-genre" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2">
+                                    <option value="漫画" ${work.genre === '漫画' ? 'selected' : ''}>漫画</option>
+                                    <option value="ゲーム" ${work.genre === 'ゲーム' ? 'selected' : ''}>ゲーム</option>
+                                    <option value="動画" ${work.genre === '動画' ? 'selected' : ''}>動画</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="edit-url" class="block text-sm font-medium text-gray-400 mb-1">作品URL (任意)</label>
+                                <input type="url" id="edit-url" value="${safeUrl}" placeholder="https://..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2">
+                            </div>
+                            <div>
+                                <label for="edit-date" class="block text-sm font-medium text-gray-400 mb-1">登録日 <span class="text-red-400">*</span></label>
+                                <input type="text" id="edit-date" value="${regDate}" placeholder="YYYY/MM/DD" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 date-input" required>
+                            </div>
+                        </div>
+                        
+                        <!-- Right Column: Image -->
+                        <div class="space-y-4">
+                            <div>
+                                <label for="edit-image" class="block text-sm font-medium text-gray-400 mb-2">画像 (任意, 900KB以下)</label>
+                                <input type="file" id="edit-image" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-sky-600 file:text-white hover:file:bg-sky-700">
+                            </div>
+                            
+                            <!-- SPEC: Image Compare Window -->
+                            <div id="image-compare-container" class="hidden space-y-3">
+                                <div class="flex gap-4">
+                                    <div class="image-compare-box bg-gray-900">
+                                        <span class="text-xs text-gray-500 mb-2">元の画像</span>
+                                        <img id="image-compare-original" src="${work.imageUrl || 'https://placehold.co/200x200/1f2937/4b5563?text=No+Image'}">
+                                    </div>
+                                    <div class="image-compare-box bg-gray-900">
+                                        <span class="text-xs text-gray-500 mb-2">新しい画像</span>
+                                        <img id="image-compare-new" src="">
+                                    </div>
+                                </div>
+                                <button type="button" id="confirm-image-change-btn" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-semibold">この画像に変更する</button>
+                            </div>
+                            
+                            <!-- Initial image preview (before comparison) -->
+                            <div id="initial-image-preview-container">
+                                <label class="block text-sm font-medium text-gray-400 mb-2">現在の画像</label>
+                                <img id="initial-image-preview" src="${work.imageUrl || 'https://placehold.co/400x200/1f2937/4b5563?text=No+Image'}" class="w-full h-auto max-h-48 object-contain mx-auto rounded-lg">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Rating & Tags -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-700">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-2">評価</label>
+                            <div class="flex items-center space-x-2 text-2xl" id="edit-rating">
+                                ${[1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= currentRating ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('')}
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">タグ</label>
+                            <div id="edit-tags-display" class="flex flex-wrap gap-2 p-2 bg-gray-700 rounded-lg min-h-[40px]"></div>
+                            <button type="button" id="edit-assign-tags-btn" class="mt-2 w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグを割り当て/編集</button>
+                        </div>
+                    </div>
+                </form>
+            `;
+            
+            openModal(`「${work.name}」を編集`, content, () => {
+                let unprocessedNewImage = null; // To hold the image before confirming
+                
+                // Rating stars logic
+                const ratingStars = $('#edit-rating');
+                ratingStars.addEventListener('click', e => {
+                    if (e.target.matches('.fa-star')) {
+                        const newRating = parseInt(e.target.dataset.value, 10);
+                        currentRating = (currentRating === newRating) ? 0 : newRating;
+                        ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= currentRating ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('');
+                    }
+                });
+
+                // Tags logic
+                const tagsContainer = $('#edit-tags-display');
+                const renderTags = (ids) => {
+                    const objects = [...ids].map(id => tags.find(t => t.id === id)).filter(Boolean);
+                    tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="tag-pill" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`;
+                };
+                renderTags(currentTagIds);
+                
+                $('#edit-assign-tags-btn').addEventListener('click', () => {
+                    // Save modal state before opening new modal
+                    const capturedState = {
+                        name: $('#edit-name').value,
+                        genre: $('#edit-genre').value,
+                        url: $('#edit-url').value,
+                        date: $('#edit-date').value,
+                        rating: currentRating,
+                        imageUrl: tempImageUrl // Pass the confirmed new image
+                    };
+                    
+                    openTagModal({
+                        mode: 'assign',
+                        currentTagIds: currentTagIds,
+                        workName: work.name,
+                        onConfirm: (newTagIds) => {
+                            // Restore state when returning
+                            openEditModal(workId);
+                            setTimeout(() => { 
+                                // Need timeout for modal to re-open
+                                $('#edit-name').value = capturedState.name;
+                                $('#edit-genre').value = capturedState.genre;
+                                $('#edit-url').value = capturedState.url;
+                                $('#edit-date').value = capturedState.date;
+                                currentRating = capturedState.rating;
+                                tempImageUrl = capturedState.imageUrl;
+                                $('#initial-image-preview').src = tempImageUrl || 'https://placehold.co/400x200/1f2937/4b5563?text=No+Image';
+                                ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= currentRating ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('');
+                                
+                                if (newTagIds) {
+                                    currentTagIds = newTagIds;
+                                    renderTags(currentTagIds);
+                                }
+                            }, 100);
+                        }
+                    });
+                });
+                
+                // Image Change Logic
+                $('#edit-image').addEventListener('change', async (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        try {
+                            unprocessedNewImage = await processImage(file);
+                            $('#image-compare-new').src = unprocessedNewImage;
+                            $('#image-compare-container').classList.remove('hidden');
+                            $('#initial-image-preview-container').classList.add('hidden');
+                        } catch (error) {
+                            showToast(error.message, "error");
+                            unprocessedNewImage = null;
+                            e.target.value = null;
+                        }
+                    }
+                });
+                
+                $('#confirm-image-change-btn').addEventListener('click', () => {
+                    tempImageUrl = unprocessedNewImage; // Confirm the change
+                    unprocessedNewImage = null;
+                    $('#initial-image-preview').src = tempImageUrl;
+                    $('#image-compare-container').classList.add('hidden');
+                    $('#initial-image-preview-container').classList.remove('hidden');
+                    showToast("画像が変更されました。保存ボタンを押して確定してください。");
+                });
+
+                // Form Submit
+                $('#edit-cancel-btn').addEventListener('click', closeModal);
+                $('#edit-work-form').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const name = $('#edit-name').value;
+                    const dateStr = $('#edit-date').value;
+                    if (!name.trim()) return showToast("作品名は必須です。", "error");
+                    if (!isValidDate(dateStr)) return showToast("登録日の形式が正しくありません (YYYY/MM/DD)。", "error");
+                    
+                    const updatedData = {
+                        name: name.trim(),
+                        genre: $('#edit-genre').value,
+                        sourceUrl: $('#edit-url').value.trim(),
+                        registeredAt: Timestamp.fromDate(new Date(dateStr.replace(/\//g, '-'))),
+                        rating: currentRating,
+                        tagIds: Array.from(currentTagIds),
+                        imageUrl: tempImageUrl // Use the confirmed new image URL
+                    };
+                    
+                    checkModalDirtyState = () => false; // Prevent confirm dialog
+                    const success = await updateWork(workId, updatedData);
+                    if (success) {
+                        showToast("作品情報を更新しました。");
+                        closeModal();
+                    }
+                });
+            });
+        };
+        
+        // --- Modal: Tag Management (from index.html) ---
+        const openTagModal = (options) => {
+            const { mode = 'manage', currentTagIds = new Set(), workName = '', onConfirm } = options;
+            let tempSelectedTagIds = new Set(currentTagIds);
+            const titleMap = { manage: 'タグ管理', assign: `「${workName}」のタグを割り当て` };
+            
+            const content = `
+                <div class="flex flex-col h-[70vh]">
+                    ${['manage', 'assign'].includes(mode) ? `<div class="flex flex-wrap gap-2 mb-4 p-1 bg-gray-900 rounded-lg"><input type="text" id="newTagName" placeholder="新しいタグ名" class="flex-grow min-w-[150px] bg-gray-700 p-2 rounded-lg"><div class="flex gap-2"><input type="color" id="newTagColor" value="#581c87" class="h-11 w-12 p-1 bg-gray-700 rounded-lg cursor-pointer"><button id="addTagBtn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold"><i class="fas fa-plus"></i> 追加</button></div></div>` : ''}
+                    <div class="flex items-center gap-2 mb-2"><div class="flex-grow relative"><i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i><input type="search" id="tagSearchInput" placeholder="タグを検索..." class="w-full bg-gray-700 p-2 pl-10 rounded-lg"></div>${mode === 'assign' ? `<select id="tagFilterSelect" class="bg-gray-700 p-2 rounded-lg"><option value="all">すべて</option><option value="assigned">設定済</option><option value="unassigned">未設定</option></select>`: ''}<select id="tagSortSelect" class="bg-gray-700 p-2 rounded-lg"><option value="createdAt_desc">追加順 (新しい)</option><option value="createdAt_asc">追加順 (古い)</option><option value="name_asc">名前順 (昇順)</option></select></div>
+                    ${mode === 'assign' ? `<div class="mb-4"><label class="block text-sm text-gray-400">選択中のタグ</label><div id="tag-selector-preview" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px]"></div></div>` : ''}
+                    <div id="tag-list" class="flex-grow overflow-y-auto pr-2 gap-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3"></div>
+                    ${mode === 'assign' ? `<div class="pt-4 mt-4 border-t border-gray-700 flex justify-end space-x-3"><button id="tag-modal-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button><button id="tag-modal-confirm" class="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold">決定</button></div>` : ''}
+                </div>`;
+            openModal(titleMap[mode], content, () => {
+                let tagSearchQuery = '', tagFilter = 'all', tagSort = { by: 'createdAt', order: 'desc' };
+                const tagListEl = $('#tag-list'), tagPreviewEl = $('#tag-selector-preview');
+                const renderTagPreview = () => { if(!tagPreviewEl) return; const objects = [...tempSelectedTagIds].map(id => tags.find(t => t.id === id)).filter(Boolean); tagPreviewEl.innerHTML = objects.length > 0 ? objects.map(t => `<span class="tag-pill" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグ未選択</span>`; };
+                const renderTagList = () => {
+                    let tagsToRender = [...tags];
+                    if(tagSearchQuery) tagsToRender = tagsToRender.filter(t => t.name.toLowerCase().includes(tagSearchQuery.toLowerCase()));
+                    if(mode === 'assign') {
+                        if (tagFilter === 'assigned') tagsToRender = tagsToRender.filter(t => tempSelectedTagIds.has(t.id));
+                        if (tagFilter === 'unassigned') tagsToRender = tagsToRender.filter(t => !tempSelectedTagIds.has(t.id));
+                    }
+                     tagsToRender.sort((a, b) => { const o = tagSort.order === 'asc' ? 1 : -1; if (tagSort.by === 'name') return a.name.localeCompare(b.name, 'ja') * o; return ((a.createdAt?.toMillis()||0) - (b.createdAt?.toMillis()||0)) * o; });
+                     tagListEl.innerHTML = tagsToRender.map(t => `<div class="tag-item flex items-center p-2 rounded-lg ${mode === 'assign' ? 'cursor-pointer hover:bg-gray-600' : ''} ${tempSelectedTagIds.has(t.id) ? 'bg-purple-900 ring-2 ring-purple-500' : 'bg-gray-700'}" data-id="${t.id}"><div class="w-4 h-4 rounded-full mr-3 shrink-0" style="background-color: ${t.color};"></div><span class="grow font-semibold truncate">${t.name}</span>${['manage', 'assign'].includes(mode) ? `<button data-action="delete-tag" data-id="${t.id}" class="ml-auto text-gray-400 hover:text-red-500 px-2 shrink-0"><i class="fas fa-trash-alt"></i></button>` : ''}</div>`).join('');
+                };
+                renderTagList(); renderTagPreview();
+                $('#tagSearchInput')?.addEventListener('input', debounce(e => { tagSearchQuery = e.target.value; renderTagList(); }, 200));
+                $('#tagFilterSelect')?.addEventListener('change', e => { tagFilter = e.target.value; renderTagList(); });
+                $('#tagSortSelect')?.addEventListener('change', e => { const [by, order] = e.target.value.split('_'); tagSort = { by, order }; renderTagList(); });
+                $('#addTagBtn')?.addEventListener('click', async () => { const nameInput = $('#newTagName'); if (nameInput.value) { await addTag(nameInput.value, $('#newTagColor').value); nameInput.value = ''; }});
+                tagListEl.addEventListener('click', e => {
+                    const tagItem = e.target.closest('.tag-item'), deleteBtn = e.target.closest('button[data-action="delete-tag"]');
+                    if (deleteBtn) { e.stopPropagation(); deleteTag(deleteBtn.dataset.id); return; }
+                    if (tagItem && mode === 'assign') { const tagId = tagItem.dataset.id; tempSelectedTagIds.has(tagId) ? tempSelectedTagIds.delete(tagId) : tempSelectedTagIds.add(tagId); renderTagList(); renderTagPreview(); }
+                });
+                $('#tag-modal-confirm')?.addEventListener('click', () => onConfirm(tempSelectedTagIds));
+                $('#tag-modal-cancel')?.addEventListener('click', () => onConfirm(null));
+            });
+        };
+        
+        const addTag = async (name, color) => { /* (from index.html, modified) */
+             const normalizedName = name.trim().toLowerCase();
+             if (tags.some(t => t.name.toLowerCase() === normalizedName)) return showToast("同じ名前のタグが既に存在します。", "error");
+             const newTag = { name: name.trim(), color, createdAt: Timestamp.now() };
+             try {
+                const docRef = doc(collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/tags`));
+                await setDoc(docRef, newTag);
+                showToast(`タグ「${name}」を作成しました。`);
+             } catch (error) { console.error("Error adding tag:", error); showToast("タグの作成に失敗しました。", "error"); }
+        };
+        const deleteTag = async (tagId) => { /* (from index.html) */
+             const tagToDelete = tags.find(t => t.id === tagId);
+             if (!tagToDelete || !await showConfirm("タグの削除", `タグ「${tagToDelete.name}」を削除しますか？<br>全ての作品からこのタグが解除されます。`)) return;
+             try {
+                const batch = writeBatch(db);
+                batch.delete(doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/tags`, tagId));
+                works.filter(w => w.tagIds?.includes(tagId)).forEach(work => {
+                    batch.update(doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, work.id), { 
+                        tagIds: (work.tagIds || []).filter(id => id !== tagId) 
+                    });
+                });
+                await batch.commit();
+                showToast(`タグ「${tagToDelete.name}」を削除しました。`);
+             } catch(error) { console.error("Error deleting tag:", error); showToast("タグの削除中にエラーが発生しました。", "error"); }
+        };
+
+        // --- Modal: Tag Filter (from index.html) ---
+        const openTagFilterModal = () => {
+            let tempAnd = new Set(filters.andTagIds), tempOr = new Set(filters.orTagIds), tempNot = new Set(filters.notTagIds);
+            const content = `... (HTML for tag filter modal, similar to index.html) ...`; // Simplified for brevity
+            openModal("タグの条件を選択", `
+                <div class="flex flex-col h-[70vh]">
+                    <div class="flex items-center gap-2 mb-2">
+                        <input type="search" id="tagSearchInput" placeholder="タグを検索..." class="w-full bg-gray-700 p-2 rounded-lg">
+                    </div>
+                    <p class="text-xs text-gray-400 mb-4">クリックで変更 ( 緑: AND → 青: OR → 赤: NOT → 解除 )</p>
+                    <div id="tag-list" class="flex-grow overflow-y-auto pr-2 space-y-2"></div>
+                    <div class="pt-4 mt-4 border-t border-gray-700 flex justify-end space-x-3">
+                        <button id="tag-modal-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
+                        <button id="tag-modal-confirm" class="px-6 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold">決定</button>
+                    </div>
+                </div>`, 
+            () => {
+                let tagSearchQuery = '';
+                const tagListEl = $('#tag-list');
+                const renderTagList = () => {
+                    let tagsToRender = [...tags].filter(t => t.name.toLowerCase().includes(tagSearchQuery));
+                    tagsToRender.sort((a,b) => a.name.localeCompare(b.name, 'ja'));
+                    tagListEl.innerHTML = tagsToRender.map(t => {
+                        let stateClass = 'bg-gray-700';
+                        if (tempAnd.has(t.id)) stateClass = 'tag-item-and';
+                        else if (tempOr.has(t.id)) stateClass = 'tag-item-or';
+                        else if (tempNot.has(t.id)) stateClass = 'tag-item-not';
+                        return `<div class="tag-item flex items-center p-2 rounded-lg cursor-pointer hover:bg-gray-600 ${stateClass}" data-id="${t.id}"><div class="w-4 h-4 rounded-full mr-3 shrink-0" style="background-color: ${t.color};"></div><span class="grow font-semibold truncate">${t.name}</span></div>`;
+                    }).join('');
+                };
+                renderTagList();
+                $('#tagSearchInput').addEventListener('input', debounce(e => { tagSearchQuery = e.target.value.toLowerCase(); renderTagList(); }, 200));
+                tagListEl.addEventListener('click', e => {
+                    const tagItem = e.target.closest('.tag-item');
+                    if (tagItem) {
+                        const tagId = tagItem.dataset.id;
+                        if (tempAnd.has(tagId)) { tempAnd.delete(tagId); tempOr.add(tagId); }
+                        else if (tempOr.has(tagId)) { tempOr.delete(tagId); tempNot.add(tagId); }
+                        else if (tempNot.has(tagId)) { tempNot.delete(tagId); }
+                        else { tempAnd.add(tagId); }
+                        renderTagList();
+                    }
+                });
+                $('#tag-modal-confirm').addEventListener('click', () => {
+                    filters.andTagIds = tempAnd; filters.orTagIds = tempOr; filters.notTagIds = tempNot;
+                    renderActiveTagFilters();
+                    paginationState.currentPage = 1; renderAll(); closeModal();
+                });
+                $('#tag-modal-cancel').addEventListener('click', closeModal);
+            });
+        };
+        
+        // --- Modal: Bulk Edit ---
+        const openBulkEditModal = () => {
+            const count = selectedWorkIds.size;
+            const content = `
+                <form id="bulk-edit-form" class="space-y-6">
+                    <p class="text-lg">${count}件の作品を一括編集します。</p>
+                    
+                    <!-- Genre -->
+                    <div class="filter-group">
+                        <label class="block text-sm font-medium text-gray-400 mb-2">ジャンルを変更</label>
+                        <div class="flex items-center gap-4">
+                            <label><input type="radio" name="bulk-genre-op" value="none" class="mr-1" checked> 変更しない</label>
+                            <label><input type="radio" name="bulk-genre-op" value="set" class="mr-1"> 変更する:</label>
+                            <select id="bulk-genre-val" class="bg-gray-700 rounded-lg p-2">
+                                <option value="漫画">漫画</option><option value="ゲーム">ゲーム</option><option value="動画">動画</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Rating -->
+                    <div class="filter-group">
+                        <label class="block text-sm font-medium text-gray-400 mb-2">評価を変更</label>
+                        <div class="flex items-center gap-4">
+                            <label><input type="radio" name="bulk-rating-op" value="none" class="mr-1" checked> 変更しない</label>
+                            <label><input type="radio" name="bulk-rating-op" value="set" class="mr-1"> 変更する:</label>
+                            <select id="bulk-rating-val" class="bg-gray-700 rounded-lg p-2">
+                                <option value="0">★ 0 (未評価)</option><option value="1">★ 1</option><option value="2">★ 2</option><option value="3">★ 3</option><option value="4">★ 4</option><option value="5">★ 5</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Tags -->
+                    <div class="space-y-4">
+                        <div>
+                            <label for="bulk-tags-add" class="block text-sm font-medium text-gray-400 mb-2">タグを一括追加</label>
+                            <select id="bulk-tags-add" multiple class="w-full bg-gray-700 rounded-lg p-2 h-24"></select>
+                        </div>
+                        <div>
+                            <label for="bulk-tags-remove" class="block text-sm font-medium text-gray-400 mb-2">タグを一括削除</label>
+                            <select id="bulk-tags-remove" multiple class="w-full bg-gray-700 rounded-lg p-2 h-24"></select>
+                        </div>
+                    </div>
+                    
+                    <div class="pt-4 flex justify-end gap-3">
+                        <button type="button" id="bulk-edit-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
+                        <button type="submit" class="px-6 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold">適用</button>
+                    </div>
+                </form>
+            `;
+            openModal("一括編集", content, () => {
+                const addSelect = $('#bulk-tags-add');
+                const removeSelect = $('#bulk-tags-remove');
+                const sortedTags = [...tags].sort((a,b) => a.name.localeCompare(b.name, 'ja'));
+                const optionsHtml = sortedTags.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+                addSelect.innerHTML = optionsHtml;
+                removeSelect.innerHTML = optionsHtml;
+                
+                $('#bulk-edit-cancel').addEventListener('click', closeModal);
+                $('#bulk-edit-form').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    
+                    const genreOp = $('input[name="bulk-genre-op"]:checked').value;
+                    const ratingOp = $('input[name="bulk-rating-op"]:checked').value;
+                    const tagsToAdd = [...addSelect.selectedOptions].map(opt => opt.value);
+                    const tagsToRemove = [...removeSelect.selectedOptions].map(opt => opt.value);
+                    
+                    if (genreOp === 'none' && ratingOp === 'none' && tagsToAdd.length === 0 && tagsToRemove.length === 0) {
+                        return showToast("変更する操作を選択してください。", "error");
+                    }
+                    
+                    try {
+                        const batch = writeBatch(db);
+                        const worksToUpdate = works.filter(w => selectedWorkIds.has(w.id));
+                        
+                        worksToUpdate.forEach(work => {
+                            const workRef = doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, work.id);
+                            let updateData = {};
+                            
+                            if (genreOp === 'set') updateData.genre = $('#bulk-genre-val').value;
+                            if (ratingOp === 'set') updateData.rating = parseInt($('#bulk-rating-val').value, 10);
+                            
+                            if (tagsToAdd.length > 0 || tagsToRemove.length > 0) {
+                                let currentTags = new Set(work.tagIds || []);
+                                tagsToAdd.forEach(tId => currentTags.add(tId));
+                                tagsToRemove.forEach(tId => currentTags.delete(tId));
+                                updateData.tagIds = Array.from(currentTags);
+                            }
+                            
+                            if (Object.keys(updateData).length > 0) {
+                                batch.update(workRef, updateData);
+                            }
+                        });
+                        
+                        await batch.commit();
+                        showToast(`${count}件の作品を更新しました。`);
+                        selectedWorkIds.clear();
+                        closeModal();
+                        renderAll(); // Will be updated by onSnapshot, but this clears selection
+                    } catch (error) {
+                        console.error("Error bulk updating works:", error);
+                        showToast("一括更新に失敗しました。", "error");
+                    }
+                });
+            });
+        };
+        
+        // --- Modal: Column Visibility ---
+        const openColumnModal = () => {
+            const allCols = [
+                { id: 'image', label: '画像' },
+                { id: 'name', label: '作品名', disabled: true },
+                { id: 'genre', label: 'ジャンル' },
+                { id: 'registeredAt', label: '登録日' },
+                { id: 'rating', label: '評価' },
+                { id: 'tags', label: 'タグ' },
+                { id: 'lastSelectedAt', label: '最終抽選日' },
+                { id: 'selectionCount', label: '抽選回数' },
+                { id: 'sourceUrl', label: 'URL' },
+                { id: 'actions', label: '操作', disabled: true },
+            ];
+            
+            const content = `
+                <div class="space-y-4">
+                    <p class="text-sm text-gray-400">テーブルに表示する列を選択してください。</p>
+                    <div class="grid grid-cols-2 gap-3">
+                        ${allCols.map(col => `
+                            <label class="flex items-center p-3 bg-gray-700 rounded-lg ${col.disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}">
+                                <input type="checkbox" data-col-id="${col.id}" class="h-4 w-4 rounded bg-gray-600 text-teal-500 border-gray-600 focus:ring-teal-600" 
+                                    ${visibleColumns.has(col.id) ? 'checked' : ''} 
+                                    ${col.disabled ? 'disabled' : ''}>
+                                <span class="ml-3 text-sm">${col.label}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                    <div class="pt-4 flex justify-end">
+                        <button id="col-modal-close" class="px-6 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold">閉じる</button>
+                    </div>
+                </div>
+            `;
+            openModal("表示列の管理", content, () => {
+                $('#col-modal-close').addEventListener('click', closeModal);
+                $$('input[data-col-id]').forEach(cb => {
+                    cb.addEventListener('change', () => {
+                        const colId = cb.dataset.colId;
+                        if (cb.checked) visibleColumns.add(colId);
+                        else visibleColumns.delete(colId);
+                        // Save to localStorage
+                        localStorage.setItem('visibleColumns', JSON.stringify(Array.from(visibleColumns)));
+                        updateColumnVisibility();
+                    });
+                });
+            }, { size: 'max-w-3xl' });
+        };
+        
+        // --- Date Input Validation (from index.html) ---
+        const initializeDateInputs = (container) => {
+            container.querySelectorAll('.date-input').forEach(textInput => {
+                if (textInput.dataset.initialized) return;
+                textInput.dataset.initialized = 'true';
+                textInput.addEventListener('input', () => {
+                    if (isValidDate(textInput.value) || textInput.value === '') {
+                        textInput.classList.remove('border-red-500');
+                    } else {
+                        textInput.classList.add('border-red-500');
+                    }
+                });
+            });
+        };
+
+        // --- Ad Logic (from price_comparison.html) ---
+        const defaultAdSettings = { showAd: true, type: 'ranking', site: 'maniax', period: 'week' };
+
+        const applyAdVisibility = (isVisible) => {
+            topAdBanner.classList.toggle('hidden', !isVisible);
+            // Adjust main content's top margin based on ad banner visibility
+            if (isVisible) {
+                mainContent.style.paddingTop = '8px'; // approx height of ad banner padding
+            } else {
+                mainContent.style.paddingTop = '0';
+            }
+        };
+        
+        const generateAndLoadAdScript = (settings) => {
+            const container = document.getElementById('ad-script-container');
+            container.innerHTML = '';
+            if (!settings.showAd) return;
+            const iframe = document.createElement('iframe');
+            iframe.style.width = '100%';
+            iframe.style.height = '100%';
+            iframe.style.border = 'none';
+            iframe.style.minHeight = '120px';
+            iframe.scrolling = 'no';
+            iframe.setAttribute('title', 'DLsite Advertisement');
+            container.appendChild(iframe);
+            const adSettings = {
+                base: "https://www.dlsite.com/", type: settings.type, site: settings.site,
+                query: {}, title: settings.type === 'ranking' ? "ランキング" : "新着作品",
+                display: "horizontal", detail: "1", column: "v", image: "small",
+                count: "5", wrapper: "0", autorotate: true, aid: "workassist"
+            };
+            if (settings.type === 'ranking') adSettings.query.period = settings.period;
+            const iframeContent = `<html><head><style>body { margin: 0; padding: 0; overflow-x: auto; overflow-y: hidden; } body::-webkit-scrollbar { height: 6px; } body::-webkit-scrollbar-track { background: transparent; } body::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; } .blogparts_container_Hor { white-space: nowrap; padding-bottom: 8px; }</style></head><body><script type="text/javascript">var blogparts = ${JSON.stringify(adSettings)};<\/script><script type="text/javascript" src="https://www.dlsite.com/js/blogparts.js" charset="UTF-8"><\/script></body></html>`;
+            const iframeDoc = iframe.contentWindow.document;
+            iframeDoc.open();
+            iframeDoc.write(iframeContent);
+            iframeDoc.close();
+        };
+
+        const saveAndReloadAd = () => {
+            const settings = {
+                showAd: document.getElementById('ad_visibility').checked,
+                type: document.querySelector('input[name="ad_type"]:checked').value,
+                site: document.getElementById('ad_site').value,
+                period: document.getElementById('ad_period').value
+            };
+            localStorage.setItem('adSettings', JSON.stringify(settings));
+            applyAdVisibility(settings.showAd);
+            generateAndLoadAdScript(settings);
+        };
+
+        const loadAdSettings = () => {
+            const saved = localStorage.getItem('adSettings');
+            const settings = saved ? JSON.parse(saved) : defaultAdSettings;
+            document.getElementById('ad_visibility').checked = settings.showAd;
+            document.querySelector(`input[name="ad_type"][value="${settings.type}"]`).checked = true;
+            const siteSelect = document.getElementById('ad_site');
+            if (siteSelect.querySelector(`option[value="${settings.site}"]`)) siteSelect.value = settings.site;
+            const periodSelect = document.getElementById('ad_period');
+            if (periodSelect.querySelector(`option[value="${settings.period}"]`)) periodSelect.value = settings.period;
+            document.getElementById('ad-period-container').style.display = settings.type === 'ranking' ? 'block' : 'none';
+            applyAdVisibility(settings.showAd);
+            generateAndLoadAdScript(settings);
+        };
+
+        // --- App Initialization (from index.html) ---
+        const startApp = () => {
+            // Load visible columns from localStorage
+            const savedCols = localStorage.getItem('visibleColumns');
+            if (savedCols) {
+                visibleColumns = new Set(JSON.parse(savedCols));
+            }
+            updateColumnVisibility();
+
+            loadingOverlay.classList.remove('hidden');
+            initializeFirebase();
+            loadAdSettings();
+            setupEventListeners();
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            passwordForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (passwordInput.value === MASTER_PASSWORD) {
+                    localStorage.setItem('passwordAuthTimestamp', Date.now().toString());
+                    passwordOverlay.classList.add('hidden');
+                    passwordError.classList.add('hidden');
+                    startApp();
+                } else {
+                    passwordError.textContent = 'パスワードが違います。';
+                    passwordError.classList.remove('hidden');
+                }
+            });
+
+            const authTimestamp = localStorage.getItem('passwordAuthTimestamp');
+            if (authTimestamp && (Date.now() - parseInt(authTimestamp, 10) < (30 * 24 * 60 * 60 * 1000))) {
+                passwordOverlay.classList.add('hidden');
+                startApp();
+            } else {
+                localStorage.removeItem('passwordAuthTimestamp');
+                passwordOverlay.classList.remove('hidden');
+                loadingOverlay.classList.add('hidden');
+            }
+        });
+
+    </script>
+</body>
+</html>
+
