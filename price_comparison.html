@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DLsite & FANZA 価格比較ダッシュボード</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* --- Custom Styles --- */
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+
+        /* Transitions */
+        .transition-all { transition: all 0.3s ease-in-out; }
+        .transition-transform { transition: transform 0.2s ease-in-out; }
+        .transition-colors { transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out; }
+
+        /* Details/Summary animation */
+        summary { list-style: none; cursor: pointer; }
+        summary::-webkit-details-marker { display: none; }
+        details[open] > summary .chevron-icon { transform: rotate(180deg); }
+
+        /* Highlight for best price */
+        .result-item-highlight {
+            background-color: #166534; /* green-800 */
+            color: #f0fdf4; /* green-50 */
+        }
+        
+        /* Registration tab active state */
+        .reg-tab-active { color: #fff; }
+
+        /* Animation for newly added items */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .new-item { animation: fadeIn 0.4s ease-in-out; }
+
+        /* Toast Notification */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .toast {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.4s ease-in-out;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        .toast-success { background-color: #1f2937; border: 1px solid #10b981; color: #d1fae5; }
+        .toast-error { background-color: #1f2937; border: 1px solid #ef4444; color: #fee2e2; }
+        .toast .icon { margin-right: 10px; }
+        
+        /* Modal Animation */
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: translateY(-20px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .modal-open { animation: modalFadeIn 0.3s ease-out forwards; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 font-sans antialiased">
+
+    <!-- Version Display -->
+    <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]">v4.1 Ad Style Fix</div>
+
+    <!-- Top Ad Banner -->
+    <div id="top-ad-banner" class="sticky top-0 z-40 w-full bg-gray-900/80 backdrop-blur-sm border-b border-gray-700/50">
+        <div class="max-w-screen-2xl mx-auto p-2 md:px-6 lg:px-8">
+            <div id="ad-script-container" class="bg-gray-800/50 rounded-lg text-center flex items-center justify-center min-h-[120px] overflow-hidden">
+                <!-- Ad script will be injected here by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div id="app-container" class="min-h-screen p-4 md:p-6 lg:p-8">
+        <div class="max-w-screen-2xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+
+            <!-- Left Column: Controls & Inputs -->
+            <aside id="left-aside" class="lg:sticky top-[160px] space-y-8 transition-all duration-300">
+                <header class="flex justify-between items-center">
+                    <h1 class="text-2xl md:text-3xl font-bold text-cyan-400 flex items-center">
+                        <i class="fas fa-balance-scale-right mr-3"></i>
+                        価格比較ダッシュボード
+                    </h1>
+                    <a href="index.html" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors flex items-center text-sm">
+                        <i class="fas fa-arrow-left mr-2"></i>
+                        セレクターに戻る
+                    </a>
+                </header>
+                
+                <details class="bg-gray-800 rounded-xl shadow-lg">
+                    <summary class="p-5 flex justify-between items-center">
+                        <h2 class="text-lg font-bold text-amber-400 flex items-center"><i class="fas fa-info-circle mr-3"></i>使い方</h2>
+                        <i class="fas fa-chevron-down chevron-icon transition-transform"></i>
+                    </summary>
+                    <div class="px-5 pb-5 border-t border-gray-700">
+                        <div class="prose prose-invert prose-sm max-w-none text-gray-300 space-y-3 pt-4">
+                            <p>1. 「割引登録」「作品登録」で必要な情報を入力します。</p>
+                            <p>2. 「比較を実行する」ボタンを押すと、右側に結果が表示されます。</p>
+                            <p>3. 右側の結果エリアで割引にチェックを入れたり、作品を既読にしたりすると、合計金額がリアルタイムで更新されます。</p>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- Discount Registration Area -->
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                    <h2 class="text-xl font-bold text-violet-400 mb-4 flex items-center"><i class="fas fa-tags mr-3"></i>割引登録</h2>
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input type="text" id="reg-discount-name" placeholder="割引名 (例: 週末クーポン)" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-colors">
+                            <div class="flex items-center gap-4 bg-gray-700 border border-gray-600 rounded-lg px-4 py-2">
+                                <label class="block text-sm font-medium">対象サイト:</label>
+                                <label class="flex items-center cursor-pointer"><input type="radio" name="reg-discount-site" value="dlsite" checked class="h-4 w-4 text-blue-500 bg-gray-900 border-gray-600 focus:ring-blue-600 ring-offset-gray-800"> <span class="ml-2">DLsite</span></label>
+                                <label class="flex items-center cursor-pointer"><input type="radio" name="reg-discount-site" value="fanza" class="h-4 w-4 text-red-500 bg-gray-900 border-gray-600 focus:ring-red-600 ring-offset-gray-800"> <span class="ml-2">FANZA</span></label>
+                            </div>
+                        </div>
+                        <select id="reg-discount-type" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-colors">
+                            <option value="bulk">まとめ買い割引</option>
+                            <option value="simple_coupon">クーポン (合計金額から)</option>
+                            <option value="conditional_coupon">クーポン (条件付き作品)</option>
+                            <option value="bulk_coupon">クーポン (複数購入)</option>
+                        </select>
+                        <div id="reg-discount-fields" class="p-4 bg-gray-900/50 rounded-lg"></div>
+                        <div class="flex justify-end">
+                            <button id="add-discount-btn" class="px-6 py-2 bg-violet-600 hover:bg-violet-700 rounded-lg font-semibold transition-colors flex items-center">
+                                <i class="fas fa-plus mr-2"></i> 割引を追加
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Work Registration Area -->
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                    <h2 class="text-xl font-bold text-green-400 mb-4 flex items-center"><i class="fas fa-book mr-3"></i>作品登録</h2>
+                    <div class="space-y-4">
+                        <div class="relative">
+                            <input type="text" id="reg-work-name" placeholder="作品名を入力..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors">
+                            <div id="work-suggestions" class="absolute z-10 w-full bg-gray-600 rounded-b-lg max-h-60 overflow-y-auto mt-1 hidden shadow-lg"></div>
+                            <div id="reg-work-status" class="text-xs h-4 mt-1 px-1"></div>
+                        </div>
+
+                        <div class="flex border-b border-gray-700">
+                            <button id="reg-tab-dlsite" class="reg-tab px-4 py-2 -mb-px border-b-2 font-semibold text-gray-400 border-transparent transition-colors duration-300">DLsite</button>
+                            <button id="reg-tab-fanza" class="reg-tab px-4 py-2 -mb-px border-b-2 font-semibold text-gray-400 border-transparent transition-colors duration-300">FANZA</button>
+                        </div>
+                        
+                        <div id="reg-form-dlsite" class="space-y-2">
+                            <div class="grid grid-cols-2 gap-4">
+                               <input type="number" id="reg-price-dlsite" placeholder="定価" min="0" max="9999999" class="numeric-input w-full bg-gray-700 border border-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-right transition-colors">
+                               <input type="number" id="reg-discount-dlsite" placeholder="割引(%)" min="0" max="100" class="numeric-input w-full bg-gray-700 border border-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-right transition-colors">
+                            </div>
+                        </div>
+                        <div id="reg-form-fanza" class="space-y-2 hidden">
+                            <div class="grid grid-cols-2 gap-4">
+                               <input type="number" id="reg-price-fanza" placeholder="定価" min="0" max="9999999" class="numeric-input w-full bg-gray-700 border border-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-red-500 text-right transition-colors">
+                               <input type="number" id="reg-discount-fanza" placeholder="割引(%)" min="0" max="100" class="numeric-input w-full bg-gray-700 border border-gray-600 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-red-500 text-right transition-colors">
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-end">
+                            <button id="add-to-list-btn" class="px-6 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition-colors flex items-center">
+                                <i class="fas fa-plus mr-2"></i> リストに追加
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                 <!-- Compare Button -->
+                <div class="pt-2">
+                    <button id="compare-btn" class="w-full px-8 py-4 bg-cyan-600 hover:bg-cyan-700 rounded-lg font-bold text-xl transition-colors flex items-center justify-center shadow-lg hover:shadow-cyan-500/30">
+                        <i class="fas fa-calculator mr-3"></i>
+                        比較を実行する
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Right Column: Results & Lists -->
+            <main class="space-y-8">
+                <!-- Summary -->
+                <section id="summary-section" class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                    <h2 class="text-xl font-bold mb-4 text-center text-gray-300">最適購入プラン 合計</h2>
+                    <div class="bg-green-900 border-2 border-green-700 p-6 rounded-lg text-center w-full max-w-md mx-auto">
+                        <p id="optimal-total" class="text-4xl lg:text-5xl font-bold text-green-300 tracking-tight">¥0</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 mt-6 text-center">
+                        <div>
+                            <p class="text-sm text-blue-300">DLsite 合計</p>
+                            <p id="dlsite-total" class="text-2xl font-bold text-blue-400">¥0</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-red-300">FANZA 合計</p>
+                            <p id="fanza-total" class="text-2xl font-bold text-red-400">¥0</p>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- Applied Discounts & Work Lists -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- DLsite Section -->
+                    <div class="space-y-6">
+                        <section class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                            <h3 class="text-lg font-bold text-blue-400 mb-4">適用する割引 (DLsite)</h3>
+                            <div id="dlsite-discounts-container" class="space-y-3"><p class="text-sm text-gray-500 discount-placeholder">割引を登録すると表示されます。</p></div>
+                        </section>
+                        <section class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                            <h3 class="text-lg font-bold text-blue-400 mb-4">DLsite 作品リスト</h3>
+                            <div id="dlsite-items-container" class="space-y-3"><p class="text-sm text-gray-500 work-placeholder">作品を登録すると表示されます。</p></div>
+                        </section>
+                    </div>
+
+                    <!-- FANZA Section -->
+                    <div class="space-y-6">
+                        <section class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                            <h3 class="text-lg font-bold text-red-400 mb-4">適用する割引 (FANZA)</h3>
+                            <div id="fanza-discounts-container" class="space-y-3"><p class="text-sm text-gray-500 discount-placeholder">割引を登録すると表示されます。</p></div>
+                        </section>
+                         <section class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                            <h3 class="text-lg font-bold text-red-400 mb-4">FANZA 作品リスト</h3>
+                            <div id="fanza-items-container" class="space-y-3"><p class="text-sm text-gray-500 work-placeholder">作品を登録すると表示されます。</p></div>
+                        </section>
+                    </div>
+                </div>
+
+                <!-- Detailed Comparison Table -->
+                <section>
+                    <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+                         <h2 class="text-xl font-bold text-gray-300">詳細比較リスト</h2>
+                        <input type="text" id="filter-input" placeholder="リスト内を検索..." class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-colors">
+                    </div>
+                    <div class="bg-gray-800 rounded-xl shadow-lg overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left">
+                                <thead class="bg-gray-700/50 text-xs uppercase tracking-wider">
+                                    <tr>
+                                        <th class="p-3"><label class="flex items-center"><input type="checkbox" id="toggle-owned-all" class="h-4 w-4 rounded bg-gray-600 text-cyan-500 border-gray-500 focus:ring-cyan-600 mr-2"> 既読</label></th>
+                                        <th class="p-3">作品名</th>
+                                        <th class="p-3 text-right">DLsite価格</th>
+                                        <th class="p-3 text-right">FANZA価格</th>
+                                        <th class="p-3 text-center">最安値</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="comparison-table-body">
+                                    <tr><td colspan="5" class="p-8 text-center text-gray-500">作品を登録して「比較を実行する」ボタンを押してください。</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+    
+    <!-- Floating Action Buttons -->
+    <div class="fixed bottom-6 right-6 z-50 flex flex-col gap-4">
+        <button id="ad-settings-fab" class="bg-blue-600 hover:bg-blue-500 w-16 h-16 rounded-full shadow-lg flex items-center justify-center text-2xl transition-transform hover:scale-110">
+            <i class="fas fa-ad"></i>
+        </button>
+        <button id="management-tools-fab" class="bg-gray-600 hover:bg-gray-500 w-16 h-16 rounded-full shadow-lg flex items-center justify-center text-2xl transition-transform hover:scale-110">
+            <i class="fas fa-tools"></i>
+        </button>
+    </div>
+
+    <!-- Ad Settings Modal -->
+    <div id="ad-settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[80] flex items-center justify-center p-4">
+        <div id="ad-settings-modal-content" class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-md w-full relative">
+             <button id="ad-settings-modal-close" class="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-times fa-lg"></i>
+            </button>
+            <h3 class="text-xl font-bold mb-6 text-gray-300"><i class="fas fa-ad mr-3"></i>広告設定</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" id="ad_visibility" class="h-5 w-5 rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-600">
+                        <span class="ml-3 text-sm font-medium text-gray-300">広告を表示する</span>
+                    </label>
+                </div>
+                <hr class="border-gray-600">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">表示タイプ</label>
+                    <div class="flex gap-4">
+                       <label class="flex items-center"><input type="radio" name="ad_type" value="ranking" checked class="h-4 w-4 text-blue-500 bg-gray-700 border-gray-600"> <span class="ml-2">ランキング</span></label>
+                       <label class="flex items-center"><input type="radio" name="ad_type" value="new" class="h-4 w-4 text-blue-500 bg-gray-700 border-gray-600"> <span class="ml-2">新着作品</span></label>
+                    </div>
+                </div>
+                <div>
+                    <label for="ad_site" class="block text-sm font-medium text-gray-400 mb-1">ジャンル</label>
+                    <select id="ad_site" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="maniax">同人</option>
+                        <option value="pro">美少女ゲーム</option>
+                        <option value="books">成年コミック</option>
+                        <option value="appx">スマホゲーム</option>
+                    </select>
+                </div>
+                <div id="ad-period-container">
+                    <label for="ad_period" class="block text-sm font-medium text-gray-400 mb-1">期間 (ランキング)</label>
+                    <select id="ad_period" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="24h">24時間ランキング</option>
+                        <option value="week">7日間ランキング</option>
+                        <option value="month">1ヵ月間ランキング</option>
+                        <option value="year">当年ランキング</option>
+                        <option value="total">累計ランキング</option>
+                    </select>
+                </div>
+                <div class="flex justify-end pt-4">
+                    <button id="save-ad-settings-btn" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors">
+                        設定を保存
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Management Modal -->
+    <div id="management-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[80] flex items-center justify-center p-4">
+        <div id="management-modal-content" class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-md w-full relative">
+            <button id="management-modal-close" class="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-times fa-lg"></i>
+            </button>
+            <h3 class="text-xl font-bold mb-6 text-gray-300"><i class="fas fa-tools mr-3"></i>管理ツール</h3>
+            <div class="space-y-4">
+                <p class="text-sm text-gray-400">各リストの内容をリセットします。この操作は元に戻せません。</p>
+                <button id="modal-reset-dlsite-btn" class="w-full px-4 py-3 bg-red-800 hover:bg-red-700 rounded-lg text-sm transition-colors text-left flex items-center">
+                    <i class="fas fa-trash-alt mr-3 w-4"></i>
+                    <span>DLsiteの作品と割引をリセット</span>
+                </button>
+                <button id="modal-reset-fanza-btn" class="w-full px-4 py-3 bg-red-800 hover:bg-red-700 rounded-lg text-sm transition-colors text-left flex items-center">
+                    <i class="fas fa-trash-alt mr-3 w-4"></i>
+                    <span>FANZAの作品と割引をリセット</span>
+                </button>
+                <button id="modal-reset-all-btn" class="w-full px-4 py-3 bg-red-600 hover:bg-red-500 rounded-lg font-semibold transition-colors flex items-center">
+                    <i class="fas fa-exclamation-triangle mr-3 w-4"></i>
+                    <span>すべての作品と割引をリセット</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[90] flex items-center justify-center p-4">
+        <div id="confirm-modal-content" class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-sm w-full">
+            <h3 id="confirm-title" class="text-lg font-bold mb-4">確認</h3>
+            <p id="confirm-message" class="text-gray-300 mb-6">この操作を続けてもよろしいですか？</p>
+            <div class="flex justify-end space-x-4">
+                <button id="confirm-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors">キャンセル</button>
+                <button id="confirm-ok" class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg font-semibold transition-colors">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
+    
+    <script type="module">
+        // --- Firebase setup (same as original) ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const DEFAULT_APP_ID = 'r18-random-selector';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : DEFAULT_APP_ID;
+        const firebaseConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : `{
+            "apiKey": "AIzaSyAnlTrmb0MW8yznBxpWF6B83R9luFnGVts",
+            "authDomain": "serecter222.firebaseapp.com",
+            "projectId": "serecter222",
+            "storageBucket": "serecter222.appspot.com",
+            "messagingSenderId": "1019715441654",
+            "appId": "1:1019715441654:web:6caa7779148cce46c92dd7"
+        }`;
+        
+        let firebaseApp, auth, db;
+        let selectorWorks = [];
+        let unsubscribeSelectorWorks = () => {};
+        let syncId = '';
+        let ownedItems = new Set();
+        let uniqueId = 0;
+        
+        const initializeFirebase = () => {
+             try {
+                const firebaseConfig = JSON.parse(firebaseConfigStr);
+                firebaseApp = initializeApp(firebaseConfig);
+                auth = getAuth(firebaseApp);
+                db = getFirestore(firebaseApp);
+                
+                onAuthStateChanged(auth, user => {
+                    if (user) {
+                        setupSyncIdAndSubscribe();
+                    } else {
+                        signInAnonymously(auth).catch(error => console.error("Anonymous sign-in failed:", error));
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+            }
+        };
+
+        const setupSyncIdAndSubscribe = () => {
+            syncId = localStorage.getItem('r18_sync_id');
+            if (!syncId) {
+                console.warn("Sync ID not found. Cannot check for duplicates.");
+                return;
+            }
+            subscribeToSelectorWorks();
+        };
+
+        const subscribeToSelectorWorks = () => {
+            unsubscribeSelectorWorks();
+            const worksRef = collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`);
+            unsubscribeSelectorWorks = onSnapshot(worksRef, (snapshot) => {
+                selectorWorks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            }, error => {
+                console.error("Error fetching selector works:", error);
+            });
+        };
+        
+        const normalizeName = (str) => {
+            if (!str) return '';
+            return str
+                .toLowerCase()
+                .replace(/[！-～]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+                .replace(/[\s!"#$%&'()’“”*+,-./:;<=>?@[\\\]^_`{|}~～〜☆★♡♥♪♪【】「」]/g, '');
+        };
+        
+        // --- UI Logic ---
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeFirebase();
+
+            const toastContainer = document.getElementById('toast-container');
+            const showToast = (message, type = 'success') => {
+                const toast = document.createElement('div');
+                const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle';
+                const colorClass = type === 'success' ? 'toast-success' : 'toast-error';
+                toast.className = `toast ${colorClass}`;
+                toast.innerHTML = `<i class="fas ${icon} icon"></i><span>${message}</span>`;
+                toastContainer.appendChild(toast);
+                setTimeout(() => toast.classList.add('show'), 10);
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    toast.addEventListener('transitionend', () => toast.remove());
+                }, 3000);
+            };
+
+            const validateNumericInput = (e) => {
+                const input = e.target;
+                const max = parseFloat(input.max);
+                if (input.value === '') return;
+                let sanitizedValue = input.value.replace(/[^0-9]/g, '');
+                if (sanitizedValue.length > 1) sanitizedValue = sanitizedValue.replace(/^0+/, '');
+                let value = parseInt(sanitizedValue, 10);
+                if (isNaN(value)) { input.value = ''; return; }
+                if (!isNaN(max) && value > max) value = max;
+                if (input.value !== String(value)) input.value = value;
+            };
+
+            const clampOnBlur = (e) => {
+                const input = e.target;
+                const min = parseFloat(input.min);
+                let value = parseInt(input.value, 10);
+                if (isNaN(value)) input.value = '';
+                else if (!isNaN(min) && value < min) input.value = min;
+            };
+            
+            // --- Modals ---
+            const managementModal = document.getElementById('management-modal');
+            const managementModalContent = document.getElementById('management-modal-content');
+            const confirmModal = document.getElementById('confirm-modal');
+            const confirmModalContent = document.getElementById('confirm-modal-content');
+            const adSettingsModal = document.getElementById('ad-settings-modal');
+            const adSettingsModalContent = document.getElementById('ad-settings-modal-content');
+
+            const showModal = (modal, content) => {
+                modal.classList.remove('hidden');
+                setTimeout(() => content.classList.add('modal-open'), 10);
+            }
+            const hideModal = (modal, content) => {
+                content.classList.remove('modal-open');
+                setTimeout(() => modal.classList.add('hidden'), 300);
+            }
+
+            const showConfirm = (title, message) => {
+                return new Promise(resolve => {
+                    document.getElementById('confirm-title').textContent = title;
+                    document.getElementById('confirm-message').innerHTML = message;
+                    showModal(confirmModal, confirmModalContent);
+                    
+                    const okHandler = () => { hideModal(confirmModal, confirmModalContent); cleanup(); resolve(true); };
+                    const cancelHandler = () => { hideModal(confirmModal, confirmModalContent); cleanup(); resolve(false); };
+                    const cleanup = () => {
+                        document.getElementById('confirm-ok').removeEventListener('click', okHandler);
+                        document.getElementById('confirm-cancel').removeEventListener('click', cancelHandler);
+                    }
+
+                    document.getElementById('confirm-ok').addEventListener('click', okHandler);
+                    document.getElementById('confirm-cancel').addEventListener('click', cancelHandler);
+                });
+            };
+
+
+            const regTabDlsite = document.getElementById('reg-tab-dlsite');
+            const regTabFanza = document.getElementById('reg-tab-fanza');
+            const regFormDlsite = document.getElementById('reg-form-dlsite');
+            const regFormFanza = document.getElementById('reg-form-fanza');
+            let activeRegTab = 'dlsite';
+
+            function switchRegTab(tab) {
+                activeRegTab = tab;
+                regTabDlsite.classList.toggle('border-blue-500', tab === 'dlsite');
+                regTabDlsite.classList.toggle('text-blue-400', tab === 'dlsite');
+                regTabDlsite.classList.toggle('reg-tab-active', tab === 'dlsite');
+                regFormDlsite.classList.toggle('hidden', tab !== 'dlsite');
+                regTabFanza.classList.toggle('border-red-500', tab === 'fanza');
+                regTabFanza.classList.toggle('text-red-400', tab === 'fanza');
+                regTabFanza.classList.toggle('reg-tab-active', tab === 'fanza');
+                regFormFanza.classList.toggle('hidden', tab !== 'fanza');
+            }
+            switchRegTab('dlsite');
+            
+            const regWorkName = document.getElementById('reg-work-name');
+            const suggestionsEl = document.getElementById('work-suggestions');
+            const regWorkStatus = document.getElementById('reg-work-status');
+            
+            const checkDuplicate = (name) => {
+                const normalized = normalizeName(name);
+                if (!normalized) {
+                    regWorkStatus.innerHTML = '';
+                    return;
+                }
+                const currentSiteContainerId = `${activeRegTab}-items-container`;
+                const isAlreadyInCurrentList = Array.from(document.querySelectorAll(`#${currentSiteContainerId} .work-name`)).some(input => normalizeName(input.value) === normalized);
+
+                if(isAlreadyInCurrentList) {
+                    const siteName = activeRegTab === 'dlsite' ? 'DLsite' : 'FANZA';
+                    regWorkStatus.innerHTML = `<i class="fas fa-exclamation-circle text-orange-400 mr-2"></i>この作品は${siteName}リストに既に追加済みです。`;
+                    return;
+                }
+                
+                const isInSelector = selectorWorks.some(work => normalizeName(work.name) === normalized);
+                if(isInSelector) {
+                    regWorkStatus.innerHTML = '<i class="fas fa-exclamation-triangle text-yellow-400 mr-2"></i>セレクターに登録済みの作品です。';
+                    return;
+                }
+                
+                regWorkStatus.innerHTML = '';
+            };
+
+            regWorkName.addEventListener('input', () => {
+                const query = regWorkName.value.trim();
+                const normalizedQuery = normalizeName(query);
+                checkDuplicate(query);
+
+                if (normalizedQuery.length < 2) {
+                    suggestionsEl.classList.add('hidden');
+                    return;
+                }
+                const suggestions = selectorWorks.filter(work => normalizeName(work.name).includes(normalizedQuery)).slice(0, 10);
+                if (suggestions.length > 0) {
+                    suggestionsEl.innerHTML = suggestions.map(work => `
+                        <div class="suggestion-item p-2 hover:bg-gray-500 cursor-pointer flex items-center gap-2" data-name="${work.name}">
+                           <img src="${work.imageUrl || 'https://placehold.co/40x40/1f2937/4b5563?text=?'}" class="w-8 h-8 object-cover rounded-sm flex-shrink-0">
+                           <span class="text-sm truncate">${work.name}</span>
+                        </div>
+                    `).join('');
+                    suggestionsEl.classList.remove('hidden');
+                } else {
+                    suggestionsEl.classList.add('hidden');
+                }
+            });
+
+            suggestionsEl.addEventListener('click', (e) => {
+                const item = e.target.closest('.suggestion-item');
+                if (item) {
+                    regWorkName.value = item.dataset.name;
+                    suggestionsEl.classList.add('hidden');
+                    checkDuplicate(item.dataset.name);
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!regWorkName.contains(e.target) && !suggestionsEl.contains(e.target)) {
+                    suggestionsEl.classList.add('hidden');
+                }
+            });
+
+            const discountFieldsContainer = document.getElementById('reg-discount-fields');
+            const discountTypeSelect = document.getElementById('reg-discount-type');
+            const discountFieldTemplates = {
+                bulk: `<div class="grid grid-cols-2 gap-2 text-sm"><div><label class="block text-xs text-gray-400">必要作品数</label><input type="number" data-key="count" value="3" min="1" max="999" class="numeric-input w-full bg-gray-800 rounded p-2 text-center"></div><div><label class="block text-xs text-gray-400">割引率 (%)</label><input type="number" data-key="percent" value="60" min="0" max="999" class="numeric-input w-full bg-gray-800 rounded p-2 text-center"></div></div>`,
+                simple_coupon: `<div class="flex items-center gap-2 text-sm"><input type="number" data-key="value" value="1000" min="0" max="9999999" class="numeric-input w-24 bg-gray-800 rounded p-2 text-right"><select data-key="type" class="bg-gray-800 rounded p-2"><option value="yen">円引き</option><option value="percent">% OFF</option></select></div>`,
+                conditional_coupon: `<div class="space-y-2 text-sm"><p>税込 <input type="number" data-key="price" value="1099" min="0" max="9999999" class="numeric-input w-24 bg-gray-800 rounded p-2 text-center"> 円までの作品が</p><p><input type="number" data-key="percent" value="20" min="0" max="100" class="numeric-input w-20 bg-gray-800 rounded p-2 text-center"> % OFF</p></div>`,
+                bulk_coupon: `<div class="space-y-2 text-sm"><p><input type="number" data-key="count" value="5" min="1" max="999" class="numeric-input w-20 bg-gray-800 rounded p-2 text-center"> 作品以上で</p><p>合計から <input type="number" data-key="percent" value="20" min="0" max="100" class="numeric-input w-20 bg-gray-800 rounded p-2 text-center"> % OFF</p></div>`
+            };
+            const renderDiscountFields = () => {
+                discountFieldsContainer.innerHTML = discountFieldTemplates[discountTypeSelect.value] || '';
+            }
+            renderDiscountFields();
+
+            const createWorkItemElement = (site, name, price, discount) => {
+                uniqueId++;
+                const isDlsite = site === 'dlsite';
+                const color = isDlsite ? 'blue' : 'red';
+                const safeName = name.replace(/"/g, '&quot;');
+                const div = document.createElement('div');
+                div.className = 'p-4 bg-gray-700/50 rounded-lg work-item space-y-3 new-item';
+                div.dataset.id = `work-${uniqueId}`;
+                div.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <input type="text" class="work-name w-full bg-transparent font-bold text-base focus:outline-none focus:bg-gray-800 rounded px-2 py-1" value="${safeName}" placeholder="作品名">
+                        <button class="remove-item-btn px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors flex-shrink-0 ml-2"><i class="fas fa-trash-alt text-xs"></i></button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3 text-sm">
+                        <div>
+                            <label class="block text-xs text-gray-400">定価</label>
+                            <input type="number" class="work-price numeric-input w-full bg-gray-800 border border-gray-600 rounded p-2 focus:ring-2 focus:ring-${color}-500 text-right" value="${price}" min="0" max="9999999">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400">割引(%)</label>
+                            <input type="number" class="work-discount numeric-input w-full bg-gray-800 border border-gray-600 rounded p-2 focus:ring-2 focus:ring-${color}-500 text-right" value="${discount}" min="0" max="100">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400">割引後</label>
+                            <input type="text" class="final-price w-full bg-transparent border-none rounded p-2 text-right font-semibold" value="¥0" readonly>
+                        </div>
+                    </div>
+                    <div>
+                        <label title="まとめ買い対象" class="flex items-center cursor-pointer text-sm">
+                            <input type="checkbox" class="work-bulk-eligible h-5 w-5 rounded bg-gray-600 text-green-500 border-gray-500 focus:ring-green-600 mr-2">
+                            <span>まとめ買い割引の対象</span>
+                        </label>
+                    </div>`;
+
+                const priceInput = div.querySelector('.work-price');
+                const discountInput = div.querySelector('.work-discount');
+                const finalPriceInput = div.querySelector('.final-price');
+                const updateItemFinalPrice = () => {
+                    const p = parseInt(priceInput.value, 10) || 0;
+                    const d = parseInt(discountInput.value, 10) || 0;
+                    const finalPrice = Math.round(p * (1 - d / 100));
+                    finalPriceInput.value = `¥${finalPrice.toLocaleString()}`;
+                };
+                [priceInput, discountInput].forEach(input => {
+                    input.addEventListener('input', (e) => { validateNumericInput(e); updateItemFinalPrice(); });
+                    input.addEventListener('blur', (e) => { clampOnBlur(e); updateItemFinalPrice(); });
+                });
+                div.querySelector('.remove-item-btn').addEventListener('click', () => { div.remove(); });
+                updateItemFinalPrice();
+                return div;
+            };
+
+            const createDiscountItemElement = (data) => {
+                uniqueId++;
+                const div = document.createElement('div');
+                div.className = 'p-3 bg-gray-700/50 rounded-lg discount-item new-item';
+                div.dataset.id = `discount-${uniqueId}`;
+                div.dataset.type = data.type;
+                for (const key in data.params) { div.dataset[key] = data.params[key]; }
+                let details = '';
+                switch(data.type) {
+                    case 'bulk': details = `${data.params.count}点以上で${data.params.percent}% OFF`; break;
+                    case 'simple_coupon': details = `${data.params.value}${data.params.type === 'yen' ? '円引' : '% OFF'}`; break;
+                    case 'conditional_coupon': details = `税込${data.params.price}円まで${data.params.percent}% OFF`; break;
+                    case 'bulk_coupon': details = `${data.params.count}点以上で合計${data.params.percent}% OFF`; break;
+                }
+                div.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <label class="flex items-center cursor-pointer flex-grow">
+                            <input type="checkbox" class="discount-active h-5 w-5 rounded bg-gray-600 text-green-500 border-gray-500 focus:ring-green-600 mr-3">
+                            <div><p class="font-semibold">${data.name}</p><p class="text-xs text-gray-400">${details}</p></div>
+                        </label>
+                        <button class="remove-discount-btn px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors ml-2"><i class="fas fa-trash-alt text-xs"></i></button>
+                    </div>`;
+                div.querySelector('.discount-active').addEventListener('change', updateUI);
+                div.querySelector('.remove-discount-btn').addEventListener('click', () => { div.remove(); updateUI(); });
+                return div;
+            };
+
+            const setupEventListeners = () => {
+                regTabDlsite.addEventListener('click', () => { switchRegTab('dlsite'); checkDuplicate(regWorkName.value); });
+                regTabFanza.addEventListener('click', () => { switchRegTab('fanza'); checkDuplicate(regWorkName.value); });
+                discountTypeSelect.addEventListener('change', renderDiscountFields);
+                document.getElementById('filter-input').addEventListener('input', updateUI);
+                document.getElementById('compare-btn').addEventListener('click', updateUI);
+                
+                document.body.addEventListener('input', e => { if (e.target.matches('.numeric-input')) validateNumericInput(e); });
+                document.body.addEventListener('blur', e => { if (e.target.matches('.numeric-input')) clampOnBlur(e); }, true);
+
+                document.getElementById('add-to-list-btn').addEventListener('click', () => {
+                    const name = document.getElementById('reg-work-name').value;
+                    if (!name.trim()) { showToast('作品名を入力してください。', 'error'); return; }
+                    
+                    const normalizedName = normalizeName(name);
+                    const site = activeRegTab;
+                    const currentSiteContainerId = `${site}-items-container`;
+                    const isAlreadyInCurrentList = Array.from(document.querySelectorAll(`#${currentSiteContainerId} .work-name`)).some(input => normalizeName(input.value) === normalizedName);
+
+                    if (isAlreadyInCurrentList) {
+                        const siteName = site === 'dlsite' ? 'DLsite' : 'FANZA';
+                        showToast(`この作品は${siteName}リストに既に追加済みです。`, 'error');
+                        return;
+                    }
+
+                    const price = document.getElementById(`reg-price-${site}`).value;
+                    const discount = document.getElementById(`reg-discount-${site}`).value;
+                    if (!price && !discount) { showToast(`${site === 'dlsite' ? 'DLsite' : 'FANZA'}の定価か割引率を入力してください。`, 'error'); return; }
+                    
+                    const container = document.getElementById(`${site}-items-container`);
+                    const placeholder = container.querySelector('.work-placeholder');
+                    if (placeholder) placeholder.remove();
+                    container.appendChild(createWorkItemElement(site, name, price, discount));
+                    
+                    ['reg-work-name', 'reg-price-dlsite', 'reg-discount-dlsite', 'reg-price-fanza', 'reg-discount-fanza'].forEach(id => document.getElementById(id).value = '');
+                    regWorkStatus.innerHTML = '';
+                    showToast(`「${name}」をリストに追加しました。`);
+                });
+
+                document.getElementById('add-discount-btn').addEventListener('click', () => {
+                    const name = document.getElementById('reg-discount-name').value.trim();
+                    if (!name) { showToast('割引名を入力してください。', 'error'); return; }
+                    const site = document.querySelector('input[name="reg-discount-site"]:checked').value;
+                    const type = discountTypeSelect.value;
+                    const params = {};
+                    discountFieldsContainer.querySelectorAll('[data-key]').forEach(input => params[input.dataset.key] = input.value);
+                    const container = document.getElementById(`${site}-discounts-container`);
+                    const placeholder = container.querySelector('.discount-placeholder');
+                    if (placeholder) placeholder.remove();
+                    container.appendChild(createDiscountItemElement({ name, type, params }));
+                    document.getElementById('reg-discount-name').value = '';
+                    showToast(`割引「${name}」を追加しました。`);
+                });
+
+                // Management Tools events
+                document.getElementById('management-tools-fab').addEventListener('click', () => showModal(managementModal, managementModalContent));
+                document.getElementById('management-modal-close').addEventListener('click', () => hideModal(managementModal, managementModalContent));
+                managementModal.addEventListener('click', (e) => {
+                    if (e.target === managementModal) hideModal(managementModal, managementModalContent);
+                });
+                
+                // Ad Settings events
+                document.getElementById('ad-settings-fab').addEventListener('click', () => showModal(adSettingsModal, adSettingsModalContent));
+                document.getElementById('ad-settings-modal-close').addEventListener('click', () => hideModal(adSettingsModal, adSettingsModalContent));
+                adSettingsModal.addEventListener('click', (e) => {
+                    if (e.target === adSettingsModal) hideModal(adSettingsModal, adSettingsModalContent);
+                });
+                document.querySelectorAll('input[name="ad_type"]').forEach(radio => {
+                    radio.addEventListener('change', (e) => {
+                        document.getElementById('ad-period-container').style.display = e.target.value === 'ranking' ? 'block' : 'none';
+                    });
+                });
+                document.getElementById('save-ad-settings-btn').addEventListener('click', () => {
+                    saveAndReloadAd();
+                    hideModal(adSettingsModal, adSettingsModalContent);
+                    showToast('広告設定を保存しました。');
+                });
+
+                document.getElementById('modal-reset-dlsite-btn').addEventListener('click', async () => {
+                    const worksCount = document.querySelectorAll('#dlsite-items-container .work-item').length;
+                    const discountsCount = document.querySelectorAll('#dlsite-discounts-container .discount-item').length;
+                    if (worksCount === 0 && discountsCount === 0) {
+                        showToast('DLsiteリストにリセットする項目がありません。', 'error');
+                        return;
+                    }
+                    if (await showConfirm('DLsiteリストのリセット', 'DLsiteの作品リストと割引リストをすべてクリアしますか？')) {
+                        document.getElementById('dlsite-items-container').innerHTML = '<p class="text-sm text-gray-500 work-placeholder">作品を登録すると表示されます。</p>';
+                        document.getElementById('dlsite-discounts-container').innerHTML = '<p class="text-sm text-gray-500 discount-placeholder">割引を登録すると表示されます。</p>';
+                        updateUI();
+                        showToast('DLsiteのリストをリセットしました。');
+                    }
+                });
+                document.getElementById('modal-reset-fanza-btn').addEventListener('click', async () => {
+                    const worksCount = document.querySelectorAll('#fanza-items-container .work-item').length;
+                    const discountsCount = document.querySelectorAll('#fanza-discounts-container .discount-item').length;
+                    if (worksCount === 0 && discountsCount === 0) {
+                        showToast('FANZAリストにリセットする項目がありません。', 'error');
+                        return;
+                    }
+                    if (await showConfirm('FANZAリストのリセット', 'FANZAの作品リストと割引リストをすべてクリアしますか？')) {
+                        document.getElementById('fanza-items-container').innerHTML = '<p class="text-sm text-gray-500 work-placeholder">作品を登録すると表示されます。</p>';
+                        document.getElementById('fanza-discounts-container').innerHTML = '<p class="text-sm text-gray-500 discount-placeholder">割引を登録すると表示されます。</p>';
+                        updateUI();
+                        showToast('FANZAのリストをリセットしました。');
+                    }
+                });
+                document.getElementById('modal-reset-all-btn').addEventListener('click', async () => {
+                     const totalItems = document.querySelectorAll('.work-item, .discount-item').length;
+                     if(totalItems === 0) {
+                        showToast('リセットする項目がありません。', 'error');
+                        return;
+                     }
+                    if (await showConfirm('全体の完全リセット', '<strong>すべてのサイト</strong>の作品と割引リストをクリアします。よろしいですか？')) {
+                        ['dlsite', 'fanza'].forEach(site => {
+                            document.getElementById(`${site}-items-container`).innerHTML = '<p class="text-sm text-gray-500 work-placeholder">作品を登録すると表示されます。</p>';
+                            document.getElementById(`${site}-discounts-container`).innerHTML = '<p class="text-sm text-gray-500 discount-placeholder">割引を登録すると表示されます。</p>';
+                        });
+                        ownedItems.clear();
+                        updateUI();
+                        showToast('すべてのデータをリセットしました。', 'error');
+                    }
+                });
+
+                 document.getElementById('toggle-owned-all').addEventListener('change', (e) => {
+                    const isChecked = e.target.checked;
+                    document.querySelectorAll('#comparison-table-body .owned-checkbox').forEach(cb => {
+                        if (isChecked) ownedItems.add(cb.dataset.name);
+                        else ownedItems.delete(cb.dataset.name);
+                    });
+                    updateUI();
+                });
+            };
+
+            const calculateSiteTotal = (purchaseList, site) => {
+                let processedList = purchaseList.map(item => ({...item, finalPrice: Math.round(item.price * (1 - (item.discount || 0) / 100)) }));
+                const activeDiscounts = Array.from(document.querySelectorAll(`#${site}-discounts-container .discount-item`))
+                    .filter(el => el.querySelector('.discount-active').checked)
+                    .map(el => el.dataset);
+                activeDiscounts.filter(d => d.type === 'bulk').forEach(campaign => {
+                    const eligibleItems = processedList.filter(item => item.bulkEligible);
+                    if (eligibleItems.length >= parseInt(campaign.count, 10)) {
+                        eligibleItems.forEach(item => item.finalPrice *= (1 - parseInt(campaign.percent, 10) / 100));
+                    }
+                });
+                const conditionalCoupons = activeDiscounts.filter(d => d.type === 'conditional_coupon');
+                processedList.forEach(item => {
+                    const bestCoupon = conditionalCoupons
+                        .filter(d => item.price <= parseInt(d.price, 10))
+                        .reduce((best, current) => parseInt(current.percent, 10) > parseInt(best.percent, 10) ? current : best, { percent: 0 });
+                    if (bestCoupon.percent > 0) item.finalPrice *= (1 - parseInt(bestCoupon.percent, 10) / 100);
+                });
+                processedList.forEach(item => item.finalPrice = Math.round(item.finalPrice));
+                const subtotal = processedList.reduce((sum, item) => sum + item.finalPrice, 0);
+                let bestCartDiscountAmount = 0;
+                activeDiscounts.filter(d => d.type === 'simple_coupon' || d.type === 'bulk_coupon').forEach(coupon => {
+                    let currentDiscountAmount = 0;
+                    if (coupon.type === 'simple_coupon') {
+                        const val = parseInt(coupon.value, 10);
+                        currentDiscountAmount = coupon.type === 'yen' ? val : subtotal * (val / 100);
+                    } else if (coupon.type === 'bulk_coupon' && processedList.length >= parseInt(coupon.count, 10)) {
+                        currentDiscountAmount = subtotal * (parseInt(coupon.percent, 10) / 100);
+                    }
+                    if (currentDiscountAmount > bestCartDiscountAmount) bestCartDiscountAmount = currentDiscountAmount;
+                });
+                const finalTotal = Math.max(0, subtotal - bestCartDiscountAmount);
+                return { total: Math.round(finalTotal), list: processedList };
+            };
+
+            const updateUI = () => {
+                const getSiteData = (site) => Array.from(document.querySelectorAll(`#${site}-items-container .work-item`)).map(item => ({
+                    name: item.querySelector('.work-name').value.trim(),
+                    price: parseInt(item.querySelector('.work-price').value, 10) || 0,
+                    discount: parseInt(item.querySelector('.work-discount').value, 10) || 0,
+                    bulkEligible: item.querySelector('.work-bulk-eligible').checked
+                })).filter(item => item.name);
+                
+                const itemMap = new Map();
+                getSiteData('dlsite').forEach(item => {
+                    const key = normalizeName(item.name);
+                    if (!itemMap.has(key)) itemMap.set(key, { name: item.name });
+                    itemMap.get(key).dlsite = item;
+                });
+                getSiteData('fanza').forEach(item => {
+                    const key = normalizeName(item.name);
+                    if (!itemMap.has(key)) itemMap.set(key, { name: item.name });
+                    itemMap.get(key).fanza = item;
+                });
+
+                const allItems = Array.from(itemMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+                const filterText = document.getElementById('filter-input').value;
+                const filteredItems = filterText ? allItems.filter(item => normalizeName(item.name).includes(normalizeName(filterText))) : allItems;
+                const tableBody = document.getElementById('comparison-table-body');
+
+                if (allItems.length === 0) {
+                     tableBody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-gray-500">作品を登録して「比較を実行する」ボタンを押してください。</td></tr>`;
+                     document.getElementById('dlsite-total').textContent = '¥0';
+                     document.getElementById('fanza-total').textContent = '¥0';
+                     document.getElementById('optimal-total').textContent = '¥0';
+                     return;
+                }
+                
+                tableBody.innerHTML = '';
+                let dlsitePurchaseList = [];
+                let fanzaPurchaseList = [];
+
+                filteredItems.forEach(item => {
+                    const normalizedName = normalizeName(item.name);
+                    item.owned = ownedItems.has(normalizedName);
+                    item.isDuplicateInSelector = selectorWorks.some(w => normalizeName(w.name) === normalizedName);
+                    item.onBothSites = item.dlsite && item.fanza;
+                    
+                    const calcPrice = (data) => data ? Math.round(data.price * (1 - data.discount / 100)) : null;
+                    const dlsiteFinalPrice = calcPrice(item.dlsite);
+                    const fanzaFinalPrice = calcPrice(item.fanza);
+                    let bestChoice = 'N/A';
+
+                    if (dlsiteFinalPrice !== null && (fanzaFinalPrice === null || dlsiteFinalPrice <= fanzaFinalPrice)) bestChoice = 'DLsite';
+                    else if (fanzaFinalPrice !== null) bestChoice = 'FANZA';
+                    
+                    if (!item.owned) {
+                        if (bestChoice === 'DLsite') dlsitePurchaseList.push(item.dlsite);
+                        else if (bestChoice === 'FANZA') fanzaPurchaseList.push(item.fanza);
+                    }
+
+                    const row = document.createElement('tr');
+                    row.className = 'bg-gray-800 border-b border-gray-700 hover:bg-gray-700/50 transition-colors';
+                    row.innerHTML = `
+                        <td class="p-3"><label class="flex items-center"><input type="checkbox" data-name="${normalizedName}" class="owned-checkbox h-4 w-4 rounded bg-gray-600 text-cyan-500 border-gray-500 focus:ring-cyan-600" ${item.owned ? 'checked' : ''}></label></td>
+                        <td class="p-3 font-medium flex items-center">
+                            <span>${item.name}</span>
+                            ${item.onBothSites ? '<i class="fas fa-exchange-alt text-cyan-400 ml-2" title="両サイトに登録されています"></i>' : ''}
+                            ${item.isDuplicateInSelector ? '<i class="fas fa-exclamation-triangle text-yellow-400 ml-2" title="セレクターに登録済みの作品です"></i>' : ''}
+                        </td>
+                        <td class="p-3 text-right ${bestChoice === 'DLsite' ? 'result-item-highlight' : ''}">${dlsiteFinalPrice !== null ? `¥${dlsiteFinalPrice.toLocaleString()} <span class="text-xs text-gray-400">(${item.dlsite.discount}%)</span>` : '-'}</td>
+                        <td class="p-3 text-right ${bestChoice === 'FANZA' ? 'result-item-highlight' : ''}">${fanzaFinalPrice !== null ? `¥${fanzaFinalPrice.toLocaleString()} <span class="text-xs text-gray-400">(${item.fanza.discount}%)</span>` : '-'}</td>
+                        <td class="p-3 font-bold text-center ${bestChoice === 'DLsite' ? 'text-blue-400' : bestChoice === 'FANZA' ? 'text-red-400' : ''}">${(dlsiteFinalPrice !== null && fanzaFinalPrice !== null) ? bestChoice : '<span class="text-amber-400">専売</span>'}</td>`;
+                    tableBody.appendChild(row);
+                });
+
+                const dlsiteResult = calculateSiteTotal(dlsitePurchaseList, 'dlsite');
+                const fanzaResult = calculateSiteTotal(fanzaPurchaseList, 'fanza');
+                document.getElementById('dlsite-total').textContent = `¥${dlsiteResult.total.toLocaleString()}`;
+                document.getElementById('fanza-total').textContent = `¥${fanzaResult.total.toLocaleString()}`;
+                document.getElementById('optimal-total').textContent = `¥${(dlsiteResult.total + fanzaResult.total).toLocaleString()}`;
+                
+                tableBody.querySelectorAll('.owned-checkbox').forEach(cb => cb.addEventListener('change', (e) => {
+                    if (e.target.checked) ownedItems.add(e.target.dataset.name);
+                    else ownedItems.delete(e.target.dataset.name);
+                    updateUI();
+                }));
+            };
+
+            // --- Ad Logic ---
+            const defaultAdSettings = { showAd: true, type: 'ranking', site: 'maniax', period: 'week' };
+            const topAdBanner = document.getElementById('top-ad-banner');
+            const leftAside = document.getElementById('left-aside');
+
+            const applyAdVisibility = (isVisible) => {
+                topAdBanner.classList.toggle('hidden', !isVisible);
+                if (window.innerWidth >= 1024) { // lg breakpoint
+                    leftAside.style.top = isVisible ? '160px' : '8px';
+                } else {
+                    leftAside.style.top = ''; // Reset for mobile
+                }
+            };
+            
+            const generateAndLoadAdScript = (settings) => {
+                const container = document.getElementById('ad-script-container');
+                container.innerHTML = ''; // Clear previous ad content
+
+                if (!settings.showAd) {
+                    return; // Don't proceed if ads are disabled
+                }
+
+                // Create an iframe to safely load the ad script, 
+                // which might use document.write().
+                const iframe = document.createElement('iframe');
+                iframe.style.width = '100%';
+                iframe.style.height = '100%';
+                iframe.style.border = 'none';
+                iframe.style.minHeight = '120px'; // Match container's min-height
+                iframe.scrolling = 'no';
+                iframe.setAttribute('title', 'DLsite Advertisement'); // for accessibility
+
+                container.appendChild(iframe);
+
+                // Dynamically create the settings object for the ad script
+                const adSettings = {
+                    base: "https://www.dlsite.com/",
+                    type: settings.type,
+                    site: settings.site,
+                    query: {},
+                    title: settings.type === 'ranking' ? "ランキング" : "新着作品",
+                    display: "horizontal",
+                    detail: "1",
+                    column: "v",
+                    image: "small",
+                    count: "5", // Display multiple items for scrolling
+                    wrapper: "0", // Set wrapper to 0 as requested
+                    autorotate: true,
+                    aid: "workassist"
+                };
+                
+                if (settings.type === 'ranking') {
+                    adSettings.query.period = settings.period;
+                }
+
+                // Prepare the HTML content to be written into the iframe
+                const iframeContent = `
+                    <html>
+                    <head>
+                        <style>
+                            /* Basic reset for the iframe body */
+                            body { 
+                                margin: 0; 
+                                padding: 0; 
+                                /* Enable horizontal scrolling, hide vertical */
+                                overflow-x: auto; 
+                                overflow-y: hidden; 
+                            }
+                            /* Style the scrollbar inside the ad iframe */
+                            body::-webkit-scrollbar { 
+                                height: 6px; 
+                            }
+                            body::-webkit-scrollbar-track { 
+                                background: transparent; 
+                            }
+                            body::-webkit-scrollbar-thumb { 
+                                background: #4b5563; 
+                                border-radius: 3px;
+                            }
+                            body::-webkit-scrollbar-thumb:hover { 
+                                background: #6b7280; 
+                            }
+                            /* DLsite script creates this container, prevent items from wrapping */
+                            .blogparts_container_Hor {
+                                white-space: nowrap;
+                                padding-bottom: 8px; /* Add padding to avoid scrollbar overlap */
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <!-- Ad script configuration -->
+                        <script type="text/javascript">
+                            var blogparts = ${JSON.stringify(adSettings)};
+                        <\/script>
+                        <!-- External ad script from DLsite -->
+                        <script type="text/javascript" src="https://www.dlsite.com/js/blogparts.js" charset="UTF-8"><\/script>
+                    </body>
+                    </html>
+                `;
+
+                // Write the complete HTML document to the iframe
+                const iframeDoc = iframe.contentWindow.document;
+                iframeDoc.open();
+                iframeDoc.write(iframeContent);
+                iframeDoc.close();
+            };
+
+            const saveAndReloadAd = () => {
+                const settings = {
+                    showAd: document.getElementById('ad_visibility').checked,
+                    type: document.querySelector('input[name="ad_type"]:checked').value,
+                    site: document.getElementById('ad_site').value,
+                    period: document.getElementById('ad_period').value
+                };
+                localStorage.setItem('adSettings', JSON.stringify(settings));
+                applyAdVisibility(settings.showAd);
+                generateAndLoadAdScript(settings);
+            };
+
+            const loadAdSettings = () => {
+                const saved = localStorage.getItem('adSettings');
+                const settings = saved ? JSON.parse(saved) : defaultAdSettings;
+
+                document.getElementById('ad_visibility').checked = settings.showAd;
+                document.querySelector(`input[name="ad_type"][value="${settings.type}"]`).checked = true;
+                
+                const siteSelect = document.getElementById('ad_site');
+                if (siteSelect.querySelector(`option[value="${settings.site}"]`)) {
+                    siteSelect.value = settings.site;
+                }
+
+                const periodSelect = document.getElementById('ad_period');
+                if (periodSelect.querySelector(`option[value="${settings.period}"]`)) {
+                    periodSelect.value = settings.period;
+                }
+                
+                document.getElementById('ad-period-container').style.display = settings.type === 'ranking' ? 'block' : 'none';
+                
+                applyAdVisibility(settings.showAd);
+                generateAndLoadAdScript(settings);
+            };
+            
+            window.addEventListener('resize', () => {
+                const settings = JSON.parse(localStorage.getItem('adSettings') || JSON.stringify(defaultAdSettings));
+                applyAdVisibility(settings.showAd);
+            });
+            
+            loadAdSettings();
+            setupEventListeners();
+        });
+    </script>
+</body>
+</html>
+
+
+

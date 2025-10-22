@@ -1,0 +1,2969 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>作品ランダムセレクター</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Custom scrollbar for webkit browsers */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+        .transition-all {
+            transition: all 0.3s ease-in-out;
+        }
+        .fab {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 30;
+        }
+        .fab-hidden {
+            transform: scale(0.5);
+            opacity: 0;
+            pointer-events: none;
+        }
+        #fab-menu-items {
+            overflow: hidden;
+            max-height: 0;
+            pointer-events: none;
+            transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #fab-container.fab-menu-open #fab-menu-items {
+            max-height: 300px; /* Adjust if more buttons are added */
+            pointer-events: auto;
+            transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #fab-menu-items button, #fab-menu-items a {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+        }
+        #fab-container.fab-menu-open #fab-menu-items button,
+        #fab-container.fab-menu-open #fab-menu-items a {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        #fab-container.fab-menu-open #fab-menu-items > *:nth-child(5) { transition-delay: 0.03s; }
+        #fab-container.fab-menu-open #fab-menu-items > *:nth-child(4) { transition-delay: 0.06s; }
+        #fab-container.fab-menu-open #fab-menu-items > *:nth-child(3) { transition-delay: 0.09s; }
+        #fab-container.fab-menu-open #fab-menu-items > *:nth-child(2) { transition-delay: 0.12s; }
+        #fab-container.fab-menu-open #fab-menu-items > *:nth-child(1) { transition-delay: 0.15s; }
+
+        #lotteryFab {
+            transition: all 0.2s ease-in-out;
+        }
+        #fab-container.fab-menu-open #lotteryFab {
+            opacity: 0;
+            transform: scale(0.5);
+            pointer-events: none;
+        }
+
+        #menuFab > i {
+            transition: transform 0.3s ease-in-out;
+        }
+        #fab-container.fab-menu-open #menuFab > i {
+            transform: rotate(135deg);
+        }
+        .modal-content {
+            max-height: 85vh;
+        }
+        .view-btn-active {
+             background-color: #0f766e; /* teal-700 */
+             color: white;
+        }
+        .work-list-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem;
+            background-color: #1f2937; /* gray-800 */
+            border-radius: 0.75rem;
+            transition: background-color 0.2s;
+        }
+        .work-list-item:hover {
+            background-color: #374151; /* gray-700 */
+        }
+        .date-filter-preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 0.5rem;
+        }
+        .btn-disabled {
+            background-color: #4b5563;
+            cursor: not-allowed;
+        }
+        .border-red-500 {
+            border-color: #ef4444;
+        }
+        summary {
+            list-style: none;
+            cursor: pointer;
+        }
+        summary::-webkit-details-marker {
+            display: none;
+        }
+        details[open] > summary .chevron-icon {
+            transform: rotate(180deg);
+        }
+        .chevron-icon {
+            transition: transform 0.2s ease-in-out;
+        }
+        .tag-item-and { background-color: #059669 !important; color: white !important; }
+        .tag-item-or { background-color: #2563eb !important; color: white !important; }
+        .tag-item-not { background-color: #be123c !important; color: white !important; text-decoration: line-through; }
+        .stats-tab-active {
+            background-color: #0f766e;
+            color: white;
+        }
+        .site-badge {
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            height: 16px;
+            line-height: 16px;
+            padding: 0 5px;
+            font-size: 10px;
+            font-weight: 800;
+            border-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 font-sans antialiased">
+    
+    <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]">v2.14</div>
+
+    <div id="debug-banner" class="hidden bg-amber-600 text-black text-center py-1 font-bold text-sm sticky top-0 z-[60]">
+          デバッグモード実行中 - データは保存されません
+    </div>
+    
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-gray-900 z-[100] flex items-center justify-center p-4">
+        <div id="loading-content" class="text-center transition-opacity duration-300 opacity-0">
+            <i class="fas fa-spinner fa-spin fa-3x text-teal-400"></i>
+            <p id="loading-text" class="mt-4 text-gray-400">アプリケーションを初期化中...</p>
+            <div class="w-64 mx-auto mt-4 bg-gray-700 rounded-full h-2.5">
+                <div id="loading-progress-bar" class="bg-teal-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Main Container -->
+    <div id="app-container" class="min-h-screen p-4 md:p-8 opacity-0 transition-opacity duration-500">
+        <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Left Column: Controls -->
+            <aside class="lg:col-span-1 space-y-6">
+                <!-- Data Sync Panel (Collapsible) -->
+                <details id="sync-panel-details" class="bg-gray-800 rounded-xl shadow-lg">
+                    <summary class="p-6 flex justify-between items-center">
+                        <h2 class="text-xl font-bold text-teal-400 flex items-center"><i class="fas fa-sync-alt mr-3"></i>データ同期</h2>
+                        <i class="fas fa-chevron-down chevron-icon"></i>
+                    </summary>
+                    <div class="px-6 pb-6">
+                        <div class="space-y-3 pt-2 border-t border-gray-700">
+                            <div class="flex items-center bg-gray-700 rounded-lg p-2">
+                                <input type="text" id="syncIdDisplay" class="bg-transparent w-full text-gray-300 focus:outline-none" readonly>
+                                <button id="copySyncIdBtn" class="ml-2 px-3 py-1 bg-teal-600 hover:bg-teal-700 rounded-md text-sm transition-colors"><i class="fas fa-copy"></i></button>
+                            </div>
+                            <select id="syncIdHistory" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500"></select>
+                            <div class="flex items-center">
+                                <input type="text" id="newSyncIdInput" placeholder="新しい同期IDをペースト" class="w-full bg-gray-700 border border-gray-600 rounded-l-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
+                                <button id="loadSyncIdBtn" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded-r-lg font-semibold transition-colors flex-shrink-0">読込</button>
+                            </div>
+                            <div class="flex space-x-2 pt-2">
+                                <button id="clearHistoryBtn" class="w-full text-sm px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors">履歴クリア</button>
+                                <button id="deleteDataBtn" class="w-full text-sm px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors">全作品削除</button>
+                            </div>
+                             <div class="pt-2">
+                                <button id="toggleDebugModeBtn" class="w-full text-sm px-4 py-2 bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors">デバッグモード開始</button>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- Work Registration Panel (Collapsible) -->
+                <details id="registration-panel-details" class="bg-gray-800 rounded-xl shadow-lg">
+                    <summary class="p-6 flex justify-between items-center">
+                        <h2 class="text-xl font-bold text-lime-400 flex items-center"><i class="fas fa-plus-circle mr-3"></i>作品登録</h2>
+                        <i class="fas fa-chevron-down chevron-icon"></i>
+                    </summary>
+                    <div class="px-6 pb-6">
+                         <form id="addWorkForm" class="space-y-4 pt-2 border-t border-gray-700">
+                            <div>
+                                <label for="workNameInput" class="block text-sm font-medium text-gray-400 mb-1">作品名</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="text" name="workName" id="workNameInput" placeholder="作品名" class="flex-grow bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500" required>
+                                    <button type="button" data-action="external-search-reg" class="flex-shrink-0 w-10 h-10 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-white flex items-center justify-center" title="外部サイトで検索"><i class="fas fa-globe-asia"></i></button>
+                                </div>
+                            </div>
+                            <select name="workGenre" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500" required>
+                                <option value="漫画">漫画</option>
+                                <option value="ゲーム">ゲーム</option>
+                                <option value="動画">動画</option>
+                            </select>
+                            <div>
+                                <label for="workUrlInput" class="block text-sm font-medium text-gray-400 mb-1">作品URL (任意)</label>
+                                <input type="url" name="workUrl" id="workUrlInput" placeholder="https://..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500">
+                            </div>
+                            <input type="text" id="workRegisteredAt" name="workRegisteredAt" placeholder="YYYY/MM/DD" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500" required>
+                            <div>
+                                <label for="workImage" class="block text-sm font-medium text-gray-400 mb-2">画像 (任意, 900KB以下)</label>
+                                <input type="file" name="workImage" id="workImage" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-lime-600 file:text-white hover:file:bg-lime-700">
+                            </div>
+                            <img id="imagePreview" src="" class="hidden max-w-full h-auto mx-auto rounded-lg mt-2">
+                            <button type="submit" class="w-full px-4 py-3 bg-lime-600 hover:bg-lime-700 rounded-lg font-bold text-lg transition-colors">登録する</button>
+                        </form>
+                    </div>
+                </details>
+
+                <!-- Lottery Panel -->
+                <div id="lottery-panel" class="bg-gray-800 p-6 rounded-xl shadow-lg lg:sticky top-8">
+                    <h2 class="text-xl font-bold text-sky-400 mb-4 flex items-center"><i class="fas fa-dice mr-3"></i>抽選</h2>
+                    <div class="bg-gray-700 p-4 rounded-lg mb-4 min-h-[60px]">
+                        <p class="text-sm text-gray-400">現在の設定:</p>
+                        <div id="lotterySummary" class="text-sm">設定を開いて条件を選択してください。</div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button id="startLotteryBtn" class="w-full px-4 py-4 bg-sky-600 hover:bg-sky-700 rounded-lg font-bold text-xl transition-colors">抽選開始！</button>
+                        <button id="openLotterySettingsBtn" class="flex-shrink-0 px-4 py-4 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors"><i class="fas fa-cog text-xl"></i></button>
+                    </div>
+                </div>
+
+            </aside>
+
+            <!-- Right Column: Content -->
+            <main class="lg:col-span-2 space-y-6">
+                <!-- List Controls -->
+                <div class="bg-gray-800 p-4 rounded-xl shadow-lg">
+                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                        <div class="md:col-span-2 flex items-center bg-gray-700 rounded-lg px-3">
+                            <i class="fas fa-search text-gray-500"></i>
+                            <input type="search" id="searchInput" placeholder="作品名で検索..." class="w-full bg-transparent p-2 focus:outline-none ml-2">
+                        </div>
+                        <div class="md:col-span-2 relative">
+                            <button id="sortBtn" class="w-full h-full flex items-center justify-between bg-gray-700 p-2 rounded-lg hover:bg-gray-600 transition-colors">
+                                <span id="sortStateLabel">並び替え: 登録日 (降順)</span><i class="fas fa-chevron-down text-sm"></i>
+                            </button>
+                            <div id="sortDropdown" class="hidden absolute z-20 mt-1 w-full bg-gray-700 rounded-lg shadow-xl py-1">
+                                <!-- Sort options will be injected by JS -->
+                            </div>
+                        </div>
+                         <button id="filterBtn" class="md:col-span-1 w-full h-full bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors flex items-center justify-center py-2"><i class="fas fa-filter mr-2"></i>絞り込み</button>
+                    </div>
+                </div>
+
+                <!-- Active Filters & Count -->
+                 <div class="flex flex-wrap gap-4 justify-between items-center px-2">
+                    <div id="activeFilters" class="flex flex-wrap gap-2 items-center">
+                         <span class="text-sm text-gray-400">絞り込み:</span>
+                         <!-- Active filter badges will be injected here -->
+                    </div>
+                    <span id="workCount" class="flex-shrink-0 px-3 py-1 bg-gray-700 rounded-full text-sm font-semibold">0 作品</span>
+                </div>
+                
+                <!-- Work List Panel -->
+                <div>
+                    <div class="flex justify-between items-center mb-4 px-2">
+                        <h2 class="text-2xl font-bold">登録作品リスト</h2>
+                        <div class="flex space-x-1 bg-gray-700 p-1 rounded-lg">
+                            <button id="view-grid-btn" class="view-btn p-2 leading-none"><i class="fas fa-th-large"></i></button>
+                            <button id="view-list-btn" class="view-btn p-2 leading-none"><i class="fas fa-bars"></i></button>
+                        </div>
+                    </div>
+                    <div id="workList" class="transition-all">
+                        <!-- Work cards will be injected here -->
+                    </div>
+                     <div id="workListMessage" class="text-center py-10">
+                        <!-- Messages like loading, no data, etc. will be shown here -->
+                     </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <!-- FAB Backdrop -->
+    <div id="fab-backdrop" class="hidden fixed inset-0 z-20"></div>
+
+    <!-- Floating Action Buttons -->
+    <div id="fab-container" class="fab flex flex-col-reverse items-center">
+        <!-- Lottery FAB (at the very bottom) -->
+        <button id="lotteryFab" class="lg:hidden w-14 h-14 bg-sky-600 hover:bg-sky-700 rounded-full text-white flex items-center justify-center shadow-lg transition-all">
+            <i class="fas fa-dice text-xl"></i>
+        </button>
+
+        <!-- Main FAB Toggle (above lottery)-->
+        <button id="menuFab" title="メニュー" class="w-16 h-16 bg-indigo-600 hover:bg-indigo-700 rounded-full text-white flex items-center justify-center shadow-lg transition-transform hover:scale-110 mt-3">
+            <i class="fas fa-plus text-2xl"></i>
+        </button>
+        
+        <!-- Collapsible Menu Items (at the top) -->
+        <div id="fab-menu-items" class="flex flex-col-reverse items-center space-y-reverse space-y-3 mb-3">
+            <a href="price_comparison.html" title="価格比較ツール">
+                 <button class="w-14 h-14 bg-cyan-600 hover:bg-cyan-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-balance-scale-right text-xl"></i></button>
+            </a>
+            <button id="historyFab" title="総合履歴" class="w-14 h-14 bg-gray-600 hover:bg-gray-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-history text-xl"></i></button>
+            <button id="externalSearchFab" title="外部サイト検索" class="w-14 h-14 bg-emerald-600 hover:bg-emerald-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-globe-asia text-xl"></i></button>
+            <button id="statsFab" title="統計" class="w-14 h-14 bg-amber-600 hover:bg-amber-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-chart-pie text-xl"></i></button>
+            <button id="manageTagsFab" title="タグ管理" class="w-14 h-14 bg-purple-600 hover:bg-purple-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-tags text-xl"></i></button>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-backdrop" class="hidden fixed inset-0 bg-black bg-opacity-70 z-40 transition-opacity"></div>
+
+    <!-- Generic Modal Wrapper -->
+    <div id="modal-wrapper" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div id="modal-container" class="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-transform scale-95 opacity-0">
+             <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h3 id="modal-title" class="text-xl font-bold">Modal Title</h3>
+                <button id="modal-close-btn" class="text-gray-400 hover:text-white"><i class="fas fa-times fa-lg"></i></button>
+            </div>
+            <div id="modal-content-host" class="p-6 overflow-y-auto modal-content">
+                <!-- Modal content will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-gray-700 text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-[70]">
+        <p id="toast-message">Message</p>
+    </div>
+
+    <!-- Simple Password Overlay -->
+    <div id="password-overlay" class="hidden fixed inset-0 bg-gray-900 bg-opacity-95 z-[90] flex items-center justify-center p-4">
+        <div class="w-full max-w-sm">
+            <form id="password-form" class="bg-gray-800 p-8 rounded-2xl shadow-2xl space-y-6">
+                <h2 class="text-2xl font-bold text-center text-gray-300">認証</h2>
+                <div id="password-error" class="hidden text-sm text-center bg-red-900 border border-red-700 text-red-300 p-2 rounded-lg"></div>
+                <div>
+                    <label for="password-input" class="block text-sm font-medium text-gray-400 mb-1">パスワード</label>
+                    <input type="password" id="password-input" required class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                </div>
+                <button type="submit" class="w-full px-4 py-3 bg-sky-600 hover:bg-sky-700 rounded-lg font-bold text-lg transition-colors">入室</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[80] flex items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-sm w-full">
+            <h3 id="confirm-title" class="text-lg font-bold mb-4">確認</h3>
+            <p id="confirm-message" class="text-gray-300 mb-6">この操作を続けてもよろしいですか？</p>
+            <div class="flex justify-end space-x-4">
+                <button id="confirm-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors">キャンセル</button>
+                <button id="confirm-ok" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            getDoc, 
+            setDoc, 
+            updateDoc, 
+            deleteDoc, 
+            onSnapshot, 
+            collection, 
+            query, 
+            writeBatch,
+            Timestamp,
+            serverTimestamp,
+            getDocs,
+            arrayUnion,
+            arrayRemove
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- UI Helper Functions ---
+        const $ = (selector) => document.querySelector(selector);
+        const $$ = (selector) => document.querySelectorAll(selector);
+
+        // --- App Configuration ---
+        const DEFAULT_APP_ID = 'r18-random-selector';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : DEFAULT_APP_ID;
+        const appVersion = 'v2.14';
+        const MASTER_PASSWORD = '07143674';
+        $('#version-display').textContent = appVersion;
+
+        const firebaseConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : `{
+            "apiKey": "AIzaSyAnlTrmb0MW8yznBxpWF6B83R9luFnGVts",
+            "authDomain": "serecter222.firebaseapp.com",
+            "projectId": "serecter222",
+            "storageBucket": "serecter222.appspot.com",
+            "messagingSenderId": "1019715441654",
+            "appId": "1:1019715441654:web:6caa7779148cce46c92dd7"
+        }`;
+        
+        let firebaseApp, auth, db;
+        
+        // --- State Management ---
+        let works = [];
+        let tags = [];
+        let unsubscribeWorks = () => {};
+        let unsubscribeTags = () => {};
+        let syncId = '';
+        let currentUser = null;
+        let loadingTimeout = null;
+        let stallTimeout = null;
+        let isLoadComplete = false;
+        let loadingStatus = { auth: false, works: false, tags: false };
+        let listViewMode = localStorage.getItem('listViewMode') || 'grid';
+        let showSiteIcon = localStorage.getItem('showSiteIcon') === 'false' ? false : true;
+        let modalStateStack = [];
+        let activeCharts = {};
+        let isDebugMode = false;
+        let checkModalDirtyState = () => false; // Function to check for unsaved changes
+
+        // Filters and Sort State
+        const defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', endDate: '' });
+        let listFilters = {
+            genres: new Set(),
+            rating: { type: 'exact', value: 0 }, // type: 'exact' or 'above'
+            andTagIds: new Set(),
+            orTagIds: new Set(),
+            notTagIds: new Set(),
+            dateFilter: defaultDateFilter(),
+            unratedOrUntaggedOnly: false,
+        };
+        let sortState = {
+            by: 'registeredAt',
+            order: 'desc',
+        };
+        let searchQuery = '';
+        let searchDebounceTimer;
+        let expandedTagsWorkIds = new Set();
+        
+        // Lottery State
+        let lotterySettings = {
+            mood: 'default', // 'favorite', 'best', 'hidden_gem'
+            genres: new Set(),
+            andTagIds: new Set(),
+            orTagIds: new Set(),
+            notTagIds: new Set(),
+            dateFilter: defaultDateFilter(),
+            priority: 'new', // 'old', 'random'
+            method: 'normal', // 'decrease_unselected'
+            unratedOrUntaggedOnly: false,
+        };
+
+
+        // --- UI Elements ---
+        const loadingOverlay = $('#loading-overlay');
+        const loadingContent = $('#loading-content');
+        const loadingText = $('#loading-text');
+        const loadingProgressBar = $('#loading-progress-bar');
+        
+        const appContainer = $('#app-container');
+        const workListEl = $('#workList');
+        const workListMessage = $('#workListMessage');
+        const workCountEl = $('#workCount');
+        
+        // Sync Panel
+        const syncIdDisplay = $('#syncIdDisplay');
+        const copySyncIdBtn = $('#copySyncIdBtn');
+        const newSyncIdInput = $('#newSyncIdInput');
+        const loadSyncIdBtn = $('#loadSyncIdBtn');
+        const syncIdHistoryEl = $('#syncIdHistory');
+        const clearHistoryBtn = $('#clearHistoryBtn');
+        const deleteDataBtn = $('#deleteDataBtn');
+        
+        // Registration Form
+        const addWorkForm = $('#addWorkForm');
+        
+        // List Controls
+        const searchInput = $('#searchInput');
+        const sortBtn = $('#sortBtn');
+        const sortDropdown = $('#sortDropdown');
+        const sortStateLabel = $('#sortStateLabel');
+        const filterBtn = $('#filterBtn');
+        const activeFiltersEl = $('#activeFilters');
+        const viewGridBtn = $('#view-grid-btn');
+        const viewListBtn = $('#view-list-btn');
+
+        // Lottery
+        const lotterySummaryEl = $('#lotterySummary');
+        const startLotteryBtn = $('#startLotteryBtn');
+        const openLotterySettingsBtn = $('#openLotterySettingsBtn');
+
+        // FAB
+        const fabContainer = $('#fab-container');
+        const menuFab = $('#menuFab');
+        const fabBackdrop = $('#fab-backdrop');
+        const historyFab = $('#historyFab');
+        const externalSearchFab = $('#externalSearchFab');
+        const statsFab = $('#statsFab');
+        const manageTagsFab = $('#manageTagsFab');
+
+
+        // Modals
+        const modalBackdrop = $('#modal-backdrop');
+        const modalWrapper = $('#modal-wrapper');
+        const modalContainer = $('#modal-container');
+        const modalTitle = $('#modal-title');
+        const modalContentHost = $('#modal-content-host');
+        const modalCloseBtn = $('#modal-close-btn');
+
+        // Auth
+        const passwordOverlay = $('#password-overlay');
+        const passwordForm = $('#password-form');
+        const passwordInput = $('#password-input');
+        const passwordError = $('#password-error');
+
+        // Toast & Confirm
+        const toastEl = $('#toast');
+        const toastMessageEl = $('#toast-message');
+        const confirmModal = $('#confirm-modal');
+        const confirmTitle = $('#confirm-title');
+        const confirmMessage = $('#confirm-message');
+        const confirmOkBtn = $('#confirm-ok');
+        const confirmCancelBtn = $('#confirm-cancel');
+        
+        // --- Utility Functions ---
+
+        const escapeHTML = (str) => str.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        
+        const isValidDate = (dateString) => {
+            if (!/^\d{4}\/\d{2}\/\d{2}$/.test(dateString)) return false;
+            const d = new Date(dateString.replace(/\//g, '-'));
+            // Check if date is valid by comparing it to its own string representation
+            if (isNaN(d.getTime())) return false;
+            return d.toISOString().slice(0, 10).replace(/-/g, '/') === dateString;
+        };
+
+        const showToast = (message, duration = 3000) => {
+            toastMessageEl.textContent = message;
+            toastEl.classList.remove('translate-y-20', 'opacity-0');
+            toastEl.classList.add('translate-y-0', 'opacity-100');
+            setTimeout(() => {
+                toastEl.classList.remove('translate-y-0', 'opacity-100');
+                toastEl.classList.add('translate-y-20', 'opacity-0');
+            }, duration);
+        };
+
+        const showConfirm = (title, message) => {
+            return new Promise((resolve) => {
+                confirmTitle.textContent = title;
+                confirmMessage.innerHTML = message;
+                confirmModal.classList.remove('hidden');
+
+                const okHandler = () => {
+                    confirmModal.classList.add('hidden');
+                    confirmOkBtn.removeEventListener('click', okHandler);
+                    confirmCancelBtn.removeEventListener('click', cancelHandler);
+                    resolve(true);
+                };
+                const cancelHandler = () => {
+                    confirmModal.classList.add('hidden');
+                    confirmOkBtn.removeEventListener('click', okHandler);
+                    confirmCancelBtn.removeEventListener('click', cancelHandler);
+                    resolve(false);
+                };
+                
+                confirmOkBtn.addEventListener('click', okHandler);
+                confirmCancelBtn.addEventListener('click', cancelHandler);
+            });
+        };
+
+        const formatDate = (timestamp, includeTime = true) => {
+            if (!timestamp || !timestamp.toDate) return 'N/A';
+            const date = timestamp.toDate();
+            const options = {
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit',
+                hour12: false
+            };
+            if (!includeTime) {
+                delete options.hour;
+                delete options.minute;
+            }
+            return new Intl.DateTimeFormat('ja-JP', options).format(date);
+        };
+
+        const formatDateForInput = (date) => {
+            const d = date instanceof Date ? date : new Date();
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}/${month}/${day}`;
+        };
+        
+        const debounce = (func, delay) => {
+            let timer;
+            return (...args) => {
+                clearTimeout(timer);
+                timer = setTimeout(() => {
+                    func.apply(this, args);
+                }, delay);
+            };
+        };
+
+        // --- FAB Menu Logic ---
+        const toggleFabMenu = () => {
+            const isOpen = fabContainer.classList.toggle('fab-menu-open');
+            fabBackdrop.classList.toggle('hidden', !isOpen);
+        };
+        const closeFabMenu = () => {
+            fabContainer.classList.remove('fab-menu-open');
+            fabBackdrop.classList.add('hidden');
+        };
+
+        // --- Modal Management ---
+        const openModal = (title, contentHtml, onOpen = null, options = {}) => {
+            closeFabMenu();
+            checkModalDirtyState = () => false; // Reset dirty check for any new modal
+            const { size = 'max-w-2xl' } = options;
+            
+            Object.values(activeCharts).forEach(chart => chart.destroy());
+            activeCharts = {};
+
+            modalContainer.classList.remove('max-w-2xl', 'max-w-4xl', 'max-w-5xl');
+            modalContainer.classList.add(size);
+            
+            modalTitle.textContent = title;
+            modalContentHost.innerHTML = contentHtml;
+            initializeDateInputs(modalContentHost); 
+            modalBackdrop.classList.remove('hidden');
+            modalWrapper.classList.remove('hidden');
+            fabContainer.classList.add('fab-hidden');
+            setTimeout(() => {
+                modalBackdrop.classList.add('opacity-100');
+                modalContainer.classList.remove('scale-95', 'opacity-0');
+                if (onOpen) onOpen();
+                
+                // Set focus to the first interactive element
+                const firstFocusable = modalContentHost.querySelector('input, select, button');
+                if (firstFocusable) {
+                    setTimeout(() => firstFocusable.focus(), 100);
+                }
+
+            }, 10);
+        };
+
+        const closeModal = async () => {
+            if (checkModalDirtyState()) {
+                const confirmed = await showConfirm("未保存の変更", "変更が保存されていません。本当に閉じますか？");
+                if (!confirmed) return;
+            }
+            checkModalDirtyState = () => false;
+
+            if (modalStateStack.length > 0) {
+                const restorePrevious = modalStateStack.pop();
+                restorePrevious();
+                return;
+            }
+
+            modalContainer.classList.add('scale-95', 'opacity-0');
+            modalBackdrop.classList.remove('opacity-100');
+            fabContainer.classList.remove('fab-hidden');
+            setTimeout(() => {
+                modalBackdrop.classList.add('hidden');
+                modalWrapper.classList.add('hidden');
+                modalContentHost.innerHTML = '';
+                Object.values(activeCharts).forEach(chart => chart.destroy());
+                activeCharts = {};
+            }, 300);
+        };
+
+        // --- Loading Timeout Logic ---
+        const updateLoadingProgress = () => {
+            if (isLoadComplete) return;
+            let progress = 10;
+            if (loadingStatus.auth) progress += 20;
+            if (loadingStatus.tags) progress += 35;
+            if (loadingStatus.works) progress += 35;
+            loadingProgressBar.style.width = `${progress}%`;
+            loadingText.textContent = `読み込み中... (${progress}%)`;
+        };
+
+        const handleLoadingTimeout = (isStall = false) => {
+            if (isLoadComplete) return;
+
+            const errorCode = isStall ? 'DATA_STALL' : 'TIMEOUT_30S';
+            const errorMessageTitle = isStall ? 'データ取得の停滞' : '読み込みタイムアウト';
+            console.error(`Loading failed: ${errorCode}`);
+
+            clearTimeout(loadingTimeout);
+            clearTimeout(stallTimeout);
+            
+            const statusParts = [];
+            if (!loadingStatus.auth) statusParts.push('認証');
+            if (!loadingStatus.tags) statusParts.push('タグ');
+            if (!loadingStatus.works) statusParts.push('作品');
+
+            loadingContent.innerHTML = `
+                <div class="bg-red-900 border border-red-700 rounded-lg p-4 text-left max-w-md mx-auto">
+                    <h3 class="text-lg font-bold text-red-300 mb-2">${errorMessageTitle}</h3>
+                    <p class="text-red-200 mb-4">データの読み込みが完了しませんでした。ネットワーク接続などを確認してください。</p>
+                    <div class="mt-4 pt-3 border-t border-red-800 text-xs font-mono text-red-300">
+                        <p>エラーコード: ${errorCode}</p>
+                        <p>未完了: ${statusParts.join(', ')}</p>
+                    </div>
+                </div>`;
+        };
+        
+        const startLoadingTimeout = () => {
+            clearTimeout(loadingTimeout);
+            loadingTimeout = setTimeout(() => handleLoadingTimeout(false), 30000);
+        };
+
+        const handleDataFetchError = (error, type) => {
+             if (isLoadComplete) return;
+             console.error(`Error fetching ${type}: `, error);
+             clearTimeout(loadingTimeout);
+             loadingContent.innerHTML = `
+                <div class="bg-red-900 border border-red-700 rounded-lg p-4 text-left max-w-md mx-auto">
+                    <h3 class="text-lg font-bold text-red-300 mb-2">${type}データの取得に失敗</h3>
+                    <p class="text-red-200 mb-4">データベースから情報を取得できませんでした。Firebaseのセキュリティルールが読み取りを許可しているか確認してください。</p>
+                    <div class="mt-4 pt-3 border-t border-red-800 text-xs font-mono text-red-300">
+                        <p>エラー: ${error.code || 'N/A'} - ${error.message}</p>
+                    </div>
+                </div>`;
+        }
+
+        const checkLoadingComplete = () => {
+            if (isLoadComplete) return;
+            updateLoadingProgress();
+            if (loadingStatus.auth && loadingStatus.works && loadingStatus.tags) {
+                isLoadComplete = true;
+                clearTimeout(loadingTimeout);
+                clearTimeout(stallTimeout);
+                console.log("All data loaded successfully.");
+                
+                loadingText.textContent = '読み込み完了！';
+                loadingProgressBar.style.width = `100%`;
+
+                setTimeout(() => {
+                    loadingOverlay.classList.add('opacity-0');
+                    appContainer.classList.remove('opacity-0');
+                    setTimeout(() => loadingOverlay.classList.add('hidden'), 500);
+
+                    const lastSelectedId = sessionStorage.getItem('lastSelectedWorkId');
+                    if (lastSelectedId) {
+                        sessionStorage.removeItem('lastSelectedWorkId');
+                        const work = works.find(w => w.id === lastSelectedId);
+                        if (work && ((work.rating || 0) === 0 || !work.tagIds || work.tagIds.length === 0)) {
+                            setTimeout(() => openFeedbackModal(work), 1000); 
+                        }
+                    }
+                }, 500);
+            }
+        };
+
+        // --- Firebase & Data Sync Logic ---
+        const initializeFirebase = () => {
+            startLoadingTimeout();
+            setTimeout(() => { loadingContent.classList.remove('opacity-0'); }, 100);
+            updateLoadingProgress();
+            try {
+                const firebaseConfig = JSON.parse(firebaseConfigStr);
+                firebaseApp = initializeApp(firebaseConfig);
+                auth = getAuth(firebaseApp);
+                db = getFirestore(firebaseApp);
+                setupAuthObserver();
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                loadingContent.innerHTML = `<p class="text-red-400">Firebaseの初期化に失敗しました。コンソールを確認してください。</p>`;
+            }
+        };
+
+        const setupAuthObserver = () => {
+            onAuthStateChanged(auth, user => {
+                if (user) {
+                    if (!loadingStatus.auth) {
+                        currentUser = user;
+                        loadingStatus.auth = true;
+                        
+                        clearTimeout(stallTimeout);
+                        stallTimeout = setTimeout(() => handleLoadingTimeout(true), 15000);
+
+                        checkLoadingComplete();
+                        setupSyncId();
+                    }
+                } else {
+                    signInAnonymously(auth).catch(error => handleDataFetchError(error, '匿名認証'));
+                }
+            });
+        };
+
+        const setupSyncId = () => {
+            let currentSyncId = localStorage.getItem('r18_sync_id');
+            if (!currentSyncId) {
+                currentSyncId = generateRandomId();
+                localStorage.setItem('r18_sync_id', currentSyncId);
+            }
+            loadDataSet(currentSyncId);
+            updateSyncIdHistory(currentSyncId);
+        };
+        
+        const loadDataSet = (newSyncId) => {
+            if (syncId === newSyncId && isLoadComplete) return;
+            
+            syncId = newSyncId;
+            syncIdDisplay.value = syncId;
+            localStorage.setItem('r18_sync_id', syncId);
+            
+            unsubscribeWorks();
+            unsubscribeTags();
+
+            works = [];
+            tags = [];
+            renderAll();
+
+            if (currentUser && syncId && !isDebugMode) {
+                subscribeToWorks();
+                subscribeToTags();
+            }
+        };
+        
+        const updateSyncIdHistory = (newId) => {
+            let history = JSON.parse(localStorage.getItem('r18_sync_id_history') || '[]');
+            if (newId && !history.includes(newId)) {
+                history.unshift(newId);
+                history = history.slice(0, 10);
+                localStorage.setItem('r18_sync_id_history', JSON.stringify(history));
+            }
+            renderSyncIdHistory();
+        };
+
+        const renderSyncIdHistory = () => {
+            const history = JSON.parse(localStorage.getItem('r18_sync_id_history') || '[]');
+            syncIdHistoryEl.innerHTML = '<option value="">履歴から選択...</option>' + 
+                history.map(id => `<option value="${id}">${id}</option>`).join('');
+        };
+        
+        const generateRandomId = (length = 16) => {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let result = '';
+            for (let i = 0; i < length; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+            return result;
+        };
+        
+        const subscribeToWorks = () => {
+            if (isDebugMode) return;
+            let isFirstLoad = true;
+            const worksRef = collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`);
+            unsubscribeWorks = onSnapshot(worksRef, (snapshot) => {
+                const workChanges = snapshot.docChanges();
+                
+                workChanges.forEach(change => {
+                    const data = { id: change.doc.id, ...change.doc.data() };
+                    const index = works.findIndex(w => w.id === change.doc.id);
+
+                    if (change.type === "added") {
+                        if (index === -1) works.push(data);
+                    }
+                    if (change.type === "modified") {
+                        if (index > -1) works[index] = data;
+                    }
+                    if (change.type === "removed") {
+                        if (index > -1) works.splice(index, 1);
+                    }
+                });
+
+                if (isFirstLoad) {
+                    isFirstLoad = false;
+                    loadingStatus.works = true;
+                    checkLoadingComplete();
+                }
+                renderAll();
+            }, error => handleDataFetchError(error, '作品'));
+        };
+
+        const subscribeToTags = () => {
+            if (isDebugMode) return;
+            let isFirstLoad = true;
+            const tagsRef = collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/tags`);
+            unsubscribeTags = onSnapshot(tagsRef, (snapshot) => {
+                tags = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                 if (isFirstLoad) {
+                    isFirstLoad = false;
+                    loadingStatus.tags = true;
+                    checkLoadingComplete();
+                 }
+                 if (!modalWrapper.classList.contains('hidden') && $('#tag-list')) {
+                     $('#tag-list').dispatchEvent(new Event('refresh-tags', {bubbles:true}));
+                 }
+                 renderAll();
+            }, error => handleDataFetchError(error, 'タグ'));
+        };
+
+        // --- Image Processing ---
+        const processImage = (file) => {
+            return new Promise((resolve, reject) => {
+                if (file.size > 900 * 1024) return reject(new Error("ファイルサイズが900KBを超えています。"));
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_SIZE = 512;
+                        let { width, height } = img;
+                        if (width > height) {
+                            if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+                        } else {
+                            if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+                        }
+                        canvas.width = width;
+                        canvas.height = height;
+                        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.8));
+                    };
+                    img.src = e.target.result;
+                };
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+        };
+        
+        // --- CRUD Operations ---
+        const handleAddWork = async (e) => {
+            e.preventDefault();
+            if (isDebugMode) { return showToast("デバッグモード中は作品を登録できません。"); }
+            const form = e.target;
+            const name = form.elements.workName.value.trim();
+            const registeredAtStr = getDateInputValue('workRegisteredAt');
+            if (!name || !registeredAtStr) return showToast("作品名と登録日は必須です。");
+            if (!isValidDate(registeredAtStr)) return showToast("登録日の形式が正しくありません (YYYY/MM/DD)。");
+            if (works.some(w => w.name.toLowerCase() === name.toLowerCase())) {
+                if (!await showConfirm("重複警告", `"${name}" は既に存在します。登録を続けますか？`)) return;
+            }
+            let imageUrl = null;
+            if (form.elements.workImage.files[0]) {
+                try {
+                    imageUrl = await processImage(form.elements.workImage.files[0]);
+                } catch (error) { return showToast(error.message); }
+            }
+            const url = form.elements.workUrl.value.trim();
+            const newWork = {
+                name,
+                genre: form.elements.workGenre.value,
+                sourceUrl: url,
+                registeredAt: Timestamp.fromDate(new Date(registeredAtStr.replace(/\//g, '-'))),
+                imageUrl, selectionCount: 0, rating: 0, tagIds: [], lastSelectedAt: null,
+                selectionHistory: []
+            };
+            try {
+                const worksRef = collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`);
+                await setDoc(doc(worksRef), newWork);
+                showToast(`"${name}" を登録しました。`);
+                form.reset();
+                $('#imagePreview').classList.add('hidden');
+                $('#workRegisteredAt').value = formatDateForInput(new Date());
+            } catch (error) {
+                console.error("Error adding work: ", error);
+                showToast("作品の登録に失敗しました。");
+            }
+        };
+
+        const updateWork = async (workId, updatedData) => {
+            if (isDebugMode) { // Allow local updates in debug mode
+                const workIndex = works.findIndex(w => w.id === workId);
+                if (workIndex !== -1) {
+                    works[workIndex] = { ...works[workIndex], ...updatedData };
+                    renderAll();
+                }
+                return true;
+            }
+            try {
+                const workRef = doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, workId);
+                await updateDoc(workRef, updatedData);
+                return true;
+            } catch (error) {
+                console.error("Error updating work:", error);
+                showToast("作品の更新に失敗しました。");
+                return false;
+            }
+        };
+
+        const deleteWork = async (workId, workName) => {
+            if (isDebugMode) { return showToast("デバッグモード中は作品を削除できません。"); }
+            if (!await showConfirm("作品の削除", `「${workName}」を本当に削除しますか？<br>この操作は取り消せません。`)) return;
+            try {
+                await deleteDoc(doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, workId));
+                showToast(`「${workName}」を削除しました。`);
+            } catch (error) {
+                console.error("Error deleting work: ", error);
+                showToast("作品の削除に失敗しました。");
+            }
+        };
+
+        const addTag = async (name, color) => {
+             if (isDebugMode) { return showToast("デバッグモード中はタグを作成できません。"); }
+             const normalizedName = name.trim().toLowerCase();
+             if (tags.some(t => t.name.toLowerCase() === normalizedName)) {
+                showToast("同じ名前のタグが既に存在します。"); return null;
+             }
+             const newTag = {
+                name: name.trim(), color, useCount: 0,
+                createdAt: Timestamp.now(), lastSelectedAt: null
+             };
+             try {
+                const docRef = doc(collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/tags`));
+                await setDoc(docRef, newTag);
+                showToast(`タグ「${name}」を作成しました。`);
+                return { id: docRef.id, ...newTag };
+             } catch (error) {
+                console.error("Error adding tag:", error);
+                showToast("タグの作成に失敗しました。"); return null;
+             }
+        };
+        
+        const deleteTag = async (tagId) => {
+             if (isDebugMode) { return showToast("デバッグモード中はタグを削除できません。"); }
+             const tagToDelete = tags.find(t => t.id === tagId);
+             if (!tagToDelete || !await showConfirm("タグの削除", `タグ「${tagToDelete.name}」を削除しますか？<br>全ての作品からこのタグが解除されます。`)) return;
+             try {
+                const batch = writeBatch(db);
+                batch.delete(doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/tags`, tagId));
+                works.filter(w => w.tagIds?.includes(tagId)).forEach(work => {
+                    const newTagIds = work.tagIds.filter(id => id !== tagId);
+                    batch.update(doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, work.id), { tagIds: newTagIds });
+                });
+                await batch.commit();
+                showToast(`タグ「${tagToDelete.name}」を削除しました。`);
+             } catch(error) {
+                console.error("Error deleting tag:", error);
+                showToast("タグの削除中にエラーが発生しました。");
+             }
+        };
+
+        // --- Rendering Logic ---
+        const saveShowSiteIcon = (value) => {
+            showSiteIcon = value;
+            localStorage.setItem('showSiteIcon', value);
+        };
+
+        const renderAll = () => {
+            renderWorkList();
+            renderActiveFilters();
+            renderLotterySummary();
+        };
+
+        const getSiteBadgeHTML = (url) => {
+            if (!showSiteIcon || !url) return '';
+            if (url.includes('dlsite.com')) {
+                return `<span class="site-badge bg-sky-600 text-white">DL</span>`;
+            }
+            if (url.includes('dmm.co.jp')) { // FANZA is on dmm.co.jp
+                return `<span class="site-badge bg-red-600 text-white">FZ</span>`;
+            }
+            return '';
+        };
+
+        const renderWorkList = () => {
+            if (!workListEl) return;
+             if (!isLoadComplete && !isDebugMode) return;
+            
+            const filteredWorks = getFilteredAndSortedWorks();
+            workCountEl.textContent = `${filteredWorks.length} / ${works.length} 作品`;
+
+            viewGridBtn.classList.toggle('view-btn-active', listViewMode === 'grid');
+            viewListBtn.classList.toggle('view-btn-active', listViewMode === 'list');
+            workListEl.className = listViewMode === 'grid' 
+                ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6' 
+                : 'space-y-2';
+            
+            if (works.length === 0) {
+                 workListMessage.innerHTML = `<div class="text-center py-10 text-gray-500"><i class="fas fa-ghost fa-3x"></i><p class="mt-4 text-base">まだ作品が登録されていません。<br>左上の「作品登録」から追加してみましょう！</p></div>`;
+                 workListMessage.classList.remove('hidden'); workListEl.classList.add('hidden'); return;
+            }
+            if (filteredWorks.length === 0) {
+                 workListMessage.innerHTML = `<div class="text-center py-10 text-gray-500"><i class="fas fa-search-minus fa-3x"></i><p class="mt-4 text-base">条件に一致する作品がありません。<br>絞り込み条件を見直してください。</p></div>`;
+                 workListMessage.classList.remove('hidden'); workListEl.classList.add('hidden'); return;
+            }
+            
+            workListMessage.classList.add('hidden'); workListEl.classList.remove('hidden');
+            workListEl.innerHTML = filteredWorks.map(listViewMode === 'grid' ? renderWorkCard : renderWorkListItem).join('');
+        };
+
+        const renderWorkCard = (work) => {
+            const tagObjects = (work.tagIds || []).map(id => tags.find(t => t.id === id)).filter(Boolean);
+            const isExpanded = expandedTagsWorkIds.has(work.id);
+            const displayedTags = isExpanded ? tagObjects : tagObjects.slice(0, 5);
+            const hasMoreTags = tagObjects.length > 5;
+            const ratingStars = Array(5).fill(0).map((_, i) => `<i class="fa-star ${i < work.rating ? 'fas text-yellow-400' : 'far text-gray-500'}"></i>`).join('');
+            const safeWorkName = escapeHTML(work.name);
+            const siteBadge = getSiteBadgeHTML(work.sourceUrl);
+
+            return `
+            <div class="bg-gray-800 rounded-xl shadow-lg overflow-hidden flex flex-col transition-transform hover:scale-[1.02]">
+                <div class="relative">
+                    <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${work.name}" class="w-full h-48 object-cover">
+                    ${siteBadge}
+                    <div class="absolute top-2 right-2 flex space-x-2">
+                         <button data-action="edit" data-id="${work.id}" class="w-8 h-8 bg-black bg-opacity-50 hover:bg-opacity-75 rounded-full flex items-center justify-center text-white" title="編集"><i class="fas fa-pencil-alt text-sm"></i></button>
+                         <button data-action="delete" data-id="${work.id}" data-name="${safeWorkName}" class="w-8 h-8 bg-black bg-opacity-50 hover:bg-opacity-75 rounded-full flex items-center justify-center text-white" title="削除"><i class="fas fa-trash-alt text-sm"></i></button>
+                    </div>
+                     <span class="absolute bottom-2 left-2 px-2 py-1 bg-black bg-opacity-60 text-xs font-semibold rounded">${work.genre}</span>
+                </div>
+                <div class="p-4 flex flex-col flex-grow">
+                    <p class="text-sm text-gray-400">${work.registeredAt ? formatDate(work.registeredAt, false) : 'N/A'}</p>
+                    <h3 class="text-lg font-bold mt-1 mb-2 flex-grow cursor-pointer" data-action="copy-name" data-name="${safeWorkName}">${work.name}</h3>
+                    <div class="flex items-center space-x-1 mb-3">${ratingStars}</div>
+                    <div class="flex flex-wrap gap-2 text-xs">
+                        ${displayedTags.map(tag => `<span class="px-2 py-1 rounded font-semibold" style="background-color:${tag.color}; color:${getContrastColor(tag.color)}">${tag.name}</span>`).join('')}
+                        ${hasMoreTags ? `<button data-action="toggle-tags" data-id="${work.id}" class="px-2 py-1 rounded bg-gray-600 hover:bg-gray-500 text-xs">${isExpanded ? '一部に戻す' : `+${tagObjects.length - 5}`}</button>` : ''}
+                    </div>
+                </div>
+            </div>`;
+        };
+
+        const renderWorkListItem = (work) => {
+            const ratingStars = Array(5).fill(0).map((_, i) => `<i class="fa-star ${i < work.rating ? 'fas text-yellow-400' : 'far text-gray-500'}"></i>`).join('');
+            const tagObjects = (work.tagIds || []).map(id => tags.find(t => t.id === id)).filter(Boolean);
+            const safeWorkName = escapeHTML(work.name);
+            const siteBadge = getSiteBadgeHTML(work.sourceUrl);
+
+            return `
+            <div class="work-list-item">
+                <div class="relative flex-shrink-0">
+                    <img src="${work.imageUrl || 'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${work.name}" class="w-12 h-12 object-cover rounded-md">
+                    ${siteBadge}
+                </div>
+                <div class="flex-grow min-w-0">
+                    <p class="font-bold truncate cursor-pointer" data-action="copy-name" data-name="${safeWorkName}">${work.name}</p>
+                    <div class="flex items-center flex-wrap gap-x-4 text-sm text-gray-400">
+                        <span>${work.genre}</span><span>${work.registeredAt ? formatDate(work.registeredAt, false) : 'N/A'}</span><span class="flex items-center space-x-1">${ratingStars}</span>
+                    </div>
+                    ${tagObjects.length > 0 ? `<div class="flex flex-wrap gap-1 mt-1 text-xs">
+                        ${tagObjects.slice(0, 4).map(tag => `<span class="px-1.5 py-0.5 rounded text-gray-300" style="background-color:${tag.color}33;">${tag.name}</span>`).join('')}
+                        ${tagObjects.length > 4 ? `<span class="px-1.5 py-0.5 rounded bg-gray-600 text-gray-300">+${tagObjects.length - 4}</span>` : ''}
+                    </div>` : ''}
+                </div>
+                <div class="flex-shrink-0 flex items-center flex-wrap gap-2">
+                    <button data-action="edit" data-id="${work.id}" class="w-8 h-8 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center text-white" title="編集"><i class="fas fa-pencil-alt text-sm"></i></button>
+                    <button data-action="delete" data-id="${work.id}" data-name="${safeWorkName}" class="w-8 h-8 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center text-white" title="削除"><i class="fas fa-trash-alt text-sm"></i></button>
+                </div>
+            </div>`;
+        };
+        
+        const getContrastColor = (hex) => {
+            if (!hex) return '#FFFFFF';
+            const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+            return (r * 0.299 + g * 0.587 + b * 0.114) > 186 ? '#000000' : '#FFFFFF';
+        };
+
+        const getFilteredWorks = (filters, sourceWorks = works) => {
+            let tempWorks = [...sourceWorks];
+
+            // Mood / Rating filter
+            if (filters.unratedOrUntaggedOnly) {
+                tempWorks = tempWorks.filter(w => (w.rating || 0) === 0 || !w.tagIds || w.tagIds.length === 0);
+            } else if (filters.mood) { // Lottery
+                if (filters.mood === 'best') tempWorks = tempWorks.filter(w => (w.rating || 0) >= 4);
+                if (filters.mood === 'hidden_gem') tempWorks = tempWorks.filter(w => (w.rating || 0) <= 2);
+            } else if (filters.rating && filters.rating.value > 0) { // List
+                tempWorks = filters.rating.type === 'exact' 
+                    ? tempWorks.filter(w => w.rating === filters.rating.value)
+                    : tempWorks.filter(w => w.rating >= filters.rating.value);
+            }
+
+            // Genre filter
+            if (filters.genres && filters.genres.size > 0) {
+                tempWorks = tempWorks.filter(w => filters.genres.has(w.genre));
+            }
+            
+            // Date filter
+            if (filters.dateFilter) {
+                const { mode, date, startDate, endDate } = filters.dateFilter;
+                if (mode === 'specific' && date && isValidDate(date)) {
+                    const start = new Date(date); start.setHours(0,0,0,0);
+                    const end = new Date(date); end.setHours(23,59,59,999);
+                    tempWorks = tempWorks.filter(w => w.registeredAt && w.registeredAt.toDate() >= start && w.registeredAt.toDate() <= end);
+                } else if (mode === 'range' && startDate && endDate && isValidDate(startDate) && isValidDate(endDate)) {
+                     const start = new Date(startDate); start.setHours(0,0,0,0);
+                     const end = new Date(endDate); end.setHours(23,59,59,999);
+                     tempWorks = tempWorks.filter(w => w.registeredAt && w.registeredAt.toDate() >= start && w.registeredAt.toDate() <= end);
+                }
+            }
+            
+            // Tag filter
+            const andTags = filters.andTagIds || new Set();
+            if (andTags && andTags.size > 0) {
+                tempWorks = tempWorks.filter(w => w.tagIds && [...andTags].every(tid => w.tagIds.includes(tid)));
+            }
+            if (filters.orTagIds && filters.orTagIds.size > 0) {
+                tempWorks = tempWorks.filter(w => w.tagIds && [...filters.orTagIds].some(tid => w.tagIds.includes(tid)));
+            }
+            if (filters.notTagIds && filters.notTagIds.size > 0) {
+                tempWorks = tempWorks.filter(w => !w.tagIds || ![...filters.notTagIds].some(tid => w.tagIds.includes(tid)));
+            }
+
+            return tempWorks;
+        };
+        
+        const getFilteredAndSortedWorks = () => {
+            let tempWorks = getFilteredWorks(listFilters);
+
+            if (searchQuery) {
+                tempWorks = tempWorks.filter(w => w.name.toLowerCase().includes(searchQuery.toLowerCase()));
+            }
+
+            return tempWorks.sort((a, b) => {
+                const order = sortState.order === 'asc' ? 1 : -1;
+                const aTime = a.registeredAt?.toMillis() || 0;
+                const bTime = b.registeredAt?.toMillis() || 0;
+                const aLastTime = a.lastSelectedAt?.toMillis() || 0;
+                const bLastTime = b.lastSelectedAt?.toMillis() || 0;
+
+                switch (sortState.by) {
+                    case 'name': return a.name.localeCompare(b.name, 'ja') * order;
+                    case 'genre': return a.genre.localeCompare(b.genre, 'ja') * order;
+                    case 'registeredAt': return (aTime - bTime) * order;
+                    case 'lastSelectedAt': return (aLastTime - bLastTime) * order;
+                    default: return 0;
+                }
+            });
+        };
+
+        const renderActiveFilters = () => {
+            const filters = [];
+            listFilters.genres.forEach(g => filters.push({type: 'genre', value: g, label: `ジャンル: ${g}`}));
+            
+            if (listFilters.unratedOrUntaggedOnly) {
+                filters.push({type: 'unrated', label: '未評価/未タグ'});
+            } else if (listFilters.rating.value > 0) {
+                filters.push({type: 'rating', label: `評価: ${'★'.repeat(listFilters.rating.value)}${listFilters.rating.type === 'above' ? '以上' : ''}`});
+            }
+
+            const addTagFilters = (tagIds, prefix, type) => {
+                tagIds.forEach(tId => {
+                    const tag = tags.find(t => t.id === tId);
+                    if (tag) filters.push({type: type, value: tId, label: `${prefix}: ${tag.name}`});
+                });
+            };
+            addTagFilters(listFilters.andTagIds, 'AND', 'andTag');
+            addTagFilters(listFilters.orTagIds, 'OR', 'orTag');
+            addTagFilters(listFilters.notTagIds, 'NOT', 'notTag');
+
+            const { mode, date, startDate, endDate } = listFilters.dateFilter;
+            if (mode === 'specific' && date) filters.push({type: 'date', label: `登録日: ${date}`});
+            if (mode === 'range' && startDate && endDate) filters.push({type: 'date', label: `期間: ${startDate} ~ ${endDate}`});
+
+            activeFiltersEl.innerHTML = (filters.length === 0)
+                ? `<span class="text-sm text-gray-400">絞り込み: なし</span>`
+                : `<span class="text-sm text-gray-400 mr-2">絞り込み:</span>` + filters.map(f => `
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-700 text-gray-200">
+                        ${f.label}
+                        <button data-action="remove-filter" data-type="${f.type}" data-value="${f.value}" class="ml-1.5 text-gray-400 hover:text-white"><i class="fas fa-times-circle"></i></button>
+                    </span>`).join('');
+        };
+        
+        const renderLotterySummary = () => {
+             const { mood, genres, andTagIds, orTagIds, notTagIds, dateFilter, priority, method, unratedOrUntaggedOnly } = lotterySettings;
+             const moodMap = { default: '問わない', favorite: 'お気に入り', best: '最高評価', hidden_gem: '隠れた名作' };
+             const priorityMap = { new: '新しい順', old: '古い順', random: 'ランダム' };
+             const methodMap = { normal: '通常', decrease_unselected: '未選択優先' };
+             const summaryParts = [];
+
+            if (unratedOrUntaggedOnly) {
+                summaryParts.push('未評価/未タグ付のみ');
+            } else {
+                summaryParts.push(`気分: ${moodMap[mood]}`);
+            }
+             if (genres.size > 0) summaryParts.push(`ジャンル: ${[...genres].join(', ')}`);
+             if (andTagIds.size > 0) summaryParts.push(`タグ(AND): ${andTagIds.size}件`);
+             if (orTagIds.size > 0) summaryParts.push(`タグ(OR): ${orTagIds.size}件`);
+             if (notTagIds.size > 0) summaryParts.push(`タグ(NOT): ${notTagIds.size}件`);
+             if (dateFilter.mode === 'specific' && dateFilter.date) summaryParts.push(`登録日: ${dateFilter.date}`);
+             if (dateFilter.mode === 'range' && dateFilter.startDate && dateFilter.endDate) summaryParts.push(`期間: ${dateFilter.startDate} ~ ${dateFilter.endDate}`);
+             summaryParts.push(`優先度: ${priorityMap[priority]}`);
+             summaryParts.push(`方法: ${methodMap[method]}`);
+
+             lotterySummaryEl.innerHTML = (
+                mood === 'default' && 
+                genres.size === 0 && 
+                andTagIds.size === 0 && orTagIds.size === 0 && notTagIds.size === 0 &&
+                dateFilter.mode === 'none' &&
+                !unratedOrUntaggedOnly
+             )
+                 ? `<p class="text-gray-400">設定を開いて条件を選択してください。</p>`
+                 : summaryParts.map(s => `<span class="inline-block bg-gray-600 px-2 py-1 rounded text-xs mr-1 mb-1">${s}</span>`).join('');
+        };
+
+        // --- Event Handlers & Site Search ---
+        const openSearchWindow = (site, query) => {
+            let url;
+            const encodedQuery = encodeURIComponent(query);
+            switch(site) {
+                case 'dlsite':
+                    url = query ? `https://www.dlsite.com/maniax/fsr/=/language/jp/sex_category%5B0%5D/male/keyword/${encodedQuery}/` : 'https://www.dlsite.com/maniax/';
+                    break;
+                case 'fanza':
+                    url = query ? `https://www.dmm.co.jp/dc/doujin/-/list/narrow/=/word=${encodedQuery}/` : 'https://www.dmm.co.jp/dc/doujin/';
+                    break;
+                case 'melonbooks':
+                    url = query ? `https://www.melonbooks.co.jp/search/search.php?name=${encodedQuery}&search_target=2` : 'https://www.melonbooks.co.jp/';
+                    break;
+                case 'booth':
+                    url = query ? `https://booth.pm/ja/search/${encodedQuery}` : 'https://booth.pm/';
+                    break;
+            }
+            if (url) {
+                window.open(url, '_blank', 'noopener,noreferrer');
+            }
+        };
+
+        const setupEventListeners = () => {
+            modalCloseBtn.addEventListener('click', closeModal);
+            modalBackdrop.addEventListener('click', closeModal);
+            menuFab.addEventListener('click', toggleFabMenu);
+            fabBackdrop.addEventListener('click', closeFabMenu);
+
+            document.body.addEventListener('click', e => {
+                const button = e.target.closest('button[data-action]');
+                const nameSpan = e.target.closest('[data-action="copy-name"]');
+                if (button) {
+                    const { action, id, name } = button.dataset;
+                    switch (action) {
+                        case 'edit': openEditModal(id); break;
+                        case 'delete': deleteWork(id, name); break;
+                        case 'toggle-tags':
+                            expandedTagsWorkIds.has(id) ? expandedTagsWorkIds.delete(id) : expandedTagsWorkIds.add(id);
+                            renderWorkList();
+                            break;
+                        case 'external-search-reg': {
+                            const query = $('#workNameInput').value.trim();
+                            openExternalSearchModal(query);
+                            break;
+                        }
+                    }
+                }
+                if (nameSpan) {
+                    searchInput.value = nameSpan.dataset.name;
+                    searchInput.focus();
+                    showToast(`「${nameSpan.dataset.name}」を検索欄にコピーしました。`);
+                }
+                const filterButton = e.target.closest('button[data-action="remove-filter"]');
+                if (filterButton) {
+                    const { type, value } = filterButton.dataset;
+                    switch(type) {
+                        case 'genre': listFilters.genres.delete(value); break;
+                        case 'rating': listFilters.rating = { type: 'exact', value: 0 }; break;
+                        case 'unrated': listFilters.unratedOrUntaggedOnly = false; break;
+                        case 'andTag': listFilters.andTagIds.delete(value); break;
+                        case 'orTag': listFilters.orTagIds.delete(value); break;
+                        case 'notTag': listFilters.notTagIds.delete(value); break;
+                        case 'date': listFilters.dateFilter = defaultDateFilter(); break;
+                    }
+                    renderAll();
+                }
+            });
+            
+            copySyncIdBtn.addEventListener('click', () => navigator.clipboard.writeText(syncId).then(() => showToast("同期IDをコピーしました。")));
+            loadSyncIdBtn.addEventListener('click', () => {
+                const newId = newSyncIdInput.value.trim();
+                if (newId && newId !== syncId) {
+                    loadDataSet(newId);
+                    updateSyncIdHistory(newId);
+                    newSyncIdInput.value = '';
+                    showToast("データを読み込みました。");
+                }
+            });
+            syncIdHistoryEl.addEventListener('change', e => e.target.value && loadDataSet(e.target.value));
+            clearHistoryBtn.addEventListener('click', async () => {
+                if (await showConfirm('履歴のクリア', '本当に同期IDの履歴をクリアしますか？')) {
+                    localStorage.removeItem('r18_sync_id_history');
+                    renderSyncIdHistory(); showToast("履歴をクリアしました。");
+                }
+            });
+            deleteDataBtn.addEventListener('click', async () => {
+                 if (isDebugMode) return showToast('デバッグモード中は全削除できません。');
+                 if (await showConfirm('全作品データ削除', `現在のID (<strong>${syncId}</strong>) に紐づく全ての作品データを削除します。<br>この操作は元に戻せません。`)) {
+                    try {
+                        const batch = writeBatch(db);
+                        const worksRef = collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`);
+                        const worksSnapshot = await getDocs(worksRef);
+                        worksSnapshot.forEach(doc => batch.delete(doc.ref));
+                        
+                        const tagsRef = collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/tags`);
+                        const tagsSnapshot = await getDocs(tagsRef);
+                        tagsSnapshot.forEach(doc => batch.delete(doc.ref));
+
+                        await batch.commit();
+                        showToast("全ての作品・タグデータを削除しました。");
+                    } catch(error) { 
+                        console.error("Error deleting all data:", error);
+                        showToast("データ削除中にエラーが発生しました。"); 
+                    }
+                 }
+            });
+            addWorkForm.addEventListener('submit', handleAddWork);
+            
+            $('#workRegisteredAt').value = formatDateForInput(new Date());
+            $('#toggleDebugModeBtn').addEventListener('click', toggleDebugMode);
+
+            $('#workImage').addEventListener('change', e => {
+                const file = e.target.files[0];
+                const preview = $('#imagePreview');
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = event => { preview.src = event.target.result; preview.classList.remove('hidden'); };
+                    reader.readAsDataURL(file);
+                } else { preview.classList.add('hidden'); }
+            });
+            searchInput.addEventListener('input', debounce(() => { searchQuery = searchInput.value; renderWorkList(); }, 300));
+            sortBtn.addEventListener('click', (e) => { e.stopPropagation(); sortDropdown.classList.toggle('hidden'); });
+            document.addEventListener('click', () => sortDropdown.classList.add('hidden'));
+            const setupSortOptions = () => {
+                const options = [
+                    { by: 'registeredAt', order: 'desc', label: '登録日 (新しい順)' }, { by: 'registeredAt', order: 'asc', label: '登録日 (古い順)' },
+                    { by: 'name', order: 'asc', label: '作品名 (昇順)' }, { by: 'name', order: 'desc', label: '作品名 (降順)' },
+                    { by: 'lastSelectedAt', order: 'desc', label: '抽選日 (新しい順)' }, { by: 'lastSelectedAt', order: 'asc', label: '抽選日 (古い順)' },
+                    { by: 'genre', order: 'asc', label: 'ジャンル (昇順)' },
+                ];
+                sortDropdown.innerHTML = options.map(opt => `<a href="#" data-by="${opt.by}" data-order="${opt.order}" class="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">${opt.label}</a>`).join('');
+                sortDropdown.addEventListener('click', (e) => {
+                     e.preventDefault();
+                     const target = e.target.closest('a');
+                     if (target) {
+                        sortState.by = target.dataset.by; sortState.order = target.dataset.order;
+                        sortStateLabel.textContent = `並び替え: ${target.textContent}`;
+                        sortDropdown.classList.add('hidden'); renderWorkList();
+                     }
+                });
+            };
+            setupSortOptions();
+            filterBtn.addEventListener('click', () => openFilterModal());
+            viewGridBtn.addEventListener('click', () => { listViewMode = 'grid'; localStorage.setItem('listViewMode', 'grid'); renderWorkList(); });
+            viewListBtn.addEventListener('click', () => { listViewMode = 'list'; localStorage.setItem('listViewMode', 'list'); renderWorkList(); });
+            manageTagsFab.addEventListener('click', () => openTagModal({ mode: 'manage', onConfirm: ()=>{} }));
+            statsFab.addEventListener('click', () => openStatsDashboardModal());
+            externalSearchFab.addEventListener('click', () => openExternalSearchModal(searchInput.value));
+            historyFab.addEventListener('click', openHistoryModal);
+            openLotterySettingsBtn.addEventListener('click', () => openLotterySettingsModal());
+            startLotteryBtn.addEventListener('click', performLottery);
+
+            const lotteryPanel = $('#lottery-panel'), lotteryFab = $('#lotteryFab');
+            if (lotteryPanel && lotteryFab) {
+                lotteryFab.addEventListener('click', () => lotteryPanel.scrollIntoView({ behavior: 'smooth' }));
+            }
+        }
+
+        const openExternalSearchModal = (prefillQuery = '') => {
+            const sites = [
+                { id: 'dlsite', name: 'DLsite', color: 'bg-blue-700', hover: 'hover:bg-blue-800' },
+                { id: 'fanza', name: 'FANZA', color: 'bg-red-600', hover: 'hover:bg-red-700' },
+                { id: 'melonbooks', name: 'Melonbooks', color: 'bg-green-600', hover: 'hover:bg-green-700' },
+                { id: 'booth', name: 'Booth', color: 'bg-rose-500', hover: 'hover:bg-rose-600' }
+            ];
+            const safeQuery = escapeHTML(prefillQuery);
+            const content = `
+                <div class="space-y-4">
+                    <div>
+                        <label for="externalSearchInput" class="block text-sm font-medium text-gray-400 mb-1">検索クエリ</label>
+                        <input type="text" id="externalSearchInput" value="${safeQuery}" placeholder="作品名などを入力..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-2">検索するサイトを選択</label>
+                        <div id="external-site-buttons" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            ${sites.map(site => `<button data-site="${site.id}" class="w-full px-4 py-3 ${site.color} ${site.hover} rounded-lg font-bold text-lg transition-colors">${site.name}</button>`).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            openModal("外部サイトで検索", content, () => {
+                $('#external-site-buttons').addEventListener('click', e => {
+                    const button = e.target.closest('button[data-site]');
+                    if (button) {
+                        const site = button.dataset.site;
+                        const query = $('#externalSearchInput').value.trim();
+                        openSearchWindow(site, query);
+                    }
+                });
+            });
+        };
+        
+        const openHistoryModal = () => {
+            const allHistory = [];
+            works.forEach(work => {
+                if (work.selectionHistory && work.selectionHistory.length > 0) {
+                    work.selectionHistory.forEach(timestamp => {
+                        allHistory.push({
+                            workName: work.name,
+                            timestamp: timestamp
+                        });
+                    });
+                }
+            });
+
+            allHistory.sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis());
+            
+            let content;
+            if (allHistory.length > 0) {
+                content = `
+                    <div class="max-h-[60vh] overflow-y-auto pr-2">
+                        <ul class="space-y-2">
+                            ${allHistory.map(entry => `
+                                <li class="bg-gray-700 p-3 rounded-lg flex justify-between items-center text-sm">
+                                    <span class="font-semibold">${entry.workName}</span>
+                                    <span class="text-gray-400">${formatDate(entry.timestamp)}</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                `;
+            } else {
+                content = `<div class="text-center py-10 text-gray-500"><i class="fas fa-history fa-3x"></i><p class="mt-4">まだ抽選履歴はありません。</p></div>`;
+            }
+
+            openModal("総合抽選履歴", content, null, { size: 'max-w-3xl' });
+        };
+
+
+        const openEditModal = (workId, tempState = null) => {
+            const work = works.find(w => w.id === workId);
+            if (!work) return;
+            let currentRating = tempState?.rating ?? (work.rating || 0);
+            let currentTagIds = tempState?.tagIds ?? new Set(work.tagIds || []);
+            const safeWorkName = escapeHTML(work.name);
+            const safeWorkUrl = escapeHTML(work.sourceUrl || '');
+
+            const pool = getLotteryPool();
+            const thisWorkInPool = pool.find(w => w.id === workId);
+            const totalWeight = pool.reduce((sum, w) => sum + w.weight, 0);
+            let probabilityText;
+            if (thisWorkInPool) {
+                const probability = totalWeight > 0 ? (thisWorkInPool.weight / totalWeight * 100).toFixed(2) : '0.00';
+                probabilityText = `<span class="font-bold text-sky-400 text-base">${probability}%</span>`;
+            } else {
+                 probabilityText = `<span class="font-bold text-gray-500">対象外</span>`;
+            }
+
+            const content = `
+                <form id="editWorkForm" class="space-y-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">作品名</label>
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="editWorkName" value="${safeWorkName}" class="flex-grow bg-gray-700 p-2 rounded-lg" required>
+                            <button type="button" id="copy-edit-title-btn" class="flex-shrink-0 w-10 h-10 bg-gray-600 hover:bg-gray-500 rounded-lg text-white flex items-center justify-center" title="タイトルをコピー"><i class="fas fa-copy"></i></button>
+                        </div>
+                        <div class="mt-2">
+                            <button type="button" id="edit-external-search" class="w-full text-sm p-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg flex items-center justify-center gap-2"><i class="fas fa-globe-asia"></i>外部サイトで検索</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">作品URL</label>
+                        <div class="flex items-center gap-2">
+                            <input type="url" id="editWorkUrl" value="${safeWorkUrl}" placeholder="作品URL" class="flex-grow bg-gray-700 p-2 rounded-lg">
+                            <button type="button" id="openWorkUrlBtn" class="flex-shrink-0 w-10 h-10 bg-sky-600 hover:bg-sky-700 rounded-lg text-white flex items-center justify-center" title="URLを開く" ${!work.sourceUrl ? 'disabled' : ''}><i class="fas fa-external-link-alt"></i></button>
+                        </div>
+                    </div>
+                    <select id="editWorkGenre" class="w-full bg-gray-700 p-2 rounded-lg" required>
+                        <option value="漫画" ${work.genre === '漫画' ? 'selected' : ''}>漫画</option>
+                        <option value="ゲーム" ${work.genre === 'ゲーム' ? 'selected' : ''}>ゲーム</option>
+                        <option value="動画" ${work.genre === '動画' ? 'selected' : ''}>動画</option>
+                    </select>
+                    ${createDateInputHTML('editWorkRegisteredAt', work.registeredAt ? formatDateForInput(work.registeredAt.toDate()) : '')}
+                    <div><label class="block text-sm text-gray-400 mb-2">評価</label><div class="flex items-center space-x-2 text-2xl" id="editWorkRating"></div></div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">タグ</label>
+                        <div id="editWorkTags" class="flex flex-wrap gap-2 p-2 bg-gray-700 rounded-lg min-h-[40px]"></div>
+                        <button type="button" id="editWorkAssignTagsBtn" class="mt-2 w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグを割り当て/編集</button>
+                    </div>
+                     <div class="text-sm text-gray-400 bg-gray-900 p-3 rounded-lg">現在の設定での選出確率: ${probabilityText}</div>
+                     
+                    <div class="pt-4 flex justify-end gap-3 flex-wrap sm:flex-nowrap">
+                        <button type="button" id="edit-cancel-btn" class="w-full sm:w-auto px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
+                        <button type="submit" class="w-full sm:w-auto px-6 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold">保存</button>
+                    </div>
+                </form>`;
+
+            openModal(`「${work.name}」を編集`, content, () => {
+                const ratingStars = $('#editWorkRating'), tagsContainer = $('#editWorkTags');
+                const workNameInput = $('#editWorkName');
+                const workUrlInput = $('#editWorkUrl');
+                const openUrlBtn = $('#openWorkUrlBtn');
+
+                workUrlInput.addEventListener('input', () => {
+                    openUrlBtn.disabled = !workUrlInput.value.trim();
+                });
+
+                openUrlBtn.addEventListener('click', () => {
+                    const url = workUrlInput.value.trim();
+                    if (url) {
+                        window.open(url, '_blank', 'noopener,noreferrer');
+                    }
+                });
+                
+                $('#copy-edit-title-btn').addEventListener('click', () => {
+                    const titleInput = $('#editWorkName');
+                    navigator.clipboard.writeText(titleInput.value).then(() => {
+                        showToast(`「${titleInput.value}」をコピーしました。`);
+                    }).catch(err => {
+                        console.error('Copy failed: ', err);
+                        showToast('コピーに失敗しました。');
+                    });
+                });
+
+                const getFormState = () => {
+                    const nameInput = $('#editWorkName');
+                    if (!nameInput) return null;
+                    return {
+                        name: nameInput.value.trim(),
+                        url: $('#editWorkUrl').value.trim(),
+                        genre: $('#editWorkGenre').value,
+                        registeredAt: getDateInputValue('editWorkRegisteredAt'),
+                        rating: currentRating,
+                        tagIds: JSON.stringify([...currentTagIds].sort())
+                    };
+                };
+                
+                const initialState = getFormState();
+                checkModalDirtyState = () => {
+                    const currentState = getFormState();
+                    if (currentState === null) return false;
+                    return JSON.stringify(initialState) !== JSON.stringify(currentState);
+                };
+                
+                $('#edit-external-search').addEventListener('click', () => {
+                     const capturedState = {
+                        rating: currentRating,
+                        tagIds: currentTagIds,
+                    };
+                    modalStateStack.push(() => openEditModal(workId, capturedState));
+                    openExternalSearchModal(workNameInput.value);
+                });
+
+                const renderStars = r => { ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= r ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join(''); };
+                const renderTags = ids => {
+                    const objects = [...ids].map(id => tags.find(t => t.id === id)).filter(Boolean);
+                    tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded font-semibold text-xs" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`;
+                };
+                
+                renderStars(currentRating);
+                renderTags(currentTagIds);
+
+                ratingStars.addEventListener('click', e => {
+                    if (e.target.matches('.fa-star')) {
+                        const newRating = parseInt(e.target.dataset.value, 10);
+                        currentRating = (currentRating === newRating) ? 0 : newRating;
+                        renderStars(currentRating);
+                    }
+                });
+                $('#editWorkAssignTagsBtn').addEventListener('click', () => {
+                    openTagModal({ mode: 'assign', workId, currentTagIds, workName: work.name,
+                        onConfirm: (newTagIds) => {
+                             if(newTagIds) currentTagIds = newTagIds;
+                             openEditModal(workId, { rating: currentRating, tagIds: currentTagIds })
+                        }
+                    });
+                });
+                $('#edit-cancel-btn').addEventListener('click', closeModal);
+                
+                $('#editWorkForm').addEventListener('submit', async e => {
+                    e.preventDefault();
+                    if (!workNameInput || !workNameInput.value.trim()){
+                        return showToast("作品名は必須です。");
+                    }
+                    const registeredAtStr = getDateInputValue('editWorkRegisteredAt');
+                    if (!isValidDate(registeredAtStr)) return showToast("登録日の形式が不正です (YYYY/MM/DD)。");
+                    
+                    const updatedData = {
+                        name: workNameInput.value.trim(),
+                        sourceUrl: workUrlInput.value.trim(),
+                        genre: $('#editWorkGenre').value,
+                        registeredAt: Timestamp.fromDate(new Date(registeredAtStr.replace(/\//g, '-'))),
+                        rating: currentRating,
+                        tagIds: Array.from(currentTagIds),
+                    };
+                    checkModalDirtyState = () => false; // Mark as not dirty before closing
+                    if (await updateWork(workId, updatedData)) {
+                        showToast("作品情報を更新しました。"); 
+                        closeModal();
+                    }
+                });
+            });
+        };
+        
+        const openFilterModal = (tempState = null) => {
+            let tempGenres = tempState?.genres ?? new Set(listFilters.genres);
+            let tempRating = tempState?.rating ?? { ...listFilters.rating };
+            let tempAndTags = tempState?.andTagIds ?? new Set(listFilters.andTagIds);
+            let tempOrTags = tempState?.orTagIds ?? new Set(listFilters.orTagIds);
+            let tempNotTags = tempState?.notTagIds ?? new Set(listFilters.notTagIds);
+            let tempDateFilter = tempState?.dateFilter ?? { ...listFilters.dateFilter };
+             if (!tempDateFilter.date) tempDateFilter.date = formatDateForInput(new Date());
+             if (!tempDateFilter.startDate) tempDateFilter.startDate = formatDateForInput(new Date());
+             if (!tempDateFilter.endDate) tempDateFilter.endDate = formatDateForInput(new Date());
+            let tempUnrated = tempState?.unratedOrUntaggedOnly ?? listFilters.unratedOrUntaggedOnly;
+            let tempShowSiteIcon = showSiteIcon;
+            
+            const content = `
+                <div class="space-y-4">
+                    <div class="flex items-center">
+                         <input type="checkbox" id="filter-unrated" class="h-4 w-4 rounded bg-gray-600 text-sky-500 border-gray-500 focus:ring-sky-600" ${tempUnrated ? 'checked' : ''}>
+                         <label for="filter-unrated" class="ml-2 text-sm font-medium">未評価またはタグ未設定の作品のみ</label>
+                    </div>
+                    <div><h4 class="font-semibold mb-2">ジャンル</h4><div class="flex flex-wrap gap-3">${['漫画', 'ゲーム', '動画'].map(g => `<div><input type="checkbox" id="filter-genre-${g}" value="${g}" class="hidden peer" ${tempGenres.has(g) ? 'checked' : ''}><label for="filter-genre-${g}" class="px-4 py-2 border-2 border-gray-600 rounded-lg cursor-pointer peer-checked:bg-teal-600 peer-checked:border-teal-500">${g}</label></div>`).join('')}</div></div>
+                    <div><h4 class="font-semibold mb-2">登録日</h4>${createDateFilterHTML('list', tempDateFilter)}</div>
+                    <div id="filter-rating-section" class="${tempUnrated ? 'opacity-50' : ''}"><h4 class="font-semibold mb-2">評価</h4><div class="flex items-center space-x-4"><div class="flex items-center space-x-2 text-2xl" id="filter-rating"></div><div class="flex items-center"><input type="checkbox" id="filter-rating-above" class="h-4 w-4 rounded bg-gray-700 text-teal-500" ${tempRating.type === 'above' ? 'checked': ''}><label for="filter-rating-above" class="ml-2 text-sm">以上</label></div><button id="filter-rating-clear" class="text-sm text-gray-400 hover:text-white">クリア</button></div></div>
+                    
+                    <div>
+                        <h4 class="font-semibold mb-1">タグ絞り込み</h4>
+                        <div id="filter-tags-display" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] mb-2"></div>
+                        <button type="button" id="filter-select-tags" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグの条件を選択</button>
+                    </div>
+                    
+                    <div>
+                        <h4 class="font-semibold mb-2">表示設定</h4>
+                        <div class="flex items-center bg-gray-900 p-3 rounded-lg">
+                            <input type="checkbox" id="filter-show-site-icon" class="h-4 w-4 rounded bg-gray-600 text-sky-500 border-gray-500 focus:ring-sky-600" ${tempShowSiteIcon ? 'checked' : ''}>
+                            <label for="filter-show-site-icon" class="ml-3 text-sm font-medium">作品画像のサイトアイコンを表示する</label>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
+                        <button id="filter-reset" class="w-full sm:w-auto px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">全リセット</button>
+                        <div class="flex space-x-3 w-full sm:w-auto">
+                            <button id="filter-cancel" class="flex-1 sm:flex-none px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
+                            <button id="filter-apply" class="flex-1 sm:flex-none px-6 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold">適用</button>
+                        </div>
+                    </div>
+                </div>`;
+            openModal("作品リストの絞り込み", content, () => {
+                const updatePreview = () => {
+                    const countEl = $('#date-filter-preview-count-list'), gridEl = $('#date-filter-preview-grid-list');
+                    if (!countEl || !gridEl) return;
+
+                    const filters = {
+                        unratedOrUntaggedOnly: $('#filter-unrated').checked,
+                        genres: new Set([...$$('input[id^="filter-genre-"]:checked')].map(cb => cb.value)),
+                        rating: { value: tempRating.value, type: $('#filter-rating-above').checked ? 'above' : 'exact' },
+                        andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
+                        dateFilter: {
+                            mode: $(`input[name="date-filter-mode-list"]:checked`).value,
+                            date: getDateInputValue('date-filter-specific-date-list'),
+                            startDate: getDateInputValue('date-filter-start-date-list'),
+                            endDate: getDateInputValue('date-filter-end-date-list')
+                        }
+                    };
+                    
+                    const filtered = getFilteredWorks(filters);
+                    
+                    countEl.textContent = `対象: ${filtered.length} 作品`;
+                    gridEl.innerHTML = filtered.slice(0, 50).map(w => `<div class="text-center"><img src="${w.imageUrl||'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${w.name}" class="w-full h-16 object-cover rounded-md"><p class="text-xs truncate mt-1">${w.name}</p></div>`).join('');
+                };
+
+                setupDateFilterEventListeners('list', updatePreview);
+                $$('input[id^="filter-genre-"]').forEach(cb => cb.addEventListener('change', updatePreview));
+                
+                const ratingSection = $('#filter-rating-section');
+                const ratingStars = $('#filter-rating');
+                const unratedToggle = $('#filter-unrated');
+
+                unratedToggle.addEventListener('change', () => {
+                    const isDisabled = unratedToggle.checked;
+                    ratingSection.classList.toggle('opacity-50', isDisabled);
+                    ratingSection.querySelectorAll('input, button').forEach(el => el.disabled = isDisabled);
+                    updatePreview();
+                });
+
+                const renderStars = r => { ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= r ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join(''); };
+                renderStars(tempRating.value);
+                ratingStars.addEventListener('click', e => { if (e.target.matches('.fa-star')) { const r = parseInt(e.target.dataset.value); tempRating.value = (tempRating.value === r) ? 0 : r; renderStars(0); updatePreview(); } });
+                $('#filter-rating-above').addEventListener('change', updatePreview);
+                $('#filter-rating-clear').addEventListener('click', () => { tempRating.value = 0; renderStars(0); updatePreview(); });
+                
+                const renderCombinedTags = () => {
+                    const container = $('#filter-tags-display');
+                    if (!container) return;
+                    let html = '';
+                    const renderSet = (ids, className, prefix) => {
+                        [...ids].map(id => tags.find(t=>t.id===id)).filter(Boolean).forEach(tag => {
+                            html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${tag.name}</span>`;
+                        });
+                    };
+                    renderSet(tempAndTags, 'tag-item-and text-white', 'AND');
+                    renderSet(tempOrTags, 'tag-item-or text-white', 'OR');
+                    renderSet(tempNotTags, 'tag-item-not text-white', 'NOT');
+
+                    container.innerHTML = html || `<span class="text-xs text-gray-500">タグ未選択</span>`;
+                };
+                renderCombinedTags();
+
+                $('#filter-select-tags').addEventListener('click', () => {
+                    const capturedState = {
+                        genres: new Set([...$$('input[id^="filter-genre-"]:checked')].map(cb => cb.value)),
+                        rating: { value: tempRating.value, type: $('#filter-rating-above').checked ? 'above' : 'exact' },
+                        andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
+                        unratedOrUntaggedOnly: unratedToggle.checked,
+                        dateFilter: {
+                            mode: $(`input[name="date-filter-mode-list"]:checked`).value,
+                            date: getDateInputValue('date-filter-specific-date-list'),
+                            startDate: getDateInputValue('date-filter-start-date-list'),
+                            endDate: getDateInputValue('date-filter-end-date-list'),
+                        }
+                    };
+                    openTagFilterModal({
+                        and: tempAndTags, or: tempOrTags, not: tempNotTags,
+                        onConfirm: (newTags) => {
+                            if (newTags) {
+                                capturedState.andTagIds = newTags.and;
+                                capturedState.orTagIds = newTags.or;
+                                capturedState.notTagIds = newTags.not;
+                            }
+                            openFilterModal(capturedState);
+                        }
+                    });
+                });
+
+                // New Site Icon Toggle Logic
+                $('#filter-show-site-icon').addEventListener('change', (e) => {
+                    tempShowSiteIcon = e.target.checked;
+                });
+
+                $('#filter-apply').addEventListener('click', () => {
+                    listFilters.genres = new Set([...$$('#modal-wrapper input[id^="filter-genre-"]:checked')].map(el => el.value));
+                    listFilters.unratedOrUntaggedOnly = unratedToggle.checked;
+                    listFilters.rating = { value: tempRating.value, type: $('#filter-rating-above').checked ? 'above' : 'exact' };
+                    listFilters.andTagIds = tempAndTags;
+                    listFilters.orTagIds = tempOrTags;
+                    listFilters.notTagIds = tempNotTags;
+                    saveShowSiteIcon(tempShowSiteIcon);
+
+                    const mode = $(`input[name="date-filter-mode-list"]:checked`).value;
+                    listFilters.dateFilter.mode = mode;
+                    if (mode === 'specific') {
+                        const dateVal = getDateInputValue('date-filter-specific-date-list');
+                        if (dateVal && !isValidDate(dateVal)) return showToast("特定日の形式が不正です。");
+                        listFilters.dateFilter.date = dateVal;
+                    } else if (mode === 'range') {
+                        const startVal = getDateInputValue('date-filter-start-date-list'), endVal = getDateInputValue('date-filter-end-date-list');
+                        if ((startVal && !isValidDate(startVal)) || (endVal && !isValidDate(endVal))) return showToast("期間の形式が不正です。");
+                        listFilters.dateFilter.startDate = startVal; listFilters.dateFilter.endDate = endVal;
+                    } else { listFilters.dateFilter = defaultDateFilter(); }
+                    renderAll(); closeModal();
+                });
+                $('#filter-cancel').addEventListener('click', closeModal);
+                $('#filter-reset').addEventListener('click', () => { 
+                    listFilters = { genres: new Set(), rating: { type: 'exact', value: 0 }, andTagIds: new Set(), orTagIds: new Set(), notTagIds: new Set(), dateFilter: defaultDateFilter(), unratedOrUntaggedOnly: false }; 
+                    saveShowSiteIcon(true);
+                    renderAll(); 
+                    closeModal(); 
+                });
+
+                // Initial setup for disabled state
+                const isDisabled = unratedToggle.checked;
+                ratingSection.classList.toggle('opacity-50', isDisabled);
+                ratingSection.querySelectorAll('input, button').forEach(el => el.disabled = isDisabled);
+                updatePreview();
+            });
+        };
+        
+        const openTagModal = (options) => {
+            const { mode = 'manage', currentTagIds = new Set(), workName = '', onConfirm } = options;
+            let tempSelectedTagIds = new Set(currentTagIds);
+            const titleMap = { manage: 'タグ管理', assign: `「${workName}」のタグを割り当て`, filter: '抽選条件のタグを選択' };
+            const content = `
+                <div class="flex flex-col h-[70vh]">
+                    ${['manage', 'assign'].includes(mode) ? `<div class="flex flex-wrap gap-2 mb-4 p-1 bg-gray-900 rounded-lg"><input type="text" id="newTagName" placeholder="新しいタグ名" class="flex-grow min-w-[150px] bg-gray-700 p-2 rounded-lg"><div class="flex gap-2"><input type="color" id="newTagColor" value="#581c87" class="h-11 w-12 p-1 bg-gray-700 rounded-lg cursor-pointer"><button id="addTagBtn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold"><i class="fas fa-plus"></i> 追加</button></div></div>` : ''}
+                    <div class="flex items-center gap-2 mb-2"><div class="flex-grow relative"><i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i><input type="search" id="tagSearchInput" placeholder="タグを検索..." class="w-full bg-gray-700 p-2 pl-10 rounded-lg"></div>${mode === 'assign' ? `<select id="tagFilterSelect" class="bg-gray-700 p-2 rounded-lg"><option value="all">すべて</option><option value="assigned">設定済</option><option value="unassigned">未設定</option></select>`: ''}<select id="tagSortSelect" class="bg-gray-700 p-2 rounded-lg"><option value="createdAt_desc">追加順 (新しい)</option><option value="createdAt_asc">追加順 (古い)</option><option value="name_asc">名前順 (昇順)</option><option value="useCount_desc">頻度順</option></select></div>
+                    ${!['manage'].includes(mode) ? `<div class="mb-4">
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="block text-sm text-gray-400">選択中のタグ</label>
+                            <button type="button" id="reset-selected-tags-btn" class="text-xs text-gray-400 hover:text-white px-2 py-1 rounded hover:bg-gray-700">リセット <i class="fas fa-times ml-1"></i></button>
+                        </div>
+                        <div id="tag-selector-preview" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px]"></div>
+                    </div>` : ''}
+                    <div id="tag-list" class="flex-grow overflow-y-auto pr-2 gap-2 grid grid-cols-2 md:grid-cols-3 lg:block lg:space-y-2"></div>
+                    ${!['manage'].includes(mode) ? `<div class="pt-4 mt-4 border-t border-gray-700 flex justify-end space-x-3"><button id="tag-modal-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button><button id="tag-modal-confirm" class="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold">決定</button></div>` : ''}
+                </div>`;
+            openModal(titleMap[mode], content, () => {
+                let tagSearchQuery = '', tagFilter = 'all', tagSort = { by: 'createdAt', order: 'desc' };
+                const tagListEl = $('#tag-list'), tagPreviewEl = $('#tag-selector-preview');
+                const renderTagPreview = () => { if(!tagPreviewEl) return; const objects = [...tempSelectedTagIds].map(id => tags.find(t => t.id === id)).filter(Boolean); tagPreviewEl.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグ未選択</span>`; };
+                const renderTagList = () => {
+                    let tagsToRender = [...tags];
+                    if(tagSearchQuery) tagsToRender = tagsToRender.filter(t => t.name.toLowerCase().includes(tagSearchQuery.toLowerCase()));
+                    if(mode === 'assign') {
+                        if (tagFilter === 'assigned') tagsToRender = tagsToRender.filter(t => tempSelectedTagIds.has(t.id));
+                        if (tagFilter === 'unassigned') tagsToRender = tagsToRender.filter(t => !tempSelectedTagIds.has(t.id));
+                    }
+                     tagsToRender.sort((a, b) => { const o = tagSort.order === 'asc' ? 1 : -1; switch (tagSort.by) { case 'name': return a.name.localeCompare(b.name, 'ja') * o; case 'createdAt': return ((a.createdAt?.toMillis()||0) - (b.createdAt?.toMillis()||0)) * o; case 'useCount': return ((a.useCount||0) - (b.useCount||0)) * o; default: return 0; }});
+                     tagListEl.innerHTML = tagsToRender.map(t => `<div class="tag-item flex items-center p-2 rounded-lg ${!['manage'].includes(mode) ? 'cursor-pointer hover:bg-gray-600' : ''} ${tempSelectedTagIds.has(t.id) ? 'bg-purple-900 ring-2 ring-purple-500' : 'bg-gray-700'}" data-id="${t.id}"><div class="w-4 h-4 rounded-full mr-3 shrink-0" style="background-color: ${t.color};"></div><span class="grow font-semibold truncate">${t.name}</span>${['manage', 'assign'].includes(mode) ? `<button data-action="delete-tag" data-id="${t.id}" class="ml-auto text-gray-400 hover:text-red-500 px-2 shrink-0"><i class="fas fa-trash-alt"></i></button>` : ''}</div>`).join('');
+                };
+                renderTagList(); renderTagPreview();
+                tagListEl.addEventListener('refresh-tags', renderTagList);
+                $('#tagSearchInput')?.addEventListener('input', debounce(e => { tagSearchQuery = e.target.value; renderTagList(); }, 200));
+                $('#tagFilterSelect')?.addEventListener('change', e => { tagFilter = e.target.value; renderTagList(); });
+                $('#tagSortSelect')?.addEventListener('change', e => { const [by, order] = e.target.value.split('_'); tagSort = { by, order }; renderTagList(); });
+                $('#addTagBtn')?.addEventListener('click', async () => {
+                     const nameInput = $('#newTagName');
+                     if (nameInput.value) {
+                        const newTag = await addTag(nameInput.value, $('#newTagColor').value);
+                        if (newTag && mode === 'assign') { tempSelectedTagIds.add(newTag.id); renderTagList(); renderTagPreview(); }
+                        nameInput.value = '';
+                     }
+                });
+                tagListEl.addEventListener('click', e => {
+                    const tagItem = e.target.closest('.tag-item'), deleteBtn = e.target.closest('button[data-action="delete-tag"]');
+                    if (deleteBtn) { e.stopPropagation(); deleteTag(deleteBtn.dataset.id); return; }
+                    if (tagItem && !['manage'].includes(mode)) {
+                        const tagId = tagItem.dataset.id;
+                        tempSelectedTagIds.has(tagId) ? tempSelectedTagIds.delete(tagId) : tempSelectedTagIds.add(tagId);
+                        renderTagList(); renderTagPreview();
+                    }
+                });
+                
+                const resetBtn = $('#reset-selected-tags-btn');
+                if (resetBtn) {
+                    resetBtn.addEventListener('click', () => {
+                        tempSelectedTagIds.clear();
+                        renderTagPreview();
+                        renderTagList();
+                    });
+                }
+                
+                $('#tag-modal-confirm')?.addEventListener('click', () => onConfirm(tempSelectedTagIds));
+                $('#tag-modal-cancel')?.addEventListener('click', () => onConfirm(null));
+            });
+        };
+        
+        const openTagFilterModal = (options) => {
+            const { and = new Set(), or = new Set(), not = new Set(), onConfirm } = options;
+            let tempAnd = new Set(and), tempOr = new Set(or), tempNot = new Set(not);
+            
+            const content = `
+                <div class="flex flex-col h-[70vh]">
+                    <div class="flex items-center gap-2 mb-2">
+                        <div class="flex-grow relative">
+                            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                            <input type="search" id="tagSearchInput" placeholder="タグを検索..." class="w-full bg-gray-700 p-2 pl-10 rounded-lg">
+                        </div>
+                        <select id="tagSortSelect" class="bg-gray-700 p-2 rounded-lg">
+                            <option value="createdAt_desc">追加順 (新しい)</option>
+                            <option value="createdAt_asc">追加順 (古い)</option>
+                            <option value="name_asc">名前順 (昇順)</option>
+                            <option value="useCount_desc">頻度順</option>
+                        </select>
+                    </div>
+                    <div class="flex justify-between items-center mb-4">
+                        <p class="text-xs text-gray-400">タグをクリックして条件を変更 ( 緑: AND → 青: OR → 赤: NOT → 解除 )</p>
+                        <button type="button" id="reset-tag-filters-btn" class="text-xs text-gray-400 hover:text-white px-2 py-1 rounded hover:bg-gray-700">リセット</button>
+                    </div>
+                    <div id="tag-list" class="flex-grow overflow-y-auto pr-2 space-y-2"></div>
+                    <div class="pt-4 mt-4 border-t border-gray-700 flex justify-end space-x-3">
+                        <button id="tag-modal-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
+                        <button id="tag-modal-confirm" class="px-6 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold">決定</button>
+                    </div>
+                </div>`;
+            
+            openModal("タグの条件を選択", content, () => {
+                let tagSearchQuery = '', tagSort = { by: 'createdAt', order: 'desc' };
+                const tagListEl = $('#tag-list');
+
+                const renderTagList = () => {
+                    let tagsToRender = [...tags];
+                    if(tagSearchQuery) tagsToRender = tagsToRender.filter(t => t.name.toLowerCase().includes(tagSearchQuery.toLowerCase()));
+                    
+                     tagsToRender.sort((a, b) => { const o = tagSort.order === 'asc' ? 1 : -1; switch (tagSort.by) { case 'name': return a.name.localeCompare(b.name, 'ja') * o; case 'createdAt': return ((a.createdAt?.toMillis()||0) - (b.createdAt?.toMillis()||0)) * o; case 'useCount': return ((a.useCount||0) - (b.useCount||0)) * o; default: return 0; }});
+
+                     tagListEl.innerHTML = tagsToRender.map(t => {
+                        let stateClass = 'bg-gray-700';
+                        if (tempAnd.has(t.id)) stateClass = 'tag-item-and';
+                        else if (tempOr.has(t.id)) stateClass = 'tag-item-or';
+                        else if (tempNot.has(t.id)) stateClass = 'tag-item-not';
+                        
+                        return `<div class="tag-item flex items-center p-2 rounded-lg cursor-pointer hover:bg-gray-600 ${stateClass}" data-id="${t.id}">
+                                    <div class="w-4 h-4 rounded-full mr-3 shrink-0" style="background-color: ${t.color};"></div>
+                                    <span class="grow font-semibold truncate">${t.name}</span>
+                                </div>`;
+                     }).join('');
+                };
+
+                renderTagList();
+                tagListEl.addEventListener('refresh-tags', renderTagList);
+
+                $('#tagSearchInput')?.addEventListener('input', debounce(e => { tagSearchQuery = e.target.value; renderTagList(); }, 200));
+                $('#tagSortSelect')?.addEventListener('change', e => { const [by, order] = e.target.value.split('_'); tagSort = { by, order }; renderTagList(); });
+
+                tagListEl.addEventListener('click', e => {
+                    const tagItem = e.target.closest('.tag-item');
+                    if (tagItem) {
+                        const tagId = tagItem.dataset.id;
+                        if (tempAnd.has(tagId)) {
+                            tempAnd.delete(tagId);
+                            tempOr.add(tagId);
+                        } else if (tempOr.has(tagId)) {
+                            tempOr.delete(tagId);
+                            tempNot.add(tagId);
+                        } else if (tempNot.has(tagId)) {
+                            tempNot.delete(tagId);
+                        } else {
+                            tempAnd.add(tagId);
+                        }
+                        renderTagList();
+                    }
+                });
+                
+                $('#reset-tag-filters-btn').addEventListener('click', () => {
+                    tempAnd.clear(); tempOr.clear(); tempNot.clear();
+                    renderTagList();
+                });
+                
+                $('#tag-modal-confirm')?.addEventListener('click', () => onConfirm({and: tempAnd, or: tempOr, not: tempNot}));
+                $('#tag-modal-cancel')?.addEventListener('click', () => onConfirm(null));
+            });
+        };
+        
+        // --- Date Filter UI & Logic ---
+        const createDateFilterHTML = (context, state) => {
+            return `
+                <div class="flex items-center space-x-4 mb-2">
+                    <label><input type="radio" name="date-filter-mode-${context}" value="none" class="mr-1" ${state.mode === 'none' ? 'checked':''}> 指定なし</label>
+                    <label><input type="radio" name="date-filter-mode-${context}" value="specific" class="mr-1" ${state.mode === 'specific' ? 'checked':''}> 特定日</label>
+                    <label><input type="radio" name="date-filter-mode-${context}" value="range" class="mr-1" ${state.mode === 'range' ? 'checked':''}> 期間</label>
+                </div>
+                <div id="date-filter-inputs-${context}" class="space-y-2">
+                    <div id="date-filter-specific-${context}" class="${state.mode !== 'specific' ? 'hidden':''}">${createDateInputHTML(`date-filter-specific-date-${context}`, state.date)}</div>
+                    <div id="date-filter-range-${context}" class="flex items-center space-x-2 ${state.mode !== 'range' ? 'hidden':''}">${createDateInputHTML(`date-filter-start-date-${context}`, state.startDate)}<span>~</span>${createDateInputHTML(`date-filter-end-date-${context}`, state.endDate)}</div>
+                </div>
+                <div id="date-filter-preview-container-${context}" class="mt-2 p-2 bg-gray-900 rounded-lg"><p id="date-filter-preview-count-${context}" class="text-sm text-gray-400 mb-2">対象: 0 作品</p><div id="date-filter-preview-grid-${context}" class="date-filter-preview-grid max-h-28 overflow-y-auto"></div></div>
+            `;
+        };
+        
+        const setupDateFilterEventListeners = (context, updateCallback) => {
+             $$(`input[name="date-filter-mode-${context}"]`).forEach(radio => {
+                radio.addEventListener('change', () => {
+                    const mode = radio.value;
+                    $('#date-filter-specific-' + context).classList.toggle('hidden', mode !== 'specific');
+                    $('#date-filter-range-' + context).classList.toggle('hidden', mode !== 'range');
+                    updateCallback();
+                });
+            });
+            const addListener = (id) => {
+                const input = $(`#${id}`);
+                if (!input) return;
+                input.addEventListener('change', updateCallback);
+                input.addEventListener('input', debounce(updateCallback, 300));
+            };
+            addListener(`date-filter-specific-date-${context}`);
+            addListener(`date-filter-start-date-${context}`);
+            addListener(`date-filter-end-date-${context}`);
+        };
+        
+        const createDateInputHTML = (id, value) => {
+            return `<input type="text" id="${id}" value="${value}" placeholder="YYYY/MM/DD" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-sky-500">`;
+        };
+        const initializeDateInputs = (container) => {
+            container.querySelectorAll('input[placeholder="YYYY/MM/DD"]').forEach(textInput => {
+                if (textInput.dataset.initialized) return;
+                textInput.dataset.initialized = 'true';
+                textInput.addEventListener('input', () => {
+                    if (isValidDate(textInput.value) || textInput.value === '') {
+                        textInput.classList.remove('border-red-500');
+                    } else {
+                        textInput.classList.add('border-red-500');
+                    }
+                });
+            });
+        };
+        const getDateInputValue = (id) => {
+            const input = $(`#${id}`);
+            return input ? input.value : '';
+        };
+
+
+        // --- Lottery Logic ---
+        const getLotteryPool = () => {
+            const poolFilters = { ...lotterySettings };
+            let pool = getFilteredWorks(poolFilters);
+            
+            const { priority, method, mood, unratedOrUntaggedOnly } = lotterySettings;
+            const selectionCount = (work) => (work.selectionHistory || []).length;
+
+            return pool.map(work => {
+                let weight = 1.0;
+                if (!unratedOrUntaggedOnly && mood === 'favorite') {
+                    weight *= [0.5, 0.8, 1, 1.5, 2][(work.rating || 3) - 1];
+                }
+                if (method === 'normal') weight /= (selectionCount(work) + 1);
+                else if (method === 'decrease_unselected' && selectionCount(work) > 0) weight *= 0.1;
+                if (priority !== 'random' && work.registeredAt) {
+                    const age = (Date.now() - work.registeredAt.toMillis()) / 86400000; // days
+                    if (priority === 'new') weight *= 1 / (age + 1);
+                    if (priority === 'old') weight *= (age + 1);
+                }
+                return { ...work, weight };
+            });
+        };
+
+        const openLotterySettingsModal = (tempState = null) => {
+                const source = tempState || lotterySettings;
+                const state = {
+                    ...source,
+                    genres: new Set(source.genres),
+                    andTagIds: new Set(source.andTagIds),
+                    orTagIds: new Set(source.orTagIds),
+                    notTagIds: new Set(source.notTagIds),
+                    dateFilter: { ...(source.dateFilter || defaultDateFilter()) }
+                };
+                // Pre-fill date inputs with today's date if they are empty
+                if (!state.dateFilter.date) state.dateFilter.date = formatDateForInput(new Date());
+                if (!state.dateFilter.startDate) state.dateFilter.startDate = formatDateForInput(new Date());
+                if (!state.dateFilter.endDate) state.dateFilter.endDate = formatDateForInput(new Date());
+
+                const genreValue = [...state.genres][0] || 'all';
+                const content = `
+                <div class="space-y-6">
+                    <div class="flex items-center justify-between">
+                         <h4 class="font-semibold">抽選設定</h4>
+                         <div class="flex items-center gap-2">
+                             <button id="lottery-apply-to-list" class="text-xs px-3 py-1 bg-teal-600 hover:bg-teal-700 rounded-full transition-colors">リストに適用</button>
+                             <button id="lottery-help-btn" class="text-gray-400 hover:text-white"><i class="fas fa-question-circle fa-lg"></i></button>
+                         </div>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold mb-2 text-sm text-gray-400">プリセット</h4>
+                        <div class="flex flex-wrap gap-2">
+                            <button data-preset="relax" class="text-xs px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-full">気分転換に</button>
+                            <button data-preset="new" class="text-xs px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-full">積みを崩す</button>
+                            <button data-preset="masterpiece" class="text-xs px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-full">傑作をもう一度</button>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex items-center mb-2">
+                             <input type="checkbox" id="lottery-unrated" class="h-4 w-4 rounded bg-gray-600 text-sky-500 border-gray-500 focus:ring-sky-600" ${state.unratedOrUntaggedOnly ? 'checked' : ''}>
+                             <label for="lottery-unrated" class="ml-2 text-sm font-medium">未評価またはタグ未設定の作品のみ</label>
+                        </div>
+                    </div>
+                    <div><label for="lottery-mood" class="block text-sm text-gray-400 mb-1">気分</label><select id="lottery-mood" class="w-full bg-gray-700 p-2 rounded-lg disabled:opacity-50" ${state.unratedOrUntaggedOnly ? 'disabled' : ''}><option value="default" ${state.mood==='default'?'selected':''}>問わない</option><option value="favorite" ${state.mood==='favorite'?'selected':''}>お気に入り</option><option value="best" ${state.mood==='best'?'selected':''}>最高評価</option><option value="hidden_gem" ${state.mood==='hidden_gem'?'selected':''}>隠れた名作</option></select></div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="block text-sm text-gray-400 mb-1">ジャンル</label><select id="lottery-genre" class="w-full bg-gray-700 p-2 rounded-lg"><option value="all">すべて</option><option value="漫画" ${genreValue==='漫画'?'selected':''}>漫画</option><option value="ゲーム" ${genreValue==='ゲーム'?'selected':''}>ゲーム</option><option value="動画" ${genreValue==='動画'?'selected':''}>動画</option></select></div>
+                        <div><label class="block text-sm text-gray-400 mb-1">登録日優先度</label><select id="lottery-priority" class="w-full bg-gray-700 p-2 rounded-lg"><option value="new" ${state.priority==='new'?'selected':''}>新しい順</option><option value="old" ${state.priority==='old'?'selected':''}>古い順</option><option value="random" ${state.priority==='random'?'selected':''}>ランダム</option></select></div>
+                    </div>
+                     <div><label class="block text-sm text-gray-400 mb-1">抽選方法</label><select id="lottery-method" class="w-full bg-gray-700 p-2 rounded-lg"><option value="normal" ${state.method==='normal'?'selected':''}>通常</option><option value="decrease_unselected" ${state.method==='decrease_unselected'?'selected':''}>未選択優先</option></select></div>
+                    <div><h4 class="text-sm text-gray-400 mb-1">登録日で絞り込む</h4>${createDateFilterHTML('lottery', state.dateFilter)}</div>
+                    <div>
+                        <h4 class="font-semibold mb-1">タグ絞り込み</h4>
+                        <div id="lottery-tags-display" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] mb-2"></div>
+                        <button type="button" id="lottery-select-tags" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグの条件を選択</button>
+                    </div>
+                    <div class="pt-4 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
+                        <button type="button" id="lottery-settings-reset" class="w-full sm:w-auto px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">リセット</button>
+                        <div class="flex space-x-3 w-full sm:w-auto">
+                            <button type="button" id="lottery-settings-cancel" class="flex-1 sm:flex-none px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
+                            <button type="button" id="lottery-settings-save" class="flex-1 sm:flex-none px-6 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold">保存</button>
+                        </div>
+                    </div>
+                </div>`;
+                openModal("抽選設定", content, () => {
+                    let tempAndTags = new Set(state.andTagIds);
+                    let tempOrTags = new Set(state.orTagIds);
+                    let tempNotTags = new Set(state.notTagIds);
+
+                    const updatePreview = () => {
+                        const countEl = $('#date-filter-preview-count-lottery'), gridEl = $('#date-filter-preview-grid-lottery');
+                        if (!countEl || !gridEl) return;
+                        
+                        const filters = {
+                            unratedOrUntaggedOnly: $('#lottery-unrated').checked,
+                            mood: $('#lottery-mood').value,
+                            genres: new Set($('#lottery-genre').value === 'all' ? [] : [$('#lottery-genre').value]),
+                            andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
+                            dateFilter: {
+                                mode: $(`input[name="date-filter-mode-lottery"]:checked`).value,
+                                date: getDateInputValue('date-filter-specific-date-lottery'),
+                                startDate: getDateInputValue('date-filter-start-date-lottery'),
+                                endDate: getDateInputValue('date-filter-end-date-lottery')
+                            }
+                        };
+                        const filtered = getFilteredWorks(filters);
+                        
+                        countEl.textContent = `対象: ${filtered.length} 作品`;
+                        gridEl.innerHTML = filtered.slice(0, 50).map(w => `<div class="text-center"><img src="${w.imageUrl||'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${w.name}" class="w-full h-16 object-cover rounded-md"><p class="text-xs truncate mt-1">${w.name}</p></div>`).join('');
+                    };
+                    
+                    setupDateFilterEventListeners('lottery', updatePreview);
+                    
+                    const moodSelect = $('#lottery-mood');
+                    const unratedToggle = $('#lottery-unrated');
+                    unratedToggle.addEventListener('change', () => {
+                        moodSelect.disabled = unratedToggle.checked;
+                        updatePreview();
+                    });
+
+                    $('#lottery-genre').addEventListener('change', updatePreview);
+                    $('#lottery-mood').addEventListener('change', updatePreview);
+                    
+                    const renderCombinedTags = () => {
+                        const container = $('#lottery-tags-display');
+                        if (!container) return;
+                        let html = '';
+                        const renderSet = (ids, className, prefix) => {
+                            [...ids].map(id => tags.find(t=>t.id===id)).filter(Boolean).forEach(tag => {
+                                html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${tag.name}</span>`;
+                            });
+                        };
+                        renderSet(tempAndTags, 'tag-item-and text-white', 'AND');
+                        renderSet(tempOrTags, 'tag-item-or text-white', 'OR');
+                        renderSet(tempNotTags, 'tag-item-not text-white', 'NOT');
+                        container.innerHTML = html || `<span class="text-xs text-gray-500">タグ未選択</span>`;
+                    };
+                    renderCombinedTags();
+                    
+                    $$('button[data-preset]').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const preset = btn.dataset.preset;
+                            let presetState = { ...lotterySettings, andTagIds: new Set(), orTagIds: new Set(), notTagIds: new Set() };
+                            if (preset === 'relax') {
+                                presetState.priority = 'old';
+                                presetState.method = 'decrease_unselected';
+                                presetState.unratedOrUntaggedOnly = false;
+                                presetState.mood = 'default';
+                            } else if (preset === 'new') {
+                                presetState.priority = 'new';
+                                presetState.unratedOrUntaggedOnly = true;
+                            } else if (preset === 'masterpiece') {
+                                presetState.priority = 'random';
+                                presetState.method = 'normal';
+                                presetState.unratedOrUntaggedOnly = false;
+                                presetState.mood = 'best';
+                            }
+                            openLotterySettingsModal(presetState);
+                        });
+                    });
+
+                    $('#lottery-select-tags').addEventListener('click', () => {
+                        const capturedState = {
+                            mood: $('#lottery-mood').value, genres: new Set($('#lottery-genre').value === 'all' ? [] : [$('#lottery-genre').value]),
+                            priority: $('#lottery-priority').value, method: $('#lottery-method').value, 
+                            andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
+                            unratedOrUntaggedOnly: $('#lottery-unrated').checked,
+                            dateFilter: { mode: $(`input[name="date-filter-mode-lottery"]:checked`).value, date: getDateInputValue(`date-filter-specific-date-lottery`), startDate: getDateInputValue(`date-filter-start-date-lottery`), endDate: getDateInputValue(`date-filter-end-date-lottery`) }
+                        };
+                        openTagFilterModal({
+                            and: tempAndTags, or: tempOrTags, not: tempNotTags,
+                            onConfirm: (newTags) => {
+                                if(newTags) {
+                                    capturedState.andTagIds = newTags.and;
+                                    capturedState.orTagIds = newTags.or;
+                                    capturedState.notTagIds = newTags.not;
+                                }
+                                openLotterySettingsModal(capturedState);
+                            }
+                        });
+                    });
+                    $('#lottery-settings-reset').addEventListener('click', () => { lotterySettings = { mood: 'default', genres: new Set(), andTagIds: new Set(), orTagIds: new Set(), notTagIds: new Set(), dateFilter: defaultDateFilter(), priority: 'new', method: 'normal', unratedOrUntaggedOnly: false }; renderLotterySummary(); openLotterySettingsModal(); });
+                    
+                    const saveSettings = () => {
+                        lotterySettings.unratedOrUntaggedOnly = $('#lottery-unrated').checked;
+                        lotterySettings.mood = $('#lottery-mood').value;
+                        const genre = $('#lottery-genre').value;
+                        lotterySettings.genres = genre === 'all' ? new Set() : new Set([genre]);
+                        lotterySettings.priority = $('#lottery-priority').value; 
+                        lotterySettings.method = $('#lottery-method').value;
+                        lotterySettings.andTagIds = tempAndTags;
+                        lotterySettings.orTagIds = tempOrTags;
+                        lotterySettings.notTagIds = tempNotTags;
+                        const mode = $(`input[name="date-filter-mode-lottery"]:checked`).value;
+                        lotterySettings.dateFilter.mode = mode;
+                        if (mode === 'specific') { const val = getDateInputValue('date-filter-specific-date-lottery'); if (val && !isValidDate(val)) return showToast("特定日の形式が不正です。"); lotterySettings.dateFilter.date = val; } 
+                        else if (mode === 'range') { const start = getDateInputValue('date-filter-start-date-lottery'), end = getDateInputValue('date-filter-end-date-lottery'); if ((start && !isValidDate(start)) || (end && !isValidDate(end))) return showToast("期間の形式が不正です。"); lotterySettings.dateFilter.startDate = start; lotterySettings.dateFilter.endDate = end; } 
+                        else { lotterySettings.dateFilter = defaultDateFilter(); }
+                    };
+
+                    $('#lottery-apply-to-list').addEventListener('click', () => {
+                        saveSettings();
+                        listFilters.genres = new Set(lotterySettings.genres);
+                        listFilters.andTagIds = new Set(lotterySettings.andTagIds);
+                        listFilters.orTagIds = new Set(lotterySettings.orTagIds);
+                        listFilters.notTagIds = new Set(lotterySettings.notTagIds);
+                        listFilters.dateFilter = { ...lotterySettings.dateFilter };
+                        listFilters.unratedOrUntaggedOnly = lotterySettings.unratedOrUntaggedOnly;
+                        
+                        // Mood to Rating conversion
+                        listFilters.rating = { type: 'exact', value: 0 }; // Reset first
+                        if (!lotterySettings.unratedOrUntaggedOnly) {
+                             if (lotterySettings.mood === 'best') listFilters.rating = { type: 'above', value: 4 };
+                             // 'hidden_gem' (<=2) and 'favorite' don't have direct equivalents in list filters
+                        }
+
+                        renderAll();
+                        closeModal();
+                        showToast("抽選設定を作品リストの絞り込みに適用しました。");
+                    });
+
+                    $('#lottery-settings-save').addEventListener('click', () => {
+                        saveSettings();
+                        renderLotterySummary();
+                        closeModal();
+                    });
+                    $('#lottery-settings-cancel').addEventListener('click', closeModal);
+                    $('#lottery-help-btn').addEventListener('click', () => {
+                        const capturedState = {
+                            mood: $('#lottery-mood').value, genres: new Set($('#lottery-genre').value === 'all' ? [] : [$('#lottery-genre').value]),
+                            priority: $('#lottery-priority').value, method: $('#lottery-method').value, 
+                            andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
+                            unratedOrUntaggedOnly: $('#lottery-unrated').checked,
+                            dateFilter: { mode: $(`input[name="date-filter-mode-lottery"]:checked`).value, date: getDateInputValue(`date-filter-specific-date-lottery`), startDate: getDateInputValue(`date-filter-start-date-lottery`), endDate: getDateInputValue(`date-filter-end-date-lottery`) }
+                        };
+                        modalStateStack.push(() => openLotterySettingsModal(capturedState));
+                        openHelpModal();
+                    });
+                    updatePreview();
+                });
+        };
+        
+        const openHelpModal = () => {
+            const content = `
+                <div class="space-y-6 text-gray-300">
+                    <div>
+                        <h4 class="font-bold text-lg text-sky-400 mb-2">未評価またはタグ未設定の作品のみ</h4>
+                        <p>このオプションを有効にすると、まだ評価がされていない(★が0個)、またはタグが1つも設定されていない作品のみが抽選対象になります。作品の整理をしたい場合に便利です。</p>
+                        <p class="text-sm text-yellow-400 mt-2">※このオプションが有効な間、「気分」による絞り込みは無効になります。</p>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-lg text-sky-400 mb-2">気分</h4>
+                        <p>特定の評価を持つ作品に絞り込んで抽選します。</p>
+                        <ul class="list-disc list-inside mt-2 pl-4 space-y-1 text-sm">
+                            <li><strong>問わない:</strong> 全ての作品を対象にします。</li>
+                            <li><strong>お気に入り:</strong> 評価が高い作品ほど選ばれやすくなります。(★3以上推奨)</li>
+                            <li><strong>最高評価:</strong> 評価が★4以上の作品のみを対象にします。</li>
+                            <li><strong>隠れた名作:</strong> 評価が★2以下の作品のみを対象にします。まだ評価していない名作を探すのに役立ちます。</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-lg text-sky-400 mb-2">登録日優先度</h4>
+                        <p>作品の登録日に基づいて、選ばれやすさを調整します。</p>
+                         <ul class="list-disc list-inside mt-2 pl-4 space-y-1 text-sm">
+                            <li><strong>新しい順:</strong> 最近登録した作品ほど選ばれやすくなります。</li>
+                            <li><strong>古い順:</strong> 昔に登録した作品ほど選ばれやすくなります。</li>
+                            <li><strong>ランダム:</strong> 登録日は考慮されません。</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-lg text-sky-400 mb-2">抽選方法</h4>
+                        <p>抽選回数に基づいて、選ばれやすさを調整します。</p>
+                         <ul class="list-disc list-inside mt-2 pl-4 space-y-1 text-sm">
+                            <li><strong>通常:</strong> 既に選ばれたことがある作品は、選ばれた回数に応じて少しずつ選ばれにくくなります。</li>
+                            <li><strong>未選択優先:</strong> まだ一度も選ばれていない作品を最優先で抽選します。全ての作品が一度は選ばれるまで、既に選ばれた作品はほとんど選ばれません。</li>
+                        </ul>
+                    </div>
+                </div>
+            `;
+            openModal("ヘルプ：抽選設定", content);
+        };
+
+        const performLottery = async () => {
+            const weightedPool = getLotteryPool();
+            if (weightedPool.length === 0) return showToast("抽選対象の作品がありません。");
+            
+            const totalWeight = weightedPool.reduce((sum, work) => sum + work.weight, 0);
+            if (totalWeight <= 0) return showToast("抽選対象の作品がありません (重み合計が0以下)。");
+
+            let random = Math.random() * totalWeight;
+            let selectedWork = weightedPool.find(work => (random -= work.weight) <= 0) || weightedPool[weightedPool.length - 1];
+            
+            sessionStorage.setItem('lastSelectedWorkId', selectedWork.id);
+            if (!isDebugMode) {
+                const newHistoryEntry = Timestamp.now();
+                await updateWork(selectedWork.id, { 
+                    selectionCount: (selectedWork.selectionCount || 0) + 1, 
+                    lastSelectedAt: newHistoryEntry,
+                    selectionHistory: arrayUnion(newHistoryEntry)
+                });
+            } else {
+                 const workIndex = works.findIndex(w => w.id === selectedWork.id);
+                 if (workIndex !== -1) {
+                    works[workIndex].selectionCount = (works[workIndex].selectionCount || 0) + 1;
+                    const now = Timestamp.now();
+                    works[workIndex].lastSelectedAt = now;
+                    if (!works[workIndex].selectionHistory) works[workIndex].selectionHistory = [];
+                    works[workIndex].selectionHistory.push(now);
+                 }
+            }
+            openLotteryResultModal(selectedWork);
+        };
+        
+        const openLotteryResultModal = (work, tempState = null) => {
+            let currentRating = tempState?.rating ?? (work.rating || 0);
+            let currentTagIds = tempState?.tagIds ?? new Set(work.tagIds || []);
+
+            const getFormState = () => ({
+                rating: currentRating,
+                tagIds: JSON.stringify([...currentTagIds].sort())
+            });
+            const initialState = getFormState();
+            checkModalDirtyState = () => JSON.stringify(initialState) !== JSON.stringify(getFormState());
+
+            const content = `
+                <div class="text-center">
+                    <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${work.name}" class="max-w-full max-h-48 object-contain mx-auto rounded-lg shadow-lg mb-4">
+                    <p class="text-lg font-bold text-sky-300">${work.genre}</p>
+                    <div class="flex items-center justify-center gap-2 my-2">
+                        <h3 class="text-3xl font-bold text-white">${work.name}</h3>
+                        <button id="copy-result-title-btn" class="p-2 text-gray-400 hover:text-white transition-colors" title="タイトルをコピー">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="mt-6 space-y-4">
+                    <div><label class="block text-center text-sm text-gray-400 mb-2">評価</label><div class="flex items-center justify-center space-x-2 text-3xl" id="result-rating"></div></div>
+                    <div><label class="block text-center text-sm text-gray-400 mb-1">タグ</label><div id="result-tags" class="flex flex-wrap justify-center gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] mb-2"></div><button type="button" id="result-assign-tags-btn" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグを割り当て/編集</button></div>
+                </div>
+                <div class="pt-6 mt-6 border-t border-gray-700 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
+                    <button id="lottery-reroll" class="w-full sm:w-auto px-6 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold">もう一度抽選</button>
+                    <div class="flex space-x-3 w-full sm:w-auto">
+                        <button id="result-close-btn" class="flex-1 sm:flex-none px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">閉じる</button>
+                        <button id="result-save-btn" class="flex-1 sm:flex-none px-6 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold">保存</button>
+                    </div>
+                </div>`;
+            
+            const onModalOpen = () => {
+                const ratingStars = $('#result-rating');
+                const renderStars = r => { ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= r ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join(''); };
+                renderStars(currentRating);
+                ratingStars.addEventListener('click', e => { if (e.target.matches('.fa-star')) { const r = parseInt(e.target.dataset.value); currentRating = (currentRating === r) ? 0 : r; renderStars(currentRating); }});
+                
+                const tagsContainer = $('#result-tags');
+                const renderTags = ids => { const objects = [...ids].map(id => tags.find(t=>t.id===id)).filter(Boolean); tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color};color:${getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`; };
+                renderTags(currentTagIds);
+
+                $('#result-assign-tags-btn').addEventListener('click', () => {
+                    openTagModal({ mode: 'assign', workId: work.id, currentTagIds, workName: work.name,
+                        onConfirm: (newIds) => {
+                            if(newIds !== null) {
+                                currentTagIds = newIds;
+                            }
+                            // Re-render content within the same modal instead of opening a new one
+                            openLotteryResultModal(work, { rating: currentRating, tagIds: currentTagIds });
+                        }
+                    });
+                });
+
+                $('#copy-result-title-btn').addEventListener('click', () => {
+                    navigator.clipboard.writeText(work.name).then(() => {
+                        showToast(`「${work.name}」をコピーしました。`);
+                    }).catch(err => {
+                        console.error('Copy failed: ', err);
+                        showToast('コピーに失敗しました。');
+                    });
+                });
+                
+                $('#lottery-reroll').addEventListener('click', () => {
+                    checkModalDirtyState = () => false; // Prevent confirm dialog on re-roll
+                    // Save current feedback before re-rolling
+                    updateWork(work.id, { rating: currentRating, tagIds: Array.from(currentTagIds) })
+                        .then(() => performLottery());
+                });
+                $('#result-close-btn').addEventListener('click', closeModal);
+                $('#result-save-btn').addEventListener('click', async () => {
+                    checkModalDirtyState = () => false; // Mark as not dirty before closing
+                    if (await updateWork(work.id, { rating: currentRating, tagIds: Array.from(currentTagIds) })) {
+                        showToast(`「${work.name}」の情報を更新しました。`); closeModal();
+                    }
+                });
+            };
+
+            // If modal is already open, just update its content. Otherwise, open it fresh.
+            if (!modalWrapper.classList.contains('hidden') && modalTitle.textContent === "抽選結果") {
+                modalContentHost.innerHTML = content;
+                initializeDateInputs(modalContentHost);
+                onModalOpen();
+            } else {
+                openModal("抽選結果", content, onModalOpen);
+            }
+        };
+
+        const openFeedbackModal = (work, tempState = null) => {
+            let currentRating = tempState?.rating ?? (work.rating || 0);
+            let currentTagIds = tempState?.tagIds ?? new Set(work.tagIds || []);
+
+             const getFormState = () => ({
+                rating: currentRating,
+                tagIds: JSON.stringify([...currentTagIds].sort())
+            });
+            const initialState = getFormState();
+            checkModalDirtyState = () => JSON.stringify(initialState) !== JSON.stringify(getFormState());
+            
+            const content = `
+                <div class="text-center">
+                    <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${work.name}" class="max-w-xs max-h-48 object-contain mx-auto rounded-lg mb-4">
+                    <h4 class="text-lg font-bold">${work.name}</h4><p class="text-gray-400 mb-4">前回の抽選作品の評価をお願いします！</p>
+                    <div class="my-6"><label class="block text-sm text-gray-400 mb-2">評価</label><div class="flex items-center justify-center space-x-2 text-3xl" id="feedback-rating"></div></div>
+                    <div class="my-6"><label class="block text-sm text-gray-400 mb-1">タグ</label><div id="feedback-tags" class="flex flex-wrap justify-center gap-2 p-2 bg-gray-700 rounded-lg min-h-[40px] mb-2"></div><button type="button" id="feedback-assign-tags-btn" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグを割り当て/編集</button></div>
+                    <div class="pt-4 flex justify-end space-x-3">
+                        <button type="button" id="feedback-later-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">また今度</button>
+                        <button type="button" id="feedback-save-btn" class="px-6 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold btn-disabled" disabled>保存</button>
+                    </div>
+                </div>`;
+            openModal("前回の作品の評価", content, () => {
+                const ratingStars = $('#feedback-rating'), saveBtn = $('#feedback-save-btn');
+                const checkSaveButton = () => { saveBtn.disabled = currentRating === (work.rating || 0) && JSON.stringify([...currentTagIds].sort()) === JSON.stringify((work.tagIds || []).sort()) ; saveBtn.classList.toggle('btn-disabled', saveBtn.disabled); };
+                const renderStars = r => { ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= r ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join(''); };
+                renderStars(currentRating);
+                ratingStars.addEventListener('click', e => { if (e.target.matches('.fa-star')) { const r = parseInt(e.target.dataset.value); currentRating = (currentRating === r) ? 0 : r; renderStars(currentRating); checkSaveButton(); }});
+                const tagsContainer = $('#feedback-tags');
+                const renderTags = ids => { const objects = [...ids].map(id => tags.find(t=>t.id===id)).filter(Boolean); tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color};color:${getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`; };
+                renderTags(currentTagIds);
+                $('#feedback-assign-tags-btn').addEventListener('click', () => {
+                    openTagModal({ mode: 'assign', workId: work.id, currentTagIds, workName: work.name,
+                        onConfirm: (newIds) => {
+                             if(newIds !== null) {
+                                currentTagIds = newIds;
+                            }
+                            openFeedbackModal(work, { rating: currentRating, tagIds: currentTagIds });
+                        }
+                    });
+                });
+                $('#feedback-later-btn').addEventListener('click', closeModal);
+                saveBtn.addEventListener('click', async () => {
+                    checkModalDirtyState = () => false;
+                    if (await updateWork(work.id, { rating: currentRating, tagIds: Array.from(currentTagIds) })) {
+                        showToast(`「${work.name}」の情報を更新しました。`); closeModal();
+                    }
+                });
+                checkSaveButton();
+            });
+        };
+
+        // --- Stats Dashboard Logic (Hybrid) ---
+        const openStatsDashboardModal = () => {
+            if (works.length === 0) {
+                return openModal("統計ダッシュボード", `<div class="text-center py-16 text-gray-500"><i class="fas fa-chart-pie fa-3x"></i><p class="mt-4">分析できる作品データがありません。</p></div>`);
+            }
+
+            const content = `
+                <div class="space-y-4">
+                    <div class="bg-gray-900 p-1 rounded-lg flex space-x-1">
+                        <button id="stats-tab-overview" class="stats-tab flex-1 px-4 py-2 rounded-md text-sm font-semibold transition-colors stats-tab-active">コレクション概要</button>
+                        <button id="stats-tab-trends" class="stats-tab flex-1 px-4 py-2 rounded-md text-sm font-semibold transition-colors">登録日分析</button>
+                    </div>
+                    
+                    <div id="stats-content-overview">
+                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="bg-gray-900 p-4 rounded-lg">
+                                <h4 id="genre-stats-title" class="font-bold text-amber-400 mb-3">ジャンル別統計</h4>
+                                <div id="genre-stats-container" class="space-y-4"></div>
+                            </div>
+                             <div class="bg-gray-900 p-4 rounded-lg flex flex-col">
+                                <h4 class="font-bold text-amber-400 mb-2 text-center">販売サイト別 割合</h4>
+                                <div class="flex-grow flex items-center justify-center relative min-h-0" style="height: 250px;">
+                                    <canvas id="site-distribution-chart"></canvas>
+                                </div>
+                            </div>
+                            <div class="bg-gray-900 p-4 rounded-lg flex flex-col md:col-span-2">
+                                <h4 class="font-bold text-amber-400 mb-2 text-center">評価別 作品数</h4>
+                                <div class="flex-grow flex items-center justify-center relative min-h-0" style="height: 250px;">
+                                    <canvas id="rating-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="stats-content-trends" class="hidden">
+                         <div class="bg-gray-900 p-4 rounded-lg">
+                            <div class="flex justify-between items-center mb-3">
+                                <h4 class="font-bold text-amber-400">登録数の推移</h4>
+                                <div class="flex space-x-1 bg-gray-800 p-1 rounded-lg">
+                                    <button id="trends-view-monthly" class="px-3 py-1 text-xs rounded stats-tab-active">月別</button>
+                                    <button id="trends-view-yearly" class="px-3 py-1 text-xs rounded">年別</button>
+                                </div>
+                            </div>
+                            <div class="h-48 relative mb-4"><canvas id="trends-chart"></canvas></div>
+                        </div>
+                        <div id="trends-detail-panel" class="mt-4 bg-gray-900 p-4 rounded-lg min-h-[200px] hidden">
+                             <h4 id="trends-detail-title" class="font-bold text-amber-400 mb-3 text-center"></h4>
+                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="md:col-span-1 flex flex-col items-center">
+                                    <h5 class="text-sm text-gray-400 mb-2">ジャンル内訳</h5>
+                                    <div class="w-32 h-32 relative"><canvas id="trends-detail-genre-chart"></canvas></div>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <h5 class="text-sm text-gray-400 mb-2">登録作品リスト</h5>
+                                    <ul id="trends-detail-list" class="text-sm space-y-1 overflow-y-auto max-h-40 pr-2"></ul>
+                                </div>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            openModal("統計ダッシュボード", content, () => {
+                setupChartDefaults();
+                renderStatsOverview();
+                
+                // Tab switching logic
+                const overviewTab = $('#stats-tab-overview'), trendsTab = $('#stats-tab-trends');
+                const overviewContent = $('#stats-content-overview'), trendsContent = $('#stats-content-trends');
+                
+                overviewTab.addEventListener('click', () => {
+                    overviewTab.classList.add('stats-tab-active');
+                    trendsTab.classList.remove('stats-tab-active');
+                    overviewContent.classList.remove('hidden');
+                    trendsContent.classList.add('hidden');
+                    renderStatsOverview(); // Re-render in case data changed
+                });
+
+                trendsTab.addEventListener('click', () => {
+                    trendsTab.classList.add('stats-tab-active');
+                    overviewTab.classList.remove('stats-tab-active');
+                    trendsContent.classList.remove('hidden');
+                    overviewContent.classList.add('hidden');
+                    renderTrendsChart('monthly');
+                });
+                
+                $('#trends-view-monthly').addEventListener('click', (e) => {
+                    e.target.classList.add('stats-tab-active');
+                    $('#trends-view-yearly').classList.remove('stats-tab-active');
+                    renderTrendsChart('monthly');
+                });
+                $('#trends-view-yearly').addEventListener('click', (e) => {
+                    e.target.classList.add('stats-tab-active');
+                    $('#trends-view-monthly').classList.remove('stats-tab-active');
+                    renderTrendsChart('yearly');
+                });
+
+            }, { size: 'max-w-5xl' });
+        };
+        
+        const setupChartDefaults = () => {
+            Chart.defaults.color = '#9ca3af'; // gray-400
+            Chart.defaults.font.family = 'sans-serif';
+            Chart.defaults.plugins.legend.position = 'bottom';
+            Chart.defaults.plugins.tooltip.backgroundColor = '#1f2937'; // gray-800
+            Chart.defaults.plugins.tooltip.titleColor = '#e5e7eb'; // gray-200
+            Chart.defaults.plugins.tooltip.bodyColor = '#d1d5db'; // gray-300
+            Chart.defaults.plugins.tooltip.borderColor = '#374151'; // gray-700
+            Chart.defaults.plugins.tooltip.borderWidth = 1;
+        };
+
+        const renderStatsOverview = () => {
+            // Genre Stats (Progress Bars)
+            const genreContainer = $('#genre-stats-container');
+            const genreTitle = $('#genre-stats-title');
+            if (!genreContainer || !genreTitle) return;
+
+            const totalWorks = works.length;
+            genreTitle.textContent = `ジャンル別統計 (全${totalWorks}件)`;
+
+            const genreCounts = works.reduce((acc, work) => ({ ...acc, [work.genre]: (acc[work.genre] || 0) + 1 }), {});
+            const genreColors = { '漫画': '#3b82f6', 'ゲーム': '#10b981', '動画': '#8b5cf6' };
+            genreContainer.innerHTML = Object.entries(genreCounts).sort((a,b) => b[1] - a[1]).map(([genre, count]) => {
+               const percentage = totalWorks > 0 ? ((count / totalWorks) * 100).toFixed(1) : 0;
+               return `<div><div class="flex justify-between mb-1 text-sm"><span class="font-bold" style="color:${genreColors[genre] || '#9ca3af'}">${genre}</span><span>${count}件 (${percentage}%)</span></div><div class="w-full bg-gray-700 rounded-full h-2.5"><div class="h-2.5 rounded-full" style="width: ${percentage}%; background-color:${genreColors[genre] || '#9ca3af'}"></div></div></div>`;
+            }).join('') || '<p class="text-sm text-gray-500">データがありません</p>';
+            
+            // Site Distribution Chart (Doughnut)
+            const siteChartCanvas = $('#site-distribution-chart');
+            if (siteChartCanvas) {
+                const siteCounts = works.reduce((acc, work) => {
+                    const url = work.sourceUrl || '';
+                    if (url.includes('dlsite.com')) acc.DLsite++;
+                    else if (url.includes('dmm.co.jp')) acc.FANZA++;
+                    else acc.Other++;
+                    return acc;
+                }, { DLsite: 0, FANZA: 0, Other: 0 });
+
+                if (activeCharts.site) activeCharts.site.destroy();
+                activeCharts.site = new Chart(siteChartCanvas.getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['DLsite', 'FANZA', 'その他'],
+                        datasets: [{
+                            data: [siteCounts.DLsite, siteCounts.FANZA, siteCounts.Other],
+                            backgroundColor: ['#0ea5e9', '#ef4444', '#6b7280'],
+                            borderColor: '#1f2937',
+                            borderWidth: 4,
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { padding: 20, boxWidth: 12 } },
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => {
+                                        const total = context.chart.getDatasetMeta(0).total;
+                                        const percentage = total > 0 ? (context.raw / total * 100).toFixed(1) : 0;
+                                        return `${context.label}: ${context.raw}件 (${percentage}%)`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Rating Chart (Bar)
+            const ratingCounts = works.reduce((acc, work) => {
+                const r = work.rating || 0; acc[r] = (acc[r] || 0) + 1; return acc;
+            }, {});
+            const ratingLabels = ['未評価', '★1', '★2', '★3', '★4', '★5'];
+            const ratingDataPoints = [ratingCounts[0] || 0, ratingCounts[1] || 0, ratingCounts[2] || 0, ratingCounts[3] || 0, ratingCounts[4] || 0, ratingCounts[5] || 0];
+            const ratingData = {
+                labels: ratingLabels,
+                datasets: [{
+                    label: '作品数',
+                    data: ratingDataPoints,
+                    backgroundColor: 'rgba(251, 191, 36, 0.6)',
+                    borderColor: 'rgba(251, 191, 36, 1)',
+                    borderWidth: 1
+                }]
+            };
+            if(activeCharts.rating) activeCharts.rating.destroy();
+            activeCharts.rating = new Chart($('#rating-chart').getContext('2d'), {
+                type: 'bar', data: ratingData,
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { 
+                        y: { beginAtZero: true, grid: { color: '#374151' }, ticks: { stepSize: 1 } }, 
+                        x: { grid: { color: '#374151' } } 
+                    }
+                }
+            });
+        };
+        
+        const renderTrendsChart = (mode) => {
+             if(activeCharts.trends) activeCharts.trends.destroy();
+             $('#trends-detail-panel').classList.add('hidden');
+
+            const trendData = works.reduce((acc, work) => {
+                if (!work.registeredAt) return acc;
+                const date = work.registeredAt.toDate();
+                const key = mode === 'monthly' ? `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}` : `${date.getFullYear()}`;
+                if (!acc[key]) acc[key] = { count: 0, works: [] };
+                acc[key].count++;
+                acc[key].works.push(work);
+                return acc;
+            }, {});
+            
+            const sortedKeys = Object.keys(trendData).sort();
+            const labels = sortedKeys;
+            const dataPoints = sortedKeys.map(key => trendData[key].count);
+
+            activeCharts.trends = new Chart($('#trends-chart').getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '登録作品数',
+                        data: dataPoints,
+                        fill: true,
+                        backgroundColor: 'rgba(14, 165, 233, 0.2)',
+                        borderColor: 'rgba(14, 165, 233, 1)',
+                        tension: 0.2,
+                        pointBackgroundColor: 'rgba(14, 165, 233, 1)',
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { 
+                        y: { beginAtZero: true, grid: { color: '#374151' }, ticks: { stepSize: 1 } }, 
+                        x: { grid: { display: false } } 
+                    },
+                    onClick: (e, elements) => {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const key = labels[index];
+                            renderTrendsDetail(key, trendData[key]);
+                        }
+                    }
+                }
+            });
+        };
+        
+        const renderTrendsDetail = (key, data) => {
+            const panel = $('#trends-detail-panel');
+            panel.classList.remove('hidden');
+            $('#trends-detail-title').textContent = `${key} の詳細`;
+            
+            // Render genre doughnut chart for the period
+            const genreCounts = data.works.reduce((acc, work) => ({ ...acc, [work.genre]: (acc[work.genre] || 0) + 1 }), {});
+            if(activeCharts.trendsDetailGenre) activeCharts.trendsDetailGenre.destroy();
+            activeCharts.trendsDetailGenre = new Chart($('#trends-detail-genre-chart').getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(genreCounts),
+                    datasets: [{ data: Object.values(genreCounts), backgroundColor: ['#3b82f6', '#10b981', '#8b5cf6'], borderColor: '#1f2937', borderWidth: 2 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+            
+            // Render list of works
+            $('#trends-detail-list').innerHTML = data.works.map(w => `<li>- ${w.name}</li>`).join('');
+
+            panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        };
+        
+        // --- Debug Mode ---
+        const generateDebugData = () => {
+            const newTags = [];
+            const tagNames = ['アクション', 'RPG', 'ファンタジー', 'シミュレーション', 'パズル', 'アドベンチャー', 'コメディ', 'ホラー', 'ドット絵', '3D', '学園モノ', '異世界', 'ボイスあり', '放置ゲーム', 'ローグライク'];
+            const colors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899'];
+            for (let i = 0; i < tagNames.length; i++) {
+                newTags.push({ id: `debug_tag_${i}`, name: tagNames[i], color: colors[i], useCount: Math.floor(Math.random() * 50) });
+            }
+
+            const newWorks = [];
+            const genres = ['ゲーム', '漫画', '動画'];
+            const workPrefixes = ['超次元', 'ドキドキ', '異世界転生したら', '新人', '隣の', '学園の', '魔王と', '聖なる', '禁断の', '伝説の'];
+            const workSuffixes = ['プリンセス', 'クエスト', 'ハーレム物語', 'デイズ', '事件簿', 'ファンタジア', 'サバイバル', 'ロマンス', '英雄譚'];
+
+            for (let i = 0; i < 50; i++) {
+                const randomDate = new Date(Date.now() - Math.floor(Math.random() * 365 * 2 * 24 * 60 * 60 * 1000)); // Within last 2 years
+                const numTags = Math.floor(Math.random() * 5);
+                const workTags = new Set();
+                while (workTags.size < numTags) {
+                    workTags.add(newTags[Math.floor(Math.random() * newTags.length)].id);
+                }
+                const selectionHistory = [];
+                const selectionCount = Math.floor(Math.random() * 20);
+                for (let j = 0; j < selectionCount; j++) {
+                    selectionHistory.push(Timestamp.fromDate(new Date(Date.now() - Math.floor(Math.random() * 60 * 24 * 60 * 60 * 1000))));
+                }
+                selectionHistory.sort((a,b) => a.toMillis() - b.toMillis());
+
+                const siteRoll = Math.random();
+                let url;
+                if (siteRoll < 0.45) url = 'https://www.dlsite.com/maniax/work/=/product_id/RJ12345.html';
+                else if (siteRoll < 0.8) url = 'https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=d_12345/';
+                else url = 'https://example.com/other';
+
+
+                newWorks.push({
+                    id: `debug_work_${i}`,
+                    name: `${workPrefixes[Math.floor(Math.random() * workPrefixes.length)]} ${workSuffixes[Math.floor(Math.random() * workSuffixes.length)]} ${i + 1}`,
+                    genre: genres[Math.floor(Math.random() * genres.length)],
+                    registeredAt: Timestamp.fromDate(randomDate),
+                    lastSelectedAt: selectionHistory.length > 0 ? selectionHistory[selectionHistory.length -1] : null,
+                    rating: Math.floor(Math.random() * 6),
+                    selectionCount: selectionCount,
+                    selectionHistory: selectionHistory,
+                    tagIds: Array.from(workTags),
+                    sourceUrl: url,
+                    imageUrl: `https://placehold.co/600x400/1f2937/4b5563?text=Debug+${i+1}`
+                });
+            }
+
+            return { works: newWorks, tags: newTags };
+        };
+        
+        const toggleDebugMode = async () => {
+            const btn = $('#toggleDebugModeBtn');
+            const syncPanel = $('#sync-panel-details');
+            const regPanel = $('#registration-panel-details');
+            
+            if (isDebugMode) {
+                // --- Exit Debug Mode ---
+                if (!await showConfirm("デバッグモード終了", "デバッグモードを終了し、データベースからデータを再読み込みしますか？")) return;
+                
+                isDebugMode = false;
+                $('#debug-banner').classList.add('hidden');
+                btn.textContent = 'デバッグモード開始';
+                btn.classList.remove('bg-red-600', 'hover:bg-red-700');
+                btn.classList.add('bg-amber-600', 'hover:bg-amber-700');
+                
+                syncPanel.style.opacity = '1';
+                syncPanel.style.pointerEvents = 'auto';
+                regPanel.style.opacity = '1';
+                regPanel.style.pointerEvents = 'auto';
+                $('#addWorkForm').querySelectorAll('input, select, button').forEach(el => el.disabled = false);
+
+                works = [];
+                tags = [];
+                showToast("デバッグモードを終了しました。");
+                loadDataSet(syncId); // This will re-subscribe and fetch data
+            } else {
+                // --- Enter Debug Mode ---
+                if (!await showConfirm("デバッグモード開始", "デバッグモードを開始しますか？<br>現在の接続は切れ、リフレッシュするまでテストデータが表示されます。データは保存されません。")) return;
+
+                isDebugMode = true;
+                unsubscribeWorks();
+                unsubscribeTags();
+                
+                const debugData = generateDebugData();
+                works = debugData.works;
+                tags = debugData.tags;
+                
+                $('#debug-banner').classList.remove('hidden');
+                btn.textContent = 'デバッグモード終了';
+                btn.classList.remove('bg-amber-600', 'hover:bg-amber-700');
+                btn.classList.add('bg-red-600', 'hover:bg-red-700');
+                
+                syncPanel.style.opacity = '0.5';
+                syncPanel.style.pointerEvents = 'none';
+                regPanel.style.opacity = '0.5';
+                regPanel.style.pointerEvents = 'none';
+                $('#addWorkForm').querySelectorAll('input, select, button').forEach(el => el.disabled = true);
+                
+                showToast("デバッグモードを開始しました。");
+                renderAll();
+            }
+        };
+
+        const checkSimpleAuth = () => {
+            const authTimestamp = localStorage.getItem('passwordAuthTimestamp');
+            if (authTimestamp) {
+                const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+                if (Date.now() - parseInt(authTimestamp, 10) < thirtyDays) {
+                    passwordOverlay.classList.add('hidden');
+                    startApp();
+                    return;
+                } else {
+                    localStorage.removeItem('passwordAuthTimestamp');
+                }
+            }
+            passwordOverlay.classList.remove('hidden');
+            loadingOverlay.classList.add('hidden');
+        };
+        
+        const startApp = () => {
+            loadingOverlay.classList.remove('hidden');
+            initializeFirebase();
+            initializeDateInputs(document.body);
+            setupEventListeners();
+        };
+
+        // --- App Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            passwordForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (passwordInput.value === MASTER_PASSWORD) {
+                    localStorage.setItem('passwordAuthTimestamp', Date.now().toString());
+                    passwordOverlay.classList.add('hidden');
+                    passwordError.classList.add('hidden');
+                    startApp();
+                } else {
+                    passwordError.textContent = 'パスワードが違います。';
+                    passwordError.classList.remove('hidden');
+                }
+            });
+
+            checkSimpleAuth();
+        });
+
+    </script>
+</body>
+</html>
