@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>作品リスト管理 (v2.1)</title> <!-- Version updated -->
+    <title>作品リスト管理 (v2.2)</title> <!-- Version updated -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -115,7 +115,13 @@
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans antialiased">
 
-    <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]">v2.1-manager</div> <!-- Version updated -->
+    <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]">v2.2-manager</div> <!-- Version updated -->
+
+    <!-- ▼▼▼ デバッグモードバナー (index.html から移植) ▼▼▼ -->
+    <div id="debug-banner" class="hidden bg-amber-600 text-black text-center py-1 font-bold text-sm sticky top-0 z-[60]">
+          デバッグモード実行中 - データは保存されません
+    </div>
+    <!-- ▲▲▲ デバッグモードバナー (index.html から移植) ▲▲▲ -->
 
     <!-- ▼▼▼ 広告機能 (price_comparison.html から移植) ▼▼▼ -->
     <div id="top-ad-banner" class="sticky top-0 z-40 w-full bg-gray-900/80 backdrop-blur-sm border-b border-gray-700/50">
@@ -179,6 +185,11 @@
                                 </div>
                             </div>
                         </div>
+                        <!-- ▼▼▼ デバッグモードボタン (index.html から移植) ▼▼▼ -->
+                        <div class="pt-4">
+                           <button id="toggleDebugModeBtn" class="w-full text-sm px-4 py-2 bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors">デバッグモード開始</button>
+                        </div>
+                        <!-- ▲▲▲ デバッグモードボタン (index.html から移植) ▲▲▲ -->
                     </div>
                 </details>
             </header>
@@ -459,7 +470,7 @@
         // --- App Configuration ---
         const DEFAULT_APP_ID = 'r18-random-selector';
         const appId = typeof __app_id !== 'undefined' ? __app_id : DEFAULT_APP_ID;
-        const appVersion = 'v2.1-manager'; // Version updated
+        const appVersion = 'v2.2-manager'; // Version updated
         const MASTER_PASSWORD = '07143674';
         $('#version-display').textContent = appVersion;
 
@@ -487,6 +498,7 @@
         let loadingStatus = { auth: false, works: false, tags: false };
         let checkModalDirtyState = () => false;
         let paginatedWorks = []; // Global scope declaration
+        let isDebugMode = false; // ▼▼▼ デバッグモード状態 ▼▼▼
 
         // List State
         let displayedWorks = []; // Filtered, sorted, paginated list
@@ -520,6 +532,7 @@
         const loadingErrorDisplay = $('#loading-error-display'); // Error display
         const appContainer = $('#app-container');
         const mainContent = $('#main-content');
+        const debugBanner = $('#debug-banner'); // ▼▼▼ デバッグバナー ▼▼▼
 
         // Sync Panel
         const syncIdDisplay = $('#syncIdDisplay');
@@ -527,6 +540,7 @@
         const newSyncIdInput = $('#newSyncIdInput');
         const loadSyncIdBtn = $('#loadSyncIdBtn');
         const syncIdHistoryEl = $('#syncIdHistory');
+        const toggleDebugModeBtn = $('#toggleDebugModeBtn'); // ▼▼▼ デバッグボタン ▼▼▼
 
         // Filter Panel
         const filterSearch = $('#filter-search');
@@ -872,10 +886,16 @@
             tags = [];
             renderAll();
 
-            if (currentUser && syncId) {
+            // ▼▼▼ デバッグモード中は購読しない ▼▼▼
+            if (currentUser && syncId && !isDebugMode) {
                 subscribeToWorks();
                 subscribeToTags();
+            } else if (isDebugMode) {
+                // デバッグモードでもロード完了ステータスは更新する
+                loadingStatus = { auth: true, works: true, tags: true };
+                checkLoadingComplete();
             }
+            // ▲▲▲ デバッグモード中は購読しない ▲▲▲
         };
 
         const updateSyncIdHistory = (newId) => {
@@ -902,6 +922,9 @@
         };
 
         const subscribeToWorks = () => {
+            // ▼▼▼ デバッグモードチェック ▼▼▼
+            if (isDebugMode) return;
+            // ▲▲▲ デバッグモードチェック ▲▲▲
             let isFirstLoad = true;
             const worksRef = collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`);
             unsubscribeWorks = onSnapshot(worksRef, (snapshot) => {
@@ -925,6 +948,9 @@
         };
 
         const subscribeToTags = () => {
+            // ▼▼▼ デバッグモードチェック ▼▼▼
+            if (isDebugMode) return;
+            // ▲▲▲ デバッグモードチェック ▲▲▲
             let isFirstLoad = true;
             const tagsRef = collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/tags`);
             unsubscribeTags = onSnapshot(tagsRef, (snapshot) => {
@@ -969,6 +995,12 @@
 
         // --- CRUD Operations ---
         const addWork = async (newWorkData) => {
+            // ▼▼▼ デバッグモードチェック ▼▼▼
+            if (isDebugMode) {
+                showToast("デバッグモード中は作品を追加できません。", "error");
+                return false;
+            }
+            // ▲▲▲ デバッグモードチェック ▲▲▲
             const name = newWorkData.name.trim();
             if (!name) return showToast("作品名は必須です。", "error");
             if (works.some(w => w.name.toLowerCase() === name.toLowerCase())) {
@@ -987,10 +1019,24 @@
         };
 
         const updateWork = async (workId, updatedData) => {
+            // ▼▼▼ デバッグモードチェック ▼▼▼
+            if (isDebugMode) {
+                // ローカルデータのみ更新
+                const index = works.findIndex(w => w.id === workId);
+                if (index > -1) {
+                    works[index] = { ...works[index], ...updatedData };
+                    renderAll(); // UIを再描画
+                    showToast("デバッグモード: 作品情報をローカルで更新しました。");
+                    return true;
+                }
+                showToast("デバッグモード: 更新対象の作品が見つかりません。", "error");
+                return false;
+            }
+            // ▲▲▲ デバッグモードチェック ▲▲▲
             try {
                 const workRef = doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, workId);
                 await updateDoc(workRef, updatedData);
-                return true;
+                return true; // onSnapshotがUIを更新するのでここではToast不要
             } catch (error) {
                 console.error("Error updating work:", error);
                 showToast("作品の更新に失敗しました。", "error");
@@ -999,12 +1045,18 @@
         };
 
         const deleteWork = async (workId, workName) => {
+            // ▼▼▼ デバッグモードチェック ▼▼▼
+            if (isDebugMode) {
+                showToast("デバッグモード中は作品を削除できません。", "error");
+                return;
+            }
+            // ▲▲▲ デバッグモードチェック ▲▲▲
             if (!await showConfirm("作品の削除", `「${workName}」を本当に削除しますか？<br>この操作は取り消せません。`)) return;
             try {
                 await deleteDoc(doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, workId));
                 showToast(`「${workName}」を削除しました。`);
                 selectedWorkIds.delete(workId);
-                renderAll();
+                // renderAll() は onSnapshot が行う
             } catch (error) {
                 console.error("Error deleting work: ", error);
                 showToast("作品の削除に失敗しました。", "error");
@@ -1012,6 +1064,12 @@
         };
 
         const bulkDeleteWorks = async () => {
+            // ▼▼▼ デバッグモードチェック ▼▼▼
+            if (isDebugMode) {
+                showToast("デバッグモード中は一括削除できません。", "error");
+                return;
+            }
+            // ▲▲▲ デバッグモードチェック ▲▲▲
             const count = selectedWorkIds.size;
             if (count === 0) return;
             if (!await showConfirm("一括削除", `${count}件の作品を本当に削除しますか？<br>この操作は取り消せません。`)) return;
@@ -1025,7 +1083,7 @@
                 await batch.commit();
                 showToast(`${count}件の作品を削除しました。`);
                 selectedWorkIds.clear();
-                renderAll();
+                // renderAll() は onSnapshot が行う
             } catch (error) {
                 console.error("Error bulk deleting works:", error);
                 showToast("一括削除に失敗しました。", "error");
@@ -1126,9 +1184,7 @@
             const { currentPage, itemsPerPage } = paginationState;
             const start = (currentPage - 1) * itemsPerPage;
             const end = start + itemsPerPage;
-            // ▼ paginatedWorks をグローバル変数に代入するように変更
             paginatedWorks = displayedWorks.slice(start, end);
-            // ▲ paginatedWorks をグローバル変数に代入するように変更
 
             if (paginatedWorks.length === 0) {
                 const colCount = worksTableHead.querySelectorAll('th').length;
@@ -1248,9 +1304,7 @@
                 bulkActionBar.classList.add('hidden');
             }
             // Sync select-all checkbox
-            // ▼ paginatedWorks をグローバル変数から参照するように変更
             const itemsOnPage = paginatedWorks.map(w => w.id);
-            // ▲ paginatedWorks をグローバル変数から参照するように変更
             const selectedOnPageCount = itemsOnPage.filter(id => selectedWorkIds.has(id)).length;
 
             if (itemsOnPage.length > 0 && selectedOnPageCount === itemsOnPage.length) {
@@ -1356,6 +1410,7 @@
                 }
             });
             syncIdHistoryEl.addEventListener('change', e => e.target.value && loadDataSet(e.target.value));
+            toggleDebugModeBtn.addEventListener('click', toggleDebugMode); // ▼▼▼ デバッグボタンリスナー ▼▼▼
 
             // Filters
             const debouncedRender = debounce(renderAll, 300);
@@ -1905,10 +1960,32 @@
                 $('#tagSearchInput')?.addEventListener('input', debounce(e => { tagSearchQuery = e.target.value; renderTagList(); }, 200));
                 $('#tagFilterSelect')?.addEventListener('change', e => { tagFilter = e.target.value; renderTagList(); });
                 $('#tagSortSelect')?.addEventListener('change', e => { const [by, order] = e.target.value.split('_'); tagSort = { by, order }; renderTagList(); });
-                $('#addTagBtn')?.addEventListener('click', async () => { const nameInput = $('#newTagName'); if (nameInput.value) { await addTag(nameInput.value, $('#newTagColor').value); nameInput.value = ''; }});
+                $('#addTagBtn')?.addEventListener('click', async () => {
+                    // ▼▼▼ デバッグモードチェック ▼▼▼
+                    if (isDebugMode) {
+                        showToast("デバッグモード中はタグを追加できません。", "error");
+                        return;
+                    }
+                    // ▲▲▲ デバッグモードチェック ▲▲▲
+                    const nameInput = $('#newTagName');
+                    if (nameInput.value) {
+                       await addTag(nameInput.value, $('#newTagColor').value);
+                       nameInput.value = '';
+                    }
+                });
                 tagListEl.addEventListener('click', e => {
                     const tagItem = e.target.closest('.tag-item'), deleteBtn = e.target.closest('button[data-action="delete-tag"]');
-                    if (deleteBtn) { e.stopPropagation(); deleteTag(deleteBtn.dataset.id); return; }
+                    if (deleteBtn) {
+                        e.stopPropagation();
+                        // ▼▼▼ デバッグモードチェック ▼▼▼
+                        if (isDebugMode) {
+                            showToast("デバッグモード中はタグを削除できません。", "error");
+                            return;
+                        }
+                        // ▲▲▲ デバッグモードチェック ▲▲▲
+                        deleteTag(deleteBtn.dataset.id);
+                        return;
+                    }
                     if (tagItem && mode === 'assign') { const tagId = tagItem.dataset.id; tempSelectedTagIds.has(tagId) ? tempSelectedTagIds.delete(tagId) : tempSelectedTagIds.add(tagId); renderTagList(); renderTagPreview(); }
                 });
                 $('#tag-modal-confirm')?.addEventListener('click', () => onConfirm(tempSelectedTagIds));
@@ -1917,6 +1994,7 @@
         };
 
         const addTag = async (name, color) => {
+             // Debug check is done in the caller (openTagModal)
              const normalizedName = name.trim().toLowerCase();
              if (tags.some(t => t.name.toLowerCase() === normalizedName)) return showToast("同じ名前のタグが既に存在します。", "error");
              const newTag = { name: name.trim(), color, createdAt: Timestamp.now() };
@@ -1927,6 +2005,7 @@
              } catch (error) { console.error("Error adding tag:", error); showToast("タグの作成に失敗しました。", "error"); }
         };
         const deleteTag = async (tagId) => {
+             // Debug check is done in the caller (openTagModal)
              const tagToDelete = tags.find(t => t.id === tagId);
              if (!tagToDelete || !await showConfirm("タグの削除", `タグ「${tagToDelete.name}」を削除しますか？<br>全ての作品からこのタグが解除されます。`)) return;
              try {
@@ -2051,6 +2130,13 @@
                 $('#bulk-edit-form').addEventListener('submit', async (e) => {
                     e.preventDefault();
 
+                    // ▼▼▼ デバッグモードチェック ▼▼▼
+                    if (isDebugMode) {
+                        showToast("デバッグモード中は一括編集できません。", "error");
+                        return;
+                    }
+                    // ▲▲▲ デバッグモードチェック ▲▲▲
+
                     const genreOp = $('input[name="bulk-genre-op"]:checked').value;
                     const ratingOp = $('input[name="bulk-rating-op"]:checked').value;
                     const tagsToAdd = [...addSelect.selectedOptions].map(opt => opt.value);
@@ -2087,7 +2173,7 @@
                         showToast(`${count}件の作品を更新しました。`);
                         selectedWorkIds.clear();
                         closeModal();
-                        renderAll(); // Re-render to clear selection visuals
+                        // renderAll() は onSnapshot が行う
                     } catch (error) {
                         console.error("Error bulk updating works:", error);
                         showToast("一括更新に失敗しました。", "error");
@@ -2221,6 +2307,109 @@
             applyAdVisibility(settings.showAd);
             generateAndLoadAdScript(settings);
         };
+
+        // --- ▼▼▼ デバッグモード機能 (index.html から移植) ▼▼▼ ---
+        const generateDebugData = () => {
+            const newTags = [];
+            const tagNames = ['アクション', 'RPG', 'ファンタジー', 'シミュレーション', 'パズル', 'アドベンチャー', 'コメディ', 'ホラー', 'ドット絵', '3D', '学園モノ', '異世界', 'ボイスあり', '放置ゲーム', 'ローグライク'];
+            const colors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899'];
+            for (let i = 0; i < tagNames.length; i++) {
+                newTags.push({ id: `debug_tag_${i}`, name: tagNames[i], color: colors[i], useCount: Math.floor(Math.random() * 50) });
+            }
+
+            const newWorks = [];
+            const genres = ['ゲーム', '漫画', '動画'];
+            const workPrefixes = ['超次元', 'ドキドキ', '異世界転生したら', '新人', '隣の', '学園の', '魔王と', '聖なる', '禁断の', '伝説の'];
+            const workSuffixes = ['プリンセス', 'クエスト', 'ハーレム物語', 'デイズ', '事件簿', 'ファンタジア', 'サバイバル', 'ロマンス', '英雄譚'];
+
+            for (let i = 0; i < 50; i++) {
+                const randomDate = new Date(Date.now() - Math.floor(Math.random() * 365 * 2 * 24 * 60 * 60 * 1000)); // Within last 2 years
+                const numTags = Math.floor(Math.random() * 5);
+                const workTags = new Set();
+                while (workTags.size < numTags) {
+                    workTags.add(newTags[Math.floor(Math.random() * newTags.length)].id);
+                }
+                const selectionHistory = [];
+                const selectionCount = Math.floor(Math.random() * 20);
+                for (let j = 0; j < selectionCount; j++) {
+                    selectionHistory.push(Timestamp.fromDate(new Date(Date.now() - Math.floor(Math.random() * 60 * 24 * 60 * 60 * 1000))));
+                }
+                selectionHistory.sort((a,b) => a.toMillis() - b.toMillis());
+
+                const siteRoll = Math.random();
+                let url;
+                if (siteRoll < 0.45) url = 'https://www.dlsite.com/maniax/work/=/product_id/RJ12345.html';
+                else if (siteRoll < 0.8) url = 'https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=d_12345/';
+                else url = 'https://example.com/other';
+
+                newWorks.push({
+                    id: `debug_work_${i}`,
+                    name: `${workPrefixes[Math.floor(Math.random() * workPrefixes.length)]} ${workSuffixes[Math.floor(Math.random() * workSuffixes.length)]} ${i + 1}`,
+                    genre: genres[Math.floor(Math.random() * genres.length)],
+                    registeredAt: Timestamp.fromDate(randomDate),
+                    lastSelectedAt: selectionHistory.length > 0 ? selectionHistory[selectionHistory.length -1] : null,
+                    rating: Math.floor(Math.random() * 6),
+                    selectionCount: selectionCount,
+                    selectionHistory: selectionHistory,
+                    tagIds: Array.from(workTags),
+                    sourceUrl: url,
+                    imageUrl: `https://placehold.co/600x400/1f2937/4b5563?text=Debug+${i+1}`
+                });
+            }
+            return { works: newWorks, tags: newTags };
+        };
+
+        const toggleDebugMode = async () => {
+            const btn = toggleDebugModeBtn;
+            const syncPanel = $('#sync-panel-details');
+            const actionButtons = [regNewWorkBtn, externalSearchBtn, manageTagsBtn, bulkEditBtn, bulkDeleteBtn]; // Buttons to disable
+
+            if (isDebugMode) {
+                // --- Exit Debug Mode ---
+                if (!await showConfirm("デバッグモード終了", "デバッグモードを終了し、データベースからデータを再読み込みしますか？")) return;
+
+                isDebugMode = false;
+                debugBanner.classList.add('hidden');
+                btn.textContent = 'デバッグモード開始';
+                btn.classList.remove('bg-red-600', 'hover:bg-red-700');
+                btn.classList.add('bg-amber-600', 'hover:bg-amber-700');
+
+                // Re-enable UI elements
+                syncPanel.style.opacity = '1';
+                syncPanel.style.pointerEvents = 'auto';
+                actionButtons.forEach(el => { if(el) el.disabled = false; }); // Enable action buttons
+
+                works = [];
+                tags = [];
+                showToast("デバッグモードを終了しました。");
+                loadDataSet(syncId); // Re-subscribe and fetch data
+            } else {
+                // --- Enter Debug Mode ---
+                if (!await showConfirm("デバッグモード開始", "デバッグモードを開始しますか？<br>現在の接続は切れ、リフレッシュするまでテストデータが表示されます。データは保存されません。")) return;
+
+                isDebugMode = true;
+                unsubscribeWorks();
+                unsubscribeTags();
+
+                const debugData = generateDebugData();
+                works = debugData.works;
+                tags = debugData.tags;
+
+                debugBanner.classList.remove('hidden');
+                btn.textContent = 'デバッグモード終了';
+                btn.classList.remove('bg-amber-600', 'hover:bg-amber-700');
+                btn.classList.add('bg-red-600', 'hover:bg-red-700');
+
+                // Disable UI elements
+                syncPanel.style.opacity = '0.5';
+                syncPanel.style.pointerEvents = 'none';
+                actionButtons.forEach(el => { if(el) el.disabled = true; }); // Disable action buttons
+
+                showToast("デバッグモードを開始しました。");
+                renderAll(); // Render with debug data
+            }
+        };
+        // --- ▲▲▲ デバッグモード機能 (index.html から移植) ▲▲▲ ---
 
         // --- App Initialization (from index.html) ---
         const startApp = () => {
