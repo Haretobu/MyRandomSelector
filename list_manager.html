@@ -12,7 +12,7 @@
         ::-webkit-scrollbar-track { background: #111827; }
         ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
-        
+
         /* Transitions */
         .transition-all { transition: all 0.3s ease-in-out; }
         .transition-transform { transition: transform 0.2s ease-in-out; }
@@ -42,7 +42,7 @@
             transition: all 0.4s ease-in-out;
         }
         #toast.show { opacity: 1; transform: translateY(0); }
-        
+
         /* Table Styles */
         #works-table th {
             cursor: pointer;
@@ -57,7 +57,7 @@
         }
         .sort-icon.asc { transform: rotate(0deg); }
         .sort-icon.desc { transform: rotate(180deg); }
-        
+
         /* Inline Rating Stars */
         .inline-rating .fa-star {
             cursor: pointer;
@@ -66,7 +66,7 @@
         .inline-rating .fa-star:hover {
             color: #facc15 !important; /* yellow-400 */
         }
-        
+
         /* Tag pills */
         .tag-pill {
             display: inline-block;
@@ -80,7 +80,7 @@
         .tag-item-and { background-color: #059669 !important; color: white !important; }
         .tag-item-or { background-color: #2563eb !important; color: white !important; }
         .tag-item-not { background-color: #be123c !important; color: white !important; text-decoration: line-through; }
-        
+
         /* Filter panel */
         .filter-group {
             border-bottom: 1px solid #374151;
@@ -90,7 +90,7 @@
             border-bottom: none;
             padding-bottom: 0;
         }
-        
+
         /* Image Compare */
         .image-compare-box {
             flex: 1;
@@ -126,7 +126,7 @@
         </div>
     </div>
     <!-- ▲▲▲ 広告機能 (price_comparison.html から移植) ▲▲▲ -->
-    
+
     <!-- ▼▼▼ ローディング画面 (index.html から移植・強化) ▼▼▼ -->
     <div id="loading-overlay" class="fixed inset-0 bg-gray-900 z-[100] flex items-center justify-center p-4">
         <div id="loading-content" class="text-center transition-opacity duration-300 opacity-0">
@@ -141,7 +141,7 @@
     <!-- Main Container -->
     <div id="app-container" class="min-h-screen p-4 md:p-6 lg:p-8 opacity-0 transition-opacity duration-500">
         <main id="main-content" class="max-w-screen-2xl mx-auto space-y-6 transition-all duration-300">
-            
+
             <!-- 1. Header & Sync Panel -->
             <header class="space-y-4">
                 <div class="flex justify-between items-center flex-wrap gap-4">
@@ -155,7 +155,7 @@
                         抽選アプリに戻る
                     </a>
                 </div>
-                
+
                 <details id="sync-panel-details" class="bg-gray-800 rounded-xl shadow-lg">
                     <summary class="p-5 flex justify-between items-center">
                         <h2 class="text-lg font-bold text-gray-300 flex items-center"><i class="fas fa-sync-alt mr-3"></i>データ同期</h2>
@@ -182,7 +182,7 @@
                     </div>
                 </details>
             </header>
-            
+
             <!-- 2. Filter Panel -->
             <details id="filter-panel-details" class="bg-gray-800 rounded-xl shadow-lg" open>
                 <summary class="p-5 flex justify-between items-center">
@@ -201,7 +201,7 @@
                             </div>
                         </div>
                         <!-- ▲▲▲ 検索候補機能を追加 ▲▲▲ -->
-                        
+
                         <!-- ジャンル -->
                         <div class="space-y-2">
                             <label class="text-sm font-medium text-gray-400">ジャンル</label>
@@ -211,7 +211,7 @@
                                 <label class="flex items-center"><input type="checkbox" data-filter-genre="動画" class="h-4 w-4 rounded bg-gray-700 text-teal-500 border-gray-600 focus:ring-teal-600"> <span class="ml-2">動画</span></label>
                             </div>
                         </div>
-                        
+
                         <!-- 評価 -->
                         <div class="space-y-2">
                             <label for="filter-rating-op" class="text-sm font-medium text-gray-400">評価</label>
@@ -233,7 +233,7 @@
                             </div>
                             <label class="flex items-center pt-2"><input type="checkbox" id="filter-unrated" class="h-4 w-4 rounded bg-gray-700 text-teal-500 border-gray-600 focus:ring-teal-600"> <span class="ml-2 text-sm">未評価の作品のみ</span></label>
                         </div>
-                        
+
                         <!-- 登録日 -->
                         <div class="space-y-2">
                              <label class="text-sm font-medium text-gray-400">登録日</label>
@@ -243,7 +243,7 @@
                                 <input type="text" id="filter-date-end" placeholder="YYYY/MM/DD" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500 date-input">
                              </div>
                         </div>
-                        
+
                         <!-- タグ -->
                         <div class="lg:col-span-4 space-y-2">
                             <label class="text-sm font-medium text-gray-400">タグ</label>
@@ -315,22 +315,22 @@
                     </table>
                 </div>
             </section>
-            
+
             <!-- 5. Pagination -->
             <section id="pagination-container" class="flex justify-center items-center gap-2 pt-4">
                 <!-- JS will render pagination buttons here -->
             </section>
-            
+
         </main>
     </div>
-    
+
     <!-- ▼▼▼ 広告FAB (price_comparison.html から移植) ▼▼▼ -->
     <div class="fixed bottom-6 right-6 z-50 flex flex-col gap-4">
         <button id="ad-settings-fab" class="bg-blue-600 hover:bg-blue-500 w-16 h-16 rounded-full shadow-lg flex items-center justify-center text-2xl transition-transform hover:scale-110" title="広告設定">
             <i class="fas fa-ad"></i>
         </button>
     </div>
-    
+
     <!-- ▼▼▼ 広告モーダル (price_comparison.html から移植) ▼▼▼ -->
     <div id="ad-settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[80] flex items-center justify-center p-4">
         <div id="ad-settings-modal-content" class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-md w-full relative">
@@ -381,7 +381,7 @@
         </div>
     </div>
     <!-- ▲▲▲ 広告関連 ▲▲▲ -->
-    
+
     <!-- ▼▼▼ 汎用モーダル (index.html から移植) ▼▼▼ -->
     <div id="modal-backdrop" class="hidden fixed inset-0 bg-black bg-opacity-70 z-40 transition-opacity"></div>
     <div id="modal-wrapper" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -432,21 +432,21 @@
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { 
-            getAuth, 
-            signInAnonymously, 
-            onAuthStateChanged 
+        import {
+            getAuth,
+            signInAnonymously,
+            onAuthStateChanged
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { 
-            getFirestore, 
-            doc, 
-            getDoc, 
-            setDoc, 
-            updateDoc, 
-            deleteDoc, 
-            onSnapshot, 
-            collection, 
-            query, 
+        import {
+            getFirestore,
+            doc,
+            getDoc,
+            setDoc,
+            updateDoc,
+            deleteDoc,
+            onSnapshot,
+            collection,
+            query,
             writeBatch,
             Timestamp,
             getDocs
@@ -460,7 +460,7 @@
         const DEFAULT_APP_ID = 'r18-random-selector';
         const appId = typeof __app_id !== 'undefined' ? __app_id : DEFAULT_APP_ID;
         const appVersion = 'v2.0-manager';
-        const MASTER_PASSWORD = '07143674'; 
+        const MASTER_PASSWORD = '07143674';
         $('#version-display').textContent = appVersion;
 
         const firebaseConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : `{
@@ -471,9 +471,9 @@
             "messagingSenderId": "1019715441654",
             "appId": "1:1019715441654:web:6caa7779148cce46c92dd7"
         }`;
-        
+
         let firebaseApp, auth, db;
-        
+
         // --- State Management ---
         let works = []; // Master list of works
         let tags = []; // Master list of tags
@@ -486,6 +486,7 @@
         let isLoadComplete = false;
         let loadingStatus = { auth: false, works: false, tags: false };
         let checkModalDirtyState = () => false;
+        let paginatedWorks = []; // ← paginatedWorks をグローバルスコープで宣言
 
         // List State
         let displayedWorks = []; // Filtered, sorted, paginated list
@@ -511,7 +512,7 @@
         };
         let selectedWorkIds = new Set();
         let visibleColumns = new Set(['name', 'genre', 'registeredAt', 'rating', 'tags', 'actions']);
-        
+
         // --- UI Elements ---
         const loadingOverlay = $('#loading-overlay');
         const loadingContent = $('#loading-content');
@@ -519,14 +520,14 @@
         const loadingErrorDisplay = $('#loading-error-display'); // エラー表示
         const appContainer = $('#app-container');
         const mainContent = $('#main-content');
-        
+
         // Sync Panel
         const syncIdDisplay = $('#syncIdDisplay');
         const copySyncIdBtn = $('#copySyncIdBtn');
         const newSyncIdInput = $('#newSyncIdInput');
         const loadSyncIdBtn = $('#loadSyncIdBtn');
         const syncIdHistoryEl = $('#syncIdHistory');
-        
+
         // Filter Panel
         const filterSearch = $('#filter-search');
         const filterSuggestions = $('#filter-suggestions'); // サジェスト用
@@ -555,7 +556,7 @@
         const worksTableHead = worksTable.querySelector('thead');
         const worksTableBody = $('#works-table-body');
         const selectAllCheckbox = $('#select-all-checkbox');
-        
+
         // Pagination
         const paginationContainer = $('#pagination-container');
 
@@ -581,26 +582,26 @@
         const confirmMessage = $('#confirm-message');
         const confirmOkBtn = $('#confirm-ok');
         const confirmCancelBtn = $('#confirm-cancel');
-        
+
         // Ad UI
         const topAdBanner = document.getElementById('top-ad-banner');
         const adSettingsModal = document.getElementById('ad-settings-modal');
         const adSettingsModalContent = document.getElementById('ad-settings-modal-content');
-        
+
         // --- Utility Functions ---
-        
+
         const escapeHTML = (str) => {
             if (typeof str !== 'string') return '';
             return str.replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         };
-        
+
         const isValidDate = (dateString) => {
             if (!/^\d{4}\/\d{2}\/\d{2}$/.test(dateString)) return false;
             const d = new Date(dateString.replace(/\//g, '-'));
             if (isNaN(d.getTime())) return false;
             return d.toISOString().slice(0, 10).replace(/-/g, '/') === dateString;
         };
-        
+
         const showToast = (message, type = 'success', duration = 3000) => {
             // 'type' argument added for error styling
             toastMessageEl.textContent = message;
@@ -637,12 +638,12 @@
                     confirmOkBtn.removeEventListener('click', okHandler);
                     confirmCancelBtn.removeEventListener('click', cancelHandler);
                 };
-                
+
                 confirmOkBtn.addEventListener('click', okHandler);
                 confirmCancelBtn.addEventListener('click', cancelHandler);
             });
         };
-        
+
         const formatDate = (timestamp, includeTime = false) => {
             if (!timestamp || !timestamp.toDate) return 'N/A';
             const date = timestamp.toDate();
@@ -661,7 +662,7 @@
             const day = String(d.getDate()).padStart(2, '0');
             return `${year}/${month}/${day}`;
         };
-        
+
         const debounce = (func, delay) => {
             let timer;
             return (...args) => {
@@ -679,7 +680,7 @@
         };
 
         // --- Loading Timeout Logic (from index.html) ---
-        
+
         const handleLoadingTimeout = (isStall = false) => {
             if (isLoadComplete) return;
 
@@ -737,22 +738,22 @@
         const openModal = (title, contentHtml, onOpen = null, options = {}) => {
             checkModalDirtyState = () => false;
             const { size = 'max-w-2xl' } = options;
-            
+
             modalContainer.classList.remove('max-w-2xl', 'max-w-4xl', 'max-w-5xl');
             modalContainer.classList.add(size);
-            
+
             modalTitle.textContent = title;
             modalContentHost.innerHTML = contentHtml;
-            initializeDateInputs(modalContentHost); 
+            initializeDateInputs(modalContentHost);
             modalBackdrop.classList.remove('hidden');
             modalWrapper.classList.remove('hidden');
-            
+
             setTimeout(() => {
                 modalBackdrop.classList.add('opacity-100');
                 modalContainer.classList.remove('scale-95', 'opacity-0');
                 modalContainer.classList.add('modal-open');
                 if (onOpen) onOpen();
-                
+
                 const firstFocusable = modalContentHost.querySelector('input, select, button');
                 if (firstFocusable) {
                     setTimeout(() => firstFocusable.focus(), 100);
@@ -770,16 +771,16 @@
             modalContainer.classList.add('scale-95', 'opacity-0');
             modalContainer.classList.remove('modal-open');
             modalBackdrop.classList.remove('opacity-100');
-            
+
             setTimeout(() => {
                 modalBackdrop.classList.add('hidden');
                 modalWrapper.classList.add('hidden');
                 modalContentHost.innerHTML = '';
             }, 300);
         };
-        
+
         // --- Loading / Auth (from index.html) ---
-        
+
         const checkLoadingComplete = () => {
             if (isLoadComplete) return;
 
@@ -790,7 +791,7 @@
                 clearTimeout(loadingTimeout);
                 clearTimeout(stallTimeout);
                 console.log("All data loaded successfully.");
-                
+
                 loadingText.textContent = '読み込み完了！';
 
                 setTimeout(() => {
@@ -824,6 +825,7 @@
                     if (!loadingStatus.auth) {
                         currentUser = user;
                         loadingStatus.auth = true;
+                        clearTimeout(stallTimeout); // Clear previous stall timer if any
                         stallTimeout = setTimeout(() => handleLoadingTimeout(true), 15000);
                         checkLoadingComplete();
                         setupSyncId();
@@ -844,14 +846,14 @@
             loadDataSet(currentSyncId);
             updateSyncIdHistory(currentSyncId);
         };
-        
+
         const loadDataSet = (newSyncId) => {
             if (syncId === newSyncId && isLoadComplete) return;
-            
+
             syncId = newSyncId;
             syncIdDisplay.value = syncId;
             localStorage.setItem('r18_sync_id', newSyncId);
-            
+
             unsubscribeWorks();
             unsubscribeTags();
             works = [];
@@ -863,7 +865,7 @@
                 subscribeToTags();
             }
         };
-        
+
         const updateSyncIdHistory = (newId) => {
             let history = JSON.parse(localStorage.getItem('r18_sync_id_history') || '[]');
             if (newId && !history.includes(newId)) {
@@ -876,17 +878,17 @@
 
         const renderSyncIdHistory = () => {
             const history = JSON.parse(localStorage.getItem('r18_sync_id_history') || '[]');
-            syncIdHistoryEl.innerHTML = '<option value="">履歴から選択...</option>' + 
+            syncIdHistoryEl.innerHTML = '<option value="">履歴から選択...</option>' +
                 history.map(id => `<option value="${id}">${id}</option>`).join('');
         };
-        
+
         const generateRandomId = (length = 16) => {
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
             let result = '';
             for (let i = 0; i < length; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
             return result;
         };
-        
+
         const subscribeToWorks = () => {
             let isFirstLoad = true;
             const worksRef = collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`);
@@ -952,7 +954,7 @@
                 reader.readAsDataURL(file);
             });
         };
-        
+
         // --- CRUD Operations ---
         const addWork = async (newWorkData) => {
             const name = newWorkData.name.trim();
@@ -996,12 +998,12 @@
                 showToast("作品の削除に失敗しました。", "error");
             }
         };
-        
+
         const bulkDeleteWorks = async () => {
             const count = selectedWorkIds.size;
             if (count === 0) return;
             if (!await showConfirm("一括削除", `${count}件の作品を本当に削除しますか？<br>この操作は取り消せません。`)) return;
-            
+
             try {
                 const batch = writeBatch(db);
                 selectedWorkIds.forEach(workId => {
@@ -1017,9 +1019,9 @@
                 showToast("一括削除に失敗しました。", "error");
             }
         };
-        
+
         // --- Rendering Logic ---
-        
+
         const renderAll = () => {
             updateFilteredAndSortedWorks();
             renderTable();
@@ -1064,7 +1066,7 @@
             if (filters.notTagIds.size > 0) {
                 tempWorks = tempWorks.filter(w => !w.tagIds || ![...filters.notTagIds].some(tid => w.tagIds.includes(tid)));
             }
-            
+
             // 2. Sort
             tempWorks.sort((a, b) => {
                 const order = sortState.order === 'asc' ? 1 : -1;
@@ -1086,7 +1088,7 @@
             // 3. Update state
             displayedWorks = tempWorks;
             workCountDisplay.textContent = `${displayedWorks.length} / ${works.length} 作品`;
-            
+
             const totalPages = Math.ceil(displayedWorks.length / paginationState.itemsPerPage);
             if (paginationState.currentPage > totalPages && totalPages > 0) {
                 paginationState.currentPage = totalPages;
@@ -1094,8 +1096,9 @@
                 paginationState.currentPage = 1;
             }
         };
-        
+
         const renderTable = () => {
+            // Update sort icons in header
             worksTableHead.querySelectorAll('th[data-sort]').forEach(th => {
                 const icon = th.querySelector('.sort-icon');
                 if (th.dataset.sort === sortState.by) {
@@ -1106,12 +1109,15 @@
                     icon.className = 'fas fa-sort-down sort-icon';
                 }
             });
-            
+
+            // Get paginated items
             const { currentPage, itemsPerPage } = paginationState;
             const start = (currentPage - 1) * itemsPerPage;
             const end = start + itemsPerPage;
-            const paginatedWorks = displayedWorks.slice(start, end);
-            
+            // ▼ paginatedWorks をグローバル変数に代入するように変更
+            paginatedWorks = displayedWorks.slice(start, end);
+            // ▲ paginatedWorks をグローバル変数に代入するように変更
+
             if (paginatedWorks.length === 0) {
                 const colCount = worksTableHead.querySelectorAll('th').length;
                 worksTableBody.innerHTML = `<tr><td colspan="${colCount}" class="p-8 text-center text-gray-500">${works.length === 0 ? '作品が登録されていません。' : '条件に一致する作品がありません。'}</td></tr>`;
@@ -1122,41 +1128,41 @@
                 const workTags = (work.tagIds || []).map(id => tags.find(t => t.id === id)).filter(Boolean);
                 const safeName = escapeHTML(work.name);
                 const rating = work.rating || 0;
-                
+
                 return `
                     <tr class="hover:bg-gray-700/50 transition-colors" data-id="${work.id}">
                         <td class="p-3"><input type="checkbox" data-id="${work.id}" class="row-checkbox h-4 w-4 rounded bg-gray-600 text-teal-500 border-gray-500 focus:ring-teal-600" ${selectedWorkIds.has(work.id) ? 'checked' : ''}></td>
-                        
+
                         <td class="p-3 col-image" data-col="image" style="display: none;">
                             <img src="${work.imageUrl || 'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${safeName}" class="w-12 h-12 object-cover rounded-md">
                         </td>
-                        
+
                         <td class="p-3 col-name" data-col="name">
                             <span class="font-medium">${safeName}</span>
                         </td>
-                        
+
                         <td class="p-3 col-genre" data-col="genre">${work.genre || 'N/A'}</td>
-                        
+
                         <td class="p-3 col-registeredAt" data-col="registeredAt">${formatDate(work.registeredAt)}</td>
-                        
+
                         <td class="p-3 col-rating inline-rating text-lg" data-col="rating" data-id="${work.id}">
                             ${[1,2,3,4,5].map(i => `<i class="fa-star ${i <= rating ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('')}
                         </td>
-                        
+
                         <td class="p-3 col-tags" data-col="tags">
                             <div class="flex flex-wrap max-w-xs">
                                 ${workTags.map(t => `<span class="tag-pill" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${t.name}</span>`).join('')}
                             </div>
                         </td>
-                        
+
                         <td class="p-3 col-lastSelectedAt" data-col="lastSelectedAt" style="display: none;">
                             ${formatDate(work.lastSelectedAt, true)}
                         </td>
-                        
+
                         <td class="p-3 col-selectionCount text-center" data-col="selectionCount" style="display: none;">
                             ${work.selectionCount || 0}
                         </td>
-                        
+
                         <td class="p-3 col-sourceUrl" data-col="sourceUrl" style="display: none;">
                             ${work.sourceUrl ? `<a href="${work.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-teal-400 hover:text-teal-300"><i class="fas fa-external-link-alt"></i></a>` : ''}
                         </td>
@@ -1171,56 +1177,56 @@
                 `;
             }).join('');
         };
-        
+
         const renderPagination = () => {
             const { currentPage, itemsPerPage } = paginationState;
             const totalItems = displayedWorks.length;
             const totalPages = Math.ceil(totalItems / itemsPerPage);
             paginationContainer.innerHTML = '';
-            
+
             if (totalPages <= 1) return;
-            
+
             const createBtn = (text, page, isDisabled = false, isActive = false) => {
                 const btn = document.createElement('button');
                 btn.innerHTML = text;
                 btn.disabled = isDisabled;
                 btn.dataset.page = page;
                 btn.className = `px-3 py-1 rounded-lg text-sm font-semibold transition-colors ${
-                    isActive ? 'bg-teal-600 text-white cursor-default' : 
-                    isDisabled ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 
+                    isActive ? 'bg-teal-600 text-white cursor-default' :
+                    isDisabled ? 'bg-gray-700 text-gray-500 cursor-not-allowed' :
                     'bg-gray-600 hover:bg-gray-500'
                 }`;
                 return btn;
             };
-            
+
             paginationContainer.appendChild(createBtn('<i class="fas fa-angle-double-left"></i>', 1, currentPage === 1));
             paginationContainer.appendChild(createBtn('<i class="fas fa-angle-left"></i>', currentPage - 1, currentPage === 1));
-            
+
             const maxPagesToShow = 5;
             let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
             let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
             if (endPage - startPage + 1 < maxPagesToShow) {
                 startPage = Math.max(1, endPage - maxPagesToShow + 1);
             }
-            
+
             if (startPage > 1) {
                 paginationContainer.appendChild(createBtn('1', 1));
                 if (startPage > 2) paginationContainer.appendChild(createBtn('...', 1, true));
             }
-            
+
             for (let i = startPage; i <= endPage; i++) {
                 paginationContainer.appendChild(createBtn(i, i, false, i === currentPage));
             }
-            
+
             if (endPage < totalPages) {
                 if (endPage < totalPages - 1) paginationContainer.appendChild(createBtn('...', totalPages, true));
                 paginationContainer.appendChild(createBtn(totalPages, totalPages));
             }
-            
+
             paginationContainer.appendChild(createBtn('<i class="fas fa-angle-right"></i>', currentPage + 1, currentPage === totalPages));
             paginationContainer.appendChild(createBtn('<i class="fas fa-angle-double-right"></i>', totalPages, currentPage === totalPages));
         };
-        
+
         const renderActionButtons = () => {
             const count = selectedWorkIds.size;
             if (count > 0) {
@@ -1230,7 +1236,9 @@
                 bulkActionBar.classList.add('hidden');
             }
             // Sync select-all checkbox
+            // ▼ paginatedWorks をグローバル変数から参照するように変更
             const itemsOnPage = paginatedWorks.map(w => w.id);
+            // ▲ paginatedWorks をグローバル変数から参照するように変更
             const selectedOnPageCount = itemsOnPage.filter(id => selectedWorkIds.has(id)).length;
 
             if (itemsOnPage.length > 0 && selectedOnPageCount === itemsOnPage.length) {
@@ -1244,7 +1252,8 @@
                 selectAllCheckbox.indeterminate = false;
             }
         };
-        
+
+
         const renderActiveTagFilters = () => {
             let html = '';
             const renderSet = (ids, className, prefix) => {
@@ -1257,7 +1266,7 @@
             renderSet(filters.notTagIds, 'tag-item-not', 'NOT');
             filterTagsDisplay.innerHTML = html || `<span class="text-xs text-gray-500">タグ未選択</span>`;
         };
-        
+
         const updateColumnVisibility = () => {
             worksTable.querySelectorAll('th, td').forEach(el => {
                 const colName = el.dataset.col;
@@ -1302,7 +1311,7 @@
                 });
             });
         };
-        
+
         const openSearchWindow = (site, query) => {
             let url;
             const encodedQuery = encodeURIComponent(query);
@@ -1317,12 +1326,12 @@
         // --- ▲▲▲ 外部検索機能 (index.html から移植) ▲▲▲ ---
 
         // --- Event Handlers ---
-        
+
         const setupEventListeners = () => {
             // Modals
             modalCloseBtn.addEventListener('click', closeModal);
             modalBackdrop.addEventListener('click', closeModal);
-            
+
             // Sync Panel
             copySyncIdBtn.addEventListener('click', () => navigator.clipboard.writeText(syncId).then(() => showToast("同期IDをコピーしました。")));
             loadSyncIdBtn.addEventListener('click', () => {
@@ -1338,24 +1347,25 @@
 
             // Filters
             const debouncedRender = debounce(renderAll, 300);
-            
+
             // ▼▼▼ 検索サジェスト機能を追加 ▼▼▼
             filterSearch.addEventListener('input', () => {
                 const query = filterSearch.value.trim();
                 filters.search = query;
-                paginationState.currentPage = 1; 
+                paginationState.currentPage = 1;
                 debouncedRender();
-                
+
                 const normalizedQuery = query.toLowerCase();
                 if (normalizedQuery.length < 2) {
                     filterSuggestions.classList.add('hidden');
                     return;
                 }
-                
-                const suggestions = works.filter(work => 
+
+                // Filter *all* works, not just displayed ones, for suggestions
+                const suggestions = works.filter(work =>
                     work.name.toLowerCase().includes(normalizedQuery)
                 ).slice(0, 10);
-                
+
                 if (suggestions.length > 0) {
                     filterSuggestions.innerHTML = suggestions.map(work => `
                         <div class="suggestion-item p-2 hover:bg-gray-500 cursor-pointer flex items-center gap-2" data-name="${escapeHTML(work.name)}">
@@ -1376,7 +1386,7 @@
                     filters.search = item.dataset.name;
                     filterSuggestions.classList.add('hidden');
                     paginationState.currentPage = 1;
-                    renderAll();
+                    renderAll(); // Re-render with the selected name
                 }
             });
 
@@ -1401,12 +1411,13 @@
             [filterDateStart, filterDateEnd].forEach(el => el.addEventListener('input', () => {
                 filters.dateStart = filterDateStart.value;
                 filters.dateEnd = filterDateEnd.value;
+                // Only trigger render if dates are valid or empty to avoid errors during typing
                 if ((!filters.dateStart || isValidDate(filters.dateStart)) && (!filters.dateEnd || isValidDate(filters.dateEnd))) {
                      paginationState.currentPage = 1; debouncedRender();
                 }
             }));
             filterOpenTagsBtn.addEventListener('click', () => openTagFilterModal());
-            
+
             // Action Bar
             itemsPerPageSelect.addEventListener('change', () => {
                 paginationState.itemsPerPage = parseInt(itemsPerPageSelect.value, 10);
@@ -1419,7 +1430,7 @@
             manageColumnsBtn.addEventListener('click', openColumnModal);
             bulkEditBtn.addEventListener('click', openBulkEditModal);
             bulkDeleteBtn.addEventListener('click', bulkDeleteWorks);
-            
+
             // Table
             worksTableHead.addEventListener('click', e => {
                 const th = e.target.closest('th[data-sort]');
@@ -1429,23 +1440,26 @@
                     sortState.order = sortState.order === 'asc' ? 'desc' : 'asc';
                 } else {
                     sortState.by = newSortBy;
-                    sortState.order = 'desc';
+                    sortState.order = 'desc'; // Default to desc for new columns
                 }
                 paginationState.currentPage = 1;
                 renderAll();
             });
-            
+
             worksTableBody.addEventListener('click', e => {
                 const target = e.target;
+                // Inline Rating
                 const star = target.closest('.inline-rating .fa-star');
                 if (star) {
                     const workId = star.closest('td').dataset.id;
                     let newRating = parseInt(star.dataset.value, 10);
                     const work = works.find(w => w.id === workId);
-                    if (work && work.rating === newRating) newRating = 0;
+                    if (work && work.rating === newRating) newRating = 0; // Toggle off
                     updateWork(workId, { rating: newRating });
+                    // No need to call renderAll here, onSnapshot will handle it
                     return;
                 }
+                // Edit/Delete buttons
                 const btn = target.closest('button[data-action]');
                 if (btn) {
                     const { action, id, name } = btn.dataset;
@@ -1454,16 +1468,16 @@
                     return;
                 }
             });
-            
+
             // Selection Checkboxes
             selectAllCheckbox.addEventListener('change', () => {
                 const isChecked = selectAllCheckbox.checked;
-                const itemsOnPage = paginatedWorks.map(w => w.id);
-                
+                const itemsOnPage = paginatedWorks.map(w => w.id); // Use global paginatedWorks
+
                 worksTableBody.querySelectorAll('.row-checkbox').forEach(cb => {
                     cb.checked = isChecked;
                 });
-                
+
                 if (isChecked) {
                     itemsOnPage.forEach(id => selectedWorkIds.add(id));
                 } else {
@@ -1471,7 +1485,7 @@
                 }
                 renderActionButtons();
             });
-            
+
             worksTableBody.addEventListener('change', e => {
                 if (e.target.classList.contains('row-checkbox')) {
                     const id = e.target.dataset.id;
@@ -1480,20 +1494,22 @@
                     renderActionButtons();
                 }
             });
-            
+
             // Pagination
             paginationContainer.addEventListener('click', e => {
                 const btn = e.target.closest('button[data-page]');
                 if (btn && !btn.disabled) {
                     paginationState.currentPage = parseInt(btn.dataset.page, 10);
                     renderAll();
+                    // Scroll to top of table
                     worksTable.scrollIntoView({ behavior: 'smooth' });
                 }
             });
-            
+
+            // Date Inputs (Validation)
             initializeDateInputs(document.body);
-            
-            // Ad UI Events
+
+            // Ad UI Events (from price_comparison.html)
             document.getElementById('ad-settings-fab').addEventListener('click', () => showModal(adSettingsModal, adSettingsModalContent));
             document.getElementById('ad-settings-modal-close').addEventListener('click', () => hideModal(adSettingsModal, adSettingsModalContent));
             adSettingsModal.addEventListener('click', (e) => {
@@ -1509,12 +1525,13 @@
                 hideModal(adSettingsModal, adSettingsModalContent);
                 showToast('広告設定を保存しました。');
             });
+            // Adjust layout on resize considering ad banner
             window.addEventListener('resize', () => {
                 const settings = JSON.parse(localStorage.getItem('adSettings') || JSON.stringify(defaultAdSettings));
                 applyAdVisibility(settings.showAd);
             });
         };
-        
+
         // --- Modal: New Registration ---
         const openRegistrationModal = () => {
             let tempImageUrl = null;
@@ -1553,7 +1570,7 @@
             openModal("新しい作品を登録", content, () => {
                 const dateInput = $('#reg-date');
                 dateInput.value = formatDateForInput(new Date());
-                
+
                 $('#reg-image').addEventListener('change', async (e) => {
                     const file = e.target.files[0];
                     const preview = $('#reg-image-preview');
@@ -1573,7 +1590,7 @@
                         preview.classList.add('hidden');
                     }
                 });
-                
+
                 $('#reg-work-form').addEventListener('submit', async (e) => {
                     e.preventDefault();
                     const name = $('#reg-name').value;
@@ -1581,7 +1598,7 @@
                     if (!isValidDate(dateStr)) {
                         return showToast("登録日の形式が正しくありません (YYYY/MM/DD)。", "error");
                     }
-                    
+
                     const newWork = {
                         name: name.trim(),
                         genre: $('#reg-genre').value,
@@ -1594,7 +1611,7 @@
                         lastSelectedAt: null,
                         selectionHistory: []
                     };
-                    
+
                     const success = await addWork(newWork);
                     if (success) {
                         closeModal();
@@ -1602,20 +1619,20 @@
                 });
             });
         };
-        
+
         // --- ▼▼▼ 編集モーダル (ボタン配置変更、画像比較機能) ▼▼▼ ---
         const openEditModal = (workId) => {
             const work = works.find(w => w.id === workId);
             if (!work) return;
-            
+
             let currentRating = work.rating || 0;
             let currentTagIds = new Set(work.tagIds || []);
             let tempImageUrl = work.imageUrl || null; // This will hold the *new* image URL if changed
-            
+
             const safeName = escapeHTML(work.name);
             const safeUrl = escapeHTML(work.sourceUrl || '');
             const regDate = work.registeredAt ? formatDateForInput(work.registeredAt.toDate()) : '';
-            
+
             const getFormState = () => ({
                 name: $('#edit-name').value,
                 genre: $('#edit-genre').value,
@@ -1625,7 +1642,7 @@
                 tags: JSON.stringify([...currentTagIds].sort()),
                 image: tempImageUrl
             });
-            
+
             const initialState = {
                 name: work.name,
                 genre: work.genre,
@@ -1635,9 +1652,9 @@
                 tags: JSON.stringify([...currentTagIds].sort()),
                 image: work.imageUrl || null
             };
-            
+
             checkModalDirtyState = () => JSON.stringify(getFormState()) !== JSON.stringify(initialState);
-            
+
             // ▼▼▼ HTML content の ボタン配置を変更 ▼▼▼
             const content = `
                 <form id="edit-work-form" class="space-y-6">
@@ -1647,7 +1664,7 @@
                         <button type="button" id="edit-cancel-btn" class="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
                     </div>
                     <!-- ▲▲▲ ボタン配置を変更 ▲▲▲ -->
-                
+
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <!-- Left Column: Details -->
                         <div class="space-y-4">
@@ -1672,14 +1689,14 @@
                                 <input type="text" id="edit-date" value="${regDate}" placeholder="YYYY/MM/DD" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 date-input" required>
                             </div>
                         </div>
-                        
+
                         <!-- Right Column: Image -->
                         <div class="space-y-4">
                             <div>
                                 <label for="edit-image" class="block text-sm font-medium text-gray-400 mb-2">画像 (任意, 900KB以下)</label>
                                 <input type="file" id="edit-image" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-sky-600 file:text-white hover:file:bg-sky-700">
                             </div>
-                            
+
                             <!-- SPEC: Image Compare Window -->
                             <div id="image-compare-container" class="hidden space-y-3">
                                 <div class="flex gap-4">
@@ -1694,7 +1711,7 @@
                                 </div>
                                 <button type="button" id="confirm-image-change-btn" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-semibold">この画像に変更する</button>
                             </div>
-                            
+
                             <!-- Initial image preview (before comparison) -->
                             <div id="initial-image-preview-container">
                                 <label class="block text-sm font-medium text-gray-400 mb-2">現在の画像</label>
@@ -1702,7 +1719,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Rating & Tags -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-700">
                         <div>
@@ -1719,10 +1736,11 @@
                     </div>
                 </form>
             `;
-            
+
             openModal(`「${work.name}」を編集`, content, () => {
                 let unprocessedNewImage = null; // To hold the image before confirming
-                
+
+                // Rating stars logic
                 const ratingStars = $('#edit-rating');
                 ratingStars.addEventListener('click', e => {
                     if (e.target.matches('.fa-star')) {
@@ -1732,30 +1750,34 @@
                     }
                 });
 
+                // Tags logic
                 const tagsContainer = $('#edit-tags-display');
                 const renderTags = (ids) => {
                     const objects = [...ids].map(id => tags.find(t => t.id === id)).filter(Boolean);
                     tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="tag-pill" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`;
                 };
                 renderTags(currentTagIds);
-                
+
                 $('#edit-assign-tags-btn').addEventListener('click', () => {
+                    // Save modal state before opening new modal
                     const capturedState = {
                         name: $('#edit-name').value,
                         genre: $('#edit-genre').value,
                         url: $('#edit-url').value,
                         date: $('#edit-date').value,
                         rating: currentRating,
-                        imageUrl: tempImageUrl
+                        imageUrl: tempImageUrl // Pass the confirmed new image
                     };
-                    
+
                     openTagModal({
                         mode: 'assign',
                         currentTagIds: currentTagIds,
                         workName: work.name,
                         onConfirm: (newTagIds) => {
+                            // Restore state when returning
                             openEditModal(workId);
-                            setTimeout(() => { 
+                            setTimeout(() => {
+                                // Need timeout for modal to re-open
                                 $('#edit-name').value = capturedState.name;
                                 $('#edit-genre').value = capturedState.genre;
                                 $('#edit-url').value = capturedState.url;
@@ -1764,7 +1786,7 @@
                                 tempImageUrl = capturedState.imageUrl;
                                 $('#initial-image-preview').src = tempImageUrl || 'https://placehold.co/400x200/1f2937/4b5563?text=No+Image';
                                 ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= currentRating ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('');
-                                
+
                                 if (newTagIds) {
                                     currentTagIds = newTagIds;
                                     renderTags(currentTagIds);
@@ -1773,7 +1795,7 @@
                         }
                     });
                 });
-                
+
                 // ▼▼▼ 画像比較ロジック ▼▼▼
                 $('#edit-image').addEventListener('change', async (e) => {
                     const file = e.target.files[0];
@@ -1786,21 +1808,26 @@
                         } catch (error) {
                             showToast(error.message, "error");
                             unprocessedNewImage = null;
-                            e.target.value = null;
+                            e.target.value = null; // Reset file input if processing fails
+                            // Revert UI if needed
+                            $('#image-compare-container').classList.add('hidden');
+                            $('#initial-image-preview-container').classList.remove('hidden');
                         }
                     }
                 });
-                
+
                 $('#confirm-image-change-btn').addEventListener('click', () => {
-                    tempImageUrl = unprocessedNewImage;
+                    tempImageUrl = unprocessedNewImage; // Confirm the change
                     unprocessedNewImage = null;
-                    $('#initial-image-preview').src = tempImageUrl;
+                    $('#initial-image-preview').src = tempImageUrl; // Update the main preview as well
                     $('#image-compare-container').classList.add('hidden');
                     $('#initial-image-preview-container').classList.remove('hidden');
+                    $('#edit-image').value = null; // Clear the file input after confirmation
                     showToast("画像が変更されました。保存ボタンを押して確定してください。");
                 });
                 // ▲▲▲ 画像比較ロジック ▲▲▲
 
+                // Form Submit
                 $('#edit-cancel-btn').addEventListener('click', closeModal);
                 $('#edit-work-form').addEventListener('submit', async (e) => {
                     e.preventDefault();
@@ -1808,7 +1835,7 @@
                     const dateStr = $('#edit-date').value;
                     if (!name.trim()) return showToast("作品名は必須です。", "error");
                     if (!isValidDate(dateStr)) return showToast("登録日の形式が正しくありません (YYYY/MM/DD)。", "error");
-                    
+
                     const updatedData = {
                         name: name.trim(),
                         genre: $('#edit-genre').value,
@@ -1816,26 +1843,26 @@
                         registeredAt: Timestamp.fromDate(new Date(dateStr.replace(/\//g, '-'))),
                         rating: currentRating,
                         tagIds: Array.from(currentTagIds),
-                        imageUrl: tempImageUrl
+                        imageUrl: tempImageUrl // Use the confirmed new image URL
                     };
-                    
-                    checkModalDirtyState = () => false;
+
+                    checkModalDirtyState = () => false; // Prevent confirm dialog
                     const success = await updateWork(workId, updatedData);
                     if (success) {
                         showToast("作品情報を更新しました。");
                         closeModal();
                     }
                 });
-            });
+            }, { size: 'max-w-4xl' }); // Use a larger modal for edit
         };
         // --- ▲▲▲ 編集モーダル ▲▲▲ ---
-        
+
         // --- Modal: Tag Management (from index.html) ---
         const openTagModal = (options) => {
             const { mode = 'manage', currentTagIds = new Set(), workName = '', onConfirm } = options;
             let tempSelectedTagIds = new Set(currentTagIds);
             const titleMap = { manage: 'タグ管理', assign: `「${workName}」のタグを割り当て` };
-            
+
             const content = `
                 <div class="flex flex-col h-[70vh]">
                     ${['manage', 'assign'].includes(mode) ? `<div class="flex flex-wrap gap-2 mb-4 p-1 bg-gray-900 rounded-lg"><input type="text" id="newTagName" placeholder="新しいタグ名" class="flex-grow min-w-[150px] bg-gray-700 p-2 rounded-lg"><div class="flex gap-2"><input type="color" id="newTagColor" value="#581c87" class="h-11 w-12 p-1 bg-gray-700 rounded-lg cursor-pointer"><button id="addTagBtn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold"><i class="fas fa-plus"></i> 追加</button></div></div>` : ''}
@@ -1869,10 +1896,10 @@
                     if (tagItem && mode === 'assign') { const tagId = tagItem.dataset.id; tempSelectedTagIds.has(tagId) ? tempSelectedTagIds.delete(tagId) : tempSelectedTagIds.add(tagId); renderTagList(); renderTagPreview(); }
                 });
                 $('#tag-modal-confirm')?.addEventListener('click', () => onConfirm(tempSelectedTagIds));
-                $('#tag-modal-cancel')?.addEventListener('click', () => onConfirm(null));
+                $('#tag-modal-cancel')?.addEventListener('click', () => onConfirm(null)); // Pass null on cancel
             });
         };
-        
+
         const addTag = async (name, color) => {
              const normalizedName = name.trim().toLowerCase();
              if (tags.some(t => t.name.toLowerCase() === normalizedName)) return showToast("同じ名前のタグが既に存在します。", "error");
@@ -1890,8 +1917,8 @@
                 const batch = writeBatch(db);
                 batch.delete(doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/tags`, tagId));
                 works.filter(w => w.tagIds?.includes(tagId)).forEach(work => {
-                    batch.update(doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, work.id), { 
-                        tagIds: (work.tagIds || []).filter(id => id !== tagId) 
+                    batch.update(doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, work.id), {
+                        tagIds: (work.tagIds || []).filter(id => id !== tagId)
                     });
                 });
                 await batch.commit();
@@ -1913,7 +1940,7 @@
                         <button id="tag-modal-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
                         <button id="tag-modal-confirm" class="px-6 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold">決定</button>
                     </div>
-                </div>`, 
+                </div>`,
             () => {
                 let tagSearchQuery = '';
                 const tagListEl = $('#tag-list');
@@ -1949,14 +1976,14 @@
                 $('#tag-modal-cancel').addEventListener('click', closeModal);
             });
         };
-        
+
         // --- Modal: Bulk Edit ---
         const openBulkEditModal = () => {
             const count = selectedWorkIds.size;
             const content = `
                 <form id="bulk-edit-form" class="space-y-6">
                     <p class="text-lg">${count}件の作品を一括編集します。</p>
-                    
+
                     <div class="filter-group">
                         <label class="block text-sm font-medium text-gray-400 mb-2">ジャンルを変更</label>
                         <div class="flex items-center gap-4">
@@ -1967,7 +1994,7 @@
                             </select>
                         </div>
                     </div>
-                    
+
                     <div class="filter-group">
                         <label class="block text-sm font-medium text-gray-400 mb-2">評価を変更</label>
                         <div class="flex items-center gap-4">
@@ -1978,7 +2005,7 @@
                             </select>
                         </div>
                     </div>
-                    
+
                     <div class="space-y-4">
                         <div>
                             <label for="bulk-tags-add" class="block text-sm font-medium text-gray-400 mb-2">タグを一括追加</label>
@@ -1989,7 +2016,7 @@
                             <select id="bulk-tags-remove" multiple class="w-full bg-gray-700 rounded-lg p-2 h-24"></select>
                         </div>
                     </div>
-                    
+
                     <div class="pt-4 flex justify-end gap-3">
                         <button type="button" id="bulk-edit-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
                         <button type="submit" class="px-6 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold">適用</button>
@@ -2003,48 +2030,48 @@
                 const optionsHtml = sortedTags.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
                 addSelect.innerHTML = optionsHtml;
                 removeSelect.innerHTML = optionsHtml;
-                
+
                 $('#bulk-edit-cancel').addEventListener('click', closeModal);
                 $('#bulk-edit-form').addEventListener('submit', async (e) => {
                     e.preventDefault();
-                    
+
                     const genreOp = $('input[name="bulk-genre-op"]:checked').value;
                     const ratingOp = $('input[name="bulk-rating-op"]:checked').value;
                     const tagsToAdd = [...addSelect.selectedOptions].map(opt => opt.value);
                     const tagsToRemove = [...removeSelect.selectedOptions].map(opt => opt.value);
-                    
+
                     if (genreOp === 'none' && ratingOp === 'none' && tagsToAdd.length === 0 && tagsToRemove.length === 0) {
                         return showToast("変更する操作を選択してください。", "error");
                     }
-                    
+
                     try {
                         const batch = writeBatch(db);
                         const worksToUpdate = works.filter(w => selectedWorkIds.has(w.id));
-                        
+
                         worksToUpdate.forEach(work => {
                             const workRef = doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, work.id);
                             let updateData = {};
-                            
+
                             if (genreOp === 'set') updateData.genre = $('#bulk-genre-val').value;
                             if (ratingOp === 'set') updateData.rating = parseInt($('#bulk-rating-val').value, 10);
-                            
+
                             if (tagsToAdd.length > 0 || tagsToRemove.length > 0) {
                                 let currentTags = new Set(work.tagIds || []);
                                 tagsToAdd.forEach(tId => currentTags.add(tId));
                                 tagsToRemove.forEach(tId => currentTags.delete(tId));
                                 updateData.tagIds = Array.from(currentTags);
                             }
-                            
+
                             if (Object.keys(updateData).length > 0) {
                                 batch.update(workRef, updateData);
                             }
                         });
-                        
+
                         await batch.commit();
                         showToast(`${count}件の作品を更新しました。`);
                         selectedWorkIds.clear();
                         closeModal();
-                        renderAll();
+                        renderAll(); // Re-render to clear selection visuals
                     } catch (error) {
                         console.error("Error bulk updating works:", error);
                         showToast("一括更新に失敗しました。", "error");
@@ -2052,7 +2079,7 @@
                 });
             });
         };
-        
+
         // --- Modal: Column Visibility ---
         const openColumnModal = () => {
             const allCols = [
@@ -2067,15 +2094,15 @@
                 { id: 'sourceUrl', label: 'URL' },
                 { id: 'actions', label: '操作', disabled: true },
             ];
-            
+
             const content = `
                 <div class="space-y-4">
                     <p class="text-sm text-gray-400">テーブルに表示する列を選択してください。</p>
                     <div class="grid grid-cols-2 gap-3">
                         ${allCols.map(col => `
                             <label class="flex items-center p-3 bg-gray-700 rounded-lg ${col.disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}">
-                                <input type="checkbox" data-col-id="${col.id}" class="h-4 w-4 rounded bg-gray-600 text-teal-500 border-gray-600 focus:ring-teal-600" 
-                                    ${visibleColumns.has(col.id) ? 'checked' : ''} 
+                                <input type="checkbox" data-col-id="${col.id}" class="h-4 w-4 rounded bg-gray-600 text-teal-500 border-gray-600 focus:ring-teal-600"
+                                    ${visibleColumns.has(col.id) ? 'checked' : ''}
                                     ${col.disabled ? 'disabled' : ''}>
                                 <span class="ml-3 text-sm">${col.label}</span>
                             </label>
@@ -2099,7 +2126,7 @@
                 });
             }, { size: 'max-w-3xl' });
         };
-        
+
         // --- Date Input Validation ---
         const initializeDateInputs = (container) => {
             container.querySelectorAll('.date-input').forEach(textInput => {
@@ -2120,13 +2147,10 @@
 
         const applyAdVisibility = (isVisible) => {
             topAdBanner.classList.toggle('hidden', !isVisible);
-            if (isVisible) {
-                mainContent.style.paddingTop = '8px';
-            } else {
-                mainContent.style.paddingTop = '0';
-            }
+            // Adjust main content padding based on ad visibility
+            mainContent.style.paddingTop = isVisible ? '8px' : '0';
         };
-        
+
         const generateAndLoadAdScript = (settings) => {
             const container = document.getElementById('ad-script-container');
             container.innerHTML = '';
@@ -2168,13 +2192,16 @@
         const loadAdSettings = () => {
             const saved = localStorage.getItem('adSettings');
             const settings = saved ? JSON.parse(saved) : defaultAdSettings;
+            // Apply settings to the modal inputs
             document.getElementById('ad_visibility').checked = settings.showAd;
-            document.querySelector(`input[name="ad_type"][value="${settings.type}"]`).checked = true;
+            const typeRadio = document.querySelector(`input[name="ad_type"][value="${settings.type}"]`);
+            if (typeRadio) typeRadio.checked = true;
             const siteSelect = document.getElementById('ad_site');
             if (siteSelect.querySelector(`option[value="${settings.site}"]`)) siteSelect.value = settings.site;
             const periodSelect = document.getElementById('ad_period');
             if (periodSelect.querySelector(`option[value="${settings.period}"]`)) periodSelect.value = settings.period;
             document.getElementById('ad-period-container').style.display = settings.type === 'ranking' ? 'block' : 'none';
+            // Apply visibility and load the script
             applyAdVisibility(settings.showAd);
             generateAndLoadAdScript(settings);
         };
@@ -2189,7 +2216,7 @@
 
             loadingOverlay.classList.remove('hidden');
             initializeFirebase();
-            loadAdSettings();
+            loadAdSettings(); // Load ad settings after Firebase init
             setupEventListeners();
         };
 
@@ -2214,10 +2241,11 @@
             } else {
                 localStorage.removeItem('passwordAuthTimestamp');
                 passwordOverlay.classList.remove('hidden');
-                loadingOverlay.classList.add('hidden');
+                loadingOverlay.classList.add('hidden'); // Hide loading if auth fails
             }
         });
 
     </script>
 </body>
 </html>
+
