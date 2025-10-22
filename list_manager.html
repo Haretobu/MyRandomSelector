@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>作品リスト管理 (v2.3)</title> <!-- Version updated -->
+    <!-- ▼ タイトルを更新 -->
+    <title>作品リスト管理 (v2.4)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -57,12 +58,10 @@
         }
         .sort-icon.asc { transform: rotate(0deg); }
         .sort-icon.desc { transform: rotate(180deg); }
-        /* ▼ スマホでのテーブル文字サイズ調整 ▼ */
-        #works-table { font-size: 0.8rem; } /* 少し小さく */
-        @media (min-width: 768px) { /* md以上で元に戻す */
-            #works-table { font-size: 0.875rem; } /* text-sm */
+        #works-table { font-size: 0.8rem; }
+        @media (min-width: 768px) {
+            #works-table { font-size: 0.875rem; }
         }
-        /* ▲ スマホでのテーブル文字サイズ調整 ▲ */
 
         /* Inline Rating Stars */
         .inline-rating .fa-star {
@@ -83,7 +82,6 @@
             margin: 2px;
             white-space: nowrap;
         }
-        /* ▼ タグ省略表示用スタイル ▼ */
         .tag-pill-sm {
              padding: 1px 6px;
              font-size: 10px;
@@ -93,7 +91,6 @@
              background-color: #4b5563; /* gray-600 */
              color: white;
         }
-        /* ▲ タグ省略表示用スタイル ▲ */
         .tag-item-and { background-color: #059669 !important; color: white !important; }
         .tag-item-or { background-color: #2563eb !important; color: white !important; }
         .tag-item-not { background-color: #be123c !important; color: white !important; text-decoration: line-through; }
@@ -128,19 +125,45 @@
         }
         .border-red-500 { border-color: #ef4444; }
 
+        /* ▼▼▼ サイトバッジCSS (index.html から移植・追加) ▼▼▼ */
+        .site-badge {
+            position: absolute;
+            top: 2px; /* p-3 のpadding(12px)を考慮し調整 */
+            left: 2px;
+            height: 16px;
+            line-height: 16px;
+            padding: 0 5px;
+            font-size: 10px;
+            font-weight: 800;
+            border-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            pointer-events: none;
+            z-index: 1;
+        }
+        .inline-site-badge {
+            display: inline-block;
+            height: 16px;
+            line-height: 16px;
+            padding: 0 5px;
+            font-size: 10px;
+            font-weight: 800;
+            border-radius: 4px;
+            margin-right: 6px;
+            vertical-align: middle; /* テキストと高さを合わせる */
+        }
+        /* ▲▲▲ サイトバッジCSS (index.html から移植・追加) ▲▲▲ */
+
     </style>
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans antialiased">
 
-    <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]">v2.3-manager</div> <!-- Version updated -->
+    <!-- ▼ バージョンを更新 -->
+    <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]">v2.4-manager</div>
 
-    <!-- ▼▼▼ デバッグモードバナー (index.html から移植) ▼▼▼ -->
     <div id="debug-banner" class="hidden bg-amber-600 text-black text-center py-1 font-bold text-sm sticky top-0 z-[60]">
           デバッグモード実行中 - データは保存されません
     </div>
-    <!-- ▲▲▲ デバッグモードバナー (index.html から移植) ▲▲▲ -->
-
-    <!-- ▼▼▼ 広告機能 (price_comparison.html から移植) ▼▼▼ -->
+    
     <div id="top-ad-banner" class="sticky top-0 z-40 w-full bg-gray-900/80 backdrop-blur-sm border-b border-gray-700/50">
         <div class="max-w-screen-2xl mx-auto p-2 md:px-6 lg:px-8">
             <div id="ad-script-container" class="bg-gray-800/50 rounded-lg text-center flex items-center justify-center min-h-[120px] overflow-hidden">
@@ -148,18 +171,14 @@
             </div>
         </div>
     </div>
-    <!-- ▲▲▲ 広告機能 (price_comparison.html から移植) ▲▲▲ -->
-
-    <!-- ▼▼▼ ローディング画面 (index.html から移植・強化) ▼▼▼ -->
+    
     <div id="loading-overlay" class="fixed inset-0 bg-gray-900 z-[100] flex items-center justify-center p-4">
         <div id="loading-content" class="text-center transition-opacity duration-300 opacity-0">
             <i class="fas fa-spinner fa-spin fa-3x text-teal-400"></i>
             <p id="loading-text" class="mt-4 text-gray-400">アプリケーションを初期化中...</p>
-            <!-- エラー表示領域 -->
             <div id="loading-error-display" class="mt-4 hidden max-w-md mx-auto"></div>
         </div>
     </div>
-    <!-- ▲▲▲ ローディング画面 (index.html から移植・強化) ▲▲▲ -->
 
     <!-- Main Container -->
     <div id="app-container" class="min-h-screen p-4 md:p-6 lg:p-8 opacity-0 transition-opacity duration-500">
@@ -172,7 +191,6 @@
                         <i class="fas fa-tasks mr-3"></i>
                         作品リスト管理
                     </h1>
-                    <!-- index.html へ戻るボタン -->
                     <a href="index.html" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors flex items-center text-sm">
                         <i class="fas fa-dice mr-2"></i>
                         抽選アプリに戻る
@@ -202,11 +220,9 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- ▼▼▼ デバッグモードボタン (index.html から移植) ▼▼▼ -->
                         <div class="pt-4">
                            <button id="toggleDebugModeBtn" class="w-full text-sm px-4 py-2 bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors">デバッグモード開始</button>
                         </div>
-                        <!-- ▲▲▲ デバッグモードボタン (index.html から移植) ▲▲▲ -->
                     </div>
                 </details>
             </header>
@@ -215,23 +231,18 @@
             <details id="filter-panel-details" class="bg-gray-800 rounded-xl shadow-lg" open>
                 <summary class="p-5 flex justify-between items-center">
                     <h2 class="text-lg font-bold text-gray-300 flex items-center"><i class="fas fa-filter mr-3"></i>検索・絞り込み</h2>
-                     <!-- ▼▼▼ フィルターリセットボタン ▼▼▼ -->
                      <button id="reset-filters-btn" class="ml-auto mr-4 px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-lg text-xs transition-colors flex items-center">
                          <i class="fas fa-undo mr-1"></i>リセット
                      </button>
-                     <!-- ▲▲▲ フィルターリセットボタン ▲▲▲ -->
                     <i class="fas fa-chevron-down chevron-icon"></i>
                 </summary>
                 <div class="p-5 border-t border-gray-700">
-                     <!-- ▼▼▼ レスポンシブグリッドに変更 ▼▼▼ -->
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                     <!-- ▲▲▲ レスポンシブグリッドに変更 ▲▲▲ -->
                         {/* <!-- 作品名検索 --> */}
                         <div class="space-y-2">
                             <label for="filter-search" class="text-sm font-medium text-gray-400">作品名</label>
                             <div class="relative">
                                 <input type="search" id="filter-search" placeholder="作品名で検索..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                {/* <!-- サジェスト表示エリア --> */}
                                 <div id="filter-suggestions" class="absolute z-30 w-full bg-gray-600 rounded-b-lg max-h-60 overflow-y-auto mt-1 hidden shadow-lg"></div>
                             </div>
                         </div>
@@ -279,9 +290,7 @@
                         </div>
 
                         {/* <!-- タグ --> */}
-                        {/* ▼ col-span を lg のみに適用 ▼ */}
                         <div class="lg:col-span-4 space-y-2">
-                        {/* ▲ col-span を lg のみに適用 ▲ */}
                             <label class="text-sm font-medium text-gray-400">タグ</label>
                             <div class="flex flex-wrap gap-2 items-center">
                                 <button id="filter-open-tags-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-sm transition-colors"><i class="fas fa-tags mr-2"></i>タグ条件を選択</button>
@@ -295,14 +304,10 @@
             </details>
 
             {/* <!-- 3. Action Bar & List Info --> */}
-            {/* ▼ flex-col sm:flex-row でレスポンシブ対応 ▼ */}
             <section class="bg-gray-800 p-4 rounded-xl shadow-lg space-y-4 md:space-y-0 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
                 <div class="flex flex-wrap gap-3">
-            {/* ▲ flex-col sm:flex-row でレスポンシブ対応 ▲ */}
                     <button id="reg-new-work-btn" class="px-4 py-2 bg-lime-600 hover:bg-lime-700 rounded-lg font-semibold transition-colors flex items-center"><i class="fas fa-plus mr-2"></i>新規登録</button>
-                    {/* <!-- ▼▼▼ 外部検索ボタンを追加 ▼▼▼ --> */}
                     <button id="external-search-btn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg font-semibold transition-colors flex items-center"><i class="fas fa-globe-asia mr-2"></i>外部検索</button>
-                    {/* <!-- ▲▲▲ 外部検索ボタンを追加 ▲▲▲ --> */}
                     <button id="manage-tags-btn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition-colors flex items-center"><i class="fas fa-tags mr-2"></i>タグ管理</button>
                     <button id="manage-columns-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors flex items-center"><i class="fas fa-columns mr-2"></i>表示列</button>
                 </div>
@@ -312,7 +317,7 @@
                     <button id="bulk-edit-btn" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg text-sm transition-colors"><i class="fas fa-pencil-alt mr-2"></i>一括編集</button>
                     <button id="bulk-delete-btn" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm transition-colors"><i class="fas fa-trash-alt mr-2"></i>一括削除</button>
                 </div>
-                {/* ▼ List info (Count & Per Page) ▼ */}
+                {/* <!-- List info (Count & Per Page) --> */}
                 <div class="flex justify-between items-center w-full md:w-auto mt-2 md:mt-0">
                     <span id="work-count-display" class="text-sm text-gray-400">0 作品</span>
                     <div class="flex items-center gap-2">
@@ -324,27 +329,28 @@
                         </select>
                     </div>
                 </div>
-                 {/* ▲ List info (Count & Per Page) ▲ */}
             </section>
 
 
             {/* <!-- 4. Works Table --> */}
             <section class="bg-gray-800 rounded-xl shadow-lg overflow-hidden">
                 <div class="overflow-x-auto">
-                    <table id="works-table" class="w-full text-left"> {/* text-sm removed, applied via CSS */}
+                    <table id="works-table" class="w-full text-left">
                         <thead class="bg-gray-700/50 text-xs text-gray-300 uppercase tracking-wider">
                             <tr>
                                 <th class="p-3 w-12"><input type="checkbox" id="select-all-checkbox" class="h-4 w-4 rounded bg-gray-600 text-teal-500 border-gray-500 focus:ring-teal-600"></th>
-                                <th class="p-3 col-image" data-col="image" style="display: none;">画像</th>
+                                <!-- ▼▼▼ style="display: none;" を削除 ▼▼▼ -->
+                                <th class="p-3 col-image" data-col="image">画像</th>
                                 <th class="p-3 col-name" data-col="name" data-sort="name">作品名 <i class="fas fa-sort-down sort-icon"></i></th>
-                                <th class="p-3 col-genre" data-col="genre" data-sort="genre" style="display: none;">ジャンル <i class="fas fa-sort-down sort-icon"></i></th> {/* Initially hidden on small screens */}
-                                <th class="p-3 col-registeredAt" data-col="registeredAt" data-sort="registeredAt" style="display: none;">登録日 <i class="fas fa-sort-down sort-icon desc"></i></th> {/* Initially hidden */}
+                                <th class="p-3 col-genre" data-col="genre" data-sort="genre">ジャンル <i class="fas fa-sort-down sort-icon"></i></th>
+                                <th class="p-3 col-registeredAt" data-col="registeredAt" data-sort="registeredAt">登録日 <i class="fas fa-sort-down sort-icon desc"></i></th>
                                 <th class="p-3 col-rating" data-col="rating" data-sort="rating">評価 <i class="fas fa-sort-down sort-icon"></i></th>
-                                <th class="p-3 col-tags" data-col="tags" style="display: none;">タグ</th> {/* Initially hidden */}
-                                <th class="p-3 col-lastSelectedAt" data-col="lastSelectedAt" data-sort="lastSelectedAt" style="display: none;">最終抽選日 <i class="fas fa-sort-down sort-icon"></i></th>
-                                <th class="p-3 col-selectionCount" data-col="selectionCount" data-sort="selectionCount" style="display: none;">抽選回数 <i class="fas fa-sort-down sort-icon"></i></th>
-                                <th class="p-3 col-sourceUrl" data-col="sourceUrl" style="display: none;">URL</th>
+                                <th class="p-3 col-tags" data-col="tags">タグ</th>
+                                <th class="p-3 col-lastSelectedAt" data-col="lastSelectedAt" data-sort="lastSelectedAt">最終抽選日 <i class="fas fa-sort-down sort-icon"></i></th>
+                                <th class="p-3 col-selectionCount" data-col="selectionCount" data-sort="selectionCount">抽選回数 <i class="fas fa-sort-down sort-icon"></i></th>
+                                <th class="p-3 col-sourceUrl" data-col="sourceUrl">URL</th>
                                 <th class="p-3 col-actions" data-col="actions">操作</th>
+                                <!-- ▲▲▲ style="display: none;" を削除 ▲▲▲ -->
                             </tr>
                         </thead>
                         <tbody id="works-table-body" class="divide-y divide-gray-700">
@@ -363,14 +369,14 @@
         </main>
     </div>
 
-    {/* <!-- ▼▼▼ 広告FAB (price_comparison.html から移植) ▼▼▼ --> */}
+    {/* <!-- Ad FAB --> */}
     <div class="fixed bottom-6 right-6 z-50 flex flex-col gap-4">
         <button id="ad-settings-fab" class="bg-blue-600 hover:bg-blue-500 w-16 h-16 rounded-full shadow-lg flex items-center justify-center text-2xl transition-transform hover:scale-110" title="広告設定">
             <i class="fas fa-ad"></i>
         </button>
     </div>
 
-    {/* <!-- ▼▼▼ 広告モーダル (price_comparison.html から移植) ▼▼▼ --> */}
+    {/* <!-- Ad Modal --> */}
     <div id="ad-settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[80] flex items-center justify-center p-4">
         <div id="ad-settings-modal-content" class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-md w-full relative">
              <button id="ad-settings-modal-close" class="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors">
@@ -419,9 +425,8 @@
             </div>
         </div>
     </div>
-    {/* <!-- ▲▲▲ 広告関連 ▲▲▲ --> */}
 
-    {/* <!-- ▼▼▼ 汎用モーダル (index.html から移植) ▼▼▼ --> */}
+    {/* <!-- Generic Modals --> */}
     <div id="modal-backdrop" class="hidden fixed inset-0 bg-black bg-opacity-70 z-40 transition-opacity"></div>
     <div id="modal-wrapper" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
         <div id="modal-container" class="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-transform scale-95 opacity-0">
@@ -435,12 +440,10 @@
         </div>
     </div>
 
-    {/* <!-- Toast Notification (from index.html) --> */}
     <div id="toast" class="fixed bottom-5 right-5 bg-gray-700 text-white px-6 py-3 rounded-lg shadow-lg z-[70]">
         <p id="toast-message">Message</p>
     </div>
 
-    {/* <!-- Password Overlay (from index.html) --> */}
     <div id="password-overlay" class="hidden fixed inset-0 bg-gray-900 bg-opacity-95 z-[90] flex items-center justify-center p-4">
         <div class="w-full max-w-sm">
             <form id="password-form" class="bg-gray-800 p-8 rounded-2xl shadow-2xl space-y-6">
@@ -455,7 +458,6 @@
         </div>
     </div>
 
-    {/* <!-- Confirmation Modal (from index.html) --> */}
     <div id="confirm-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[80] flex items-center justify-center p-4">
         <div class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-sm w-full">
             <h3 id="confirm-title" class="text-lg font-bold mb-4">確認</h3>
@@ -466,7 +468,6 @@
             </div>
         </div>
     </div>
-    {/* <!-- ▲▲▲ 汎用モーダル (index.html から移植) ▲▲▲ --> */}
 
     {/* <!-- Firebase SDKs --> */}
     <script type="module">
@@ -498,7 +499,8 @@
         // --- App Configuration ---
         const DEFAULT_APP_ID = 'r18-random-selector';
         const appId = typeof __app_id !== 'undefined' ? __app_id : DEFAULT_APP_ID;
-        const appVersion = 'v2.3-manager'; // Version updated
+        // ▼ バージョンを更新
+        const appVersion = 'v2.4-manager';
         const MASTER_PASSWORD = '07143674';
         $('#version-display').textContent = appVersion;
 
@@ -525,10 +527,9 @@
         let isLoadComplete = false;
         let loadingStatus = { auth: false, works: false, tags: false };
         let checkModalDirtyState = () => false;
-        let paginatedWorks = []; // Global scope declaration
-        let isDebugMode = false; // Debug mode state
+        let paginatedWorks = [];
+        let isDebugMode = false;
 
-        // ▼▼▼ フィルター初期状態を関数化 ▼▼▼
         const getDefaultFilters = () => ({
             search: '',
             genres: new Set(),
@@ -541,11 +542,10 @@
             orTagIds: new Set(),
             notTagIds: new Set()
         });
-        // ▲▲▲ フィルター初期状態を関数化 ▲▲▲
 
         // List State
         let displayedWorks = []; // Filtered, sorted, paginated list
-        let listFilters = getDefaultFilters(); // ▼▼▼ 初期化に関数を使用 ▼▼▼
+        let listFilters = getDefaultFilters();
         let sortState = {
             by: 'registeredAt',
             order: 'desc',
@@ -555,18 +555,16 @@
             itemsPerPage: 50,
         };
         let selectedWorkIds = new Set();
-        // ▼▼▼ スマホ用にデフォルト表示列を変更 ▼▼▼
-        let visibleColumns = new Set(['name', 'rating', 'actions']);
-        // ▲▲▲ スマホ用にデフォルト表示列を変更 ▲▲▲
+        let visibleColumns = new Set(['name', 'rating', 'actions']); // Default for mobile
 
         // --- UI Elements ---
         const loadingOverlay = $('#loading-overlay');
         const loadingContent = $('#loading-content');
         const loadingText = $('#loading-text');
-        const loadingErrorDisplay = $('#loading-error-display'); // Error display
+        const loadingErrorDisplay = $('#loading-error-display');
         const appContainer = $('#app-container');
         const mainContent = $('#main-content');
-        const debugBanner = $('#debug-banner'); // Debug banner
+        const debugBanner = $('#debug-banner');
 
         // Sync Panel
         const syncIdDisplay = $('#syncIdDisplay');
@@ -574,11 +572,11 @@
         const newSyncIdInput = $('#newSyncIdInput');
         const loadSyncIdBtn = $('#loadSyncIdBtn');
         const syncIdHistoryEl = $('#syncIdHistory');
-        const toggleDebugModeBtn = $('#toggleDebugModeBtn'); // Debug button
+        const toggleDebugModeBtn = $('#toggleDebugModeBtn');
 
         // Filter Panel
         const filterSearch = $('#filter-search');
-        const filterSuggestions = $('#filter-suggestions'); // Suggestion area
+        const filterSuggestions = $('#filter-suggestions');
         const filterUnrated = $('#filter-unrated');
         const filterRatingOp = $('#filter-rating-op');
         const filterRatingVal = $('#filter-rating-val');
@@ -586,11 +584,11 @@
         const filterDateEnd = $('#filter-date-end');
         const filterOpenTagsBtn = $('#filter-open-tags-btn');
         const filterTagsDisplay = $('#filter-tags-display');
-        const resetFiltersBtn = $('#reset-filters-btn'); // ▼▼▼ リセットボタン ▼▼▼
+        const resetFiltersBtn = $('#reset-filters-btn');
 
         // Action Bar
         const regNewWorkBtn = $('#reg-new-work-btn');
-        const externalSearchBtn = $('#external-search-btn'); // External search button
+        const externalSearchBtn = $('#external-search-btn');
         const manageTagsBtn = $('#manage-tags-btn');
         const manageColumnsBtn = $('#manage-columns-btn');
         const bulkActionBar = $('#bulk-action-bar');
@@ -727,6 +725,31 @@
             return (r * 0.299 + g * 0.587 + b * 0.114) > 186 ? '#000000' : '#FFFFFF';
         };
 
+        // --- ▼▼▼ サイトバッジ用関数 (index.html から移植) ▼▼▼ ---
+        const getSiteBadgeHTML = (url, isInline = false) => {
+            if (!url) return '';
+            let site = '';
+            let classes = '';
+
+            if (url.includes('dlsite.com')) {
+                site = 'DL';
+                classes = 'bg-sky-600 text-white';
+            } else if (url.includes('dmm.co.jp')) { // FANZA is on dmm.co.jp
+                site = 'FZ';
+                classes = 'bg-red-600 text-white';
+            } else {
+                return ''; // Not DL or FANZA
+            }
+
+            if (isInline) {
+                return `<span class="inline-site-badge ${classes}">${site}</span>`;
+            } else {
+                // Not inline (for image overlay)
+                return `<span class="site-badge ${classes}">${site}</span>`;
+            }
+        };
+        // --- ▲▲▲ サイトバッジ用関数 (index.html から移植) ▲▲▲ ---
+
         // --- Loading Timeout Logic ---
 
         const handleLoadingTimeout = (isStall = false) => {
@@ -782,7 +805,7 @@
             loadingErrorDisplay.classList.remove('hidden');
         };
 
-        // --- ▼▼▼ 広告設定用 Modal Helper Functions (移植) ▼▼▼ ---
+        // --- Ad Modal Helper Functions ---
         const showModal = (modal, content) => {
             modal.classList.remove('hidden');
             setTimeout(() => content.classList.add('modal-open'), 10);
@@ -791,11 +814,9 @@
             content.classList.remove('modal-open');
             setTimeout(() => modal.classList.add('hidden'), 300);
         }
-        // --- ▲▲▲ 広告設定用 Modal Helper Functions (移植) ▲▲▲ ---
 
-        // --- Modal Management ---
+        // --- Generic Modal Management ---
         const openModal = (title, contentHtml, onOpen = null, options = {}) => {
-            // This is the main modal function used by most features EXCEPT ad settings
             checkModalDirtyState = () => false;
             const { size = 'max-w-2xl' } = options;
 
@@ -811,7 +832,7 @@
             setTimeout(() => {
                 modalBackdrop.classList.add('opacity-100');
                 modalContainer.classList.remove('scale-95', 'opacity-0');
-                modalContainer.classList.add('modal-open'); // Use class for animation
+                modalContainer.classList.add('modal-open');
                 if (onOpen) onOpen();
 
                 const firstFocusable = modalContentHost.querySelector('input, select, button');
@@ -822,7 +843,6 @@
         };
 
         const closeModal = async () => {
-            // This is the main close function used by most features EXCEPT ad settings
             if (checkModalDirtyState()) {
                 const confirmed = await showConfirm("未保存の変更", "変更が保存されていません。本当に閉じますか？");
                 if (!confirmed) return;
@@ -830,14 +850,14 @@
             checkModalDirtyState = () => false;
 
             modalContainer.classList.add('scale-95', 'opacity-0');
-            modalContainer.classList.remove('modal-open'); // Remove animation class
+            modalContainer.classList.remove('modal-open');
             modalBackdrop.classList.remove('opacity-100');
 
             setTimeout(() => {
                 modalBackdrop.classList.add('hidden');
                 modalWrapper.classList.add('hidden');
                 modalContentHost.innerHTML = '';
-            }, 300); // Wait for animation
+            }, 300);
         };
 
         // --- Loading / Auth ---
@@ -921,12 +941,10 @@
             tags = [];
             renderAll();
 
-            // Debug mode check
             if (currentUser && syncId && !isDebugMode) {
                 subscribeToWorks();
                 subscribeToTags();
             } else if (isDebugMode) {
-                // Update load status even in debug mode
                 loadingStatus = { auth: true, works: true, tags: true };
                 checkLoadingComplete();
             }
@@ -1048,11 +1066,10 @@
 
         const updateWork = async (workId, updatedData) => {
             if (isDebugMode) {
-                // ローカルデータのみ更新
                 const index = works.findIndex(w => w.id === workId);
                 if (index > -1) {
                     works[index] = { ...works[index], ...updatedData };
-                    renderAll(); // UIを再描画
+                    renderAll();
                     showToast("デバッグモード: 作品情報をローカルで更新しました。");
                     return true;
                 }
@@ -1062,7 +1079,7 @@
             try {
                 const workRef = doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, workId);
                 await updateDoc(workRef, updatedData);
-                return true; // onSnapshotがUIを更新するのでここではToast不要
+                return true;
             } catch (error) {
                 console.error("Error updating work:", error);
                 showToast("作品の更新に失敗しました。", "error");
@@ -1080,7 +1097,6 @@
                 await deleteDoc(doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, workId));
                 showToast(`「${workName}」を削除しました。`);
                 selectedWorkIds.delete(workId);
-                // renderAll() は onSnapshot が行う
             } catch (error) {
                 console.error("Error deleting work: ", error);
                 showToast("作品の削除に失敗しました。", "error");
@@ -1105,7 +1121,6 @@
                 await batch.commit();
                 showToast(`${count}件の作品を削除しました。`);
                 selectedWorkIds.clear();
-                // renderAll() は onSnapshot が行う
             } catch (error) {
                 console.error("Error bulk deleting works:", error);
                 showToast("一括削除に失敗しました。", "error");
@@ -1119,7 +1134,7 @@
             renderTable();
             renderPagination();
             renderActionButtons();
-            updateColumnVisibility();
+            // ▼ updateColumnVisibilityはrenderTable内で呼び出されるため不要
         };
 
         const updateFilteredAndSortedWorks = () => {
@@ -1216,8 +1231,12 @@
                 const workTags = (work.tagIds || []).map(id => tags.find(t => t.id === id)).filter(Boolean);
                 const safeName = escapeHTML(work.name);
                 const rating = work.rating || 0;
+                
+                // ▼▼▼ サイトバッジ用HTMLを取得 ▼▼▼
+                const badgeImageHTML = getSiteBadgeHTML(work.sourceUrl, false);
+                const badgeInlineHTML = getSiteBadgeHTML(work.sourceUrl, true);
+                // ▲▲▲ サイトバッジ用HTMLを取得 ▲▲▲
 
-                // ▼▼▼ タグ省略表示ロジック ▼▼▼
                 const MAX_TAGS_VISIBLE = 4;
                 const tagsHtml = workTags.slice(0, MAX_TAGS_VISIBLE).map(t =>
                     `<span class="tag-pill tag-pill-sm" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${t.name}</span>`
@@ -1225,45 +1244,49 @@
                 const moreTagsHtml = workTags.length > MAX_TAGS_VISIBLE
                     ? `<span class="tag-pill tag-pill-sm tag-pill-more">+${workTags.length - MAX_TAGS_VISIBLE}</span>`
                     : '';
-                // ▲▲▲ タグ省略表示ロジック ▲▲▲
-
+                
+                // ▼▼▼ style="display: none;" を削除し、バッジとtruncateを追加 ▼▼▼
                 return `
                     <tr class="hover:bg-gray-700/50 transition-colors" data-id="${work.id}">
                         <td class="p-3"><input type="checkbox" data-id="${work.id}" class="row-checkbox h-4 w-4 rounded bg-gray-600 text-teal-500 border-gray-500 focus:ring-teal-600" ${selectedWorkIds.has(work.id) ? 'checked' : ''}></td>
 
-                        <td class="p-3 col-image" data-col="image" style="display: none;">
+                        {/* <!-- ▼ バッジ用に relative を追加 ▼ --> */}
+                        <td class="p-3 col-image relative" data-col="image">
+                            ${badgeImageHTML}
                             <img src="${work.imageUrl || 'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${safeName}" class="w-12 h-12 object-cover rounded-md">
                         </td>
 
+                        {/* <!-- ▼ バッジとtruncateラッパーを追加 ▼ --> */}
                         <td class="p-3 col-name" data-col="name">
-                            <span class="font-medium">${safeName}</span>
+                            <div class="flex items-center max-w-xs xl:max-w-md">
+                                ${badgeInlineHTML}
+                                <span class="font-medium truncate">${safeName}</span>
+                            </div>
                         </td>
 
-                        <td class="p-3 col-genre" data-col="genre" style="display: none;">${work.genre || 'N/A'}</td>
+                        <td class="p-3 col-genre" data-col="genre">${work.genre || 'N/A'}</td>
 
-                        <td class="p-3 col-registeredAt" data-col="registeredAt" style="display: none;">${formatDate(work.registeredAt, false)}</td>
+                        <td class="p-3 col-registeredAt" data-col="registeredAt">${formatDate(work.registeredAt, false)}</td>
 
                         <td class="p-3 col-rating inline-rating text-lg" data-col="rating" data-id="${work.id}">
                             ${[1,2,3,4,5].map(i => `<i class="fa-star ${i <= rating ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('')}
                         </td>
 
-                        {/* ▼ タグ列の表示を更新 ▼ */}
-                        <td class="p-3 col-tags max-w-xs" data-col="tags" style="display: none;">
+                        <td class="p-3 col-tags max-w-xs" data-col="tags">
                             <div class="flex flex-wrap">
                                 ${tagsHtml}${moreTagsHtml}
                             </div>
                         </td>
-                         {/* ▲ タグ列の表示を更新 ▲ */}
 
-                        <td class="p-3 col-lastSelectedAt" data-col="lastSelectedAt" style="display: none;">
+                        <td class="p-3 col-lastSelectedAt" data-col="lastSelectedAt">
                             ${formatDate(work.lastSelectedAt, true)}
                         </td>
 
-                        <td class="p-3 col-selectionCount text-center" data-col="selectionCount" style="display: none;">
+                        <td class="p-3 col-selectionCount text-center" data-col="selectionCount">
                             ${work.selectionCount || 0}
                         </td>
 
-                        <td class="p-3 col-sourceUrl" data-col="sourceUrl" style="display: none;">
+                        <td class="p-3 col-sourceUrl" data-col="sourceUrl">
                             ${work.sourceUrl ? `<a href="${work.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-teal-400 hover:text-teal-300"><i class="fas fa-external-link-alt"></i></a>` : ''}
                         </td>
 
@@ -1275,10 +1298,10 @@
                         </td>
                     </tr>
                 `;
+                // ▲▲▲ style="display: none;" を削除 ▲▲▲
             }).join('');
-            // ▼ 表示列の再適用 ▼
+            
             updateColumnVisibility();
-            // ▲ 表示列の再適用 ▲
         };
 
 
@@ -1370,30 +1393,31 @@
         };
 
         const updateColumnVisibility = () => {
-             // Load saved settings if available
              const savedCols = localStorage.getItem('visibleColumns');
              if (savedCols) {
                 visibleColumns = new Set(JSON.parse(savedCols));
              } else {
-                // Apply default for small screens if no save data
                  if (window.innerWidth < 768) { // md breakpoint
                      visibleColumns = new Set(['name', 'rating', 'actions']);
                  } else {
-                     visibleColumns = new Set(['name', 'genre', 'registeredAt', 'rating', 'tags', 'actions']);
+                     visibleColumns = new Set(['image', 'name', 'genre', 'registeredAt', 'rating', 'tags', 'actions']);
                  }
              }
 
             worksTable.querySelectorAll('th, td').forEach(el => {
                 const colName = el.dataset.col;
                 if (colName) {
-                    el.style.display = visibleColumns.has(colName) ? '' : 'table-cell'; // Use table-cell for proper layout
+                    // ▼▼▼ 表示ロジックを修正 ▼▼▼
+                    // 'table-cell' で表示、'none' で非表示
+                    el.style.display = visibleColumns.has(colName) ? 'table-cell' : 'none';
+                    // ▲▲▲ 表示ロジックを修正 ▲▲▲
                 }
             });
-            // Persist the current state (important after initial load/resize check)
+            // Persist the current state
             localStorage.setItem('visibleColumns', JSON.stringify(Array.from(visibleColumns)));
         };
 
-        // --- ▼▼▼ 外部検索機能 (index.html から移植) ▼▼▼ ---
+        // --- External Search ---
         const openExternalSearchModal = (prefillQuery = '') => {
             const sites = [
                 { id: 'dlsite', name: 'DLsite', color: 'bg-blue-700', hover: 'hover:bg-blue-800' },
@@ -1440,7 +1464,6 @@
             }
             if (url) window.open(url, '_blank', 'noopener,noreferrer');
         };
-        // --- ▲▲▲ 外部検索機能 (index.html から移植) ▲▲▲ ---
 
         // --- Event Handlers ---
 
@@ -1461,17 +1484,16 @@
                 }
             });
             syncIdHistoryEl.addEventListener('change', e => e.target.value && loadDataSet(e.target.value));
-            toggleDebugModeBtn.addEventListener('click', toggleDebugMode); // Debug button listener
+            toggleDebugModeBtn.addEventListener('click', toggleDebugMode);
 
             // Filters
             const debouncedRender = debounce(renderAll, 300);
 
-            // Search Suggestion
             filterSearch.addEventListener('input', () => {
                 const query = filterSearch.value.trim();
-                listFilters.search = query; // Update filter state immediately
+                listFilters.search = query;
                 paginationState.currentPage = 1;
-                debouncedRender(); // Update table based on search input
+                debouncedRender();
 
                 const normalizedQuery = query.toLowerCase();
                 if (normalizedQuery.length < 2) {
@@ -1479,7 +1501,6 @@
                     return;
                 }
 
-                // Filter *all* works for suggestions
                 const suggestions = works.filter(work =>
                     work.name.toLowerCase().includes(normalizedQuery)
                 ).slice(0, 10);
@@ -1501,10 +1522,10 @@
                 const item = e.target.closest('.suggestion-item');
                 if (item) {
                     filterSearch.value = item.dataset.name;
-                    listFilters.search = item.dataset.name; // Update filter state
+                    listFilters.search = item.dataset.name;
                     filterSuggestions.classList.add('hidden');
                     paginationState.currentPage = 1;
-                    renderAll(); // Re-render with the selected name
+                    renderAll();
                 }
             });
 
@@ -1533,11 +1554,9 @@
                 }
             }));
             filterOpenTagsBtn.addEventListener('click', () => openTagFilterModal());
-             // ▼▼▼ リセットボタンリスナー ▼▼▼
              resetFiltersBtn.addEventListener('click', async () => {
                  if (await showConfirm("フィルターリセット", "すべての絞り込み条件をリセットしますか？")) {
-                     listFilters = getDefaultFilters(); // Reset state
-                     // Reset UI elements
+                     listFilters = getDefaultFilters();
                      filterSearch.value = '';
                      $$('input[data-filter-genre]').forEach(cb => cb.checked = false);
                      filterRatingOp.value = 'gte';
@@ -1545,13 +1564,12 @@
                      filterUnrated.checked = false;
                      filterDateStart.value = '';
                      filterDateEnd.value = '';
-                     renderActiveTagFilters(); // Clear tag display
+                     renderActiveTagFilters();
                      paginationState.currentPage = 1;
                      renderAll();
                      showToast("フィルターをリセットしました。");
                  }
              });
-             // ▲▲▲ リセットボタンリスナー ▲▲▲
 
             // Action Bar
             itemsPerPageSelect.addEventListener('change', () => {
@@ -1560,7 +1578,7 @@
                 renderAll();
             });
             regNewWorkBtn.addEventListener('click', openRegistrationModal);
-            externalSearchBtn.addEventListener('click', () => openExternalSearchModal(listFilters.search)); // Use filter state for prefill
+            externalSearchBtn.addEventListener('click', () => openExternalSearchModal(listFilters.search));
             manageTagsBtn.addEventListener('click', () => openTagModal({ mode: 'manage' }));
             manageColumnsBtn.addEventListener('click', openColumnModal);
             bulkEditBtn.addEventListener('click', openBulkEditModal);
@@ -1575,7 +1593,7 @@
                     sortState.order = sortState.order === 'asc' ? 'desc' : 'asc';
                 } else {
                     sortState.by = newSortBy;
-                    sortState.order = 'desc'; // Default to desc for new columns
+                    sortState.order = 'desc';
                 }
                 paginationState.currentPage = 1;
                 renderAll();
@@ -1656,14 +1674,11 @@
                 hideModal(adSettingsModal, adSettingsModalContent);
                 showToast('広告設定を保存しました。');
             });
-            // Adjust layout on resize considering ad banner & columns
             window.addEventListener('resize', () => {
                 const settings = JSON.parse(localStorage.getItem('adSettings') || JSON.stringify(defaultAdSettings));
                 applyAdVisibility(settings.showAd);
-                // ▼ 列表示も再評価 ▼
                 updateColumnVisibility();
-                renderTable(); // Re-render table might be needed if columns changed
-                // ▲ 列表示も再評価 ▲
+                renderTable();
             });
         };
 
@@ -1755,7 +1770,7 @@
             });
         };
 
-        // --- Edit Modal (Button layout, Image compare) ---
+        // --- Edit Modal ---
         const openEditModal = (workId) => {
             const work = works.find(w => w.id === workId);
             if (!work) return;
@@ -1792,14 +1807,12 @@
 
             const content = `
                 <form id="edit-work-form" class="space-y-6">
-                    {/* <!-- Save/Cancel buttons reordered --> */}
                     <div class="flex flex-col gap-3">
                         <button type="submit" class="w-full px-6 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold">保存</button>
                         <button type="button" id="edit-cancel-btn" class="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* <!-- Left Column: Details --> */}
                         <div class="space-y-4">
                             <div>
                                 <label for="edit-name" class="block text-sm font-medium text-gray-400 mb-1">作品名 <span class="text-red-400">*</span></label>
@@ -1823,14 +1836,12 @@
                             </div>
                         </div>
 
-                        {/* <!-- Right Column: Image --> */}
                         <div class="space-y-4">
                             <div>
                                 <label for="edit-image" class="block text-sm font-medium text-gray-400 mb-2">画像 (任意, 900KB以下)</label>
                                 <input type="file" id="edit-image" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-sky-600 file:text-white hover:file:bg-sky-700">
                             </div>
 
-                            {/* <!-- Image Compare Window --> */}
                             <div id="image-compare-container" class="hidden space-y-3">
                                 <div class="flex gap-4">
                                     <div class="image-compare-box bg-gray-900">
@@ -1845,7 +1856,6 @@
                                 <button type="button" id="confirm-image-change-btn" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-semibold">この画像に変更する</button>
                             </div>
 
-                            {/* <!-- Initial image preview --> */}
                             <div id="initial-image-preview-container">
                                 <label class="block text-sm font-medium text-gray-400 mb-2">現在の画像</label>
                                 <img id="initial-image-preview" src="${work.imageUrl || 'https://placehold.co/400x200/1f2937/4b5563?text=No+Image'}" class="w-full h-auto max-h-48 object-contain mx-auto rounded-lg">
@@ -1853,7 +1863,6 @@
                         </div>
                     </div>
 
-                    {/* <!-- Rating & Tags --> */}
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-700">
                         <div>
                             <label class="block text-sm font-medium text-gray-400 mb-2">評価</label>
@@ -1962,7 +1971,7 @@
                     ${['manage', 'assign'].includes(mode) ? `<div class="flex flex-wrap gap-2 mb-4 p-1 bg-gray-900 rounded-lg"><input type="text" id="newTagName" placeholder="新しいタグ名" class="flex-grow min-w-[150px] bg-gray-700 p-2 rounded-lg"><div class="flex gap-2"><input type="color" id="newTagColor" value="#581c87" class="h-11 w-12 p-1 bg-gray-700 rounded-lg cursor-pointer"><button id="addTagBtn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold"><i class="fas fa-plus"></i> 追加</button></div></div>` : ''}
                     <div class="flex items-center gap-2 mb-2"><div class="flex-grow relative"><i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i><input type="search" id="tagSearchInput" placeholder="タグを検索..." class="w-full bg-gray-700 p-2 pl-10 rounded-lg"></div>${mode === 'assign' ? `<select id="tagFilterSelect" class="bg-gray-700 p-2 rounded-lg"><option value="all">すべて</option><option value="assigned">設定済</option><option value="unassigned">未設定</option></select>`: ''}<select id="tagSortSelect" class="bg-gray-700 p-2 rounded-lg"><option value="createdAt_desc">追加順 (新しい)</option><option value="createdAt_asc">追加順 (古い)</option><option value="name_asc">名前順 (昇順)</option></select></div>
                     ${mode === 'assign' ? `<div class="mb-4"><label class="block text-sm text-gray-400">選択中のタグ</label><div id="tag-selector-preview" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px]"></div></div>` : ''}
-                    <div id="tag-list" class="flex-grow overflow-y-auto pr-2 gap-2 grid grid-cols-2 md:grid-cols-3 lg:block lg:space-y-2"></div> {/* Responsive grid */}
+                    <div id="tag-list" class="flex-grow overflow-y-auto pr-2 gap-2 grid grid-cols-2 md:grid-cols-3 lg:block lg:space-y-2"></div>
                     ${mode === 'assign' ? `<div class="pt-4 mt-4 border-t border-gray-700 flex justify-end space-x-3"><button id="tag-modal-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button><button id="tag-modal-confirm" class="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold">決定</button></div>` : ''}
                 </div>`;
             openModal(titleMap[mode], content, () => {
@@ -2003,7 +2012,6 @@
         };
 
         const addTag = async (name, color) => {
-             // Debug check done in caller
              const normalizedName = name.trim().toLowerCase();
              if (tags.some(t => t.name.toLowerCase() === normalizedName)) return showToast("同じ名前のタグが既に存在します。", "error");
              const newTag = { name: name.trim(), color, createdAt: Timestamp.now() };
@@ -2014,7 +2022,6 @@
              } catch (error) { console.error("Error adding tag:", error); showToast("タグの作成に失敗しました。", "error"); }
         };
         const deleteTag = async (tagId) => {
-             // Debug check done in caller
              const tagToDelete = tags.find(t => t.id === tagId);
              if (!tagToDelete || !await showConfirm("タグの削除", `タグ「${tagToDelete.name}」を削除しますか？<br>全ての作品からこのタグが解除されます。`)) return;
              try {
@@ -2177,7 +2184,6 @@
                         showToast(`${count}件の作品を更新しました。`);
                         selectedWorkIds.clear();
                         closeModal();
-                        // renderAll() called by onSnapshot
                     } catch (error) {
                         console.error("Error bulk updating works:", error);
                         showToast("一括更新に失敗しました。", "error");
@@ -2227,8 +2233,8 @@
                         if (cb.checked) visibleColumns.add(colId);
                         else visibleColumns.delete(colId);
                         localStorage.setItem('visibleColumns', JSON.stringify(Array.from(visibleColumns)));
-                        updateColumnVisibility(); // Apply immediately
-                        renderTable(); // Re-render table to reflect changes
+                        updateColumnVisibility();
+                        renderTable(); // Re-render to apply changes
                     });
                 });
             }, { size: 'max-w-3xl' });
@@ -2318,11 +2324,10 @@
                 showToast("デバッグモードを開始しました。"); renderAll();
             }
         };
-        // --- End Debug Mode Logic ---
 
         // --- App Initialization ---
         const startApp = () => {
-            updateColumnVisibility(); // Initial column setup based on screen size/localStorage
+            updateColumnVisibility(); // Call this first
             loadingOverlay.classList.remove('hidden');
             initializeFirebase();
             loadAdSettings();
@@ -2351,4 +2356,3 @@
     </script>
 </body>
 </html>
-
