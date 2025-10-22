@@ -163,7 +163,7 @@
     <div id="debug-banner" class="hidden bg-amber-600 text-black text-center py-1 font-bold text-sm sticky top-0 z-[60]">
           デバッグモード実行中 - データは保存されません
     </div>
-    
+
     <div id="top-ad-banner" class="sticky top-0 z-40 w-full bg-gray-900/80 backdrop-blur-sm border-b border-gray-700/50">
         <div class="max-w-screen-2xl mx-auto p-2 md:px-6 lg:px-8">
             <div id="ad-script-container" class="bg-gray-800/50 rounded-lg text-center flex items-center justify-center min-h-[120px] overflow-hidden">
@@ -171,7 +171,7 @@
             </div>
         </div>
     </div>
-    
+
     <div id="loading-overlay" class="fixed inset-0 bg-gray-900 z-[100] flex items-center justify-center p-4">
         <div id="loading-content" class="text-center transition-opacity duration-300 opacity-0">
             <i class="fas fa-spinner fa-spin fa-3x text-teal-400"></i>
@@ -238,7 +238,7 @@
                 </summary>
                 <div class="p-5 border-t border-gray-700">
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {/* <!-- 作品名検索 --> */}
+                        <!-- ▼▼▼ `{/* */}` を削除 ▼▼▼ -->
                         <div class="space-y-2">
                             <label for="filter-search" class="text-sm font-medium text-gray-400">作品名</label>
                             <div class="relative">
@@ -247,7 +247,6 @@
                             </div>
                         </div>
 
-                        {/* <!-- ジャンル --> */}
                         <div class="space-y-2">
                             <label class="text-sm font-medium text-gray-400">ジャンル</label>
                             <div class="flex flex-wrap gap-x-4 gap-y-2 pt-2">
@@ -257,7 +256,6 @@
                             </div>
                         </div>
 
-                        {/* <!-- 評価 --> */}
                         <div class="space-y-2">
                             <label for="filter-rating-op" class="text-sm font-medium text-gray-400">評価</label>
                             <div class="flex items-center gap-2">
@@ -279,7 +277,6 @@
                             <label class="flex items-center pt-2"><input type="checkbox" id="filter-unrated" class="h-4 w-4 rounded bg-gray-700 text-teal-500 border-gray-600 focus:ring-teal-600"> <span class="ml-2 text-sm">未評価の作品のみ</span></label>
                         </div>
 
-                        {/* <!-- 登録日 --> */}
                         <div class="space-y-2">
                              <label class="text-sm font-medium text-gray-400">登録日</label>
                              <div class="flex items-center gap-2">
@@ -289,7 +286,6 @@
                              </div>
                         </div>
 
-                        {/* <!-- タグ --> */}
                         <div class="lg:col-span-4 space-y-2">
                             <label class="text-sm font-medium text-gray-400">タグ</label>
                             <div class="flex flex-wrap gap-2 items-center">
@@ -299,6 +295,7 @@
                                 </div>
                             </div>
                         </div>
+                        <!-- ▲▲▲ `{/* */}` を削除 ▲▲▲ -->
                     </div>
                 </div>
             </details>
@@ -339,7 +336,6 @@
                         <thead class="bg-gray-700/50 text-xs text-gray-300 uppercase tracking-wider">
                             <tr>
                                 <th class="p-3 w-12"><input type="checkbox" id="select-all-checkbox" class="h-4 w-4 rounded bg-gray-600 text-teal-500 border-gray-500 focus:ring-teal-600"></th>
-                                <!-- ▼▼▼ style="display: none;" を削除 ▼▼▼ -->
                                 <th class="p-3 col-image" data-col="image">画像</th>
                                 <th class="p-3 col-name" data-col="name" data-sort="name">作品名 <i class="fas fa-sort-down sort-icon"></i></th>
                                 <th class="p-3 col-genre" data-col="genre" data-sort="genre">ジャンル <i class="fas fa-sort-down sort-icon"></i></th>
@@ -350,7 +346,6 @@
                                 <th class="p-3 col-selectionCount" data-col="selectionCount" data-sort="selectionCount">抽選回数 <i class="fas fa-sort-down sort-icon"></i></th>
                                 <th class="p-3 col-sourceUrl" data-col="sourceUrl">URL</th>
                                 <th class="p-3 col-actions" data-col="actions">操作</th>
-                                <!-- ▲▲▲ style="display: none;" を削除 ▲▲▲ -->
                             </tr>
                         </thead>
                         <tbody id="works-table-body" class="divide-y divide-gray-700">
@@ -1231,7 +1226,7 @@
                 const workTags = (work.tagIds || []).map(id => tags.find(t => t.id === id)).filter(Boolean);
                 const safeName = escapeHTML(work.name);
                 const rating = work.rating || 0;
-                
+
                 // ▼▼▼ サイトバッジ用HTMLを取得 ▼▼▼
                 const badgeImageHTML = getSiteBadgeHTML(work.sourceUrl, false);
                 const badgeInlineHTML = getSiteBadgeHTML(work.sourceUrl, true);
@@ -1244,7 +1239,7 @@
                 const moreTagsHtml = workTags.length > MAX_TAGS_VISIBLE
                     ? `<span class="tag-pill tag-pill-sm tag-pill-more">+${workTags.length - MAX_TAGS_VISIBLE}</span>`
                     : '';
-                
+
                 // ▼▼▼ style="display: none;" を削除し、バッジとtruncateを追加 ▼▼▼
                 return `
                     <tr class="hover:bg-gray-700/50 transition-colors" data-id="${work.id}">
@@ -1300,7 +1295,7 @@
                 `;
                 // ▲▲▲ style="display: none;" を削除 ▲▲▲
             }).join('');
-            
+
             updateColumnVisibility();
         };
 
