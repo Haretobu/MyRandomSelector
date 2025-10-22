@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>作品リスト管理 (v2.0)</title>
+    <title>作品リスト管理 (v2.1)</title> <!-- Version updated -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -115,7 +115,7 @@
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans antialiased">
 
-    <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]">v2.0-manager</div>
+    <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]">v2.1-manager</div> <!-- Version updated -->
 
     <!-- ▼▼▼ 広告機能 (price_comparison.html から移植) ▼▼▼ -->
     <div id="top-ad-banner" class="sticky top-0 z-40 w-full bg-gray-900/80 backdrop-blur-sm border-b border-gray-700/50">
@@ -459,7 +459,7 @@
         // --- App Configuration ---
         const DEFAULT_APP_ID = 'r18-random-selector';
         const appId = typeof __app_id !== 'undefined' ? __app_id : DEFAULT_APP_ID;
-        const appVersion = 'v2.0-manager';
+        const appVersion = 'v2.1-manager'; // Version updated
         const MASTER_PASSWORD = '07143674';
         $('#version-display').textContent = appVersion;
 
@@ -486,7 +486,7 @@
         let isLoadComplete = false;
         let loadingStatus = { auth: false, works: false, tags: false };
         let checkModalDirtyState = () => false;
-        let paginatedWorks = []; // ← paginatedWorks をグローバルスコープで宣言
+        let paginatedWorks = []; // Global scope declaration
 
         // List State
         let displayedWorks = []; // Filtered, sorted, paginated list
@@ -517,7 +517,7 @@
         const loadingOverlay = $('#loading-overlay');
         const loadingContent = $('#loading-content');
         const loadingText = $('#loading-text');
-        const loadingErrorDisplay = $('#loading-error-display'); // エラー表示
+        const loadingErrorDisplay = $('#loading-error-display'); // Error display
         const appContainer = $('#app-container');
         const mainContent = $('#main-content');
 
@@ -530,7 +530,7 @@
 
         // Filter Panel
         const filterSearch = $('#filter-search');
-        const filterSuggestions = $('#filter-suggestions'); // サジェスト用
+        const filterSuggestions = $('#filter-suggestions'); // Suggestion area
         const filterUnrated = $('#filter-unrated');
         const filterRatingOp = $('#filter-rating-op');
         const filterRatingVal = $('#filter-rating-val');
@@ -541,7 +541,7 @@
 
         // Action Bar
         const regNewWorkBtn = $('#reg-new-work-btn');
-        const externalSearchBtn = $('#external-search-btn'); // 外部検索ボタン
+        const externalSearchBtn = $('#external-search-btn'); // External search button
         const manageTagsBtn = $('#manage-tags-btn');
         const manageColumnsBtn = $('#manage-columns-btn');
         const bulkActionBar = $('#bulk-action-bar');
@@ -603,7 +603,6 @@
         };
 
         const showToast = (message, type = 'success', duration = 3000) => {
-            // 'type' argument added for error styling
             toastMessageEl.textContent = message;
             if (type === 'error') {
                 toastEl.classList.add('bg-red-600');
@@ -679,7 +678,7 @@
             return (r * 0.299 + g * 0.587 + b * 0.114) > 186 ? '#000000' : '#FFFFFF';
         };
 
-        // --- Loading Timeout Logic (from index.html) ---
+        // --- Loading Timeout Logic ---
 
         const handleLoadingTimeout = (isStall = false) => {
             if (isLoadComplete) return;
@@ -734,8 +733,20 @@
             loadingErrorDisplay.classList.remove('hidden');
         };
 
-        // --- Modal Management (from index.html) ---
+        // --- ▼▼▼ 広告設定用 Modal Helper Functions (移植) ▼▼▼ ---
+        const showModal = (modal, content) => {
+            modal.classList.remove('hidden');
+            setTimeout(() => content.classList.add('modal-open'), 10);
+        }
+        const hideModal = (modal, content) => {
+            content.classList.remove('modal-open');
+            setTimeout(() => modal.classList.add('hidden'), 300);
+        }
+        // --- ▲▲▲ 広告設定用 Modal Helper Functions (移植) ▲▲▲ ---
+
+        // --- Modal Management ---
         const openModal = (title, contentHtml, onOpen = null, options = {}) => {
+            // This is the main modal function used by most features EXCEPT ad settings
             checkModalDirtyState = () => false;
             const { size = 'max-w-2xl' } = options;
 
@@ -751,7 +762,7 @@
             setTimeout(() => {
                 modalBackdrop.classList.add('opacity-100');
                 modalContainer.classList.remove('scale-95', 'opacity-0');
-                modalContainer.classList.add('modal-open');
+                modalContainer.classList.add('modal-open'); // Use class for animation
                 if (onOpen) onOpen();
 
                 const firstFocusable = modalContentHost.querySelector('input, select, button');
@@ -762,6 +773,7 @@
         };
 
         const closeModal = async () => {
+            // This is the main close function used by most features EXCEPT ad settings
             if (checkModalDirtyState()) {
                 const confirmed = await showConfirm("未保存の変更", "変更が保存されていません。本当に閉じますか？");
                 if (!confirmed) return;
@@ -769,17 +781,17 @@
             checkModalDirtyState = () => false;
 
             modalContainer.classList.add('scale-95', 'opacity-0');
-            modalContainer.classList.remove('modal-open');
+            modalContainer.classList.remove('modal-open'); // Remove animation class
             modalBackdrop.classList.remove('opacity-100');
 
             setTimeout(() => {
                 modalBackdrop.classList.add('hidden');
                 modalWrapper.classList.add('hidden');
                 modalContentHost.innerHTML = '';
-            }, 300);
+            }, 300); // Wait for animation
         };
 
-        // --- Loading / Auth (from index.html) ---
+        // --- Loading / Auth ---
 
         const checkLoadingComplete = () => {
             if (isLoadComplete) return;
@@ -825,7 +837,7 @@
                     if (!loadingStatus.auth) {
                         currentUser = user;
                         loadingStatus.auth = true;
-                        clearTimeout(stallTimeout); // Clear previous stall timer if any
+                        clearTimeout(stallTimeout);
                         stallTimeout = setTimeout(() => handleLoadingTimeout(true), 15000);
                         checkLoadingComplete();
                         setupSyncId();
@@ -836,7 +848,7 @@
             }, error => handleDataFetchError(error, '認証状態監視'));
         };
 
-        // --- Data Sync Logic (from index.html) ---
+        // --- Data Sync Logic ---
         const setupSyncId = () => {
             let currentSyncId = localStorage.getItem('r18_sync_id');
             if (!currentSyncId) {
@@ -927,7 +939,7 @@
             }, error => handleDataFetchError(error, 'タグ'));
         };
 
-        // --- Image Processing (from index.html) ---
+        // --- Image Processing ---
         const processImage = (file) => {
             return new Promise((resolve, reject) => {
                 if (file.size > 900 * 1024) return reject(new Error("ファイルサイズが900KBを超えています。"));
@@ -1510,11 +1522,14 @@
             initializeDateInputs(document.body);
 
             // Ad UI Events (from price_comparison.html)
+            // ▼▼▼ Correctly reference the specific showModal/hideModal for ads ▼▼▼
             document.getElementById('ad-settings-fab').addEventListener('click', () => showModal(adSettingsModal, adSettingsModalContent));
             document.getElementById('ad-settings-modal-close').addEventListener('click', () => hideModal(adSettingsModal, adSettingsModalContent));
             adSettingsModal.addEventListener('click', (e) => {
+                // Use the specific hideModal for ads
                 if (e.target === adSettingsModal) hideModal(adSettingsModal, adSettingsModalContent);
             });
+            // ▲▲▲ Correctly reference the specific showModal/hideModal for ads ▲▲▲
             document.querySelectorAll('input[name="ad_type"]').forEach(radio => {
                 radio.addEventListener('change', (e) => {
                     document.getElementById('ad-period-container').style.display = e.target.value === 'ranking' ? 'block' : 'none';
@@ -1522,6 +1537,7 @@
             });
             document.getElementById('save-ad-settings-btn').addEventListener('click', () => {
                 saveAndReloadAd();
+                 // Use the specific hideModal for ads
                 hideModal(adSettingsModal, adSettingsModalContent);
                 showToast('広告設定を保存しました。');
             });
