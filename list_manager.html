@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>作品リスト管理 (v2.2)</title> <!-- Version updated -->
+    <title>作品リスト管理 (v2.3)</title> <!-- Version updated -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -57,6 +57,12 @@
         }
         .sort-icon.asc { transform: rotate(0deg); }
         .sort-icon.desc { transform: rotate(180deg); }
+        /* ▼ スマホでのテーブル文字サイズ調整 ▼ */
+        #works-table { font-size: 0.8rem; } /* 少し小さく */
+        @media (min-width: 768px) { /* md以上で元に戻す */
+            #works-table { font-size: 0.875rem; } /* text-sm */
+        }
+        /* ▲ スマホでのテーブル文字サイズ調整 ▲ */
 
         /* Inline Rating Stars */
         .inline-rating .fa-star {
@@ -77,6 +83,17 @@
             margin: 2px;
             white-space: nowrap;
         }
+        /* ▼ タグ省略表示用スタイル ▼ */
+        .tag-pill-sm {
+             padding: 1px 6px;
+             font-size: 10px;
+             margin: 1px;
+        }
+        .tag-pill-more {
+             background-color: #4b5563; /* gray-600 */
+             color: white;
+        }
+        /* ▲ タグ省略表示用スタイル ▲ */
         .tag-item-and { background-color: #059669 !important; color: white !important; }
         .tag-item-or { background-color: #2563eb !important; color: white !important; }
         .tag-item-not { background-color: #be123c !important; color: white !important; text-decoration: line-through; }
@@ -115,7 +132,7 @@
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans antialiased">
 
-    <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]">v2.2-manager</div> <!-- Version updated -->
+    <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]">v2.3-manager</div> <!-- Version updated -->
 
     <!-- ▼▼▼ デバッグモードバナー (index.html から移植) ▼▼▼ -->
     <div id="debug-banner" class="hidden bg-amber-600 text-black text-center py-1 font-bold text-sm sticky top-0 z-[60]">
@@ -198,22 +215,28 @@
             <details id="filter-panel-details" class="bg-gray-800 rounded-xl shadow-lg" open>
                 <summary class="p-5 flex justify-between items-center">
                     <h2 class="text-lg font-bold text-gray-300 flex items-center"><i class="fas fa-filter mr-3"></i>検索・絞り込み</h2>
+                     <!-- ▼▼▼ フィルターリセットボタン ▼▼▼ -->
+                     <button id="reset-filters-btn" class="ml-auto mr-4 px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-lg text-xs transition-colors flex items-center">
+                         <i class="fas fa-undo mr-1"></i>リセット
+                     </button>
+                     <!-- ▲▲▲ フィルターリセットボタン ▲▲▲ -->
                     <i class="fas fa-chevron-down chevron-icon"></i>
                 </summary>
                 <div class="p-5 border-t border-gray-700">
+                     <!-- ▼▼▼ レスポンシブグリッドに変更 ▼▼▼ -->
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <!-- ▼▼▼ 検索候補機能を追加 ▼▼▼ -->
+                     <!-- ▲▲▲ レスポンシブグリッドに変更 ▲▲▲ -->
+                        {/* <!-- 作品名検索 --> */}
                         <div class="space-y-2">
                             <label for="filter-search" class="text-sm font-medium text-gray-400">作品名</label>
                             <div class="relative">
                                 <input type="search" id="filter-search" placeholder="作品名で検索..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                <!-- サジェスト表示エリア -->
+                                {/* <!-- サジェスト表示エリア --> */}
                                 <div id="filter-suggestions" class="absolute z-30 w-full bg-gray-600 rounded-b-lg max-h-60 overflow-y-auto mt-1 hidden shadow-lg"></div>
                             </div>
                         </div>
-                        <!-- ▲▲▲ 検索候補機能を追加 ▲▲▲ -->
 
-                        <!-- ジャンル -->
+                        {/* <!-- ジャンル --> */}
                         <div class="space-y-2">
                             <label class="text-sm font-medium text-gray-400">ジャンル</label>
                             <div class="flex flex-wrap gap-x-4 gap-y-2 pt-2">
@@ -223,7 +246,7 @@
                             </div>
                         </div>
 
-                        <!-- 評価 -->
+                        {/* <!-- 評価 --> */}
                         <div class="space-y-2">
                             <label for="filter-rating-op" class="text-sm font-medium text-gray-400">評価</label>
                             <div class="flex items-center gap-2">
@@ -245,7 +268,7 @@
                             <label class="flex items-center pt-2"><input type="checkbox" id="filter-unrated" class="h-4 w-4 rounded bg-gray-700 text-teal-500 border-gray-600 focus:ring-teal-600"> <span class="ml-2 text-sm">未評価の作品のみ</span></label>
                         </div>
 
-                        <!-- 登録日 -->
+                        {/* <!-- 登録日 --> */}
                         <div class="space-y-2">
                              <label class="text-sm font-medium text-gray-400">登録日</label>
                              <div class="flex items-center gap-2">
@@ -255,13 +278,15 @@
                              </div>
                         </div>
 
-                        <!-- タグ -->
+                        {/* <!-- タグ --> */}
+                        {/* ▼ col-span を lg のみに適用 ▼ */}
                         <div class="lg:col-span-4 space-y-2">
+                        {/* ▲ col-span を lg のみに適用 ▲ */}
                             <label class="text-sm font-medium text-gray-400">タグ</label>
                             <div class="flex flex-wrap gap-2 items-center">
                                 <button id="filter-open-tags-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-sm transition-colors"><i class="fas fa-tags mr-2"></i>タグ条件を選択</button>
                                 <div id="filter-tags-display" class="flex flex-wrap gap-1">
-                                    <!-- Selected tag pills go here -->
+                                    {/* <!-- Selected tag pills go here --> */}
                                 </div>
                             </div>
                         </div>
@@ -269,25 +294,26 @@
                 </div>
             </details>
 
-            <!-- 3. Action Bar & List Info -->
-            <section class="bg-gray-800 p-4 rounded-xl shadow-lg space-y-4">
-                <div class="flex justify-between items-center flex-wrap gap-4">
-                    <div class="flex flex-wrap gap-3">
-                        <button id="reg-new-work-btn" class="px-4 py-2 bg-lime-600 hover:bg-lime-700 rounded-lg font-semibold transition-colors flex items-center"><i class="fas fa-plus mr-2"></i>新規登録</button>
-                        <!-- ▼▼▼ 外部検索ボタンを追加 ▼▼▼ -->
-                        <button id="external-search-btn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg font-semibold transition-colors flex items-center"><i class="fas fa-globe-asia mr-2"></i>外部検索</button>
-                        <!-- ▲▲▲ 外部検索ボタンを追加 ▲▲▲ -->
-                        <button id="manage-tags-btn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition-colors flex items-center"><i class="fas fa-tags mr-2"></i>タグ管理</button>
-                        <button id="manage-columns-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors flex items-center"><i class="fas fa-columns mr-2"></i>表示列</button>
-                    </div>
-                    <!-- Bulk Actions (hidden by default) -->
-                    <div id="bulk-action-bar" class="hidden flex flex-wrap gap-3 items-center bg-gray-700 p-3 rounded-lg">
-                        <span id="bulk-selected-count" class="text-sm font-semibold mr-2">0件選択中</span>
-                        <button id="bulk-edit-btn" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg text-sm transition-colors"><i class="fas fa-pencil-alt mr-2"></i>一括編集</button>
-                        <button id="bulk-delete-btn" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm transition-colors"><i class="fas fa-trash-alt mr-2"></i>一括削除</button>
-                    </div>
+            {/* <!-- 3. Action Bar & List Info --> */}
+            {/* ▼ flex-col sm:flex-row でレスポンシブ対応 ▼ */}
+            <section class="bg-gray-800 p-4 rounded-xl shadow-lg space-y-4 md:space-y-0 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+                <div class="flex flex-wrap gap-3">
+            {/* ▲ flex-col sm:flex-row でレスポンシブ対応 ▲ */}
+                    <button id="reg-new-work-btn" class="px-4 py-2 bg-lime-600 hover:bg-lime-700 rounded-lg font-semibold transition-colors flex items-center"><i class="fas fa-plus mr-2"></i>新規登録</button>
+                    {/* <!-- ▼▼▼ 外部検索ボタンを追加 ▼▼▼ --> */}
+                    <button id="external-search-btn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg font-semibold transition-colors flex items-center"><i class="fas fa-globe-asia mr-2"></i>外部検索</button>
+                    {/* <!-- ▲▲▲ 外部検索ボタンを追加 ▲▲▲ --> */}
+                    <button id="manage-tags-btn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition-colors flex items-center"><i class="fas fa-tags mr-2"></i>タグ管理</button>
+                    <button id="manage-columns-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors flex items-center"><i class="fas fa-columns mr-2"></i>表示列</button>
                 </div>
-                <div class="flex justify-between items-center px-2">
+                {/* <!-- Bulk Actions (hidden by default) --> */}
+                <div id="bulk-action-bar" class="hidden flex flex-wrap gap-3 items-center bg-gray-700 p-3 rounded-lg">
+                    <span id="bulk-selected-count" class="text-sm font-semibold mr-2">0件選択中</span>
+                    <button id="bulk-edit-btn" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg text-sm transition-colors"><i class="fas fa-pencil-alt mr-2"></i>一括編集</button>
+                    <button id="bulk-delete-btn" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm transition-colors"><i class="fas fa-trash-alt mr-2"></i>一括削除</button>
+                </div>
+                {/* ▼ List info (Count & Per Page) ▼ */}
+                <div class="flex justify-between items-center w-full md:w-auto mt-2 md:mt-0">
                     <span id="work-count-display" class="text-sm text-gray-400">0 作品</span>
                     <div class="flex items-center gap-2">
                         <label for="items-per-page" class="text-sm text-gray-400">表示件数:</label>
@@ -298,21 +324,23 @@
                         </select>
                     </div>
                 </div>
+                 {/* ▲ List info (Count & Per Page) ▲ */}
             </section>
 
-            <!-- 4. Works Table -->
+
+            {/* <!-- 4. Works Table --> */}
             <section class="bg-gray-800 rounded-xl shadow-lg overflow-hidden">
                 <div class="overflow-x-auto">
-                    <table id="works-table" class="w-full text-sm text-left">
+                    <table id="works-table" class="w-full text-left"> {/* text-sm removed, applied via CSS */}
                         <thead class="bg-gray-700/50 text-xs text-gray-300 uppercase tracking-wider">
                             <tr>
                                 <th class="p-3 w-12"><input type="checkbox" id="select-all-checkbox" class="h-4 w-4 rounded bg-gray-600 text-teal-500 border-gray-500 focus:ring-teal-600"></th>
                                 <th class="p-3 col-image" data-col="image" style="display: none;">画像</th>
                                 <th class="p-3 col-name" data-col="name" data-sort="name">作品名 <i class="fas fa-sort-down sort-icon"></i></th>
-                                <th class="p-3 col-genre" data-col="genre" data-sort="genre">ジャンル <i class="fas fa-sort-down sort-icon"></i></th>
-                                <th class="p-3 col-registeredAt" data-col="registeredAt" data-sort="registeredAt">登録日 <i class="fas fa-sort-down sort-icon desc"></i></th>
+                                <th class="p-3 col-genre" data-col="genre" data-sort="genre" style="display: none;">ジャンル <i class="fas fa-sort-down sort-icon"></i></th> {/* Initially hidden on small screens */}
+                                <th class="p-3 col-registeredAt" data-col="registeredAt" data-sort="registeredAt" style="display: none;">登録日 <i class="fas fa-sort-down sort-icon desc"></i></th> {/* Initially hidden */}
                                 <th class="p-3 col-rating" data-col="rating" data-sort="rating">評価 <i class="fas fa-sort-down sort-icon"></i></th>
-                                <th class="p-3 col-tags" data-col="tags">タグ</th>
+                                <th class="p-3 col-tags" data-col="tags" style="display: none;">タグ</th> {/* Initially hidden */}
                                 <th class="p-3 col-lastSelectedAt" data-col="lastSelectedAt" data-sort="lastSelectedAt" style="display: none;">最終抽選日 <i class="fas fa-sort-down sort-icon"></i></th>
                                 <th class="p-3 col-selectionCount" data-col="selectionCount" data-sort="selectionCount" style="display: none;">抽選回数 <i class="fas fa-sort-down sort-icon"></i></th>
                                 <th class="p-3 col-sourceUrl" data-col="sourceUrl" style="display: none;">URL</th>
@@ -320,29 +348,29 @@
                             </tr>
                         </thead>
                         <tbody id="works-table-body" class="divide-y divide-gray-700">
-                            <!-- JS will render rows here -->
+                            {/* <!-- JS will render rows here --> */}
                             <tr><td colspan="10" class="p-8 text-center text-gray-500">データを読み込み中...</td></tr>
                         </tbody>
                     </table>
                 </div>
             </section>
 
-            <!-- 5. Pagination -->
+            {/* <!-- 5. Pagination --> */}
             <section id="pagination-container" class="flex justify-center items-center gap-2 pt-4">
-                <!-- JS will render pagination buttons here -->
+                {/* <!-- JS will render pagination buttons here --> */}
             </section>
 
         </main>
     </div>
 
-    <!-- ▼▼▼ 広告FAB (price_comparison.html から移植) ▼▼▼ -->
+    {/* <!-- ▼▼▼ 広告FAB (price_comparison.html から移植) ▼▼▼ --> */}
     <div class="fixed bottom-6 right-6 z-50 flex flex-col gap-4">
         <button id="ad-settings-fab" class="bg-blue-600 hover:bg-blue-500 w-16 h-16 rounded-full shadow-lg flex items-center justify-center text-2xl transition-transform hover:scale-110" title="広告設定">
             <i class="fas fa-ad"></i>
         </button>
     </div>
 
-    <!-- ▼▼▼ 広告モーダル (price_comparison.html から移植) ▼▼▼ -->
+    {/* <!-- ▼▼▼ 広告モーダル (price_comparison.html から移植) ▼▼▼ --> */}
     <div id="ad-settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[80] flex items-center justify-center p-4">
         <div id="ad-settings-modal-content" class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-md w-full relative">
              <button id="ad-settings-modal-close" class="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors">
@@ -391,9 +419,9 @@
             </div>
         </div>
     </div>
-    <!-- ▲▲▲ 広告関連 ▲▲▲ -->
+    {/* <!-- ▲▲▲ 広告関連 ▲▲▲ --> */}
 
-    <!-- ▼▼▼ 汎用モーダル (index.html から移植) ▼▼▼ -->
+    {/* <!-- ▼▼▼ 汎用モーダル (index.html から移植) ▼▼▼ --> */}
     <div id="modal-backdrop" class="hidden fixed inset-0 bg-black bg-opacity-70 z-40 transition-opacity"></div>
     <div id="modal-wrapper" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
         <div id="modal-container" class="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-transform scale-95 opacity-0">
@@ -402,17 +430,17 @@
                 <button id="modal-close-btn" class="text-gray-400 hover:text-white"><i class="fas fa-times fa-lg"></i></button>
             </div>
             <div id="modal-content-host" class="p-6 overflow-y-auto modal-content">
-                <!-- Modal content will be injected here -->
+                {/* <!-- Modal content will be injected here --> */}
             </div>
         </div>
     </div>
 
-    <!-- Toast Notification (from index.html) -->
+    {/* <!-- Toast Notification (from index.html) --> */}
     <div id="toast" class="fixed bottom-5 right-5 bg-gray-700 text-white px-6 py-3 rounded-lg shadow-lg z-[70]">
         <p id="toast-message">Message</p>
     </div>
 
-    <!-- Password Overlay (from index.html) -->
+    {/* <!-- Password Overlay (from index.html) --> */}
     <div id="password-overlay" class="hidden fixed inset-0 bg-gray-900 bg-opacity-95 z-[90] flex items-center justify-center p-4">
         <div class="w-full max-w-sm">
             <form id="password-form" class="bg-gray-800 p-8 rounded-2xl shadow-2xl space-y-6">
@@ -427,7 +455,7 @@
         </div>
     </div>
 
-    <!-- Confirmation Modal (from index.html) -->
+    {/* <!-- Confirmation Modal (from index.html) --> */}
     <div id="confirm-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[80] flex items-center justify-center p-4">
         <div class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-sm w-full">
             <h3 id="confirm-title" class="text-lg font-bold mb-4">確認</h3>
@@ -438,9 +466,9 @@
             </div>
         </div>
     </div>
-    <!-- ▲▲▲ 汎用モーダル (index.html から移植) ▲▲▲ -->
+    {/* <!-- ▲▲▲ 汎用モーダル (index.html から移植) ▲▲▲ --> */}
 
-    <!-- Firebase SDKs -->
+    {/* <!-- Firebase SDKs --> */}
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import {
@@ -470,7 +498,7 @@
         // --- App Configuration ---
         const DEFAULT_APP_ID = 'r18-random-selector';
         const appId = typeof __app_id !== 'undefined' ? __app_id : DEFAULT_APP_ID;
-        const appVersion = 'v2.2-manager'; // Version updated
+        const appVersion = 'v2.3-manager'; // Version updated
         const MASTER_PASSWORD = '07143674';
         $('#version-display').textContent = appVersion;
 
@@ -498,14 +526,13 @@
         let loadingStatus = { auth: false, works: false, tags: false };
         let checkModalDirtyState = () => false;
         let paginatedWorks = []; // Global scope declaration
-        let isDebugMode = false; // ▼▼▼ デバッグモード状態 ▼▼▼
+        let isDebugMode = false; // Debug mode state
 
-        // List State
-        let displayedWorks = []; // Filtered, sorted, paginated list
-        let filters = {
+        // ▼▼▼ フィルター初期状態を関数化 ▼▼▼
+        const getDefaultFilters = () => ({
             search: '',
             genres: new Set(),
-            ratingOp: 'gte', // 'gte', 'lte', 'eq'
+            ratingOp: 'gte',
             ratingVal: 0,
             unrated: false,
             dateStart: '',
@@ -513,7 +540,12 @@
             andTagIds: new Set(),
             orTagIds: new Set(),
             notTagIds: new Set()
-        };
+        });
+        // ▲▲▲ フィルター初期状態を関数化 ▲▲▲
+
+        // List State
+        let displayedWorks = []; // Filtered, sorted, paginated list
+        let listFilters = getDefaultFilters(); // ▼▼▼ 初期化に関数を使用 ▼▼▼
         let sortState = {
             by: 'registeredAt',
             order: 'desc',
@@ -523,7 +555,9 @@
             itemsPerPage: 50,
         };
         let selectedWorkIds = new Set();
-        let visibleColumns = new Set(['name', 'genre', 'registeredAt', 'rating', 'tags', 'actions']);
+        // ▼▼▼ スマホ用にデフォルト表示列を変更 ▼▼▼
+        let visibleColumns = new Set(['name', 'rating', 'actions']);
+        // ▲▲▲ スマホ用にデフォルト表示列を変更 ▲▲▲
 
         // --- UI Elements ---
         const loadingOverlay = $('#loading-overlay');
@@ -532,7 +566,7 @@
         const loadingErrorDisplay = $('#loading-error-display'); // Error display
         const appContainer = $('#app-container');
         const mainContent = $('#main-content');
-        const debugBanner = $('#debug-banner'); // ▼▼▼ デバッグバナー ▼▼▼
+        const debugBanner = $('#debug-banner'); // Debug banner
 
         // Sync Panel
         const syncIdDisplay = $('#syncIdDisplay');
@@ -540,7 +574,7 @@
         const newSyncIdInput = $('#newSyncIdInput');
         const loadSyncIdBtn = $('#loadSyncIdBtn');
         const syncIdHistoryEl = $('#syncIdHistory');
-        const toggleDebugModeBtn = $('#toggleDebugModeBtn'); // ▼▼▼ デバッグボタン ▼▼▼
+        const toggleDebugModeBtn = $('#toggleDebugModeBtn'); // Debug button
 
         // Filter Panel
         const filterSearch = $('#filter-search');
@@ -552,6 +586,7 @@
         const filterDateEnd = $('#filter-date-end');
         const filterOpenTagsBtn = $('#filter-open-tags-btn');
         const filterTagsDisplay = $('#filter-tags-display');
+        const resetFiltersBtn = $('#reset-filters-btn'); // ▼▼▼ リセットボタン ▼▼▼
 
         // Action Bar
         const regNewWorkBtn = $('#reg-new-work-btn');
@@ -886,16 +921,15 @@
             tags = [];
             renderAll();
 
-            // ▼▼▼ デバッグモード中は購読しない ▼▼▼
+            // Debug mode check
             if (currentUser && syncId && !isDebugMode) {
                 subscribeToWorks();
                 subscribeToTags();
             } else if (isDebugMode) {
-                // デバッグモードでもロード完了ステータスは更新する
+                // Update load status even in debug mode
                 loadingStatus = { auth: true, works: true, tags: true };
                 checkLoadingComplete();
             }
-            // ▲▲▲ デバッグモード中は購読しない ▲▲▲
         };
 
         const updateSyncIdHistory = (newId) => {
@@ -922,9 +956,7 @@
         };
 
         const subscribeToWorks = () => {
-            // ▼▼▼ デバッグモードチェック ▼▼▼
             if (isDebugMode) return;
-            // ▲▲▲ デバッグモードチェック ▲▲▲
             let isFirstLoad = true;
             const worksRef = collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`);
             unsubscribeWorks = onSnapshot(worksRef, (snapshot) => {
@@ -948,9 +980,7 @@
         };
 
         const subscribeToTags = () => {
-            // ▼▼▼ デバッグモードチェック ▼▼▼
             if (isDebugMode) return;
-            // ▲▲▲ デバッグモードチェック ▲▲▲
             let isFirstLoad = true;
             const tagsRef = collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/tags`);
             unsubscribeTags = onSnapshot(tagsRef, (snapshot) => {
@@ -995,12 +1025,10 @@
 
         // --- CRUD Operations ---
         const addWork = async (newWorkData) => {
-            // ▼▼▼ デバッグモードチェック ▼▼▼
             if (isDebugMode) {
                 showToast("デバッグモード中は作品を追加できません。", "error");
                 return false;
             }
-            // ▲▲▲ デバッグモードチェック ▲▲▲
             const name = newWorkData.name.trim();
             if (!name) return showToast("作品名は必須です。", "error");
             if (works.some(w => w.name.toLowerCase() === name.toLowerCase())) {
@@ -1019,7 +1047,6 @@
         };
 
         const updateWork = async (workId, updatedData) => {
-            // ▼▼▼ デバッグモードチェック ▼▼▼
             if (isDebugMode) {
                 // ローカルデータのみ更新
                 const index = works.findIndex(w => w.id === workId);
@@ -1032,7 +1059,6 @@
                 showToast("デバッグモード: 更新対象の作品が見つかりません。", "error");
                 return false;
             }
-            // ▲▲▲ デバッグモードチェック ▲▲▲
             try {
                 const workRef = doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, workId);
                 await updateDoc(workRef, updatedData);
@@ -1045,12 +1071,10 @@
         };
 
         const deleteWork = async (workId, workName) => {
-            // ▼▼▼ デバッグモードチェック ▼▼▼
             if (isDebugMode) {
                 showToast("デバッグモード中は作品を削除できません。", "error");
                 return;
             }
-            // ▲▲▲ デバッグモードチェック ▲▲▲
             if (!await showConfirm("作品の削除", `「${workName}」を本当に削除しますか？<br>この操作は取り消せません。`)) return;
             try {
                 await deleteDoc(doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, workId));
@@ -1064,12 +1088,10 @@
         };
 
         const bulkDeleteWorks = async () => {
-            // ▼▼▼ デバッグモードチェック ▼▼▼
             if (isDebugMode) {
                 showToast("デバッグモード中は一括削除できません。", "error");
                 return;
             }
-            // ▲▲▲ デバッグモードチェック ▲▲▲
             const count = selectedWorkIds.size;
             if (count === 0) return;
             if (!await showConfirm("一括削除", `${count}件の作品を本当に削除しますか？<br>この操作は取り消せません。`)) return;
@@ -1104,37 +1126,37 @@
             let tempWorks = [...works];
 
             // 1. Filter
-            if (filters.search) {
-                const searchLower = filters.search.toLowerCase();
+            if (listFilters.search) {
+                const searchLower = listFilters.search.toLowerCase();
                 tempWorks = tempWorks.filter(w => w.name.toLowerCase().includes(searchLower));
             }
-            if (filters.genres.size > 0) {
-                tempWorks = tempWorks.filter(w => filters.genres.has(w.genre));
+            if (listFilters.genres.size > 0) {
+                tempWorks = tempWorks.filter(w => listFilters.genres.has(w.genre));
             }
-            if (filters.unrated) {
+            if (listFilters.unrated) {
                 tempWorks = tempWorks.filter(w => !w.rating || w.rating === 0);
-            } else if (filters.ratingVal > 0) {
-                const val = filters.ratingVal;
-                if (filters.ratingOp === 'gte') tempWorks = tempWorks.filter(w => w.rating >= val);
-                else if (filters.ratingOp === 'lte') tempWorks = tempWorks.filter(w => w.rating <= val && w.rating > 0);
-                else if (filters.ratingOp === 'eq') tempWorks = tempWorks.filter(w => w.rating === val);
+            } else if (listFilters.ratingVal > 0) {
+                const val = listFilters.ratingVal;
+                if (listFilters.ratingOp === 'gte') tempWorks = tempWorks.filter(w => w.rating >= val);
+                else if (listFilters.ratingOp === 'lte') tempWorks = tempWorks.filter(w => w.rating <= val && w.rating > 0);
+                else if (listFilters.ratingOp === 'eq') tempWorks = tempWorks.filter(w => w.rating === val);
             }
-            if (filters.dateStart && isValidDate(filters.dateStart)) {
-                const start = new Date(filters.dateStart); start.setHours(0,0,0,0);
+            if (listFilters.dateStart && isValidDate(listFilters.dateStart)) {
+                const start = new Date(listFilters.dateStart); start.setHours(0,0,0,0);
                 tempWorks = tempWorks.filter(w => w.registeredAt && w.registeredAt.toDate() >= start);
             }
-            if (filters.dateEnd && isValidDate(filters.dateEnd)) {
-                const end = new Date(filters.dateEnd); end.setHours(23,59,59,999);
+            if (listFilters.dateEnd && isValidDate(listFilters.dateEnd)) {
+                const end = new Date(listFilters.dateEnd); end.setHours(23,59,59,999);
                 tempWorks = tempWorks.filter(w => w.registeredAt && w.registeredAt.toDate() <= end);
             }
-            if (filters.andTagIds.size > 0) {
-                tempWorks = tempWorks.filter(w => w.tagIds && [...filters.andTagIds].every(tid => w.tagIds.includes(tid)));
+            if (listFilters.andTagIds.size > 0) {
+                tempWorks = tempWorks.filter(w => w.tagIds && [...listFilters.andTagIds].every(tid => w.tagIds.includes(tid)));
             }
-            if (filters.orTagIds.size > 0) {
-                tempWorks = tempWorks.filter(w => w.tagIds && [...filters.orTagIds].some(tid => w.tagIds.includes(tid)));
+            if (listFilters.orTagIds.size > 0) {
+                tempWorks = tempWorks.filter(w => w.tagIds && [...listFilters.orTagIds].some(tid => w.tagIds.includes(tid)));
             }
-            if (filters.notTagIds.size > 0) {
-                tempWorks = tempWorks.filter(w => !w.tagIds || ![...filters.notTagIds].some(tid => w.tagIds.includes(tid)));
+            if (listFilters.notTagIds.size > 0) {
+                tempWorks = tempWorks.filter(w => !w.tagIds || ![...listFilters.notTagIds].some(tid => w.tagIds.includes(tid)));
             }
 
             // 2. Sort
@@ -1168,7 +1190,6 @@
         };
 
         const renderTable = () => {
-            // Update sort icons in header
             worksTableHead.querySelectorAll('th[data-sort]').forEach(th => {
                 const icon = th.querySelector('.sort-icon');
                 if (th.dataset.sort === sortState.by) {
@@ -1180,7 +1201,6 @@
                 }
             });
 
-            // Get paginated items
             const { currentPage, itemsPerPage } = paginationState;
             const start = (currentPage - 1) * itemsPerPage;
             const end = start + itemsPerPage;
@@ -1197,6 +1217,16 @@
                 const safeName = escapeHTML(work.name);
                 const rating = work.rating || 0;
 
+                // ▼▼▼ タグ省略表示ロジック ▼▼▼
+                const MAX_TAGS_VISIBLE = 4;
+                const tagsHtml = workTags.slice(0, MAX_TAGS_VISIBLE).map(t =>
+                    `<span class="tag-pill tag-pill-sm" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${t.name}</span>`
+                ).join('');
+                const moreTagsHtml = workTags.length > MAX_TAGS_VISIBLE
+                    ? `<span class="tag-pill tag-pill-sm tag-pill-more">+${workTags.length - MAX_TAGS_VISIBLE}</span>`
+                    : '';
+                // ▲▲▲ タグ省略表示ロジック ▲▲▲
+
                 return `
                     <tr class="hover:bg-gray-700/50 transition-colors" data-id="${work.id}">
                         <td class="p-3"><input type="checkbox" data-id="${work.id}" class="row-checkbox h-4 w-4 rounded bg-gray-600 text-teal-500 border-gray-500 focus:ring-teal-600" ${selectedWorkIds.has(work.id) ? 'checked' : ''}></td>
@@ -1209,19 +1239,21 @@
                             <span class="font-medium">${safeName}</span>
                         </td>
 
-                        <td class="p-3 col-genre" data-col="genre">${work.genre || 'N/A'}</td>
+                        <td class="p-3 col-genre" data-col="genre" style="display: none;">${work.genre || 'N/A'}</td>
 
-                        <td class="p-3 col-registeredAt" data-col="registeredAt">${formatDate(work.registeredAt)}</td>
+                        <td class="p-3 col-registeredAt" data-col="registeredAt" style="display: none;">${formatDate(work.registeredAt, false)}</td>
 
                         <td class="p-3 col-rating inline-rating text-lg" data-col="rating" data-id="${work.id}">
                             ${[1,2,3,4,5].map(i => `<i class="fa-star ${i <= rating ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('')}
                         </td>
 
-                        <td class="p-3 col-tags" data-col="tags">
-                            <div class="flex flex-wrap max-w-xs">
-                                ${workTags.map(t => `<span class="tag-pill" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${t.name}</span>`).join('')}
+                        {/* ▼ タグ列の表示を更新 ▼ */}
+                        <td class="p-3 col-tags max-w-xs" data-col="tags" style="display: none;">
+                            <div class="flex flex-wrap">
+                                ${tagsHtml}${moreTagsHtml}
                             </div>
                         </td>
+                         {/* ▲ タグ列の表示を更新 ▲ */}
 
                         <td class="p-3 col-lastSelectedAt" data-col="lastSelectedAt" style="display: none;">
                             ${formatDate(work.lastSelectedAt, true)}
@@ -1244,7 +1276,11 @@
                     </tr>
                 `;
             }).join('');
+            // ▼ 表示列の再適用 ▼
+            updateColumnVisibility();
+            // ▲ 表示列の再適用 ▲
         };
+
 
         const renderPagination = () => {
             const { currentPage, itemsPerPage } = paginationState;
@@ -1327,19 +1363,34 @@
                     html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${tag.name}</span>`;
                 });
             };
-            renderSet(filters.andTagIds, 'tag-item-and', 'AND');
-            renderSet(filters.orTagIds, 'tag-item-or', 'OR');
-            renderSet(filters.notTagIds, 'tag-item-not', 'NOT');
+            renderSet(listFilters.andTagIds, 'tag-item-and text-white', 'AND');
+            renderSet(listFilters.orTagIds, 'tag-item-or text-white', 'OR');
+            renderSet(listFilters.notTagIds, 'tag-item-not text-white', 'NOT');
             filterTagsDisplay.innerHTML = html || `<span class="text-xs text-gray-500">タグ未選択</span>`;
         };
 
         const updateColumnVisibility = () => {
+             // Load saved settings if available
+             const savedCols = localStorage.getItem('visibleColumns');
+             if (savedCols) {
+                visibleColumns = new Set(JSON.parse(savedCols));
+             } else {
+                // Apply default for small screens if no save data
+                 if (window.innerWidth < 768) { // md breakpoint
+                     visibleColumns = new Set(['name', 'rating', 'actions']);
+                 } else {
+                     visibleColumns = new Set(['name', 'genre', 'registeredAt', 'rating', 'tags', 'actions']);
+                 }
+             }
+
             worksTable.querySelectorAll('th, td').forEach(el => {
                 const colName = el.dataset.col;
                 if (colName) {
-                    el.style.display = visibleColumns.has(colName) ? '' : 'none';
+                    el.style.display = visibleColumns.has(colName) ? '' : 'table-cell'; // Use table-cell for proper layout
                 }
             });
+            // Persist the current state (important after initial load/resize check)
+            localStorage.setItem('visibleColumns', JSON.stringify(Array.from(visibleColumns)));
         };
 
         // --- ▼▼▼ 外部検索機能 (index.html から移植) ▼▼▼ ---
@@ -1410,17 +1461,17 @@
                 }
             });
             syncIdHistoryEl.addEventListener('change', e => e.target.value && loadDataSet(e.target.value));
-            toggleDebugModeBtn.addEventListener('click', toggleDebugMode); // ▼▼▼ デバッグボタンリスナー ▼▼▼
+            toggleDebugModeBtn.addEventListener('click', toggleDebugMode); // Debug button listener
 
             // Filters
             const debouncedRender = debounce(renderAll, 300);
 
-            // ▼▼▼ 検索サジェスト機能を追加 ▼▼▼
+            // Search Suggestion
             filterSearch.addEventListener('input', () => {
                 const query = filterSearch.value.trim();
-                filters.search = query;
+                listFilters.search = query; // Update filter state immediately
                 paginationState.currentPage = 1;
-                debouncedRender();
+                debouncedRender(); // Update table based on search input
 
                 const normalizedQuery = query.toLowerCase();
                 if (normalizedQuery.length < 2) {
@@ -1428,7 +1479,7 @@
                     return;
                 }
 
-                // Filter *all* works, not just displayed ones, for suggestions
+                // Filter *all* works for suggestions
                 const suggestions = works.filter(work =>
                     work.name.toLowerCase().includes(normalizedQuery)
                 ).slice(0, 10);
@@ -1450,7 +1501,7 @@
                 const item = e.target.closest('.suggestion-item');
                 if (item) {
                     filterSearch.value = item.dataset.name;
-                    filters.search = item.dataset.name;
+                    listFilters.search = item.dataset.name; // Update filter state
                     filterSuggestions.classList.add('hidden');
                     paginationState.currentPage = 1;
                     renderAll(); // Re-render with the selected name
@@ -1462,28 +1513,45 @@
                     filterSuggestions.classList.add('hidden');
                 }
             });
-            // ▲▲▲ 検索サジェスト機能を追加 ▲▲▲
 
             $$('input[data-filter-genre]').forEach(cb => cb.addEventListener('change', () => {
-                if (cb.checked) filters.genres.add(cb.dataset.filterGenre);
-                else filters.genres.delete(cb.dataset.filterGenre);
+                if (cb.checked) listFilters.genres.add(cb.dataset.filterGenre);
+                else listFilters.genres.delete(cb.dataset.filterGenre);
                 paginationState.currentPage = 1; renderAll();
             }));
-            filterUnrated.addEventListener('change', () => { filters.unrated = filterUnrated.checked; paginationState.currentPage = 1; renderAll(); });
+            filterUnrated.addEventListener('change', () => { listFilters.unrated = filterUnrated.checked; paginationState.currentPage = 1; renderAll(); });
             [filterRatingOp, filterRatingVal].forEach(el => el.addEventListener('change', () => {
-                filters.ratingOp = filterRatingOp.value;
-                filters.ratingVal = parseInt(filterRatingVal.value, 10);
+                listFilters.ratingOp = filterRatingOp.value;
+                listFilters.ratingVal = parseInt(filterRatingVal.value, 10);
                 paginationState.currentPage = 1; renderAll();
             }));
             [filterDateStart, filterDateEnd].forEach(el => el.addEventListener('input', () => {
-                filters.dateStart = filterDateStart.value;
-                filters.dateEnd = filterDateEnd.value;
-                // Only trigger render if dates are valid or empty to avoid errors during typing
-                if ((!filters.dateStart || isValidDate(filters.dateStart)) && (!filters.dateEnd || isValidDate(filters.dateEnd))) {
+                listFilters.dateStart = filterDateStart.value;
+                listFilters.dateEnd = filterDateEnd.value;
+                if ((!listFilters.dateStart || isValidDate(listFilters.dateStart)) && (!listFilters.dateEnd || isValidDate(listFilters.dateEnd))) {
                      paginationState.currentPage = 1; debouncedRender();
                 }
             }));
             filterOpenTagsBtn.addEventListener('click', () => openTagFilterModal());
+             // ▼▼▼ リセットボタンリスナー ▼▼▼
+             resetFiltersBtn.addEventListener('click', async () => {
+                 if (await showConfirm("フィルターリセット", "すべての絞り込み条件をリセットしますか？")) {
+                     listFilters = getDefaultFilters(); // Reset state
+                     // Reset UI elements
+                     filterSearch.value = '';
+                     $$('input[data-filter-genre]').forEach(cb => cb.checked = false);
+                     filterRatingOp.value = 'gte';
+                     filterRatingVal.value = '0';
+                     filterUnrated.checked = false;
+                     filterDateStart.value = '';
+                     filterDateEnd.value = '';
+                     renderActiveTagFilters(); // Clear tag display
+                     paginationState.currentPage = 1;
+                     renderAll();
+                     showToast("フィルターをリセットしました。");
+                 }
+             });
+             // ▲▲▲ リセットボタンリスナー ▲▲▲
 
             // Action Bar
             itemsPerPageSelect.addEventListener('change', () => {
@@ -1492,7 +1560,7 @@
                 renderAll();
             });
             regNewWorkBtn.addEventListener('click', openRegistrationModal);
-            externalSearchBtn.addEventListener('click', () => openExternalSearchModal(filterSearch.value)); // 外部検索ボタンリスナー
+            externalSearchBtn.addEventListener('click', () => openExternalSearchModal(listFilters.search)); // Use filter state for prefill
             manageTagsBtn.addEventListener('click', () => openTagModal({ mode: 'manage' }));
             manageColumnsBtn.addEventListener('click', openColumnModal);
             bulkEditBtn.addEventListener('click', openBulkEditModal);
@@ -1515,18 +1583,15 @@
 
             worksTableBody.addEventListener('click', e => {
                 const target = e.target;
-                // Inline Rating
                 const star = target.closest('.inline-rating .fa-star');
                 if (star) {
                     const workId = star.closest('td').dataset.id;
                     let newRating = parseInt(star.dataset.value, 10);
                     const work = works.find(w => w.id === workId);
-                    if (work && work.rating === newRating) newRating = 0; // Toggle off
+                    if (work && work.rating === newRating) newRating = 0;
                     updateWork(workId, { rating: newRating });
-                    // No need to call renderAll here, onSnapshot will handle it
                     return;
                 }
-                // Edit/Delete buttons
                 const btn = target.closest('button[data-action]');
                 if (btn) {
                     const { action, id, name } = btn.dataset;
@@ -1539,7 +1604,7 @@
             // Selection Checkboxes
             selectAllCheckbox.addEventListener('change', () => {
                 const isChecked = selectAllCheckbox.checked;
-                const itemsOnPage = paginatedWorks.map(w => w.id); // Use global paginatedWorks
+                const itemsOnPage = paginatedWorks.map(w => w.id);
 
                 worksTableBody.querySelectorAll('.row-checkbox').forEach(cb => {
                     cb.checked = isChecked;
@@ -1568,7 +1633,6 @@
                 if (btn && !btn.disabled) {
                     paginationState.currentPage = parseInt(btn.dataset.page, 10);
                     renderAll();
-                    // Scroll to top of table
                     worksTable.scrollIntoView({ behavior: 'smooth' });
                 }
             });
@@ -1576,15 +1640,12 @@
             // Date Inputs (Validation)
             initializeDateInputs(document.body);
 
-            // Ad UI Events (from price_comparison.html)
-            // ▼▼▼ Correctly reference the specific showModal/hideModal for ads ▼▼▼
+            // Ad UI Events
             document.getElementById('ad-settings-fab').addEventListener('click', () => showModal(adSettingsModal, adSettingsModalContent));
             document.getElementById('ad-settings-modal-close').addEventListener('click', () => hideModal(adSettingsModal, adSettingsModalContent));
             adSettingsModal.addEventListener('click', (e) => {
-                // Use the specific hideModal for ads
                 if (e.target === adSettingsModal) hideModal(adSettingsModal, adSettingsModalContent);
             });
-            // ▲▲▲ Correctly reference the specific showModal/hideModal for ads ▲▲▲
             document.querySelectorAll('input[name="ad_type"]').forEach(radio => {
                 radio.addEventListener('change', (e) => {
                     document.getElementById('ad-period-container').style.display = e.target.value === 'ranking' ? 'block' : 'none';
@@ -1592,14 +1653,17 @@
             });
             document.getElementById('save-ad-settings-btn').addEventListener('click', () => {
                 saveAndReloadAd();
-                 // Use the specific hideModal for ads
                 hideModal(adSettingsModal, adSettingsModalContent);
                 showToast('広告設定を保存しました。');
             });
-            // Adjust layout on resize considering ad banner
+            // Adjust layout on resize considering ad banner & columns
             window.addEventListener('resize', () => {
                 const settings = JSON.parse(localStorage.getItem('adSettings') || JSON.stringify(defaultAdSettings));
                 applyAdVisibility(settings.showAd);
+                // ▼ 列表示も再評価 ▼
+                updateColumnVisibility();
+                renderTable(); // Re-render table might be needed if columns changed
+                // ▲ 列表示も再評価 ▲
             });
         };
 
@@ -1691,14 +1755,14 @@
             });
         };
 
-        // --- ▼▼▼ 編集モーダル (ボタン配置変更、画像比較機能) ▼▼▼ ---
+        // --- Edit Modal (Button layout, Image compare) ---
         const openEditModal = (workId) => {
             const work = works.find(w => w.id === workId);
             if (!work) return;
 
             let currentRating = work.rating || 0;
             let currentTagIds = new Set(work.tagIds || []);
-            let tempImageUrl = work.imageUrl || null; // This will hold the *new* image URL if changed
+            let tempImageUrl = work.imageUrl || null;
 
             const safeName = escapeHTML(work.name);
             const safeUrl = escapeHTML(work.sourceUrl || '');
@@ -1726,18 +1790,16 @@
 
             checkModalDirtyState = () => JSON.stringify(getFormState()) !== JSON.stringify(initialState);
 
-            // ▼▼▼ HTML content の ボタン配置を変更 ▼▼▼
             const content = `
                 <form id="edit-work-form" class="space-y-6">
-                    <!-- SPEC: Save/Cancel buttons reordered per request -->
+                    {/* <!-- Save/Cancel buttons reordered --> */}
                     <div class="flex flex-col gap-3">
                         <button type="submit" class="w-full px-6 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold">保存</button>
                         <button type="button" id="edit-cancel-btn" class="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
                     </div>
-                    <!-- ▲▲▲ ボタン配置を変更 ▲▲▲ -->
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <!-- Left Column: Details -->
+                        {/* <!-- Left Column: Details --> */}
                         <div class="space-y-4">
                             <div>
                                 <label for="edit-name" class="block text-sm font-medium text-gray-400 mb-1">作品名 <span class="text-red-400">*</span></label>
@@ -1761,14 +1823,14 @@
                             </div>
                         </div>
 
-                        <!-- Right Column: Image -->
+                        {/* <!-- Right Column: Image --> */}
                         <div class="space-y-4">
                             <div>
                                 <label for="edit-image" class="block text-sm font-medium text-gray-400 mb-2">画像 (任意, 900KB以下)</label>
                                 <input type="file" id="edit-image" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-sky-600 file:text-white hover:file:bg-sky-700">
                             </div>
 
-                            <!-- SPEC: Image Compare Window -->
+                            {/* <!-- Image Compare Window --> */}
                             <div id="image-compare-container" class="hidden space-y-3">
                                 <div class="flex gap-4">
                                     <div class="image-compare-box bg-gray-900">
@@ -1783,7 +1845,7 @@
                                 <button type="button" id="confirm-image-change-btn" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-semibold">この画像に変更する</button>
                             </div>
 
-                            <!-- Initial image preview (before comparison) -->
+                            {/* <!-- Initial image preview --> */}
                             <div id="initial-image-preview-container">
                                 <label class="block text-sm font-medium text-gray-400 mb-2">現在の画像</label>
                                 <img id="initial-image-preview" src="${work.imageUrl || 'https://placehold.co/400x200/1f2937/4b5563?text=No+Image'}" class="w-full h-auto max-h-48 object-contain mx-auto rounded-lg">
@@ -1791,7 +1853,7 @@
                         </div>
                     </div>
 
-                    <!-- Rating & Tags -->
+                    {/* <!-- Rating & Tags --> */}
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-700">
                         <div>
                             <label class="block text-sm font-medium text-gray-400 mb-2">評価</label>
@@ -1809,9 +1871,8 @@
             `;
 
             openModal(`「${work.name}」を編集`, content, () => {
-                let unprocessedNewImage = null; // To hold the image before confirming
+                let unprocessedNewImage = null;
 
-                // Rating stars logic
                 const ratingStars = $('#edit-rating');
                 ratingStars.addEventListener('click', e => {
                     if (e.target.matches('.fa-star')) {
@@ -1821,7 +1882,6 @@
                     }
                 });
 
-                // Tags logic
                 const tagsContainer = $('#edit-tags-display');
                 const renderTags = (ids) => {
                     const objects = [...ids].map(id => tags.find(t => t.id === id)).filter(Boolean);
@@ -1830,44 +1890,26 @@
                 renderTags(currentTagIds);
 
                 $('#edit-assign-tags-btn').addEventListener('click', () => {
-                    // Save modal state before opening new modal
                     const capturedState = {
-                        name: $('#edit-name').value,
-                        genre: $('#edit-genre').value,
-                        url: $('#edit-url').value,
-                        date: $('#edit-date').value,
-                        rating: currentRating,
-                        imageUrl: tempImageUrl // Pass the confirmed new image
+                        name: $('#edit-name').value, genre: $('#edit-genre').value, url: $('#edit-url').value, date: $('#edit-date').value,
+                        rating: currentRating, imageUrl: tempImageUrl
                     };
-
                     openTagModal({
-                        mode: 'assign',
-                        currentTagIds: currentTagIds,
-                        workName: work.name,
+                        mode: 'assign', currentTagIds: currentTagIds, workName: work.name,
                         onConfirm: (newTagIds) => {
-                            // Restore state when returning
-                            openEditModal(workId);
-                            setTimeout(() => {
-                                // Need timeout for modal to re-open
-                                $('#edit-name').value = capturedState.name;
-                                $('#edit-genre').value = capturedState.genre;
-                                $('#edit-url').value = capturedState.url;
-                                $('#edit-date').value = capturedState.date;
-                                currentRating = capturedState.rating;
-                                tempImageUrl = capturedState.imageUrl;
+                            openEditModal(workId); // Reopen edit modal
+                            setTimeout(() => { // Restore state after modal reopens
+                                $('#edit-name').value = capturedState.name; $('#edit-genre').value = capturedState.genre; $('#edit-url').value = capturedState.url; $('#edit-date').value = capturedState.date;
+                                currentRating = capturedState.rating; tempImageUrl = capturedState.imageUrl;
                                 $('#initial-image-preview').src = tempImageUrl || 'https://placehold.co/400x200/1f2937/4b5563?text=No+Image';
                                 ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= currentRating ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('');
-
-                                if (newTagIds) {
-                                    currentTagIds = newTagIds;
-                                    renderTags(currentTagIds);
-                                }
+                                if (newTagIds) { currentTagIds = newTagIds; renderTags(currentTagIds); }
                             }, 100);
                         }
                     });
                 });
 
-                // ▼▼▼ 画像比較ロジック ▼▼▼
+                // Image Compare Logic
                 $('#edit-image').addEventListener('change', async (e) => {
                     const file = e.target.files[0];
                     if (file) {
@@ -1877,58 +1919,39 @@
                             $('#image-compare-container').classList.remove('hidden');
                             $('#initial-image-preview-container').classList.add('hidden');
                         } catch (error) {
-                            showToast(error.message, "error");
-                            unprocessedNewImage = null;
-                            e.target.value = null; // Reset file input if processing fails
-                            // Revert UI if needed
-                            $('#image-compare-container').classList.add('hidden');
-                            $('#initial-image-preview-container').classList.remove('hidden');
+                            showToast(error.message, "error"); unprocessedNewImage = null; e.target.value = null;
+                            $('#image-compare-container').classList.add('hidden'); $('#initial-image-preview-container').classList.remove('hidden');
                         }
                     }
                 });
-
                 $('#confirm-image-change-btn').addEventListener('click', () => {
-                    tempImageUrl = unprocessedNewImage; // Confirm the change
-                    unprocessedNewImage = null;
-                    $('#initial-image-preview').src = tempImageUrl; // Update the main preview as well
-                    $('#image-compare-container').classList.add('hidden');
-                    $('#initial-image-preview-container').classList.remove('hidden');
-                    $('#edit-image').value = null; // Clear the file input after confirmation
+                    tempImageUrl = unprocessedNewImage; unprocessedNewImage = null;
+                    $('#initial-image-preview').src = tempImageUrl;
+                    $('#image-compare-container').classList.add('hidden'); $('#initial-image-preview-container').classList.remove('hidden');
+                    $('#edit-image').value = null;
                     showToast("画像が変更されました。保存ボタンを押して確定してください。");
                 });
-                // ▲▲▲ 画像比較ロジック ▲▲▲
 
                 // Form Submit
                 $('#edit-cancel-btn').addEventListener('click', closeModal);
                 $('#edit-work-form').addEventListener('submit', async (e) => {
                     e.preventDefault();
-                    const name = $('#edit-name').value;
-                    const dateStr = $('#edit-date').value;
+                    const name = $('#edit-name').value; const dateStr = $('#edit-date').value;
                     if (!name.trim()) return showToast("作品名は必須です。", "error");
                     if (!isValidDate(dateStr)) return showToast("登録日の形式が正しくありません (YYYY/MM/DD)。", "error");
-
                     const updatedData = {
-                        name: name.trim(),
-                        genre: $('#edit-genre').value,
-                        sourceUrl: $('#edit-url').value.trim(),
+                        name: name.trim(), genre: $('#edit-genre').value, sourceUrl: $('#edit-url').value.trim(),
                         registeredAt: Timestamp.fromDate(new Date(dateStr.replace(/\//g, '-'))),
-                        rating: currentRating,
-                        tagIds: Array.from(currentTagIds),
-                        imageUrl: tempImageUrl // Use the confirmed new image URL
+                        rating: currentRating, tagIds: Array.from(currentTagIds), imageUrl: tempImageUrl
                     };
-
-                    checkModalDirtyState = () => false; // Prevent confirm dialog
+                    checkModalDirtyState = () => false;
                     const success = await updateWork(workId, updatedData);
-                    if (success) {
-                        showToast("作品情報を更新しました。");
-                        closeModal();
-                    }
+                    if (success) { showToast("作品情報を更新しました。"); closeModal(); }
                 });
-            }, { size: 'max-w-4xl' }); // Use a larger modal for edit
+            }, { size: 'max-w-4xl' });
         };
-        // --- ▲▲▲ 編集モーダル ▲▲▲ ---
 
-        // --- Modal: Tag Management (from index.html) ---
+        // --- Tag Management Modal ---
         const openTagModal = (options) => {
             const { mode = 'manage', currentTagIds = new Set(), workName = '', onConfirm } = options;
             let tempSelectedTagIds = new Set(currentTagIds);
@@ -1939,7 +1962,7 @@
                     ${['manage', 'assign'].includes(mode) ? `<div class="flex flex-wrap gap-2 mb-4 p-1 bg-gray-900 rounded-lg"><input type="text" id="newTagName" placeholder="新しいタグ名" class="flex-grow min-w-[150px] bg-gray-700 p-2 rounded-lg"><div class="flex gap-2"><input type="color" id="newTagColor" value="#581c87" class="h-11 w-12 p-1 bg-gray-700 rounded-lg cursor-pointer"><button id="addTagBtn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold"><i class="fas fa-plus"></i> 追加</button></div></div>` : ''}
                     <div class="flex items-center gap-2 mb-2"><div class="flex-grow relative"><i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i><input type="search" id="tagSearchInput" placeholder="タグを検索..." class="w-full bg-gray-700 p-2 pl-10 rounded-lg"></div>${mode === 'assign' ? `<select id="tagFilterSelect" class="bg-gray-700 p-2 rounded-lg"><option value="all">すべて</option><option value="assigned">設定済</option><option value="unassigned">未設定</option></select>`: ''}<select id="tagSortSelect" class="bg-gray-700 p-2 rounded-lg"><option value="createdAt_desc">追加順 (新しい)</option><option value="createdAt_asc">追加順 (古い)</option><option value="name_asc">名前順 (昇順)</option></select></div>
                     ${mode === 'assign' ? `<div class="mb-4"><label class="block text-sm text-gray-400">選択中のタグ</label><div id="tag-selector-preview" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px]"></div></div>` : ''}
-                    <div id="tag-list" class="flex-grow overflow-y-auto pr-2 gap-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3"></div>
+                    <div id="tag-list" class="flex-grow overflow-y-auto pr-2 gap-2 grid grid-cols-2 md:grid-cols-3 lg:block lg:space-y-2"></div> {/* Responsive grid */}
                     ${mode === 'assign' ? `<div class="pt-4 mt-4 border-t border-gray-700 flex justify-end space-x-3"><button id="tag-modal-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button><button id="tag-modal-confirm" class="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold">決定</button></div>` : ''}
                 </div>`;
             openModal(titleMap[mode], content, () => {
@@ -1961,40 +1984,26 @@
                 $('#tagFilterSelect')?.addEventListener('change', e => { tagFilter = e.target.value; renderTagList(); });
                 $('#tagSortSelect')?.addEventListener('change', e => { const [by, order] = e.target.value.split('_'); tagSort = { by, order }; renderTagList(); });
                 $('#addTagBtn')?.addEventListener('click', async () => {
-                    // ▼▼▼ デバッグモードチェック ▼▼▼
-                    if (isDebugMode) {
-                        showToast("デバッグモード中はタグを追加できません。", "error");
-                        return;
-                    }
-                    // ▲▲▲ デバッグモードチェック ▲▲▲
+                    if (isDebugMode) { showToast("デバッグモード中はタグを追加できません。", "error"); return; }
                     const nameInput = $('#newTagName');
-                    if (nameInput.value) {
-                       await addTag(nameInput.value, $('#newTagColor').value);
-                       nameInput.value = '';
-                    }
+                    if (nameInput.value) { await addTag(nameInput.value, $('#newTagColor').value); nameInput.value = ''; }
                 });
                 tagListEl.addEventListener('click', e => {
                     const tagItem = e.target.closest('.tag-item'), deleteBtn = e.target.closest('button[data-action="delete-tag"]');
                     if (deleteBtn) {
                         e.stopPropagation();
-                        // ▼▼▼ デバッグモードチェック ▼▼▼
-                        if (isDebugMode) {
-                            showToast("デバッグモード中はタグを削除できません。", "error");
-                            return;
-                        }
-                        // ▲▲▲ デバッグモードチェック ▲▲▲
-                        deleteTag(deleteBtn.dataset.id);
-                        return;
+                        if (isDebugMode) { showToast("デバッグモード中はタグを削除できません。", "error"); return; }
+                        deleteTag(deleteBtn.dataset.id); return;
                     }
                     if (tagItem && mode === 'assign') { const tagId = tagItem.dataset.id; tempSelectedTagIds.has(tagId) ? tempSelectedTagIds.delete(tagId) : tempSelectedTagIds.add(tagId); renderTagList(); renderTagPreview(); }
                 });
                 $('#tag-modal-confirm')?.addEventListener('click', () => onConfirm(tempSelectedTagIds));
-                $('#tag-modal-cancel')?.addEventListener('click', () => onConfirm(null)); // Pass null on cancel
+                $('#tag-modal-cancel')?.addEventListener('click', () => onConfirm(null));
             });
         };
 
         const addTag = async (name, color) => {
-             // Debug check is done in the caller (openTagModal)
+             // Debug check done in caller
              const normalizedName = name.trim().toLowerCase();
              if (tags.some(t => t.name.toLowerCase() === normalizedName)) return showToast("同じ名前のタグが既に存在します。", "error");
              const newTag = { name: name.trim(), color, createdAt: Timestamp.now() };
@@ -2005,7 +2014,7 @@
              } catch (error) { console.error("Error adding tag:", error); showToast("タグの作成に失敗しました。", "error"); }
         };
         const deleteTag = async (tagId) => {
-             // Debug check is done in the caller (openTagModal)
+             // Debug check done in caller
              const tagToDelete = tags.find(t => t.id === tagId);
              if (!tagToDelete || !await showConfirm("タグの削除", `タグ「${tagToDelete.name}」を削除しますか？<br>全ての作品からこのタグが解除されます。`)) return;
              try {
@@ -2021,9 +2030,9 @@
              } catch(error) { console.error("Error deleting tag:", error); showToast("タグの削除中にエラーが発生しました。", "error"); }
         };
 
-        // --- Modal: Tag Filter (from index.html) ---
+        // --- Tag Filter Modal ---
         const openTagFilterModal = () => {
-            let tempAnd = new Set(filters.andTagIds), tempOr = new Set(filters.orTagIds), tempNot = new Set(filters.notTagIds);
+            let tempAnd = new Set(listFilters.andTagIds), tempOr = new Set(listFilters.orTagIds), tempNot = new Set(listFilters.notTagIds);
             openModal("タグの条件を選択", `
                 <div class="flex flex-col h-[70vh]">
                     <div class="flex items-center gap-2 mb-2">
@@ -2064,7 +2073,7 @@
                     }
                 });
                 $('#tag-modal-confirm').addEventListener('click', () => {
-                    filters.andTagIds = tempAnd; filters.orTagIds = tempOr; filters.notTagIds = tempNot;
+                    listFilters.andTagIds = tempAnd; listFilters.orTagIds = tempOr; listFilters.notTagIds = tempNot;
                     renderActiveTagFilters();
                     paginationState.currentPage = 1; renderAll(); closeModal();
                 });
@@ -2072,7 +2081,7 @@
             });
         };
 
-        // --- Modal: Bulk Edit ---
+        // --- Bulk Edit Modal ---
         const openBulkEditModal = () => {
             const count = selectedWorkIds.size;
             const content = `
@@ -2130,12 +2139,7 @@
                 $('#bulk-edit-form').addEventListener('submit', async (e) => {
                     e.preventDefault();
 
-                    // ▼▼▼ デバッグモードチェック ▼▼▼
-                    if (isDebugMode) {
-                        showToast("デバッグモード中は一括編集できません。", "error");
-                        return;
-                    }
-                    // ▲▲▲ デバッグモードチェック ▲▲▲
+                    if (isDebugMode) { showToast("デバッグモード中は一括編集できません。", "error"); return; }
 
                     const genreOp = $('input[name="bulk-genre-op"]:checked').value;
                     const ratingOp = $('input[name="bulk-rating-op"]:checked').value;
@@ -2173,7 +2177,7 @@
                         showToast(`${count}件の作品を更新しました。`);
                         selectedWorkIds.clear();
                         closeModal();
-                        // renderAll() は onSnapshot が行う
+                        // renderAll() called by onSnapshot
                     } catch (error) {
                         console.error("Error bulk updating works:", error);
                         showToast("一括更新に失敗しました。", "error");
@@ -2182,7 +2186,7 @@
             });
         };
 
-        // --- Modal: Column Visibility ---
+        // --- Column Visibility Modal ---
         const openColumnModal = () => {
             const allCols = [
                 { id: 'image', label: '画像' },
@@ -2223,7 +2227,8 @@
                         if (cb.checked) visibleColumns.add(colId);
                         else visibleColumns.delete(colId);
                         localStorage.setItem('visibleColumns', JSON.stringify(Array.from(visibleColumns)));
-                        updateColumnVisibility();
+                        updateColumnVisibility(); // Apply immediately
+                        renderTable(); // Re-render table to reflect changes
                     });
                 });
             }, { size: 'max-w-3xl' });
@@ -2244,12 +2249,11 @@
             });
         };
 
-        // --- Ad Logic (from price_comparison.html) ---
+        // --- Ad Logic ---
         const defaultAdSettings = { showAd: true, type: 'ranking', site: 'maniax', period: 'week' };
 
         const applyAdVisibility = (isVisible) => {
             topAdBanner.classList.toggle('hidden', !isVisible);
-            // Adjust main content padding based on ad visibility
             mainContent.style.paddingTop = isVisible ? '8px' : '0';
         };
 
@@ -2258,34 +2262,17 @@
             container.innerHTML = '';
             if (!settings.showAd) return;
             const iframe = document.createElement('iframe');
-            iframe.style.width = '100%';
-            iframe.style.height = '100%';
-            iframe.style.border = 'none';
-            iframe.style.minHeight = '120px';
-            iframe.scrolling = 'no';
-            iframe.setAttribute('title', 'DLsite Advertisement');
+            iframe.style.width = '100%'; iframe.style.height = '100%'; iframe.style.border = 'none'; iframe.style.minHeight = '120px'; iframe.scrolling = 'no'; iframe.setAttribute('title', 'DLsite Advertisement');
             container.appendChild(iframe);
-            const adSettings = {
-                base: "https://www.dlsite.com/", type: settings.type, site: settings.site,
-                query: {}, title: settings.type === 'ranking' ? "ランキング" : "新着作品",
-                display: "horizontal", detail: "1", column: "v", image: "small",
-                count: "5", wrapper: "0", autorotate: true, aid: "workassist"
-            };
+            const adSettings = { base: "https://www.dlsite.com/", type: settings.type, site: settings.site, query: {}, title: settings.type === 'ranking' ? "ランキング" : "新着作品", display: "horizontal", detail: "1", column: "v", image: "small", count: "5", wrapper: "0", autorotate: true, aid: "workassist" };
             if (settings.type === 'ranking') adSettings.query.period = settings.period;
             const iframeContent = `<html><head><style>body { margin: 0; padding: 0; overflow-x: auto; overflow-y: hidden; } body::-webkit-scrollbar { height: 6px; } body::-webkit-scrollbar-track { background: transparent; } body::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; } .blogparts_container_Hor { white-space: nowrap; padding-bottom: 8px; }</style></head><body><script type="text/javascript">var blogparts = ${JSON.stringify(adSettings)};<\/script><script type="text/javascript" src="https://www.dlsite.com/js/blogparts.js" charset="UTF-8"><\/script></body></html>`;
             const iframeDoc = iframe.contentWindow.document;
-            iframeDoc.open();
-            iframeDoc.write(iframeContent);
-            iframeDoc.close();
+            iframeDoc.open(); iframeDoc.write(iframeContent); iframeDoc.close();
         };
 
         const saveAndReloadAd = () => {
-            const settings = {
-                showAd: document.getElementById('ad_visibility').checked,
-                type: document.querySelector('input[name="ad_type"]:checked').value,
-                site: document.getElementById('ad_site').value,
-                period: document.getElementById('ad_period').value
-            };
+            const settings = { showAd: $('#ad_visibility').checked, type: $('input[name="ad_type"]:checked').value, site: $('#ad_site').value, period: $('#ad_period').value };
             localStorage.setItem('adSettings', JSON.stringify(settings));
             applyAdVisibility(settings.showAd);
             generateAndLoadAdScript(settings);
@@ -2294,134 +2281,51 @@
         const loadAdSettings = () => {
             const saved = localStorage.getItem('adSettings');
             const settings = saved ? JSON.parse(saved) : defaultAdSettings;
-            // Apply settings to the modal inputs
-            document.getElementById('ad_visibility').checked = settings.showAd;
-            const typeRadio = document.querySelector(`input[name="ad_type"][value="${settings.type}"]`);
-            if (typeRadio) typeRadio.checked = true;
-            const siteSelect = document.getElementById('ad_site');
-            if (siteSelect.querySelector(`option[value="${settings.site}"]`)) siteSelect.value = settings.site;
-            const periodSelect = document.getElementById('ad_period');
-            if (periodSelect.querySelector(`option[value="${settings.period}"]`)) periodSelect.value = settings.period;
-            document.getElementById('ad-period-container').style.display = settings.type === 'ranking' ? 'block' : 'none';
-            // Apply visibility and load the script
+            $('#ad_visibility').checked = settings.showAd;
+            const typeRadio = $(`input[name="ad_type"][value="${settings.type}"]`); if (typeRadio) typeRadio.checked = true;
+            const siteSelect = $('#ad_site'); if (siteSelect.querySelector(`option[value="${settings.site}"]`)) siteSelect.value = settings.site;
+            const periodSelect = $('#ad_period'); if (periodSelect.querySelector(`option[value="${settings.period}"]`)) periodSelect.value = settings.period;
+            $('#ad-period-container').style.display = settings.type === 'ranking' ? 'block' : 'none';
             applyAdVisibility(settings.showAd);
             generateAndLoadAdScript(settings);
         };
 
-        // --- ▼▼▼ デバッグモード機能 (index.html から移植) ▼▼▼ ---
+        // --- Debug Mode Logic ---
         const generateDebugData = () => {
-            const newTags = [];
-            const tagNames = ['アクション', 'RPG', 'ファンタジー', 'シミュレーション', 'パズル', 'アドベンチャー', 'コメディ', 'ホラー', 'ドット絵', '3D', '学園モノ', '異世界', 'ボイスあり', '放置ゲーム', 'ローグライク'];
-            const colors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899'];
-            for (let i = 0; i < tagNames.length; i++) {
-                newTags.push({ id: `debug_tag_${i}`, name: tagNames[i], color: colors[i], useCount: Math.floor(Math.random() * 50) });
-            }
-
-            const newWorks = [];
-            const genres = ['ゲーム', '漫画', '動画'];
-            const workPrefixes = ['超次元', 'ドキドキ', '異世界転生したら', '新人', '隣の', '学園の', '魔王と', '聖なる', '禁断の', '伝説の'];
-            const workSuffixes = ['プリンセス', 'クエスト', 'ハーレム物語', 'デイズ', '事件簿', 'ファンタジア', 'サバイバル', 'ロマンス', '英雄譚'];
-
+            const newTags = []; const tagNames = ['アクション', 'RPG', 'ファンタジー', 'シミュレーション', 'パズル', 'アドベンチャー', 'コメディ', 'ホラー', 'ドット絵', '3D', '学園モノ', '異世界', 'ボイスあり', '放置ゲーム', 'ローグライク']; const colors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899'];
+            for (let i = 0; i < tagNames.length; i++) { newTags.push({ id: `debug_tag_${i}`, name: tagNames[i], color: colors[i], useCount: Math.floor(Math.random() * 50) }); }
+            const newWorks = []; const genres = ['ゲーム', '漫画', '動画']; const workPrefixes = ['超次元', 'ドキドキ', '異世界転生したら', '新人', '隣の', '学園の', '魔王と', '聖なる', '禁断の', '伝説の']; const workSuffixes = ['プリンセス', 'クエスト', 'ハーレム物語', 'デイズ', '事件簿', 'ファンタジア', 'サバイバル', 'ロマンス', '英雄譚'];
             for (let i = 0; i < 50; i++) {
-                const randomDate = new Date(Date.now() - Math.floor(Math.random() * 365 * 2 * 24 * 60 * 60 * 1000)); // Within last 2 years
-                const numTags = Math.floor(Math.random() * 5);
-                const workTags = new Set();
-                while (workTags.size < numTags) {
-                    workTags.add(newTags[Math.floor(Math.random() * newTags.length)].id);
-                }
-                const selectionHistory = [];
-                const selectionCount = Math.floor(Math.random() * 20);
-                for (let j = 0; j < selectionCount; j++) {
-                    selectionHistory.push(Timestamp.fromDate(new Date(Date.now() - Math.floor(Math.random() * 60 * 24 * 60 * 60 * 1000))));
-                }
-                selectionHistory.sort((a,b) => a.toMillis() - b.toMillis());
-
-                const siteRoll = Math.random();
-                let url;
-                if (siteRoll < 0.45) url = 'https://www.dlsite.com/maniax/work/=/product_id/RJ12345.html';
-                else if (siteRoll < 0.8) url = 'https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=d_12345/';
-                else url = 'https://example.com/other';
-
-                newWorks.push({
-                    id: `debug_work_${i}`,
-                    name: `${workPrefixes[Math.floor(Math.random() * workPrefixes.length)]} ${workSuffixes[Math.floor(Math.random() * workSuffixes.length)]} ${i + 1}`,
-                    genre: genres[Math.floor(Math.random() * genres.length)],
-                    registeredAt: Timestamp.fromDate(randomDate),
-                    lastSelectedAt: selectionHistory.length > 0 ? selectionHistory[selectionHistory.length -1] : null,
-                    rating: Math.floor(Math.random() * 6),
-                    selectionCount: selectionCount,
-                    selectionHistory: selectionHistory,
-                    tagIds: Array.from(workTags),
-                    sourceUrl: url,
-                    imageUrl: `https://placehold.co/600x400/1f2937/4b5563?text=Debug+${i+1}`
-                });
+                const randomDate = new Date(Date.now() - Math.floor(Math.random() * 365 * 2 * 24 * 60 * 60 * 1000)); const numTags = Math.floor(Math.random() * 5); const workTags = new Set(); while (workTags.size < numTags) { workTags.add(newTags[Math.floor(Math.random() * newTags.length)].id); } const selectionHistory = []; const selectionCount = Math.floor(Math.random() * 20); for (let j = 0; j < selectionCount; j++) { selectionHistory.push(Timestamp.fromDate(new Date(Date.now() - Math.floor(Math.random() * 60 * 24 * 60 * 60 * 1000)))); } selectionHistory.sort((a,b) => a.toMillis() - b.toMillis());
+                const siteRoll = Math.random(); let url; if (siteRoll < 0.45) url = 'https://www.dlsite.com/maniax/work/=/product_id/RJ12345.html'; else if (siteRoll < 0.8) url = 'https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=d_12345/'; else url = 'https://example.com/other';
+                newWorks.push({ id: `debug_work_${i}`, name: `${workPrefixes[Math.floor(Math.random() * workPrefixes.length)]} ${workSuffixes[Math.floor(Math.random() * workSuffixes.length)]} ${i + 1}`, genre: genres[Math.floor(Math.random() * genres.length)], registeredAt: Timestamp.fromDate(randomDate), lastSelectedAt: selectionHistory.length > 0 ? selectionHistory[selectionHistory.length -1] : null, rating: Math.floor(Math.random() * 6), selectionCount: selectionCount, selectionHistory: selectionHistory, tagIds: Array.from(workTags), sourceUrl: url, imageUrl: `https://placehold.co/600x400/1f2937/4b5563?text=Debug+${i+1}` });
             }
             return { works: newWorks, tags: newTags };
         };
 
         const toggleDebugMode = async () => {
-            const btn = toggleDebugModeBtn;
-            const syncPanel = $('#sync-panel-details');
-            const actionButtons = [regNewWorkBtn, externalSearchBtn, manageTagsBtn, bulkEditBtn, bulkDeleteBtn]; // Buttons to disable
-
+            const btn = toggleDebugModeBtn; const syncPanel = $('#sync-panel-details'); const actionButtons = [regNewWorkBtn, externalSearchBtn, manageTagsBtn, bulkEditBtn, bulkDeleteBtn];
             if (isDebugMode) {
-                // --- Exit Debug Mode ---
                 if (!await showConfirm("デバッグモード終了", "デバッグモードを終了し、データベースからデータを再読み込みしますか？")) return;
-
-                isDebugMode = false;
-                debugBanner.classList.add('hidden');
-                btn.textContent = 'デバッグモード開始';
-                btn.classList.remove('bg-red-600', 'hover:bg-red-700');
-                btn.classList.add('bg-amber-600', 'hover:bg-amber-700');
-
-                // Re-enable UI elements
-                syncPanel.style.opacity = '1';
-                syncPanel.style.pointerEvents = 'auto';
-                actionButtons.forEach(el => { if(el) el.disabled = false; }); // Enable action buttons
-
-                works = [];
-                tags = [];
-                showToast("デバッグモードを終了しました。");
-                loadDataSet(syncId); // Re-subscribe and fetch data
+                isDebugMode = false; debugBanner.classList.add('hidden'); btn.textContent = 'デバッグモード開始'; btn.classList.remove('bg-red-600', 'hover:bg-red-700'); btn.classList.add('bg-amber-600', 'hover:bg-amber-700');
+                syncPanel.style.opacity = '1'; syncPanel.style.pointerEvents = 'auto'; actionButtons.forEach(el => { if(el) el.disabled = false; });
+                works = []; tags = []; showToast("デバッグモードを終了しました。"); loadDataSet(syncId);
             } else {
-                // --- Enter Debug Mode ---
                 if (!await showConfirm("デバッグモード開始", "デバッグモードを開始しますか？<br>現在の接続は切れ、リフレッシュするまでテストデータが表示されます。データは保存されません。")) return;
-
-                isDebugMode = true;
-                unsubscribeWorks();
-                unsubscribeTags();
-
-                const debugData = generateDebugData();
-                works = debugData.works;
-                tags = debugData.tags;
-
-                debugBanner.classList.remove('hidden');
-                btn.textContent = 'デバッグモード終了';
-                btn.classList.remove('bg-amber-600', 'hover:bg-amber-700');
-                btn.classList.add('bg-red-600', 'hover:bg-red-700');
-
-                // Disable UI elements
-                syncPanel.style.opacity = '0.5';
-                syncPanel.style.pointerEvents = 'none';
-                actionButtons.forEach(el => { if(el) el.disabled = true; }); // Disable action buttons
-
-                showToast("デバッグモードを開始しました。");
-                renderAll(); // Render with debug data
+                isDebugMode = true; unsubscribeWorks(); unsubscribeTags(); const debugData = generateDebugData(); works = debugData.works; tags = debugData.tags;
+                debugBanner.classList.remove('hidden'); btn.textContent = 'デバッグモード終了'; btn.classList.remove('bg-amber-600', 'hover:bg-amber-700'); btn.classList.add('bg-red-600', 'hover:bg-red-700');
+                syncPanel.style.opacity = '0.5'; syncPanel.style.pointerEvents = 'none'; actionButtons.forEach(el => { if(el) el.disabled = true; });
+                showToast("デバッグモードを開始しました。"); renderAll();
             }
         };
-        // --- ▲▲▲ デバッグモード機能 (index.html から移植) ▲▲▲ ---
+        // --- End Debug Mode Logic ---
 
-        // --- App Initialization (from index.html) ---
+        // --- App Initialization ---
         const startApp = () => {
-            const savedCols = localStorage.getItem('visibleColumns');
-            if (savedCols) {
-                visibleColumns = new Set(JSON.parse(savedCols));
-            }
-            updateColumnVisibility();
-
+            updateColumnVisibility(); // Initial column setup based on screen size/localStorage
             loadingOverlay.classList.remove('hidden');
             initializeFirebase();
-            loadAdSettings(); // Load ad settings after Firebase init
+            loadAdSettings();
             setupEventListeners();
         };
 
@@ -2430,23 +2334,17 @@
                 e.preventDefault();
                 if (passwordInput.value === MASTER_PASSWORD) {
                     localStorage.setItem('passwordAuthTimestamp', Date.now().toString());
-                    passwordOverlay.classList.add('hidden');
-                    passwordError.classList.add('hidden');
+                    passwordOverlay.classList.add('hidden'); passwordError.classList.add('hidden');
                     startApp();
                 } else {
-                    passwordError.textContent = 'パスワードが違います。';
-                    passwordError.classList.remove('hidden');
+                    passwordError.textContent = 'パスワードが違います。'; passwordError.classList.remove('hidden');
                 }
             });
-
             const authTimestamp = localStorage.getItem('passwordAuthTimestamp');
             if (authTimestamp && (Date.now() - parseInt(authTimestamp, 10) < (30 * 24 * 60 * 60 * 1000))) {
-                passwordOverlay.classList.add('hidden');
-                startApp();
+                passwordOverlay.classList.add('hidden'); startApp();
             } else {
-                localStorage.removeItem('passwordAuthTimestamp');
-                passwordOverlay.classList.remove('hidden');
-                loadingOverlay.classList.add('hidden'); // Hide loading if auth fails
+                localStorage.removeItem('passwordAuthTimestamp'); passwordOverlay.classList.remove('hidden'); loadingOverlay.classList.add('hidden');
             }
         });
 
