@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>作品リスト管理</title>
+    <title>作品リスト管理 (v2.0)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -115,9 +115,9 @@
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans antialiased">
 
-    <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]">v1.0-manager</div>
+    <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]">v2.0-manager</div>
 
-    <!-- Top Ad Banner (from price_comparison.html) -->
+    <!-- ▼▼▼ 広告機能 (price_comparison.html から移植) ▼▼▼ -->
     <div id="top-ad-banner" class="sticky top-0 z-40 w-full bg-gray-900/80 backdrop-blur-sm border-b border-gray-700/50">
         <div class="max-w-screen-2xl mx-auto p-2 md:px-6 lg:px-8">
             <div id="ad-script-container" class="bg-gray-800/50 rounded-lg text-center flex items-center justify-center min-h-[120px] overflow-hidden">
@@ -125,16 +125,18 @@
             </div>
         </div>
     </div>
+    <!-- ▲▲▲ 広告機能 (price_comparison.html から移植) ▲▲▲ -->
     
-    <!-- Loading Overlay -->
+    <!-- ▼▼▼ ローディング画面 (index.html から移植・強化) ▼▼▼ -->
     <div id="loading-overlay" class="fixed inset-0 bg-gray-900 z-[100] flex items-center justify-center p-4">
         <div id="loading-content" class="text-center transition-opacity duration-300 opacity-0">
             <i class="fas fa-spinner fa-spin fa-3x text-teal-400"></i>
             <p id="loading-text" class="mt-4 text-gray-400">アプリケーションを初期化中...</p>
-            <!-- Add error display area -->
+            <!-- エラー表示領域 -->
             <div id="loading-error-display" class="mt-4 hidden max-w-md mx-auto"></div>
         </div>
     </div>
+    <!-- ▲▲▲ ローディング画面 (index.html から移植・強化) ▲▲▲ -->
 
     <!-- Main Container -->
     <div id="app-container" class="min-h-screen p-4 md:p-6 lg:p-8 opacity-0 transition-opacity duration-500">
@@ -147,6 +149,7 @@
                         <i class="fas fa-tasks mr-3"></i>
                         作品リスト管理
                     </h1>
+                    <!-- index.html へ戻るボタン -->
                     <a href="index.html" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors flex items-center text-sm">
                         <i class="fas fa-dice mr-2"></i>
                         抽選アプリに戻る
@@ -188,11 +191,16 @@
                 </summary>
                 <div class="p-5 border-t border-gray-700">
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <!-- 作品名検索 -->
+                        <!-- ▼▼▼ 検索候補機能を追加 ▼▼▼ -->
                         <div class="space-y-2">
                             <label for="filter-search" class="text-sm font-medium text-gray-400">作品名</label>
-                            <input type="search" id="filter-search" placeholder="作品名で検索..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
+                            <div class="relative">
+                                <input type="search" id="filter-search" placeholder="作品名で検索..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
+                                <!-- サジェスト表示エリア -->
+                                <div id="filter-suggestions" class="absolute z-30 w-full bg-gray-600 rounded-b-lg max-h-60 overflow-y-auto mt-1 hidden shadow-lg"></div>
+                            </div>
                         </div>
+                        <!-- ▲▲▲ 検索候補機能を追加 ▲▲▲ -->
                         
                         <!-- ジャンル -->
                         <div class="space-y-2">
@@ -255,6 +263,9 @@
                 <div class="flex justify-between items-center flex-wrap gap-4">
                     <div class="flex flex-wrap gap-3">
                         <button id="reg-new-work-btn" class="px-4 py-2 bg-lime-600 hover:bg-lime-700 rounded-lg font-semibold transition-colors flex items-center"><i class="fas fa-plus mr-2"></i>新規登録</button>
+                        <!-- ▼▼▼ 外部検索ボタンを追加 ▼▼▼ -->
+                        <button id="external-search-btn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg font-semibold transition-colors flex items-center"><i class="fas fa-globe-asia mr-2"></i>外部検索</button>
+                        <!-- ▲▲▲ 外部検索ボタンを追加 ▲▲▲ -->
                         <button id="manage-tags-btn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition-colors flex items-center"><i class="fas fa-tags mr-2"></i>タグ管理</button>
                         <button id="manage-columns-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors flex items-center"><i class="fas fa-columns mr-2"></i>表示列</button>
                     </div>
@@ -313,14 +324,14 @@
         </main>
     </div>
     
-    <!-- Floating Action Buttons (from price_comparison.html) -->
+    <!-- ▼▼▼ 広告FAB (price_comparison.html から移植) ▼▼▼ -->
     <div class="fixed bottom-6 right-6 z-50 flex flex-col gap-4">
         <button id="ad-settings-fab" class="bg-blue-600 hover:bg-blue-500 w-16 h-16 rounded-full shadow-lg flex items-center justify-center text-2xl transition-transform hover:scale-110" title="広告設定">
             <i class="fas fa-ad"></i>
         </button>
     </div>
     
-    <!-- Ad Settings Modal (from price_comparison.html) -->
+    <!-- ▼▼▼ 広告モーダル (price_comparison.html から移植) ▼▼▼ -->
     <div id="ad-settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[80] flex items-center justify-center p-4">
         <div id="ad-settings-modal-content" class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-md w-full relative">
              <button id="ad-settings-modal-close" class="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors">
@@ -369,8 +380,9 @@
             </div>
         </div>
     </div>
+    <!-- ▲▲▲ 広告関連 ▲▲▲ -->
     
-    <!-- Generic Modal Wrapper (from index.html) -->
+    <!-- ▼▼▼ 汎用モーダル (index.html から移植) ▼▼▼ -->
     <div id="modal-backdrop" class="hidden fixed inset-0 bg-black bg-opacity-70 z-40 transition-opacity"></div>
     <div id="modal-wrapper" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
         <div id="modal-container" class="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-transform scale-95 opacity-0">
@@ -389,7 +401,7 @@
         <p id="toast-message">Message</p>
     </div>
 
-    <!-- Simple Password Overlay (from index.html) -->
+    <!-- Password Overlay (from index.html) -->
     <div id="password-overlay" class="hidden fixed inset-0 bg-gray-900 bg-opacity-95 z-[90] flex items-center justify-center p-4">
         <div class="w-full max-w-sm">
             <form id="password-form" class="bg-gray-800 p-8 rounded-2xl shadow-2xl space-y-6">
@@ -415,6 +427,7 @@
             </div>
         </div>
     </div>
+    <!-- ▲▲▲ 汎用モーダル (index.html から移植) ▲▲▲ -->
 
     <!-- Firebase SDKs -->
     <script type="module">
@@ -446,12 +459,10 @@
         // --- App Configuration ---
         const DEFAULT_APP_ID = 'r18-random-selector';
         const appId = typeof __app_id !== 'undefined' ? __app_id : DEFAULT_APP_ID;
-        const appVersion = 'v1.0-manager';
-        // (from index.html)
+        const appVersion = 'v2.0-manager';
         const MASTER_PASSWORD = '07143674'; 
         $('#version-display').textContent = appVersion;
 
-        // (from index.html)
         const firebaseConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : `{
             "apiKey": "AIzaSyAnlTrmb0MW8yznBxpWF6B83R9luFnGVts",
             "authDomain": "serecter222.firebaseapp.com",
@@ -470,8 +481,8 @@
         let unsubscribeTags = () => {};
         let syncId = '';
         let currentUser = null;
-        let loadingTimeout = null; // Add loading timeout timer
-        let stallTimeout = null; // Add data stall timer
+        let loadingTimeout = null;
+        let stallTimeout = null;
         let isLoadComplete = false;
         let loadingStatus = { auth: false, works: false, tags: false };
         let checkModalDirtyState = () => false;
@@ -504,8 +515,8 @@
         // --- UI Elements ---
         const loadingOverlay = $('#loading-overlay');
         const loadingContent = $('#loading-content');
-        const loadingText = $('#loading-text'); // Get loading text
-        const loadingErrorDisplay = $('#loading-error-display'); // Get error display element
+        const loadingText = $('#loading-text');
+        const loadingErrorDisplay = $('#loading-error-display'); // エラー表示
         const appContainer = $('#app-container');
         const mainContent = $('#main-content');
         
@@ -518,6 +529,7 @@
         
         // Filter Panel
         const filterSearch = $('#filter-search');
+        const filterSuggestions = $('#filter-suggestions'); // サジェスト用
         const filterUnrated = $('#filter-unrated');
         const filterRatingOp = $('#filter-rating-op');
         const filterRatingVal = $('#filter-rating-val');
@@ -528,6 +540,7 @@
 
         // Action Bar
         const regNewWorkBtn = $('#reg-new-work-btn');
+        const externalSearchBtn = $('#external-search-btn'); // 外部検索ボタン
         const manageTagsBtn = $('#manage-tags-btn');
         const manageColumnsBtn = $('#manage-columns-btn');
         const bulkActionBar = $('#bulk-action-bar');
@@ -546,7 +559,7 @@
         // Pagination
         const paginationContainer = $('#pagination-container');
 
-        // Modals (from index.html)
+        // Modals
         const modalBackdrop = $('#modal-backdrop');
         const modalWrapper = $('#modal-wrapper');
         const modalContainer = $('#modal-container');
@@ -554,13 +567,13 @@
         const modalContentHost = $('#modal-content-host');
         const modalCloseBtn = $('#modal-close-btn');
 
-        // Auth (from index.html)
+        // Auth
         const passwordOverlay = $('#password-overlay');
         const passwordForm = $('#password-form');
         const passwordInput = $('#password-input');
         const passwordError = $('#password-error');
 
-        // Toast & Confirm (from index.html)
+        // Toast & Confirm
         const toastEl = $('#toast');
         const toastMessageEl = $('#toast-message');
         const confirmModal = $('#confirm-modal');
@@ -569,12 +582,12 @@
         const confirmOkBtn = $('#confirm-ok');
         const confirmCancelBtn = $('#confirm-cancel');
         
-        // Ad UI (from price_comparison.html)
+        // Ad UI
         const topAdBanner = document.getElementById('top-ad-banner');
         const adSettingsModal = document.getElementById('ad-settings-modal');
         const adSettingsModalContent = document.getElementById('ad-settings-modal-content');
         
-        // --- Utility Functions (from index.html) ---
+        // --- Utility Functions ---
         
         const escapeHTML = (str) => {
             if (typeof str !== 'string') return '';
@@ -588,8 +601,16 @@
             return d.toISOString().slice(0, 10).replace(/-/g, '/') === dateString;
         };
         
-        const showToast = (message, duration = 3000) => {
+        const showToast = (message, type = 'success', duration = 3000) => {
+            // 'type' argument added for error styling
             toastMessageEl.textContent = message;
+            if (type === 'error') {
+                toastEl.classList.add('bg-red-600');
+                toastEl.classList.remove('bg-gray-700');
+            } else {
+                toastEl.classList.remove('bg-red-600');
+                toastEl.classList.add('bg-gray-700');
+            }
             toastEl.classList.add('show');
             setTimeout(() => {
                 toastEl.classList.remove('show');
@@ -599,7 +620,7 @@
         const showConfirm = (title, message) => {
             return new Promise((resolve) => {
                 confirmTitle.textContent = title;
-                confirmMessage.innerHTML = message; // Allow HTML for emphasis
+                confirmMessage.innerHTML = message;
                 confirmModal.classList.remove('hidden');
 
                 const okHandler = () => {
@@ -669,14 +690,13 @@
             clearTimeout(loadingTimeout);
             clearTimeout(stallTimeout);
 
-            loadingText.classList.add('hidden'); // Hide normal loading text
+            loadingText.classList.add('hidden');
 
             const statusParts = [];
             if (!loadingStatus.auth) statusParts.push('認証');
             if (!loadingStatus.tags) statusParts.push('タグ');
             if (!loadingStatus.works) statusParts.push('作品');
 
-            // Display error in the dedicated div
             loadingErrorDisplay.innerHTML = `
                 <div class="bg-red-900 border border-red-700 rounded-lg p-4 text-left">
                     <h3 class="text-lg font-bold text-red-300 mb-2">${errorMessageTitle}</h3>
@@ -691,18 +711,17 @@
 
         const startLoadingTimeout = () => {
             clearTimeout(loadingTimeout);
-            loadingTimeout = setTimeout(() => handleLoadingTimeout(false), 30000); // 30 seconds timeout
+            loadingTimeout = setTimeout(() => handleLoadingTimeout(false), 30000);
         };
 
         const handleDataFetchError = (error, type) => {
-             if (isLoadComplete) return; // Don't show error if loading already succeeded
+             if (isLoadComplete) return;
              console.error(`Error fetching ${type}: `, error);
-             clearTimeout(loadingTimeout); // Stop the main timeout
-             clearTimeout(stallTimeout); // Stop stall timeout
+             clearTimeout(loadingTimeout);
+             clearTimeout(stallTimeout);
 
-             loadingText.classList.add('hidden'); // Hide normal loading text
+             loadingText.classList.add('hidden');
 
-             // Display error in the dedicated div
              loadingErrorDisplay.innerHTML = `
                 <div class="bg-red-900 border border-red-700 rounded-lg p-4 text-left">
                     <h3 class="text-lg font-bold text-red-300 mb-2">${type}データの取得に失敗</h3>
@@ -764,12 +783,11 @@
         const checkLoadingComplete = () => {
             if (isLoadComplete) return;
 
-            // Update loading text (no progress bar in this app)
             loadingText.textContent = `読み込み中... (認証: ${loadingStatus.auth}, タグ: ${loadingStatus.tags}, 作品: ${loadingStatus.works})`;
 
             if (loadingStatus.auth && loadingStatus.works && loadingStatus.tags) {
                 isLoadComplete = true;
-                clearTimeout(loadingTimeout); // Clear timeouts on success
+                clearTimeout(loadingTimeout);
                 clearTimeout(stallTimeout);
                 console.log("All data loaded successfully.");
                 
@@ -784,7 +802,7 @@
         };
 
         const initializeFirebase = () => {
-            startLoadingTimeout(); // Start the 30s timeout
+            startLoadingTimeout();
             setTimeout(() => { loadingContent.classList.remove('opacity-0'); }, 100);
             try {
                 const firebaseConfig = JSON.parse(firebaseConfigStr);
@@ -794,7 +812,6 @@
                 setupAuthObserver();
             } catch (error) {
                 console.error("Firebase initialization failed:", error);
-                // Show initialization error directly
                 loadingText.classList.add('hidden');
                 loadingErrorDisplay.innerHTML = `<p class="text-red-400">Firebaseの初期化に失敗しました。設定を確認してください。<br><span class="text-xs">${error.message}</span></p>`;
                 loadingErrorDisplay.classList.remove('hidden');
@@ -804,23 +821,17 @@
         const setupAuthObserver = () => {
             onAuthStateChanged(auth, user => {
                 if (user) {
-                    // Only process if auth hasn't completed yet
                     if (!loadingStatus.auth) {
                         currentUser = user;
                         loadingStatus.auth = true;
-
-                        clearTimeout(stallTimeout); // Clear previous stall timer if any
-                        // Start a 15s stall timer after successful auth
                         stallTimeout = setTimeout(() => handleLoadingTimeout(true), 15000);
-
-                        checkLoadingComplete(); // Update progress and check if all loaded
-                        setupSyncId(); // Proceed to load data
+                        checkLoadingComplete();
+                        setupSyncId();
                     }
                 } else {
-                    // Try to sign in anonymously, handle error if it fails
                     signInAnonymously(auth).catch(error => handleDataFetchError(error, '匿名認証'));
                 }
-            }, error => handleDataFetchError(error, '認証状態監視')); // Handle observer errors
+            }, error => handleDataFetchError(error, '認証状態監視'));
         };
 
         // --- Data Sync Logic (from index.html) ---
@@ -892,11 +903,11 @@
 
                 if (isFirstLoad) {
                     isFirstLoad = false;
-                    loadingStatus.works = true; // Mark works as loaded
-                    checkLoadingComplete(); // Check if all data is now loaded
+                    loadingStatus.works = true;
+                    checkLoadingComplete();
                 }
                 renderAll();
-            }, error => handleDataFetchError(error, '作品')); // Add error handler
+            }, error => handleDataFetchError(error, '作品'));
         };
 
         const subscribeToTags = () => {
@@ -906,13 +917,12 @@
                 tags = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                  if (isFirstLoad) {
                     isFirstLoad = false;
-                    loadingStatus.tags = true; // Mark tags as loaded
-                    checkLoadingComplete(); // Check if all data is now loaded
+                    loadingStatus.tags = true;
+                    checkLoadingComplete();
                  }
                  renderAll();
-                 // Refresh tag filter display if modal is open
                  if ($('#filter-tags-display')) renderActiveTagFilters();
-            }, error => handleDataFetchError(error, 'タグ')); // Add error handler
+            }, error => handleDataFetchError(error, 'タグ'));
         };
 
         // --- Image Processing (from index.html) ---
@@ -943,7 +953,7 @@
             });
         };
         
-        // --- CRUD Operations (Adapted from index.html) ---
+        // --- CRUD Operations ---
         const addWork = async (newWorkData) => {
             const name = newWorkData.name.trim();
             if (!name) return showToast("作品名は必須です。", "error");
@@ -979,8 +989,8 @@
             try {
                 await deleteDoc(doc(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`, workId));
                 showToast(`「${workName}」を削除しました。`);
-                selectedWorkIds.delete(workId); // Deselect if it was selected
-                renderAll(); // Re-render after deletion
+                selectedWorkIds.delete(workId);
+                renderAll();
             } catch (error) {
                 console.error("Error deleting work: ", error);
                 showToast("作品の削除に失敗しました。", "error");
@@ -1003,12 +1013,12 @@
                 selectedWorkIds.clear();
                 renderAll();
             } catch (error) {
-                console.error("Error bulk deleting works: ", error);
+                console.error("Error bulk deleting works:", error);
                 showToast("一括削除に失敗しました。", "error");
             }
         };
         
-        // --- Rendering Logic (New) ---
+        // --- Rendering Logic ---
         
         const renderAll = () => {
             updateFilteredAndSortedWorks();
@@ -1077,7 +1087,6 @@
             displayedWorks = tempWorks;
             workCountDisplay.textContent = `${displayedWorks.length} / ${works.length} 作品`;
             
-            // Reset page if current page is out of bounds
             const totalPages = Math.ceil(displayedWorks.length / paginationState.itemsPerPage);
             if (paginationState.currentPage > totalPages && totalPages > 0) {
                 paginationState.currentPage = totalPages;
@@ -1087,7 +1096,6 @@
         };
         
         const renderTable = () => {
-            // Update sort icons in header
             worksTableHead.querySelectorAll('th[data-sort]').forEach(th => {
                 const icon = th.querySelector('.sort-icon');
                 if (th.dataset.sort === sortState.by) {
@@ -1099,7 +1107,6 @@
                 }
             });
             
-            // Get paginated items
             const { currentPage, itemsPerPage } = paginationState;
             const start = (currentPage - 1) * itemsPerPage;
             const end = start + itemsPerPage;
@@ -1189,7 +1196,6 @@
             paginationContainer.appendChild(createBtn('<i class="fas fa-angle-double-left"></i>', 1, currentPage === 1));
             paginationContainer.appendChild(createBtn('<i class="fas fa-angle-left"></i>', currentPage - 1, currentPage === 1));
             
-            // Page number logic
             const maxPagesToShow = 5;
             let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
             let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
@@ -1224,12 +1230,13 @@
                 bulkActionBar.classList.add('hidden');
             }
             // Sync select-all checkbox
-            const itemsOnPage = worksTableBody.querySelectorAll('.row-checkbox').length;
-            const selectedOnPage = worksTableBody.querySelectorAll('.row-checkbox:checked').length;
-            if (itemsOnPage > 0 && selectedOnPage === itemsOnPage) {
+            const itemsOnPage = paginatedWorks.map(w => w.id);
+            const selectedOnPageCount = itemsOnPage.filter(id => selectedWorkIds.has(id)).length;
+
+            if (itemsOnPage.length > 0 && selectedOnPageCount === itemsOnPage.length) {
                 selectAllCheckbox.checked = true;
                 selectAllCheckbox.indeterminate = false;
-            } else if (selectedOnPage > 0) {
+            } else if (selectedOnPageCount > 0) {
                 selectAllCheckbox.checked = false;
                 selectAllCheckbox.indeterminate = true;
             } else {
@@ -1260,7 +1267,56 @@
             });
         };
 
-        // --- Event Handlers (New & Adapted) ---
+        // --- ▼▼▼ 外部検索機能 (index.html から移植) ▼▼▼ ---
+        const openExternalSearchModal = (prefillQuery = '') => {
+            const sites = [
+                { id: 'dlsite', name: 'DLsite', color: 'bg-blue-700', hover: 'hover:bg-blue-800' },
+                { id: 'fanza', name: 'FANZA', color: 'bg-red-600', hover: 'hover:bg-red-700' },
+                { id: 'melonbooks', name: 'Melonbooks', color: 'bg-green-600', hover: 'hover:bg-green-700' },
+                { id: 'booth', name: 'Booth', color: 'bg-rose-500', hover: 'hover:bg-rose-600' }
+            ];
+            const safeQuery = escapeHTML(prefillQuery);
+            const content = `
+                <div class="space-y-4">
+                    <div>
+                        <label for="externalSearchInput" class="block text-sm font-medium text-gray-400 mb-1">検索クエリ</label>
+                        <input type="text" id="externalSearchInput" value="${safeQuery}" placeholder="作品名などを入力..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-2">検索するサイトを選択</label>
+                        <div id="external-site-buttons" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            ${sites.map(site => `<button data-site="${site.id}" class="w-full px-4 py-3 ${site.color} ${site.hover} rounded-lg font-bold text-lg transition-colors">${site.name}</button>`).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            openModal("外部サイトで検索", content, () => {
+                $('#external-site-buttons').addEventListener('click', e => {
+                    const button = e.target.closest('button[data-site]');
+                    if (button) {
+                        const site = button.dataset.site;
+                        const query = $('#externalSearchInput').value.trim();
+                        openSearchWindow(site, query);
+                    }
+                });
+            });
+        };
+        
+        const openSearchWindow = (site, query) => {
+            let url;
+            const encodedQuery = encodeURIComponent(query);
+            switch(site) {
+                case 'dlsite': url = query ? `https://www.dlsite.com/maniax/fsr/=/language/jp/sex_category%5B0%5D/male/keyword/${encodedQuery}/` : 'https://www.dlsite.com/maniax/'; break;
+                case 'fanza': url = query ? `https://www.dmm.co.jp/dc/doujin/-/list/narrow/=/word=${encodedQuery}/` : 'https://www.dmm.co.jp/dc/doujin/'; break;
+                case 'melonbooks': url = query ? `https://www.melonbooks.co.jp/search/search.php?name=${encodedQuery}&search_target=2` : 'https://www.melonbooks.co.jp/'; break;
+                case 'booth': url = query ? `https://booth.pm/ja/search/${encodedQuery}` : 'https://booth.pm/'; break;
+            }
+            if (url) window.open(url, '_blank', 'noopener,noreferrer');
+        };
+        // --- ▲▲▲ 外部検索機能 (index.html から移植) ▲▲▲ ---
+
+        // --- Event Handlers ---
         
         const setupEventListeners = () => {
             // Modals
@@ -1282,7 +1338,55 @@
 
             // Filters
             const debouncedRender = debounce(renderAll, 300);
-            filterSearch.addEventListener('input', () => { filters.search = filterSearch.value; paginationState.currentPage = 1; debouncedRender(); });
+            
+            // ▼▼▼ 検索サジェスト機能を追加 ▼▼▼
+            filterSearch.addEventListener('input', () => {
+                const query = filterSearch.value.trim();
+                filters.search = query;
+                paginationState.currentPage = 1; 
+                debouncedRender();
+                
+                const normalizedQuery = query.toLowerCase();
+                if (normalizedQuery.length < 2) {
+                    filterSuggestions.classList.add('hidden');
+                    return;
+                }
+                
+                const suggestions = works.filter(work => 
+                    work.name.toLowerCase().includes(normalizedQuery)
+                ).slice(0, 10);
+                
+                if (suggestions.length > 0) {
+                    filterSuggestions.innerHTML = suggestions.map(work => `
+                        <div class="suggestion-item p-2 hover:bg-gray-500 cursor-pointer flex items-center gap-2" data-name="${escapeHTML(work.name)}">
+                           <img src="${work.imageUrl || 'https://placehold.co/40x40/1f2937/4b5563?text=?'}" class="w-8 h-8 object-cover rounded-sm flex-shrink-0">
+                           <span class="text-sm truncate">${escapeHTML(work.name)}</span>
+                        </div>
+                    `).join('');
+                    filterSuggestions.classList.remove('hidden');
+                } else {
+                    filterSuggestions.classList.add('hidden');
+                }
+            });
+
+            filterSuggestions.addEventListener('click', (e) => {
+                const item = e.target.closest('.suggestion-item');
+                if (item) {
+                    filterSearch.value = item.dataset.name;
+                    filters.search = item.dataset.name;
+                    filterSuggestions.classList.add('hidden');
+                    paginationState.currentPage = 1;
+                    renderAll();
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!filterSearch.contains(e.target) && !filterSuggestions.contains(e.target)) {
+                    filterSuggestions.classList.add('hidden');
+                }
+            });
+            // ▲▲▲ 検索サジェスト機能を追加 ▲▲▲
+
             $$('input[data-filter-genre]').forEach(cb => cb.addEventListener('change', () => {
                 if (cb.checked) filters.genres.add(cb.dataset.filterGenre);
                 else filters.genres.delete(cb.dataset.filterGenre);
@@ -1310,6 +1414,7 @@
                 renderAll();
             });
             regNewWorkBtn.addEventListener('click', openRegistrationModal);
+            externalSearchBtn.addEventListener('click', () => openExternalSearchModal(filterSearch.value)); // 外部検索ボタンリスナー
             manageTagsBtn.addEventListener('click', () => openTagModal({ mode: 'manage' }));
             manageColumnsBtn.addEventListener('click', openColumnModal);
             bulkEditBtn.addEventListener('click', openBulkEditModal);
@@ -1324,7 +1429,7 @@
                     sortState.order = sortState.order === 'asc' ? 'desc' : 'asc';
                 } else {
                     sortState.by = newSortBy;
-                    sortState.order = 'desc'; // Default to desc for new columns
+                    sortState.order = 'desc';
                 }
                 paginationState.currentPage = 1;
                 renderAll();
@@ -1332,17 +1437,15 @@
             
             worksTableBody.addEventListener('click', e => {
                 const target = e.target;
-                // Inline Rating
                 const star = target.closest('.inline-rating .fa-star');
                 if (star) {
                     const workId = star.closest('td').dataset.id;
                     let newRating = parseInt(star.dataset.value, 10);
                     const work = works.find(w => w.id === workId);
-                    if (work && work.rating === newRating) newRating = 0; // Toggle off
+                    if (work && work.rating === newRating) newRating = 0;
                     updateWork(workId, { rating: newRating });
-                    return; // update will be handled by onSnapshot
+                    return;
                 }
-                // Edit/Delete buttons
                 const btn = target.closest('button[data-action]');
                 if (btn) {
                     const { action, id, name } = btn.dataset;
@@ -1356,9 +1459,11 @@
             selectAllCheckbox.addEventListener('change', () => {
                 const isChecked = selectAllCheckbox.checked;
                 const itemsOnPage = paginatedWorks.map(w => w.id);
+                
                 worksTableBody.querySelectorAll('.row-checkbox').forEach(cb => {
                     cb.checked = isChecked;
                 });
+                
                 if (isChecked) {
                     itemsOnPage.forEach(id => selectedWorkIds.add(id));
                 } else {
@@ -1382,15 +1487,13 @@
                 if (btn && !btn.disabled) {
                     paginationState.currentPage = parseInt(btn.dataset.page, 10);
                     renderAll();
-                    // Scroll to top of table
                     worksTable.scrollIntoView({ behavior: 'smooth' });
                 }
             });
             
-            // Date Inputs (Validation)
             initializeDateInputs(document.body);
             
-            // Ad UI Events (from price_comparison.html)
+            // Ad UI Events
             document.getElementById('ad-settings-fab').addEventListener('click', () => showModal(adSettingsModal, adSettingsModalContent));
             document.getElementById('ad-settings-modal-close').addEventListener('click', () => hideModal(adSettingsModal, adSettingsModalContent));
             adSettingsModal.addEventListener('click', (e) => {
@@ -1463,7 +1566,7 @@
                             showToast(error.message, "error");
                             tempImageUrl = null;
                             preview.classList.add('hidden');
-                            e.target.value = null; // Reset file input
+                            e.target.value = null;
                         }
                     } else {
                         tempImageUrl = null;
@@ -1500,7 +1603,7 @@
             });
         };
         
-        // --- Modal: Edit (with Image Compare) ---
+        // --- ▼▼▼ 編集モーダル (ボタン配置変更、画像比較機能) ▼▼▼ ---
         const openEditModal = (workId) => {
             const work = works.find(w => w.id === workId);
             if (!work) return;
@@ -1520,7 +1623,7 @@
                 date: $('#edit-date').value,
                 rating: currentRating,
                 tags: JSON.stringify([...currentTagIds].sort()),
-                image: tempImageUrl // Compare against the new temp image
+                image: tempImageUrl
             });
             
             const initialState = {
@@ -1530,18 +1633,20 @@
                 date: regDate,
                 rating: currentRating,
                 tags: JSON.stringify([...currentTagIds].sort()),
-                image: work.imageUrl || null // Compare against original image
+                image: work.imageUrl || null
             };
             
             checkModalDirtyState = () => JSON.stringify(getFormState()) !== JSON.stringify(initialState);
             
+            // ▼▼▼ HTML content の ボタン配置を変更 ▼▼▼
             const content = `
                 <form id="edit-work-form" class="space-y-6">
-                    <!-- SPEC: Save button on top -->
-                    <div class="flex justify-end gap-3">
-                        <button type="button" id="edit-cancel-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
-                        <button type="submit" class="px-6 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold">保存</button>
+                    <!-- SPEC: Save/Cancel buttons reordered per request -->
+                    <div class="flex flex-col gap-3">
+                        <button type="submit" class="w-full px-6 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold">保存</button>
+                        <button type="button" id="edit-cancel-btn" class="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
                     </div>
+                    <!-- ▲▲▲ ボタン配置を変更 ▲▲▲ -->
                 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <!-- Left Column: Details -->
@@ -1618,7 +1723,6 @@
             openModal(`「${work.name}」を編集`, content, () => {
                 let unprocessedNewImage = null; // To hold the image before confirming
                 
-                // Rating stars logic
                 const ratingStars = $('#edit-rating');
                 ratingStars.addEventListener('click', e => {
                     if (e.target.matches('.fa-star')) {
@@ -1628,7 +1732,6 @@
                     }
                 });
 
-                // Tags logic
                 const tagsContainer = $('#edit-tags-display');
                 const renderTags = (ids) => {
                     const objects = [...ids].map(id => tags.find(t => t.id === id)).filter(Boolean);
@@ -1637,14 +1740,13 @@
                 renderTags(currentTagIds);
                 
                 $('#edit-assign-tags-btn').addEventListener('click', () => {
-                    // Save modal state before opening new modal
                     const capturedState = {
                         name: $('#edit-name').value,
                         genre: $('#edit-genre').value,
                         url: $('#edit-url').value,
                         date: $('#edit-date').value,
                         rating: currentRating,
-                        imageUrl: tempImageUrl // Pass the confirmed new image
+                        imageUrl: tempImageUrl
                     };
                     
                     openTagModal({
@@ -1652,10 +1754,8 @@
                         currentTagIds: currentTagIds,
                         workName: work.name,
                         onConfirm: (newTagIds) => {
-                            // Restore state when returning
                             openEditModal(workId);
                             setTimeout(() => { 
-                                // Need timeout for modal to re-open
                                 $('#edit-name').value = capturedState.name;
                                 $('#edit-genre').value = capturedState.genre;
                                 $('#edit-url').value = capturedState.url;
@@ -1674,7 +1774,7 @@
                     });
                 });
                 
-                // Image Change Logic
+                // ▼▼▼ 画像比較ロジック ▼▼▼
                 $('#edit-image').addEventListener('change', async (e) => {
                     const file = e.target.files[0];
                     if (file) {
@@ -1692,15 +1792,15 @@
                 });
                 
                 $('#confirm-image-change-btn').addEventListener('click', () => {
-                    tempImageUrl = unprocessedNewImage; // Confirm the change
+                    tempImageUrl = unprocessedNewImage;
                     unprocessedNewImage = null;
                     $('#initial-image-preview').src = tempImageUrl;
                     $('#image-compare-container').classList.add('hidden');
                     $('#initial-image-preview-container').classList.remove('hidden');
                     showToast("画像が変更されました。保存ボタンを押して確定してください。");
                 });
+                // ▲▲▲ 画像比較ロジック ▲▲▲
 
-                // Form Submit
                 $('#edit-cancel-btn').addEventListener('click', closeModal);
                 $('#edit-work-form').addEventListener('submit', async (e) => {
                     e.preventDefault();
@@ -1716,10 +1816,10 @@
                         registeredAt: Timestamp.fromDate(new Date(dateStr.replace(/\//g, '-'))),
                         rating: currentRating,
                         tagIds: Array.from(currentTagIds),
-                        imageUrl: tempImageUrl // Use the confirmed new image URL
+                        imageUrl: tempImageUrl
                     };
                     
-                    checkModalDirtyState = () => false; // Prevent confirm dialog
+                    checkModalDirtyState = () => false;
                     const success = await updateWork(workId, updatedData);
                     if (success) {
                         showToast("作品情報を更新しました。");
@@ -1728,6 +1828,7 @@
                 });
             });
         };
+        // --- ▲▲▲ 編集モーダル ▲▲▲ ---
         
         // --- Modal: Tag Management (from index.html) ---
         const openTagModal = (options) => {
@@ -1772,7 +1873,7 @@
             });
         };
         
-        const addTag = async (name, color) => { /* (from index.html, modified) */
+        const addTag = async (name, color) => {
              const normalizedName = name.trim().toLowerCase();
              if (tags.some(t => t.name.toLowerCase() === normalizedName)) return showToast("同じ名前のタグが既に存在します。", "error");
              const newTag = { name: name.trim(), color, createdAt: Timestamp.now() };
@@ -1782,7 +1883,7 @@
                 showToast(`タグ「${name}」を作成しました。`);
              } catch (error) { console.error("Error adding tag:", error); showToast("タグの作成に失敗しました。", "error"); }
         };
-        const deleteTag = async (tagId) => { /* (from index.html) */
+        const deleteTag = async (tagId) => {
              const tagToDelete = tags.find(t => t.id === tagId);
              if (!tagToDelete || !await showConfirm("タグの削除", `タグ「${tagToDelete.name}」を削除しますか？<br>全ての作品からこのタグが解除されます。`)) return;
              try {
@@ -1801,7 +1902,6 @@
         // --- Modal: Tag Filter (from index.html) ---
         const openTagFilterModal = () => {
             let tempAnd = new Set(filters.andTagIds), tempOr = new Set(filters.orTagIds), tempNot = new Set(filters.notTagIds);
-            const content = `... (HTML for tag filter modal, similar to index.html) ...`; // Simplified for brevity
             openModal("タグの条件を選択", `
                 <div class="flex flex-col h-[70vh]">
                     <div class="flex items-center gap-2 mb-2">
@@ -1857,7 +1957,6 @@
                 <form id="bulk-edit-form" class="space-y-6">
                     <p class="text-lg">${count}件の作品を一括編集します。</p>
                     
-                    <!-- Genre -->
                     <div class="filter-group">
                         <label class="block text-sm font-medium text-gray-400 mb-2">ジャンルを変更</label>
                         <div class="flex items-center gap-4">
@@ -1869,7 +1968,6 @@
                         </div>
                     </div>
                     
-                    <!-- Rating -->
                     <div class="filter-group">
                         <label class="block text-sm font-medium text-gray-400 mb-2">評価を変更</label>
                         <div class="flex items-center gap-4">
@@ -1881,7 +1979,6 @@
                         </div>
                     </div>
                     
-                    <!-- Tags -->
                     <div class="space-y-4">
                         <div>
                             <label for="bulk-tags-add" class="block text-sm font-medium text-gray-400 mb-2">タグを一括追加</label>
@@ -1947,7 +2044,7 @@
                         showToast(`${count}件の作品を更新しました。`);
                         selectedWorkIds.clear();
                         closeModal();
-                        renderAll(); // Will be updated by onSnapshot, but this clears selection
+                        renderAll();
                     } catch (error) {
                         console.error("Error bulk updating works:", error);
                         showToast("一括更新に失敗しました。", "error");
@@ -1996,7 +2093,6 @@
                         const colId = cb.dataset.colId;
                         if (cb.checked) visibleColumns.add(colId);
                         else visibleColumns.delete(colId);
-                        // Save to localStorage
                         localStorage.setItem('visibleColumns', JSON.stringify(Array.from(visibleColumns)));
                         updateColumnVisibility();
                     });
@@ -2004,7 +2100,7 @@
             }, { size: 'max-w-3xl' });
         };
         
-        // --- Date Input Validation (from index.html) ---
+        // --- Date Input Validation ---
         const initializeDateInputs = (container) => {
             container.querySelectorAll('.date-input').forEach(textInput => {
                 if (textInput.dataset.initialized) return;
@@ -2024,9 +2120,8 @@
 
         const applyAdVisibility = (isVisible) => {
             topAdBanner.classList.toggle('hidden', !isVisible);
-            // Adjust main content's top margin based on ad banner visibility
             if (isVisible) {
-                mainContent.style.paddingTop = '8px'; // approx height of ad banner padding
+                mainContent.style.paddingTop = '8px';
             } else {
                 mainContent.style.paddingTop = '0';
             }
@@ -2086,7 +2181,6 @@
 
         // --- App Initialization (from index.html) ---
         const startApp = () => {
-            // Load visible columns from localStorage
             const savedCols = localStorage.getItem('visibleColumns');
             if (savedCols) {
                 visibleColumns = new Set(JSON.parse(savedCols));
@@ -2127,4 +2221,3 @@
     </script>
 </body>
 </html>
-
