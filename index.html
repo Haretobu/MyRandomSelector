@@ -287,8 +287,8 @@
                     <div class="flex justify-between items-center mb-4 px-2">
                         <h2 class="text-2xl font-bold">登録作品リスト</h2>
                         <div class="flex space-x-1 bg-gray-700 p-1 rounded-lg">
-                            <button id="view-grid-btn" class="view-btn p-2 leading-none"><i class="fas fa-th-large"></i></button>
-                            <button id="view-list-btn" class="view-btn p-2 leading-none"><i class="fas fa-bars"></i></button>
+                            <button id="view-grid-btn" aria-label="グリッド表示" class="view-btn p-2 leading-none"><i class="fas fa-th-large"></i></button>
+                            <button id="view-list-btn" aria-label="リスト表示" class="view-btn p-2 leading-none"><i class="fas fa-bars"></i></button>
                         </div>
                     </div>
                     <div id="workList" class="transition-all">
@@ -313,7 +313,7 @@
         </button>
 
         <!-- Main FAB Toggle (above lottery)-->
-        <button id="menuFab" title="メニュー" class="w-16 h-16 bg-indigo-600 hover:bg-indigo-700 rounded-full text-white flex items-center justify-center shadow-lg transition-transform hover:scale-110 mt-3">
+        <button id="menuFab" title="メニュー" aria-label="メニューを開く" class="w-16 h-16 bg-indigo-600 hover:bg-indigo-700 rounded-full text-white flex items-center justify-center shadow-lg transition-transform hover:scale-110 mt-3">
             <i class="fas fa-plus text-2xl"></i>
         </button>
         
@@ -337,7 +337,7 @@
         <div id="modal-container" class="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-transform scale-95 opacity-0">
              <div class="flex justify-between items-center p-4 border-b border-gray-700">
                 <h3 id="modal-title" class="text-xl font-bold">Modal Title</h3>
-                <button id="modal-close-btn" class="text-gray-400 hover:text-white"><i class="fas fa-times fa-lg"></i></button>
+                <button id="modal-close-btn" aria-label="閉じる" class="text-gray-400 hover:text-white"><i class="fas fa-times fa-lg"></i></button>
             </div>
             <div id="modal-content-host" class="p-6 overflow-y-auto modal-content">
                 <!-- Modal content will be injected here -->
@@ -626,6 +626,10 @@
             };
         };
 
+        const getTagObjects = (tagIds) => {
+            return (tagIds || []).map(id => tags.find(t => t.id === id)).filter(Boolean);
+        };
+
         // --- FAB Menu Logic ---
         const toggleFabMenu = () => {
             const isOpen = fabContainer.classList.toggle('fab-menu-open');
@@ -894,7 +898,7 @@
                     loadingStatus.works = true;
                     checkLoadingComplete();
                 }
-                renderAll();
+                renderWorkList();
             }, error => handleDataFetchError(error, '作品'));
         };
 
@@ -919,7 +923,7 @@
         // --- Image Processing ---
         const processImage = (file) => {
             return new Promise((resolve, reject) => {
-                if (file.size > 900 * 1024) return reject(new Error("ファイルサイズが900KBを超えています。"));
+                if (file.size > 900 * 1024) return reject(new Error("ファイルサイズが900KBを超えています。別の画像をお試しください。"));
                 const reader = new FileReader();
                 reader.onload = e => {
                     const img = new Image();
@@ -980,7 +984,7 @@
                 $('#workRegisteredAt').value = formatDateForInput(new Date());
             } catch (error) {
                 console.error("Error adding work: ", error);
-                showToast("作品の登録に失敗しました。");
+                showToast("作品の登録に失敗しました。時間をおいて再度お試しください。");
             }
         };
 
@@ -1106,7 +1110,7 @@
         };
 
         const renderWorkCard = (work) => {
-            const tagObjects = (work.tagIds || []).map(id => tags.find(t => t.id === id)).filter(Boolean);
+            const tagObjects = getTagObjects(work.tagIds);
             const isExpanded = expandedTagsWorkIds.has(work.id);
             const displayedTags = isExpanded ? tagObjects : tagObjects.slice(0, 5);
             const hasMoreTags = tagObjects.length > 5;
@@ -1139,7 +1143,7 @@
 
         const renderWorkListItem = (work) => {
             const ratingStars = Array(5).fill(0).map((_, i) => `<i class="fa-star ${i < work.rating ? 'fas text-yellow-400' : 'far text-gray-500'}"></i>`).join('');
-            const tagObjects = (work.tagIds || []).map(id => tags.find(t => t.id === id)).filter(Boolean);
+            const tagObjects = getTagObjects(work.tagIds);
             const safeWorkName = escapeHTML(work.name);
             const siteBadge = getSiteBadgeHTML(work.sourceUrl);
 
@@ -1657,7 +1661,7 @@
 
                 const renderStars = r => { ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= r ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join(''); };
                 const renderTags = ids => {
-                    const objects = [...ids].map(id => tags.find(t => t.id === id)).filter(Boolean);
+                    const objects = getTagObjects(ids);
                     tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded font-semibold text-xs" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`;
                 };
                 
@@ -1902,7 +1906,7 @@
             openModal(titleMap[mode], content, () => {
                 let tagSearchQuery = '', tagFilter = 'all', tagSort = { by: 'createdAt', order: 'desc' };
                 const tagListEl = $('#tag-list'), tagPreviewEl = $('#tag-selector-preview');
-                const renderTagPreview = () => { if(!tagPreviewEl) return; const objects = [...tempSelectedTagIds].map(id => tags.find(t => t.id === id)).filter(Boolean); tagPreviewEl.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグ未選択</span>`; };
+                const renderTagPreview = () => { if(!tagPreviewEl) return; const objects = getTagObjects(tempSelectedTagIds); tagPreviewEl.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color}; color:${getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグ未選択</span>`; };
                 const renderTagList = () => {
                     let tagsToRender = [...tags];
                     if(tagSearchQuery) tagsToRender = tagsToRender.filter(t => t.name.toLowerCase().includes(tagSearchQuery.toLowerCase()));
@@ -2080,13 +2084,17 @@
             container.querySelectorAll('input[placeholder="YYYY/MM/DD"]').forEach(textInput => {
                 if (textInput.dataset.initialized) return;
                 textInput.dataset.initialized = 'true';
-                textInput.addEventListener('input', () => {
+                const validateDateInput = () => {
                     if (isValidDate(textInput.value) || textInput.value === '') {
                         textInput.classList.remove('border-red-500');
                     } else {
                         textInput.classList.add('border-red-500');
                     }
-                });
+                };
+                
+                // 'input'と'change'の両方のイベントでバリデーションを実行
+                textInput.addEventListener('input', validateDateInput);
+                textInput.addEventListener('change', validateDateInput);
             });
         };
         const getDateInputValue = (id) => {
@@ -2448,7 +2456,7 @@
                 ratingStars.addEventListener('click', e => { if (e.target.matches('.fa-star')) { const r = parseInt(e.target.dataset.value); currentRating = (currentRating === r) ? 0 : r; renderStars(currentRating); }});
                 
                 const tagsContainer = $('#result-tags');
-                const renderTags = ids => { const objects = [...ids].map(id => tags.find(t=>t.id===id)).filter(Boolean); tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color};color:${getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`; };
+                const renderTags = ids => { const objects = getTagObjects(ids); tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color};color:${getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`; };
                 renderTags(currentTagIds);
 
                 $('#result-assign-tags-btn').addEventListener('click', () => {
@@ -2526,7 +2534,7 @@
                 renderStars(currentRating);
                 ratingStars.addEventListener('click', e => { if (e.target.matches('.fa-star')) { const r = parseInt(e.target.dataset.value); currentRating = (currentRating === r) ? 0 : r; renderStars(currentRating); checkSaveButton(); }});
                 const tagsContainer = $('#feedback-tags');
-                const renderTags = ids => { const objects = [...ids].map(id => tags.find(t=>t.id===id)).filter(Boolean); tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color};color:${getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`; };
+                const renderTags = ids => { const objects = getTagObjects(ids); tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color};color:${getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`; };
                 renderTags(currentTagIds);
                 $('#feedback-assign-tags-btn').addEventListener('click', () => {
                     openTagModal({ mode: 'assign', workId: work.id, currentTagIds, workName: work.name,
@@ -2946,6 +2954,11 @@
             loadingOverlay.classList.remove('hidden');
             initializeFirebase();
             initializeDateInputs(document.body);
+
+            if (window.innerWidth < 1024) {
+                $('#sync-panel-details').removeAttribute('open');
+                $('#registration-panel-details').removeAttribute('open');
+            }
             setupEventListeners();
         };
 
