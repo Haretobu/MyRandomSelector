@@ -27,58 +27,51 @@
         .transition-all {
             transition: all 0.3s ease-in-out;
         }
-        .fab {
-            position: fixed;
-            bottom: 2rem;
-            right: 2rem;
-            z-index: 30;
-        }
-        .fab-hidden {
-            transform: scale(0.5);
-            opacity: 0;
-            pointer-events: none;
-        }
-        #fab-menu-items {
+
+        #sliding-fab-drawer {
+            max-width: 0;
+            padding-left: 0;
+            padding-right: 0;
             overflow: hidden;
-            max-height: 0;
-            pointer-events: none;
-            transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        #fab-container.fab-menu-open #fab-menu-items {
-            max-height: 300px; /* Adjust if more buttons are added */
-            pointer-events: auto;
-            transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+
+        #sliding-fab-container.drawer-open #sliding-fab-drawer {
+            max-width: 100px; /* ドロワーが開いたときの幅 (ボタンサイズに応じて調整) */
+            padding-left: 0.75rem; /* p-3 */
+            padding-right: 0.75rem; /* p-3 */
         }
-        #fab-menu-items button, #fab-menu-items a {
+        /* ドロワーが開いたときにアイコンを回転 ( < → > ) */
+        #sliding-fab-container.drawer-open #sliding-fab-icon {
+            transform: rotate(180deg);
+        }
+        /* モーダル表示時にドロワーを隠す (古い .fab-hidden と同じ役割) */
+        #sliding-fab-container.fab-hidden {
+             transform: translateX(100%) translateY(-50%);
+             opacity: 0;
+             pointer-events: none;
+        }
+        /* 隠すときのアニメーション */
+        #sliding-fab-container {
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+
+        #image-compare-modal, #image-compare-modal-backdrop {
+            transition: opacity 0.3s ease-out;
             opacity: 0;
-            transform: translateY(20px);
-            transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+            pointer-events: none;
         }
-        #fab-container.fab-menu-open #fab-menu-items button,
-        #fab-container.fab-menu-open #fab-menu-items a {
+        #image-compare-modal.active, #image-compare-modal-backdrop.active {
             opacity: 1;
-            transform: translateY(0);
+            pointer-events: auto;
         }
-        #fab-container.fab-menu-open #fab-menu-items > *:nth-child(5) { transition-delay: 0.03s; }
-        #fab-container.fab-menu-open #fab-menu-items > *:nth-child(4) { transition-delay: 0.06s; }
-        #fab-container.fab-menu-open #fab-menu-items > *:nth-child(3) { transition-delay: 0.09s; }
-        #fab-container.fab-menu-open #fab-menu-items > *:nth-child(2) { transition-delay: 0.12s; }
-        #fab-container.fab-menu-open #fab-menu-items > *:nth-child(1) { transition-delay: 0.15s; }
-
-        #lotteryFab {
-            transition: all 0.2s ease-in-out;
+        #image-compare-modal.active > div {
+            transform: translateY(0) scale(1);
+            opacity: 1;
         }
-        #fab-container.fab-menu-open #lotteryFab {
+        #image-compare-modal > div {
+            transform: translateY(-20px) scale(0.95);
             opacity: 0;
-            transform: scale(0.5);
-            pointer-events: none;
-        }
-
-        #menuFab > i {
-            transition: transform 0.3s ease-in-out;
-        }
-        #fab-container.fab-menu-open #menuFab > i {
-            transform: rotate(135deg);
+            transition: transform 0.3s ease-out, opacity 0.3s ease-out;
         }
         .modal-content {
             max-height: 85vh;
@@ -303,28 +296,24 @@
     <!-- FAB Backdrop -->
     <div id="fab-backdrop" class="hidden fixed inset-0 z-20"></div>
 
-    <!-- Floating Action Buttons -->
-    <div id="fab-container" class="fab flex flex-col-reverse items-center">
-        <!-- Lottery FAB (at the very bottom) -->
-        <button id="lotteryFab" class="lg:hidden w-14 h-14 bg-sky-600 hover:bg-sky-700 rounded-full text-white flex items-center justify-center shadow-lg transition-all">
-            <i class="fas fa-dice text-xl"></i>
-        </button>
-
-        <!-- Main FAB Toggle (above lottery)-->
-        <button id="menuFab" title="メニュー" aria-label="メニューを開く" class="w-16 h-16 bg-indigo-600 hover:bg-indigo-700 rounded-full text-white flex items-center justify-center shadow-lg transition-transform hover:scale-110 mt-3">
-            <i class="fas fa-plus text-2xl"></i>
-        </button>
+    <div id="sliding-fab-container" class="fixed top-1/2 -translate-y-1/2 right-0 z-30 flex items-center">
         
-        <!-- Collapsible Menu Items (at the top) -->
-        <div id="fab-menu-items" class="flex flex-col-reverse items-center space-y-reverse space-y-3 mb-3">
-            <a href="price_comparison.html" title="価格比較ツール">
+        <div id="sliding-fab-drawer" class="bg-gray-800 rounded-l-lg shadow-lg flex flex-col space-y-3 p-3 transition-all duration-300">
+            <button id="manageTagsFab" title="タグ管理" aria-label="タグ管理" class="w-14 h-14 bg-purple-600 hover:bg-purple-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-tags text-xl"></i></button>
+            <button id="statsFab" title="統計" aria-label="統計" class="w-14 h-14 bg-amber-600 hover:bg-amber-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-chart-pie text-xl"></i></button>
+            <button id="externalSearchFab" title="外部サイト検索" aria-label="外部サイト検索" class="w-14 h-14 bg-emerald-600 hover:bg-emerald-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-globe-asia text-xl"></i></button>
+            <button id="historyFab" title="総合履歴" aria-label="総合履歴" class="w-14 h-14 bg-gray-600 hover:bg-gray-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-history text-xl"></i></button>
+            <a href="price_comparison.html" title="価格比較ツール" aria-label="価格比較ツール">
                  <button class="w-14 h-14 bg-cyan-600 hover:bg-cyan-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-balance-scale-right text-xl"></i></button>
             </a>
-            <button id="historyFab" title="総合履歴" class="w-14 h-14 bg-gray-600 hover:bg-gray-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-history text-xl"></i></button>
-            <button id="externalSearchFab" title="外部サイト検索" class="w-14 h-14 bg-emerald-600 hover:bg-emerald-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-globe-asia text-xl"></i></button>
-            <button id="statsFab" title="統計" class="w-14 h-14 bg-amber-600 hover:bg-amber-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-chart-pie text-xl"></i></button>
-            <button id="manageTagsFab" title="タグ管理" class="w-14 h-14 bg-purple-600 hover:bg-purple-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-tags text-xl"></i></button>
+            <button id="drawerLotteryFab" title="抽選パネルへ" aria-label="抽選パネルへ移動" class="lg:hidden w-14 h-14 bg-sky-600 hover:bg-sky-700 rounded-full text-white flex items-center justify-center shadow-lg">
+                <i class="fas fa-dice text-xl"></i>
+            </button>
         </div>
+        
+        <button id="sliding-fab-toggle" aria-label="メニューを開く" class="w-10 h-24 bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center rounded-l-lg shadow-lg -mr-1">
+            <i id="sliding-fab-icon" class="fas fa-chevron-left transition-transform duration-300"></i>
+        </button>
     </div>
 
     <!-- Modals -->
@@ -375,6 +364,39 @@
         </div>
     </div>
 
+    <div id="image-compare-modal-backdrop" class="fixed inset-0 bg-black bg-opacity-75 z-[90]"></div>
+    <div id="image-compare-modal" class="fixed inset-0 flex items-center justify-center z-[91] p-4">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg">
+            <div class="px-4 py-3 sm:px-6 flex justify-between items-center border-b border-gray-700">
+                <h3 class="text-lg font-medium text-white">画像変更の確認</h3>
+                <button type="button" id="image-compare-close-btn" class="text-gray-400 hover:text-white" aria-label="閉じる">
+                    <i class="fas fa-times fa-lg"></i>
+                </button>
+            </div>
+            <div class="p-4 sm:p-6 text-center">
+                <p class="text-sm text-gray-300 mb-4">変更後の画像を確認してください。</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-gray-400 text-xs mb-2">現在の画像</p>
+                        <img id="compare-original-image" src="" alt="現在の画像" class="w-full h-32 object-contain rounded-md border border-gray-700">
+                    </div>
+                    <div>
+                        <p class="text-gray-400 text-xs mb-2">新しい画像</p>
+                        <img id="compare-new-image" src="" alt="新しい画像" class="w-full h-32 object-contain rounded-md border border-gray-700">
+                    </div>
+                </div>
+            </div>
+            <div class="px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse sm:justify-center">
+                <button type="button" id="image-compare-confirm-btn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm">
+                    決定して変更
+                </button>
+                <button type="button" id="image-compare-cancel-btn" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-700 shadow-sm px-4 py-2 bg-gray-600 text-base font-medium text-gray-100 hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                    キャンセル
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -398,7 +420,8 @@
             serverTimestamp,
             getDocs,
             arrayUnion,
-            arrayRemove
+            arrayRemove,
+            deleteField
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- UI Helper Functions ---
@@ -408,7 +431,7 @@
         // --- App Configuration ---
         const DEFAULT_APP_ID = 'r18-random-selector';
         const appId = typeof __app_id !== 'undefined' ? __app_id : DEFAULT_APP_ID;
-        const appVersion = 'v2.17';
+        const appVersion = 'v2.20';
         const MASTER_PASSWORD = '07143674';
         $('#version-display').textContent = appVersion;
 
@@ -440,6 +463,9 @@
         let activeCharts = {};
         let isDebugMode = false;
         let checkModalDirtyState = () => false; // Function to check for unsaved changes
+
+        let tempNewImageUrl = null;  // 新しい画像URL(DataURL)の一時保存
+        let deleteImageFlag = false; // 画像削除フラグ
 
         // Filters and Sort State
         const defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', endDate: '' });
@@ -513,13 +539,14 @@
         const openLotterySettingsBtn = $('#openLotterySettingsBtn');
 
         // FAB
-        const fabContainer = $('#fab-container');
-        const menuFab = $('#menuFab');
-        const fabBackdrop = $('#fab-backdrop');
-        const historyFab = $('#historyFab');
-        const externalSearchFab = $('#externalSearchFab');
-        const statsFab = $('#statsFab');
-        const manageTagsFab = $('#manageTagsFab');
+        const slidingFabContainer = $('#sliding-fab-container'); // 変更
+        const slidingFabToggle = $('#sliding-fab-toggle'); // 追加
+        const fabBackdrop = $('#fab-backdrop'); // 変更なし
+        const historyFab = $('#historyFab'); // 変更なし (IDがHTML内に存在するため)
+        const externalSearchFab = $('#externalSearchFab'); // 変更なし
+        const statsFab = $('#statsFab'); // 変更なし
+        const manageTagsFab = $('#manageTagsFab'); // 変更なし
+        const drawerLotteryFab = $('#drawerLotteryFab'); // 追加 (モバイル用)
 
 
         // Modals
@@ -529,6 +556,15 @@
         const modalTitle = $('#modal-title');
         const modalContentHost = $('#modal-content-host');
         const modalCloseBtn = $('#modal-close-btn');
+        
+        // Image Compare Modal
+        const imageCompareModalBackdrop = $('#image-compare-modal-backdrop');
+        const imageCompareModal = $('#image-compare-modal');
+        const imageCompareCloseBtn = $('#image-compare-close-btn');
+        const compareOriginalImage = $('#compare-original-image');
+        const compareNewImage = $('#compare-new-image');
+        const imageCompareConfirmBtn = $('#image-compare-confirm-btn');
+        const imageCompareCancelBtn = $('#image-compare-cancel-btn');
 
         // Auth
         const passwordOverlay = $('#password-overlay');
@@ -630,12 +666,14 @@
 
         // --- FAB Menu Logic ---
         const toggleFabMenu = () => {
-            const isOpen = fabContainer.classList.toggle('fab-menu-open');
+            const isOpen = slidingFabContainer.classList.toggle('drawer-open');
             fabBackdrop.classList.toggle('hidden', !isOpen);
+            slidingFabToggle.setAttribute('aria-label', isOpen ? 'メニューを閉じる' : 'メニューを開く');
         };
         const closeFabMenu = () => {
-            fabContainer.classList.remove('fab-menu-open');
+            slidingFabContainer.classList.remove('drawer-open');
             fabBackdrop.classList.add('hidden');
+            slidingFabToggle.setAttribute('aria-label', 'メニューを開く');
         };
 
         // --- Modal Management ---
@@ -655,7 +693,7 @@
             initializeDateInputs(modalContentHost); 
             modalBackdrop.classList.remove('hidden');
             modalWrapper.classList.remove('hidden');
-            fabContainer.classList.add('fab-hidden');
+            slidingFabContainer.classList.add('fab-hidden');
             setTimeout(() => {
                 modalBackdrop.classList.add('opacity-100');
                 modalContainer.classList.remove('scale-95', 'opacity-0');
@@ -685,7 +723,7 @@
 
             modalContainer.classList.add('scale-95', 'opacity-0');
             modalBackdrop.classList.remove('opacity-100');
-            fabContainer.classList.remove('fab-hidden');
+            slidingFabContainer.classList.remove('fab-hidden');
             setTimeout(() => {
                 modalBackdrop.classList.add('hidden');
                 modalWrapper.classList.add('hidden');
@@ -693,6 +731,24 @@
                 Object.values(activeCharts).forEach(chart => chart.destroy());
                 activeCharts = {};
             }, 300);
+        };
+
+        const openImageCompareModal = (originalUrl, newUrl) => {
+            compareOriginalImage.src = originalUrl || 'https://placehold.co/300x200/1f2937/4b5563?text=No+Image';
+            compareNewImage.src = newUrl;
+            imageCompareModalBackdrop.classList.add('active');
+            imageCompareModal.classList.add('active');
+        };
+
+        const closeImageCompareModal = (clearInput = true) => {
+            imageCompareModalBackdrop.classList.remove('active');
+            imageCompareModal.classList.remove('active');
+            // 一時データをリセット
+            if (clearInput) {
+                tempNewImageUrl = null;
+                const editImageUpload = $('#edit-image-upload');
+                if (editImageUpload) editImageUpload.value = ''; // ファイル選択をクリア
+            }
         };
 
         // --- Loading Timeout Logic ---
@@ -1338,7 +1394,7 @@
         const setupEventListeners = () => {
             modalCloseBtn.addEventListener('click', closeModal);
             modalBackdrop.addEventListener('click', closeModal);
-            menuFab.addEventListener('click', toggleFabMenu);
+            slidingFabToggle.addEventListener('click', toggleFabMenu);
             fabBackdrop.addEventListener('click', closeFabMenu);
 
             document.body.addEventListener('click', e => {
@@ -1465,10 +1521,46 @@
             openLotterySettingsBtn.addEventListener('click', () => openLotterySettingsModal());
             startLotteryBtn.addEventListener('click', performLottery);
 
-            const lotteryPanel = $('#lottery-panel'), lotteryFab = $('#lotteryFab');
-            if (lotteryPanel && lotteryFab) {
-                lotteryFab.addEventListener('click', () => lotteryPanel.scrollIntoView({ behavior: 'smooth' }));
+            const lotteryPanel = $('#lottery-panel'); // lotteryFab の参照を削除
+            if (lotteryPanel && drawerLotteryFab) { // drawerLotteryFab を使用
+                drawerLotteryFab.addEventListener('click', () => {
+                    lotteryPanel.scrollIntoView({ behavior: 'smooth' });
+                    closeFabMenu(); // ドロワーを閉じる処理を忘れずに追加
+                });
             }
+            
+            // 画像比較モーダル関連のイベントリスナー
+            imageCompareCloseBtn.addEventListener('click', () => closeImageCompareModal());
+            imageCompareModalBackdrop.addEventListener('click', () => closeImageCompareModal());
+
+            // 画像比較モーダルのキャンセルボタン
+            imageCompareCancelBtn.addEventListener('click', () => {
+                closeImageCompareModal(); // モーダルを閉じ、一時ファイルと入力欄をクリア
+                showToast("画像の変更をキャンセルしました。", "info");
+            });
+
+            // 画像比較モーダルの決定ボタン
+            imageCompareConfirmBtn.addEventListener('click', () => {
+                // ここではファイルの一時保存(tempNewImageUrl)は変更Eで実施済み
+                // なので、モーダルを閉じるだけ
+                closeImageCompareModal(false); // モーダルを閉じる (入力欄はクリアしない)
+                
+                // プレビューを更新
+                const editCurrentImagePreview = $('#edit-current-image-preview');
+                const editNoImagePlaceholder = $('#edit-no-image-placeholder');
+                const editImageDeleteBtn = $('#edit-image-delete-btn');
+                
+                if (editCurrentImagePreview && tempNewImageUrl) {
+                    editCurrentImagePreview.src = tempNewImageUrl;
+                    editCurrentImagePreview.classList.remove('hidden');
+                    editNoImagePlaceholder.classList.add('hidden');
+                    editImageDeleteBtn.classList.remove('hidden');
+                    deleteImageFlag = false; // 削除フラグもリセット
+                }
+                
+                showToast("新しい画像が適用されます。保存ボタンで確定してください。", "success");
+            });
+
         }
 
         const openExternalSearchModal = (prefillQuery = '') => {
@@ -1598,6 +1690,25 @@
                             <button type="button" id="openWorkUrlBtn" class="flex-shrink-0 w-10 h-10 bg-sky-600 hover:bg-sky-700 rounded-lg text-white flex items-center justify-center" title="URLを開く" ${!work.sourceUrl ? 'disabled' : ''}><i class="fas fa-external-link-alt"></i></button>
                         </div>
                     </div>
+
+                    <div class="space-y-4">
+                        <div id="edit-current-image-container" class="mb-4">
+                            <label class="block text-gray-400 text-sm font-bold mb-2">現在の画像</label>
+                            <img id="edit-current-image-preview" src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="現在の作品画像" class="w-full h-48 object-cover rounded-lg ${!work.imageUrl ? 'hidden' : ''}">
+                            <img id="edit-no-image-placeholder" src="https://placehold.co/600x400/1f2937/4b5563?text=No+Image" alt="画像なし" class="w-full h-48 object-cover rounded-lg ${work.imageUrl ? 'hidden' : ''}">
+                            <button type="button" id="edit-image-delete-btn" class="mt-2 text-red-400 hover:text-red-500 text-sm ${!work.imageUrl ? 'hidden' : ''}"><i class="fas fa-trash-alt mr-1"></i>画像を削除</button>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-gray-400 text-sm font-bold mb-2" for="edit-image-upload">新しい画像をアップロード</label>
+                            <input type="file" id="edit-image-upload" accept="image/*" class="w-full text-sm text-gray-300
+                                file:mr-4 file:py-2 file:px-4
+                                file:rounded-full file:border-0
+                                file:text-sm file:font-semibold
+                                file:bg-violet-50 file:text-violet-700
+                                hover:file:bg-violet-100 cursor-pointer">
+                            <p class="text-xs text-gray-500 mt-1">最大900KB, JPG/PNG推奨</p>
+                        </div>
+                    </div>
                     <select id="editWorkGenre" class="w-full bg-gray-700 p-2 rounded-lg" required>
                         <option value="漫画" ${work.genre === '漫画' ? 'selected' : ''}>漫画</option>
                         <option value="ゲーム" ${work.genre === 'ゲーム' ? 'selected' : ''}>ゲーム</option>
@@ -1622,6 +1733,59 @@
                 const ratingStars = $('#editWorkRating'), tagsContainer = $('#editWorkTags');
                 const workNameInput = $('#editWorkName');
                 const workUrlInput = $('#editWorkUrl');
+
+                const editImageUpload = $('#edit-image-upload');
+                const editCurrentImagePreview = $('#edit-current-image-preview');
+                const editImageDeleteBtn = $('#edit-image-delete-btn');
+                const editNoImagePlaceholder = $('#edit-no-image-placeholder');
+                
+                // モーダルを開くたびに一時変数とフラグをリセット
+                tempNewImageUrl = null;
+                deleteImageFlag = false;
+
+                // 画像削除ボタンのイベントリスナー
+                editImageDeleteBtn.addEventListener('click', () => {
+                    if (confirm('本当に画像を削除しますか？')) {
+                        editCurrentImagePreview.src = '';
+                        editCurrentImagePreview.classList.add('hidden');
+                        editImageDeleteBtn.classList.add('hidden');
+                        editNoImagePlaceholder.classList.remove('hidden');
+                        
+                        deleteImageFlag = true; // 削除フラグを立てる
+                        tempNewImageUrl = null; // 新しい画像も（あれば）キャンセル
+                        editImageUpload.value = ''; // ファイル選択もクリア
+                        
+                        showToast("画像を削除候補にしました。保存で確定されます。", "info");
+                    }
+                });
+
+                // 新しい画像が選択されたときのイベントリスナー
+                editImageUpload.addEventListener('change', async (e) => { // onchange → addEventListener
+                    const file = e.target.files[0];
+                    if (!file) {
+                        tempNewImageUrl = null;
+                        return;
+                    }
+
+                    try {
+                        const newUrl = await processImage(file); // processImageはDataURLを返す
+                        
+                        // 比較モーダルを開く
+                        openImageCompareModal(work.imageUrl || '', newUrl);
+
+                        // 比較モーダルの「決定」が押されたら一時変数にセットする
+                        // (リスナーはsetupEventListenersでグローバルに設定)
+                        // ここでは、比較モーダル側でセットされるのを待つ
+                        // → (変更) 比較モーダル側で tempNewImageUrl を直接セットするようにする
+                        tempNewImageUrl = newUrl; // 一時保存
+
+                    } catch (error) {
+                        showToast(error.message || "画像処理に失敗しました。");
+                        editImageUpload.value = ''; // エラー時は選択をクリア
+                        tempNewImageUrl = null;
+                    }
+                });
+
                 const openUrlBtn = $('#openWorkUrlBtn');
 
                 workUrlInput.addEventListener('input', () => {
@@ -1716,6 +1880,15 @@
                         rating: currentRating,
                         tagIds: Array.from(currentTagIds),
                     };
+
+                    if (tempNewImageUrl) {
+                        // 比較モーダルで「決定」され、新しい画像が一時保存されている場合
+                        updatedData.imageUrl = tempNewImageUrl;
+                    } else if (deleteImageFlag) {
+                        // 削除ボタンが押された場合
+                        updatedData.imageUrl = deleteField(); // Firestoreのフィールドを削除
+                    }
+
                     checkModalDirtyState = () => false; // Mark as not dirty before closing
                     if (await updateWork(workId, updatedData)) {
                         showToast("作品情報を更新しました。"); 
