@@ -251,7 +251,7 @@
             </aside>
 
             <!-- Right Column: Content -->
-            <main class="lg:col-span-2 space-y-6">
+            <main class="lg:col-span-2 space-y-6 pb-24">
                 <!-- List Controls -->
                 <div class="bg-gray-800 p-4 rounded-xl shadow-lg">
                      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
@@ -768,9 +768,9 @@
                     appContainer.classList.remove('opacity-0');
                     setTimeout(() => loadingOverlay.classList.add('hidden'), 500);
 
-                    const lastSelectedId = sessionStorage.getItem('lastSelectedWorkId');
+                    const lastSelectedId = localStorage.getItem('lastSelectedWorkId');
                     if (lastSelectedId) {
-                        sessionStorage.removeItem('lastSelectedWorkId');
+                        localStorage.removeItem('lastSelectedWorkId');
                         const work = works.find(w => w.id === lastSelectedId);
                         if (work && ((work.rating || 0) === 0 || !work.tagIds || work.tagIds.length === 0)) {
                             setTimeout(() => openFeedbackModal(work), 1000); 
@@ -1512,6 +1512,7 @@
                 if (work.selectionHistory && work.selectionHistory.length > 0) {
                     work.selectionHistory.forEach(timestamp => {
                         allHistory.push({
+                            workId: work.id,
                             workName: work.name,
                             timestamp: timestamp
                         });
@@ -1525,11 +1526,12 @@
             if (allHistory.length > 0) {
                 content = `
                     <div class="max-h-[60vh] overflow-y-auto pr-2">
-                        <ul class="space-y-2">
-                            ${allHistory.map(entry => `
-                                <li class="bg-gray-700 p-3 rounded-lg flex justify-between items-center text-sm">
-                                    <span class="font-semibold">${entry.workName}</span>
-                                    <span class="text-gray-400">${formatDate(entry.timestamp)}</span>
+                        <ul id="history-list-ul" class="space-y-2"> ${allHistory.map(entry => `
+                                <li>
+                                    <button data-id="${entry.workId}" class="w-full text-left bg-gray-700 p-3 rounded-lg flex justify-between items-center text-sm transition-colors hover:bg-gray-600">
+                                        <span class="font-semibold">${entry.workName}</span>
+                                        <span class="text-gray-400">${formatDate(entry.timestamp)}</span>
+                                    </button>
                                 </li>
                             `).join('')}
                         </ul>
@@ -1539,7 +1541,22 @@
                 content = `<div class="text-center py-10 text-gray-500"><i class="fas fa-history fa-3x"></i><p class="mt-4">まだ抽選履歴はありません。</p></div>`;
             }
 
-            openModal("総合抽選履歴", content, null, { size: 'max-w-3xl' });
+            openModal("総合抽選履歴", content, () => {
+                $('#history-list-ul').addEventListener('click', e => {
+                    const button = e.target.closest('button[data-id]');
+                    if (button) {
+                        const workId = button.dataset.id;
+                        if (workId) {
+                            // 履歴モーダルを閉じる
+                            closeModal(); 
+                            // アニメーション(300ms)待機後に編集モーダルを開く
+                            setTimeout(() => {
+                                openEditModal(workId);
+                            }, 300); 
+                        }
+                    }
+                });
+            }, { size: 'max-w-3xl' });
         };
 
 
@@ -2392,7 +2409,7 @@
             let random = Math.random() * totalWeight;
             let selectedWork = weightedPool.find(work => (random -= work.weight) <= 0) || weightedPool[weightedPool.length - 1];
             
-            sessionStorage.setItem('lastSelectedWorkId', selectedWork.id);
+            localStorage.setItem('lastSelectedWorkId', selectedWork.id);
             if (!isDebugMode) {
                 const newHistoryEntry = Timestamp.now();
                 await updateWork(selectedWork.id, { 
