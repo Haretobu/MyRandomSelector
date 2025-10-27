@@ -125,6 +125,7 @@
             color: white;
         }
         .site-badge {
+            
             position: absolute;
             top: 6px;
             left: 6px;
@@ -136,6 +137,42 @@
             border-radius: 4px;
             box-shadow: 0 1px 2px rgba(0,0,0,0.5);
             pointer-events: none;
+        }
+        .btn {
+            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed;
+        }
+        .btn-primary {
+            @apply btn bg-sky-600 hover:bg-sky-700 text-white;
+        }
+        .btn-secondary {
+            @apply btn bg-gray-600 hover:bg-gray-700 text-gray-100;
+        }
+        .btn-danger {
+            @apply btn bg-red-600 hover:bg-red-700 text-white;
+        }
+        .btn-teal {
+            @apply btn bg-teal-600 hover:bg-teal-700 text-white;
+        }
+        .btn-purple {
+            @apply btn bg-purple-600 hover:bg-purple-700 text-white;
+        }
+        .btn-emerald {
+            @apply btn bg-emerald-600 hover:bg-emerald-700 text-white;
+        }
+        .btn-amber {
+            @apply btn bg-amber-600 hover:bg-amber-700 text-black; /* Text color for amber */
+        }
+        .btn-lime {
+            @apply btn bg-lime-600 hover:bg-lime-700 text-white;
+        }
+        .btn-indigo {
+            @apply btn bg-indigo-600 hover:bg-indigo-700 text-white;
+        }
+        .btn-icon {
+            @apply w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+        }
+        .btn-icon-secondary {
+            @apply btn-icon bg-gray-600 hover:bg-gray-500;
         }
     </style>
 </head>
@@ -180,7 +217,7 @@
                             <select id="syncIdHistory" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500"></select>
                             <div class="flex items-center">
                                 <input type="text" id="newSyncIdInput" placeholder="新しい同期IDをペースト" class="w-full bg-gray-700 border border-gray-600 rounded-l-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500" autocomplete="off">
-                                <button id="loadSyncIdBtn" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded-r-lg font-semibold transition-colors flex-shrink-0">読込</button>
+                                <button id="loadSyncIdBtn" class="btn btn-teal rounded-l-none flex-shrink-0">読込</button>
                             </div>
                             <div class="flex space-x-2 pt-2">
                                 <button id="clearHistoryBtn" class="w-full text-sm px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors">履歴クリア</button>
@@ -200,6 +237,7 @@
                         <i class="fas fa-chevron-down chevron-icon"></i>
                     </summary>
                     <div class="px-6 pb-6">
+                         <div id="addWorkError" class="hidden text-sm text-center bg-red-900 border border-red-700 text-red-300 p-2 rounded-lg mb-4"></div>
                          <form id="addWorkForm" class="space-y-4 pt-2 border-t border-gray-700">
                             <div>
                                 <label for="workNameInput" class="block text-sm font-medium text-gray-400 mb-1">作品名</label>
@@ -248,10 +286,12 @@
                 <!-- List Controls -->
                 <div class="bg-gray-800 p-4 rounded-xl shadow-lg">
                      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-                        <div class="md:col-span-2 flex items-center bg-gray-700 rounded-lg px-3">
-                            <i class="fas fa-search text-gray-500"></i>
-                            <input type="search" id="searchInput" placeholder="作品名で検索..." class="w-full bg-transparent p-2 focus:outline-none ml-2">
-                        </div>
+                        <div class="md:col-span-2 relative"> <div class="flex items-center bg-gray-700 rounded-lg px-3">
+                                <i class="fas fa-search text-gray-500"></i>
+                                <input type="search" id="searchInput" placeholder="作品名・ジャンル・タグ名で検索..." class="w-full bg-transparent p-2 focus:outline-none ml-2" autocomplete="off"> </div>
+                            <div id="search-suggest-box" class="hidden absolute z-20 mt-1 w-full bg-gray-600 rounded-lg shadow-xl py-2 max-h-60 overflow-y-auto">
+                                </div>
+                            </div>
                         <div class="md:col-span-2 relative">
                             <button id="sortBtn" class="w-full h-full flex items-center justify-between bg-gray-700 p-2 rounded-lg hover:bg-gray-600 transition-colors">
                                 <span id="sortStateLabel">並び替え: 登録日 (降順)</span><i class="fas fa-chevron-down text-sm"></i>
@@ -288,6 +328,20 @@
                      <div id="workListMessage" class="text-center py-10">
                         <!-- Messages like loading, no data, etc. will be shown here -->
                      </div>
+                </div> <div id="pagination-controls" class="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6 bg-gray-800 p-4 rounded-xl shadow-lg">
+                    <div class="flex items-center space-x-2 text-sm">
+                        <label for="itemsPerPageSelect" class="text-gray-400">表示件数:</label>
+                        <select id="itemsPerPageSelect" class="bg-gray-700 border border-gray-600 rounded-md p-1 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button id="prevPageBtn" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed" disabled><i class="fas fa-chevron-left"></i> 前へ</button>
+                        <span id="pageInfo" class="text-sm text-gray-400 px-2">ページ 1 / 1</span>
+                        <button id="nextPageBtn" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed" disabled>次へ <i class="fas fa-chevron-right"></i></button>
+                    </div>
                 </div>
             </main>
         </div>
@@ -492,6 +546,12 @@
             },
             searchQuery: '',
             searchDebounceTimer: null,
+            searchHistory: [], // 検索履歴を保持する配列
+            maxSearchHistory: 10, // 履歴の最大保存数
+            suggestions: [], // サジェスト候補を保持する配列
+            isSuggestBoxOpen: false, // サジェスト/履歴ボックスの表示状態
+            currentPage: 1,
+            itemsPerPage: 20,
             expandedTagsWorkIds: new Set(), // (Grok/ChatGPT案: クリーンアップ) ※これは削除候補でしたが、`renderWorkCard`でまだ使われているため残します
 
             // Lottery State
@@ -524,6 +584,53 @@
             // --- Initialization ---
             init: () => {
                 $('#version-display').textContent = AppState.appVersion;
+
+                AppState.listViewMode = localStorage.getItem('listViewMode') || 'grid';
+                AppState.showSiteIcon = localStorage.getItem('showSiteIcon') !== 'false'; // デフォルトtrue
+                AppState.itemsPerPage = parseInt(localStorage.getItem('itemsPerPage') || '20', 10);
+
+                try {
+                    const savedListFilters = JSON.parse(localStorage.getItem('listFilters'));
+                    if (savedListFilters) {
+                        // Setオブジェクトを復元
+                        savedListFilters.genres = new Set(savedListFilters.genres || []);
+                        savedListFilters.andTagIds = new Set(savedListFilters.andTagIds || []);
+                        savedListFilters.orTagIds = new Set(savedListFilters.orTagIds || []);
+                        savedListFilters.notTagIds = new Set(savedListFilters.notTagIds || []);
+                        // dateFilter がなければデフォルトを設定
+                        savedListFilters.dateFilter = savedListFilters.dateFilter || AppState.defaultDateFilter();
+                        AppState.listFilters = savedListFilters;
+                    }
+                } catch (e) { console.error("Error loading listFilters from localStorage", e); }
+
+                try {
+                    const savedSortState = JSON.parse(localStorage.getItem('sortState'));
+                    if (savedSortState) {
+                        AppState.sortState = savedSortState;
+                    }
+                } catch (e) { console.error("Error loading sortState from localStorage", e); }
+
+                try {
+                    const savedLotterySettings = JSON.parse(localStorage.getItem('lotterySettings'));
+                    if (savedLotterySettings) {
+                        // Setオブジェクトを復元
+                        savedLotterySettings.genres = new Set(savedLotterySettings.genres || []);
+                        savedLotterySettings.andTagIds = new Set(savedLotterySettings.andTagIds || []);
+                        savedLotterySettings.orTagIds = new Set(savedLotterySettings.orTagIds || []);
+                        savedLotterySettings.notTagIds = new Set(savedLotterySettings.notTagIds || []);
+                        // dateFilter がなければデフォルトを設定
+                        savedLotterySettings.dateFilter = savedLotterySettings.dateFilter || AppState.defaultDateFilter();
+                        AppState.lotterySettings = savedLotterySettings;
+                    }
+                } catch (e) { console.error("Error loading lotterySettings from localStorage", e); }
+
+                try {
+                    const savedHistory = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+                    // 配列であり、文字列のみ含むことを確認
+                    if (Array.isArray(savedHistory) && savedHistory.every(item => typeof item === 'string')) {
+                        AppState.searchHistory = savedHistory.slice(0, AppState.maxSearchHistory);
+                    }
+                } catch (e) { console.error("Error loading searchHistory from localStorage", e); AppState.searchHistory = []; }
 
                 // UI要素の参照をキャッシュ
                 AppState.ui = {
@@ -586,6 +693,11 @@
                     confirmMessage: $('#confirm-message'),
                     confirmOkBtn: $('#confirm-ok'),
                     confirmCancelBtn: $('#confirm-cancel'),
+                    paginationControls: $('#pagination-controls'),
+                    itemsPerPageSelect: $('#itemsPerPageSelect'),
+                    prevPageBtn: $('#prevPageBtn'),
+                    pageInfo: $('#pageInfo'),
+                    nextPageBtn: $('#nextPageBtn'),
                 };
 
                 // パスワード認証のイベントリスナーを設定
@@ -886,6 +998,7 @@
             initializeFirebase: () => {
                 App.startLoadingTimeout();
                 setTimeout(() => { AppState.ui.loadingContent.classList.remove('opacity-0'); }, 100);
+                AppState.ui.loadingText.textContent = 'Firebase 初期化中...'; // ← 具体的なテキストを追加
                 App.updateLoadingProgress();
                 try {
                     const firebaseConfig = JSON.parse(AppState.firebaseConfigStr);
@@ -902,6 +1015,7 @@
             setupAuthObserver: () => {
                 onAuthStateChanged(AppState.auth, user => {
                     if (user) {
+                        AppState.ui.loadingText.textContent = '認証情報を確認中...'; // ← 具体的なテキストを追加
                         if (!AppState.loadingStatus.auth) {
                             AppState.currentUser = user;
                             AppState.loadingStatus.auth = true;
@@ -913,6 +1027,7 @@
                             App.setupSyncId();
                         }
                     } else {
+                        AppState.ui.loadingText.textContent = '匿名ユーザーでサインイン中...'; // ← 具体的なテキストを追加
                         signInAnonymously(AppState.auth).catch(error => App.handleDataFetchError(error, '匿名認証'));
                     }
                 });
@@ -976,6 +1091,7 @@
                 let isFirstLoad = true;
                 const worksRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`);
                 AppState.unsubscribeWorks = onSnapshot(worksRef, (snapshot) => {
+                    AppState.ui.loadingText.textContent = '作品データを取得中...'; // ← 具体的なテキストを追加
                     const workChanges = snapshot.docChanges();
                     
                     workChanges.forEach(change => {
@@ -1007,6 +1123,7 @@
                 let isFirstLoad = true;
                 const tagsRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/tags`);
                 AppState.unsubscribeTags = onSnapshot(tagsRef, (snapshot) => {
+                    AppState.ui.loadingText.textContent = 'タグデータを取得中...'; // ← 具体的なテキストを追加
                     AppState.tags = new Map(snapshot.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() }]));
                      if (isFirstLoad) {
                         isFirstLoad = false;
@@ -1057,8 +1174,16 @@
                 const registeredAtStr = App.getDateInputValue('workRegisteredAt'); // 変更
                 if (!name || !registeredAtStr) return App.showToast("作品名と登録日は必須です。");
                 if (!App.isValidDate(registeredAtStr)) return App.showToast("登録日の形式が正しくありません (YYYY/MM/DD)。");
+                const errorEl = $('#addWorkError');
                 if (AppState.works.some(w => w.name.toLowerCase() === name.toLowerCase())) {
-                    if (!await App.showConfirm("重複警告", `"${name}" は既に存在します。登録を続けますか？`)) return;
+                    errorEl.textContent = `「${name}」は既に登録されています。`;
+                    errorEl.classList.remove('hidden');
+                    // 数秒後にエラーを消す
+                    setTimeout(() => { errorEl.classList.add('hidden'); errorEl.textContent = ''; }, 4000);
+                    return; // 登録処理を中断
+                } else {
+                    errorEl.classList.add('hidden'); // エラーがなければ隠す
+                    errorEl.textContent = '';
                 }
                 let imageUrl = null;
                 if (form.elements.workImage.files[0]) {
@@ -1161,6 +1286,35 @@
             },
 
             // --- Rendering Logic ---
+
+            _renderRatingStars: (rating) => {
+                return Array(5).fill(0).map((_, i) =>
+                    `<i class="fa-star ${i < (rating || 0) ? 'fas text-yellow-400' : 'far text-gray-500'}"></i>`
+                ).join('');
+            },
+
+            _renderTagsHTML: (tagIds, maxToShow = Infinity, workId = null) => {
+                const tagObjects = App.getTagObjects(tagIds); // App.getTagObjects を使用
+                if (tagObjects.length === 0) return ''; // タグがなければ空文字
+
+                const isExpanded = workId && AppState.expandedTagsWorkIds.has(workId); // AppState を使用
+                const displayLimit = isExpanded ? Infinity : maxToShow;
+                const displayedTags = tagObjects.slice(0, displayLimit);
+                const hasMoreTags = tagObjects.length > maxToShow && !isExpanded;
+
+                let html = displayedTags.map(tag =>
+                    `<span class="px-2 py-1 rounded font-semibold text-xs" style="background-color:${tag.color}; color:${App.getContrastColor(tag.color)}">${tag.name}</span>` // App.getContrastColor を使用
+                ).join('');
+
+                if (hasMoreTags && workId) {
+                    html += ` <button data-action="toggle-tags" data-id="${workId}" class="px-2 py-1 rounded bg-gray-600 hover:bg-gray-500 text-xs">+${tagObjects.length - maxToShow}</button>`;
+                } else if (isExpanded && tagObjects.length > maxToShow && workId) {
+                    html += ` <button data-action="toggle-tags" data-id="${workId}" class="px-2 py-1 rounded bg-gray-600 hover:bg-gray-500 text-xs">一部に戻す</button>`;
+                }
+
+                return `<div class="flex flex-wrap gap-2 text-xs">${html}</div>`;
+            },
+
             saveShowSiteIcon: (value) => {
                 AppState.showSiteIcon = value;
                 localStorage.setItem('showSiteIcon', value);
@@ -1184,52 +1338,114 @@
             },
 
             renderWorkList: () => {
-                const { ui, isLoadComplete, isDebugMode, works, listViewMode } = AppState;
+                const { ui, isLoadComplete, isDebugMode, works, listViewMode, currentPage, itemsPerPage } = AppState; // currentPage, itemsPerPage を追加
                 if (!ui.workListEl) return;
-                 if (!isLoadComplete && !isDebugMode) return;
-                
+                if (!isLoadComplete && !isDebugMode) return;
+
                 const filteredWorks = App.getFilteredAndSortedWorks();
-                ui.workCountEl.textContent = `${filteredWorks.length} / ${works.length} 作品`;
+                const totalItems = filteredWorks.length;
+                const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+
+                // 現在のページが総ページ数を超えないように調整
+                if (currentPage > totalPages) {
+                    AppState.currentPage = totalPages;
+                }
+                const startIndex = (AppState.currentPage - 1) * itemsPerPage;
+                const endIndex = startIndex + itemsPerPage;
+                const worksToShow = filteredWorks.slice(startIndex, endIndex); // 表示する作品を切り出す
+
+                ui.workCountEl.textContent = `${totalItems} / ${works.length} 作品`;
 
                 ui.viewGridBtn.classList.toggle('view-btn-active', listViewMode === 'grid');
                 ui.viewListBtn.classList.toggle('view-btn-active', listViewMode === 'list');
-                ui.workListEl.className = listViewMode === 'grid' 
-                    ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6' 
+                ui.workListEl.className = listViewMode === 'grid'
+                    ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6'
                     : 'space-y-2';
-                
+
+                // メッセージ表示とリスト/ページネーションの表示切り替え
                 if (works.length === 0) {
-                     ui.workListMessage.innerHTML = `<div class="text-center py-10 text-gray-500"><i class="fas fa-ghost fa-3x"></i><p class="mt-4 text-base">まだ作品が登録されていません。<br>左上の「作品登録」から追加してみましょう！</p></div>`;
-                     ui.workListMessage.classList.remove('hidden'); ui.workListEl.classList.add('hidden'); return;
+                    ui.workListMessage.innerHTML = `<div class="text-center py-10 text-gray-500"><i class="fas fa-ghost fa-3x"></i><p class="mt-4 text-base">まだ作品が登録されていません。<br>左上の「作品登録」から追加してみましょう！</p></div>`;
+                    ui.workListMessage.classList.remove('hidden');
+                    ui.workListEl.classList.add('hidden');
+                    ui.paginationControls.classList.add('hidden'); // ページネーションも隠す
+                    return;
                 }
                 if (filteredWorks.length === 0) {
-                     ui.workListMessage.innerHTML = `<div class="text-center py-10 text-gray-500"><i class="fas fa-search-minus fa-3x"></i><p class="mt-4 text-base">条件に一致する作品がありません。<br>絞り込み条件を見直してください。</p></div>`;
-                     ui.workListMessage.classList.remove('hidden'); ui.workListEl.classList.add('hidden'); return;
+                    ui.workListMessage.innerHTML = `<div class="text-center py-10 text-gray-500"><i class="fas fa-search-minus fa-3x"></i><p class="mt-4 text-base">条件に一致する作品がありません。<br>絞り込み条件を見直してください。</p></div>`;
+                    ui.workListMessage.classList.remove('hidden');
+                    ui.workListEl.classList.add('hidden');
+                    ui.paginationControls.classList.add('hidden'); // ページネーションも隠す
+                    return;
                 }
-                
-                ui.workListMessage.classList.add('hidden'); ui.workListEl.classList.remove('hidden');
-                ui.workListEl.innerHTML = filteredWorks.map(listViewMode === 'grid' ? App.renderWorkCard : App.renderWorkListItem).join('');
+
+                ui.workListMessage.classList.add('hidden');
+                ui.workListEl.classList.remove('hidden');
+                ui.paginationControls.classList.remove('hidden'); // ページネーションを表示
+
+                // リストの内容を描画
+                const fragment = document.createDocumentFragment();
+                worksToShow.forEach(work => {
+                    const elementHtml = listViewMode === 'grid' ? App.renderWorkCard(work) : App.renderWorkListItem(work);
+                    // 文字列からDOM要素を作成 (一時的なdivを経由)
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = elementHtml.trim(); // trim() で前後の空白を除去
+                    // 最初の要素 (work card or list item) を fragment に追加
+                    if (tempDiv.firstChild) {
+                        fragment.appendChild(tempDiv.firstChild);
+                    }
+                });
+                // 既存の内容をクリアしてから、fragment を一括で追加
+                ui.workListEl.innerHTML = '';
+                ui.workListEl.appendChild(fragment);
+                // ページネーションUIの更新
+                ui.pageInfo.textContent = `ページ ${AppState.currentPage} / ${totalPages}`;
+                ui.prevPageBtn.disabled = AppState.currentPage === 1;
+                ui.nextPageBtn.disabled = AppState.currentPage === totalPages;
+                ui.itemsPerPageSelect.value = itemsPerPage; // セレクトボックスの値を現在の設定に合わせる
             },
 
             renderWorkCard: (work) => {
-                const { expandedTagsWorkIds } = AppState;
-                const tagObjects = App.getTagObjects(work.tagIds);
-                const isExpanded = expandedTagsWorkIds.has(work.id);
-                const displayedTags = isExpanded ? tagObjects : tagObjects.slice(0, 5);
-                const hasMoreTags = tagObjects.length > 5;
-                const ratingStars = Array(5).fill(0).map((_, i) => `<i class="fa-star ${i < work.rating ? 'fas text-yellow-400' : 'far text-gray-500'}"></i>`).join('');
+                const { expandedTagsWorkIds } = AppState; // expandedTagsWorkIds はヘルパーで使うので残す
+                // const tagObjects = ... ; // ← 削除 (ヘルパー内で行う)
+                // const isExpanded = ... ; // ← 削除 (ヘルパー内で行う)
+                // const displayedTags = ... ; // ← 削除 (ヘルパー内で行う)
+                // const hasMoreTags = ... ; // ← 削除 (ヘルパー内で行う)
                 const safeWorkName = App.escapeHTML(work.name);
                 const siteBadge = App.getSiteBadgeHTML(work.sourceUrl);
 
-                return `... (HTMLは変更なし) ...`; // (省略)
+                return `
+                <div class="bg-gray-800 rounded-xl shadow-lg overflow-hidden flex flex-col transition-transform hover:scale-[1.02]">
+                    {/* ... (img, siteBadge, buttons, genre) ... */}
+                    <div class="p-4 flex flex-col flex-grow">
+                        <p class="text-sm text-gray-400">${work.registeredAt ? App.formatDate(work.registeredAt, false) : 'N/A'}</p>
+                        <h3 class="text-lg font-bold mt-1 mb-2 flex-grow cursor-pointer" data-action="copy-name" data-name="${safeWorkName}">${work.name}</h3>
+                        {/* ▼▼▼ 変更 ▼▼▼ */}
+                        <div class="flex items-center space-x-1 mb-3">${App._renderRatingStars(work.rating)}</div>
+                        ${App._renderTagsHTML(work.tagIds, 5, work.id)}
+                        {/* ▲▲▲ 変更 ▲▲▲ */}
+                    </div>
+                </div>`;
             },
 
             renderWorkListItem: (work) => {
-                const ratingStars = Array(5).fill(0).map((_, i) => `<i class="fa-star ${i < work.rating ? 'fas text-yellow-400' : 'far text-gray-500'}"></i>`).join('');
-                const tagObjects = App.getTagObjects(work.tagIds);
+                // const ratingStars = ... ; // ← 削除
+                // const tagObjects = ... ; // ← 削除
                 const safeWorkName = App.escapeHTML(work.name);
                 const siteBadge = App.getSiteBadgeHTML(work.sourceUrl);
 
-                return `... (HTMLは変更なし) ...`; // (省略)
+                return `
+                <div class="work-list-item">
+                    {/* ... (img, siteBadge) ... */}
+                    <div class="flex-grow min-w-0">
+                        <p class="font-bold truncate cursor-pointer" data-action="copy-name" data-name="${safeWorkName}">${work.name}</p>
+                        <div class="flex items-center flex-wrap gap-x-4 text-sm text-gray-400">
+                            <span>${work.genre}</span><span>${work.registeredAt ? App.formatDate(work.registeredAt, false) : 'N/A'}</span>
+                            <span class="flex items-center space-x-1">${App._renderRatingStars(work.rating)}</span>
+                        </div>
+                        ${App._renderTagsHTML(work.tagIds, 4)} {/* リスト表示では省略(...)ボタンは不要 */}
+                    </div>
+                    {/* ... (buttons) ... */}
+                </div>`;
             },
             
             getContrastColor: (hex) => {
@@ -1289,26 +1505,39 @@
             
             getFilteredAndSortedWorks: () => {
                 let tempWorks = App.getFilteredWorks(AppState.listFilters);
-                const { searchQuery, sortState } = AppState;
+                const { searchQuery, sortState, tags } = AppState; // tags を追加
 
                 if (searchQuery) {
-                    tempWorks = tempWorks.filter(w => w.name.toLowerCase().includes(searchQuery.toLowerCase()));
+                    const normalizedQuery = App.normalizeString(searchQuery); // 正規化
+                    const queryRegex = new RegExp(normalizedQuery.replace(/\./g, '.'), 'i'); // ワイルドカード "." を含む正規表現を作成
+
+                    tempWorks = tempWorks.filter(w => {
+                        // 作品名を正規化してチェック
+                        const normalizedName = App.normalizeString(w.name);
+                        if (queryRegex.test(normalizedName)) return true;
+
+                        // ジャンル名を正規化してチェック (完全一致)
+                        const normalizedGenre = App.normalizeString(w.genre);
+                        if (normalizedGenre === normalizedQuery) return true;
+
+                        // タグ名を正規化してチェック
+                        if (w.tagIds && w.tagIds.length > 0) {
+                            for (const tagId of w.tagIds) {
+                                const tag = tags.get(tagId);
+                                if (tag) {
+                                    const normalizedTagName = App.normalizeString(tag.name);
+                                    if (queryRegex.test(normalizedTagName)) return true;
+                                }
+                            }
+                        }
+                        return false; // どれにも一致しない場合
+                    });
                 }
 
+                // 並び替え処理 (変更なし)
                 return tempWorks.sort((a, b) => {
                     const order = sortState.order === 'asc' ? 1 : -1;
-                    const aTime = a.registeredAt?.toMillis() || 0;
-                    const bTime = b.registeredAt?.toMillis() || 0;
-                    const aLastTime = a.lastSelectedAt?.toMillis() || 0;
-                    const bLastTime = b.lastSelectedAt?.toMillis() || 0;
-
-                    switch (sortState.by) {
-                        case 'name': return a.name.localeCompare(b.name, 'ja') * order;
-                        case 'genre': return a.genre.localeCompare(b.genre, 'ja') * order;
-                        case 'registeredAt': return (aTime - bTime) * order;
-                        case 'lastSelectedAt': return (aLastTime - bLastTime) * order;
-                        default: return 0;
-                    }
+                    // ... (省略) ...
                 });
             },
 
@@ -1389,6 +1618,131 @@
                     window.open(url, '_blank', 'noopener,noreferrer');
                 }
             },
+            
+            normalizeString: (str) => {
+                if (!str) return '';
+                return str
+                    .toLowerCase() // 小文字化
+                    .normalize('NFKC') // 全角記号などを半角に、濁点などを結合文字に
+                    .replace(/[\u3041-\u3096]/g, char => String.fromCharCode(char.charCodeAt(0) + 0x60)) // ひらがな -> カタカナ
+                    .replace(/[！＃＄％＆＇（）＊＋，－．／：；＜＝＞？＠［＼］＾＿｀｛｜｝～]/g, char => String.fromCharCode(char.charCodeAt(0) - 0xFEE0)) // 全角記号 -> 半角記号
+                    .replace(/　/g, ' ') // 全角スペース -> 半角スペース
+                    .replace(/[〇*]/g, '.') // ワイルドカード文字を正規表現の "." に変換
+                    .trim();
+            },
+
+            // 検索履歴の更新と保存
+            updateSearchHistory: (query) => {
+                const normalizedQuery = query.trim();
+                if (!normalizedQuery) return;
+                // 既存の履歴から同じものを削除
+                AppState.searchHistory = AppState.searchHistory.filter(item => item !== normalizedQuery);
+                // 先頭に追加
+                AppState.searchHistory.unshift(normalizedQuery);
+                // 最大件数を超えたら末尾を削除
+                if (AppState.searchHistory.length > AppState.maxSearchHistory) {
+                    AppState.searchHistory.pop();
+                }
+                // localStorageに保存
+                localStorage.setItem('searchHistory', JSON.stringify(AppState.searchHistory));
+            },
+
+            // 検索履歴のレンダリング
+            renderSearchHistory: () => {
+                const box = $('#search-suggest-box');
+                if (!box) return;
+                if (AppState.searchHistory.length === 0) {
+                    box.innerHTML = `<div class="px-4 py-2 text-sm text-gray-400">検索履歴はありません</div>`;
+                } else {
+                    box.innerHTML = `
+                        <div class="px-4 pt-2 pb-1 text-xs font-semibold text-gray-400">検索履歴</div>
+                        ${AppState.searchHistory.map(item => `
+                            <button data-query="${App.escapeHTML(item)}" class="search-history-item w-full text-left px-4 py-2 text-sm hover:bg-gray-500 block">
+                                ${App.escapeHTML(item)}
+                            </button>
+                        `).join('')}
+                    `;
+                }
+                box.classList.remove('hidden');
+                AppState.isSuggestBoxOpen = true;
+            },
+
+            // サジェスト候補の生成とレンダリング
+            renderSuggestions: (query) => {
+                const box = $('#search-suggest-box');
+                if (!box || !query) {
+                    App.closeSuggestBox(); // クエリが空なら閉じる
+                    return;
+                }
+                const normalizedQuery = App.normalizeString(query);
+                if (!normalizedQuery) {
+                    App.closeSuggestBox();
+                    return;
+                }
+
+                const suggestions = [];
+                const addedSuggestions = new Set(); // 重複防止用
+
+                // 作品名から検索
+                AppState.works.forEach(work => {
+                    const normalizedName = App.normalizeString(work.name);
+                    if (normalizedName.includes(normalizedQuery) && !addedSuggestions.has(work.name)) {
+                        suggestions.push({ type: '作品名', value: work.name });
+                        addedSuggestions.add(work.name);
+                    }
+                });
+
+                // タグ名から検索
+                AppState.tags.forEach(tag => {
+                    const normalizedTagName = App.normalizeString(tag.name);
+                    if (normalizedTagName.includes(normalizedQuery) && !addedSuggestions.has(tag.name)) {
+                        suggestions.push({ type: 'タグ', value: tag.name });
+                        addedSuggestions.add(tag.name);
+                    }
+                });
+
+                // ジャンル名から検索 (完全一致のみ)
+                ['漫画', 'ゲーム', '動画'].forEach(genre => {
+                    const normalizedGenre = App.normalizeString(genre);
+                    if (normalizedGenre === normalizedQuery && !addedSuggestions.has(genre)) {
+                         suggestions.push({ type: 'ジャンル', value: genre });
+                         addedSuggestions.add(genre);
+                    }
+                });
+
+
+                if (suggestions.length === 0) {
+                    box.innerHTML = `<div class="px-4 py-2 text-sm text-gray-400">候補が見つかりません</div>`;
+                } else {
+                    box.innerHTML = suggestions.slice(0, 10).map(item => `
+                        <button data-query="${App.escapeHTML(item.value)}" class="search-suggestion-item w-full text-left px-4 py-2 text-sm hover:bg-gray-500 block">
+                            ${App.escapeHTML(item.value)} <span class="text-xs text-gray-400 ml-2">(${item.type})</span>
+                        </button>
+                    `).join('');
+                }
+                box.classList.remove('hidden');
+                AppState.isSuggestBoxOpen = true;
+            },
+
+            // サジェスト/履歴ボックスを閉じる
+            closeSuggestBox: () => {
+                const box = $('#search-suggest-box');
+                if (box) box.classList.add('hidden');
+                AppState.isSuggestBoxOpen = false;
+            },
+
+            // 検索の実行
+            performSearch: (query) => {
+                AppState.searchQuery = query.trim();
+                App.updateSearchHistory(AppState.searchQuery); // 履歴を更新
+                AppState.currentPage = 1; // 検索したら1ページ目に戻る
+                App.renderWorkList(); // リストを再描画
+                App.closeSuggestBox(); // ボックスを閉じる
+                // 検索ボックスの内容も確定させる (サジェスト選択時など)
+                if (AppState.ui.searchInput.value !== AppState.searchQuery) {
+                    AppState.ui.searchInput.value = AppState.searchQuery;
+                }
+            },
 
             setupEventListeners: () => {
                 const { ui } = AppState; // UI要素の参照をまとめて取得
@@ -1419,20 +1773,23 @@
                     const nameSpan = e.target.closest('[data-action="copy-name"]');
                     const filterButton = e.target.closest('button[data-action="remove-filter"]');
 
+                    // (ChatGPT案: イベントリスナーをマップ化)
                     if (button) {
                         const { action, id, name } = button.dataset;
-                        switch (action) {
-                            case 'edit': App.openEditModal(id); break;
-                            case 'delete': App.deleteWork(id, name); break;
-                            case 'toggle-tags':
+                        const actionHandlers = {
+                            'edit': () => App.openEditModal(id),
+                            'delete': () => App.deleteWork(id, name),
+                            'toggle-tags': () => {
                                 AppState.expandedTagsWorkIds.has(id) ? AppState.expandedTagsWorkIds.delete(id) : AppState.expandedTagsWorkIds.add(id);
                                 App.renderWorkList();
-                                break;
-                            case 'external-search-reg': {
+                            },
+                            'external-search-reg': () => {
                                 const query = $('#workNameInput').value.trim();
                                 App.openExternalSearchModal(query);
-                                break;
                             }
+                        };
+                        if (actionHandlers[action]) {
+                            actionHandlers[action](); // 対応する関数を実行
                         }
                     }
                     if (nameSpan) {
@@ -1513,8 +1870,58 @@
                     } else { preview.classList.add('hidden'); }
                 });
                 
-                ui.searchInput.addEventListener('input', App.debounce(() => { AppState.searchQuery = ui.searchInput.value; App.renderWorkList(); }, 300));
-                
+                ui.searchInput.addEventListener('input', App.debounce(() => {
+                    const query = ui.searchInput.value;
+                    if (query.length > 0) {
+                        App.renderSuggestions(query); // 入力があればサジェスト表示
+                    } else {
+                        App.renderSearchHistory(); // 入力が空なら履歴表示
+                    }
+                    // 即時検索は行わず、Enterかサジェスト選択を待つ (必要ならここでも App.performSearch を呼ぶ)
+                }, 300));
+
+                // 検索ボックスでEnterキーが押されたら検索実行
+                ui.searchInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault(); // フォーム送信を防ぐ
+                        App.performSearch(ui.searchInput.value);
+                    }
+                    // Escキーでサジェストボックスを閉じる
+                    if (e.key === 'Escape') {
+                        App.closeSuggestBox();
+                    }
+                });
+
+                // 検索ボックスがフォーカスされたら履歴表示
+                ui.searchInput.addEventListener('focus', () => {
+                    // 入力が空の場合のみ履歴を表示
+                    if (ui.searchInput.value.length === 0) {
+                    App.renderSearchHistory();
+                    } else {
+                    // 入力がある場合はサジェストを表示（debounceと重複する可能性あるが念のため）
+                    App.renderSuggestions(ui.searchInput.value);
+                    }
+                });
+
+                // 検索ボックス外をクリックしたらサジェストボックスを閉じる
+                document.addEventListener('click', (e) => {
+                    const searchContainer = ui.searchInput.closest('div.relative'); // 検索ボックスとそのコンテナを取得
+                    if (AppState.isSuggestBoxOpen && !searchContainer.contains(e.target)) {
+                        App.closeSuggestBox();
+                    }
+                });
+
+                // 履歴/サジェスト項目がクリックされたら検索実行
+                const suggestBox = $('#search-suggest-box');
+                if (suggestBox) {
+                    suggestBox.addEventListener('click', (e) => {
+                        const button = e.target.closest('button[data-query]');
+                        if (button) {
+                            const query = button.dataset.query;
+                            App.performSearch(query);
+                        }
+                    });
+                }
                 ui.sortBtn.addEventListener('click', (e) => { e.stopPropagation(); ui.sortDropdown.classList.toggle('hidden'); });
                 document.addEventListener('click', () => ui.sortDropdown.classList.add('hidden'));
                 
@@ -1532,6 +1939,8 @@
                          if (target) {
                             AppState.sortState.by = target.dataset.by; AppState.sortState.order = target.dataset.order;
                             ui.sortStateLabel.textContent = `並び替え: ${target.textContent}`;
+                            // (Grok案: 設定の保存) localStorageにも保存
+                            localStorage.setItem('sortState', JSON.stringify(AppState.sortState));
                             ui.sortDropdown.classList.add('hidden'); App.renderWorkList();
                          }
                     });
@@ -1583,26 +1992,76 @@
                     
                     App.showToast("新しい画像が適用されます。保存ボタンで確定してください。", "success");
                 });
+
+                ui.prevPageBtn.addEventListener('click', () => {
+                    if (AppState.currentPage > 1) {
+                        AppState.currentPage--;
+                        App.renderWorkList();
+                        ui.workListEl.scrollIntoView({ behavior: 'smooth' }); // リストの先頭にスクロール
+                    }
+                });
+
+                ui.nextPageBtn.addEventListener('click', () => {
+                    const totalPages = Math.max(1, Math.ceil(App.getFilteredAndSortedWorks().length / AppState.itemsPerPage));
+                    if (AppState.currentPage < totalPages) {
+                        AppState.currentPage++;
+                        App.renderWorkList();
+                        ui.workListEl.scrollIntoView({ behavior: 'smooth' }); // リストの先頭にスクロール
+                    }
+                });
+
+                ui.itemsPerPageSelect.addEventListener('change', (e) => {
+                    AppState.itemsPerPage = parseInt(e.target.value, 10);
+                    AppState.currentPage = 1; // 件数を変えたら1ページ目に戻る
+                    App.renderWorkList();
+                    // (Grok案: 設定の保存) localStorageにも保存
+                    localStorage.setItem('itemsPerPage', AppState.itemsPerPage);
+                });
             },
 
             // --- Modal Implementations ---
             
             openExternalSearchModal: (prefillQuery = '') => {
-                // ... (中身のロジックは App. や AppState. を使うように変更) ...
-                // 例: openSearchWindow(...) -> App.openSearchWindow(...)
-                const sites = [ ... ];
-                const safeQuery = App.escapeHTML(prefillQuery);
-                const content = `...`;
-                
-                App.openModal("外部サイトで検索", content, () => {
-                    $('#external-site-buttons').addEventListener('click', e => {
-                        const button = e.target.closest('button[data-site]');
-                        if (button) {
-                            const site = button.dataset.site;
-                            const query = $('#externalSearchInput').value.trim();
-                            App.openSearchWindow(site, query); // 修正
-                        }
-                    });
+                const sites = [
+                    { id: 'dlsite', name: 'DLsite', color: 'bg-blue-700', hover: 'hover:bg-blue-800' },
+                    { id: 'fanza', name: 'FANZA', color: 'bg-red-600', hover: 'hover:bg-red-700' },
+                    { id: 'melonbooks', name: 'Melonbooks', color: 'bg-green-600', hover: 'hover:bg-green-700' },
+                    { id: 'booth', name: 'Booth', color: 'bg-rose-500', hover: 'hover:bg-rose-600' }
+                ];
+                const safeQuery = App.escapeHTML(prefillQuery); // App.escapeHTML を使用
+                const content = `
+                    <div class="space-y-4">
+                        <div>
+                            <label for="externalSearchInput" class="block text-sm font-medium text-gray-400 mb-1">検索クエリ</label>
+                            <input type="text" id="externalSearchInput" value="${safeQuery}" placeholder="作品名などを入力..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-2">検索するサイトを選択</label>
+                            <div id="external-site-buttons" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                ${sites.map(site => `<button data-site="${site.id}" class="w-full px-4 py-3 ${site.color} ${site.hover} rounded-lg font-bold text-lg transition-colors">${site.name}</button>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                App.openModal("外部サイトで検索", content, () => { // App.openModal を使用
+                    const siteButtons = $('#external-site-buttons');
+                    const searchInput = $('#externalSearchInput');
+                    // モーダルが開いたときに検索入力欄にフォーカスを当てる
+                    if (searchInput) {
+                        setTimeout(() => searchInput.focus(), 100);
+                    }
+
+                    if (siteButtons) {
+                        siteButtons.addEventListener('click', e => {
+                            const button = e.target.closest('button[data-site]');
+                            if (button) {
+                                const site = button.dataset.site;
+                                const query = searchInput ? searchInput.value.trim() : '';
+                                App.openSearchWindow(site, query); // App.openSearchWindow を使用
+                            }
+                        });
+                    }
                 });
             },
             
@@ -1747,9 +2206,38 @@
                         });
                     });
 
-                    const getFormState = () => { ... }; // (変更なし)
+                    const getFormState = () => {
+                        const nameInput = $('#editWorkName');
+                        // 修正: モーダルが閉じられた後などに要素がない場合nullを返す
+                        if (!nameInput) return null;
+                        const registeredAtInput = $('#editWorkRegisteredAt');
+                        const urlInput = $('#editWorkUrl');
+                        const genreSelect = $('#editWorkGenre');
+                        // 修正: 要素が存在するか確認
+                        const registeredAtStr = registeredAtInput ? App.getDateInputValue('editWorkRegisteredAt') : '';
+                        const urlValue = urlInput ? urlInput.value.trim() : '';
+                        const genreValue = genreSelect ? genreSelect.value : '';
+
+                        return {
+                            name: nameInput.value.trim(),
+                            url: urlValue,
+                            genre: genreValue,
+                            registeredAt: registeredAtStr,
+                            rating: currentRating,
+                            tagIds: JSON.stringify([...currentTagIds].sort()) // Setをソート済み配列のJSON文字列に変換して比較
+                        };
+                    };
+
                     const initialState = getFormState();
-                    AppState.checkModalDirtyState = () => { ... }; // (変更なし)
+
+                    AppState.checkModalDirtyState = () => {
+                        const currentState = getFormState();
+                        // 修正: どちらかの状態が取得できなかった場合は dirty とみなさない
+                        if (initialState === null || currentState === null) return false;
+                        // 修正: 画像変更フラグもチェックに加える
+                        const imageChanged = AppState.tempNewImageUrl !== null || AppState.deleteImageFlag;
+                        return JSON.stringify(initialState) !== JSON.stringify(currentState) || imageChanged;
+                    };
                     
                     $('#edit-external-search').addEventListener('click', () => {
                          const capturedState = { rating: currentRating, tagIds: currentTagIds };
@@ -1765,7 +2253,19 @@
                     renderStars(currentRating);
                     renderTags(currentTagIds);
 
-                    ratingStars.addEventListener('click', e => { ... }); // (変更なし)
+                    if (ratingStars) {
+                        ratingStars.addEventListener('click', e => {
+                            // クリックされたのが星アイコンか確認
+                            if (e.target.matches('.fa-star')) {
+                                const newRating = parseInt(e.target.dataset.value, 10);
+                                // 同じ星をクリックしたら評価を0にする、そうでなければ新しい評価を設定
+                                currentRating = (currentRating === newRating) ? 0 : newRating;
+                                renderStars(currentRating); // 星の表示を更新
+                                // 変更があったことを示す (checkModalDirtyState で使われる)
+                                // AppState.checkModalDirtyState(); // 必要に応じて呼び出す
+                            }
+                        });
+                    }
                     
                     $('#editWorkAssignTagsBtn').addEventListener('click', () => {
                         App.openTagModal({ // 修正
@@ -1787,7 +2287,16 @@
                         const registeredAtStr = App.getDateInputValue('editWorkRegisteredAt'); // 修正
                         if (!App.isValidDate(registeredAtStr)) return App.showToast("登録日の形式が不正です (YYYY/MM/DD)。", "error"); // 修正
                         
-                        const updatedData = { ... }; // (変更なし)
+                        const updatedData = {
+                            name: workNameInput.value.trim(),
+                            sourceUrl: workUrlInput.value.trim(),
+                            genre: $('#editWorkGenre').value, // Get value from select element
+                            // Convert YYYY/MM/DD string back to Firestore Timestamp
+                            registeredAt: Timestamp.fromDate(new Date(registeredAtStr.replace(/\//g, '-'))),
+                            rating: currentRating, // Use the potentially updated rating
+                            tagIds: Array.from(currentTagIds), // Convert Set back to Array
+                            // lastUpdated: serverTimestamp() // Add this if you want to track updates
+                        }; // (変更なし)
                         
                         if (AppState.tempNewImageUrl) { // 修正
                             updatedData.imageUrl = AppState.tempNewImageUrl; // 修正
@@ -1805,20 +2314,379 @@
             },
             
             openFilterModal: (tempState = null) => {
-                // ... (すべての内部ロジックを App. や AppState. を使うように変更) ...
-                // この関数は非常に長いため、すべての置換をここで示すのは省略しますが、
-                // openEditModal と同様のロジックで App. をつけてください。
-                // 例: createDateFilterHTML(...) -> App.createDateFilterHTML(...)
-                // 例: listFilters -> AppState.listFilters
-                // 例: tags -> AppState.tags
+                let tempGenres = tempState?.genres ?? new Set(AppState.listFilters.genres);
+                let tempRating = tempState?.rating ?? { ...AppState.listFilters.rating };
+                let tempAndTags = tempState?.andTagIds ?? new Set(AppState.listFilters.andTagIds);
+                let tempOrTags = tempState?.orTagIds ?? new Set(AppState.listFilters.orTagIds);
+                let tempNotTags = tempState?.notTagIds ?? new Set(AppState.listFilters.notTagIds);
+                let tempDateFilter = tempState?.dateFilter ?? { ...AppState.listFilters.dateFilter };
+                if (!tempDateFilter.date) tempDateFilter.date = App.formatDateForInput(new Date());
+                if (!tempDateFilter.startDate) tempDateFilter.startDate = App.formatDateForInput(new Date());
+                if (!tempDateFilter.endDate) tempDateFilter.endDate = App.formatDateForInput(new Date());
+                let tempUnrated = tempState?.unratedOrUntaggedOnly ?? AppState.listFilters.unratedOrUntaggedOnly;
+                let tempShowSiteIcon = AppState.showSiteIcon;
+
+                const content = `
+                    <div class="space-y-4">
+                        <div class="flex items-center">
+                            <input type="checkbox" id="filter-unrated" class="h-4 w-4 rounded bg-gray-600 text-sky-500 border-gray-500 focus:ring-sky-600" ${tempUnrated ? 'checked' : ''}>
+                            <label for="filter-unrated" class="ml-2 text-sm font-medium">未評価またはタグ未設定の作品のみ</label>
+                        </div>
+                        <div><h4 class="font-semibold mb-2">ジャンル</h4><div class="flex flex-wrap gap-3">${['漫画', 'ゲーム', '動画'].map(g => `<div><input type="checkbox" id="filter-genre-${g}" value="${g}" class="hidden peer" ${tempGenres.has(g) ? 'checked' : ''}><label for="filter-genre-${g}" class="px-4 py-2 border-2 border-gray-600 rounded-lg cursor-pointer peer-checked:bg-teal-600 peer-checked:border-teal-500">${g}</label></div>`).join('')}</div></div>
+                        <div><h4 class="font-semibold mb-2">登録日</h4>${App.createDateFilterHTML('list', tempDateFilter)}</div>
+                        <div id="filter-rating-section" class="${tempUnrated ? 'opacity-50' : ''}"><h4 class="font-semibold mb-2">評価</h4><div class="flex items-center space-x-4"><div class="flex items-center space-x-2 text-2xl" id="filter-rating"></div><div class="flex items-center"><input type="checkbox" id="filter-rating-above" class="h-4 w-4 rounded bg-gray-700 text-teal-500" ${tempRating.type === 'above' ? 'checked': ''}><label for="filter-rating-above" class="ml-2 text-sm">以上</label></div><button id="filter-rating-clear" class="text-sm text-gray-400 hover:text-white">クリア</button></div></div>
+
+                        <div>
+                            <h4 class="font-semibold mb-1">タグ絞り込み</h4>
+                            <div id="filter-tags-display" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] mb-2"></div>
+                            <button type="button" id="filter-select-tags" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグの条件を選択</button>
+                        </div>
+
+                        <div>
+                            <h4 class="font-semibold mb-2">表示設定</h4>
+                            <div class="flex items-center bg-gray-900 p-3 rounded-lg">
+                                <input type="checkbox" id="filter-show-site-icon" class="h-4 w-4 rounded bg-gray-600 text-sky-500 border-gray-500 focus:ring-sky-600" ${tempShowSiteIcon ? 'checked' : ''}>
+                                <label for="filter-show-site-icon" class="ml-3 text-sm font-medium">作品画像のサイトアイコンを表示する</label>
+                            </div>
+                        </div>
+
+                        <div class="pt-4 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
+                            <button id="filter-reset" class="w-full sm:w-auto btn btn-secondary">全リセット</button>
+                            <div class="flex space-x-3 w-full sm:w-auto">
+                                <button id="filter-cancel" class="flex-1 sm:flex-none px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
+                                <button id="filter-apply" class="flex-1 sm:flex-none px-6 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold">適用</button>
+                            </div>
+                        </div>
+                    </div>`;
+
+                App.openModal("作品リストの絞り込み", content, () => {
+                    const updatePreview = () => {
+                        const countEl = $('#date-filter-preview-count-list'), gridEl = $('#date-filter-preview-grid-list');
+                        if (!countEl || !gridEl) return;
+
+                        const filters = {
+                            unratedOrUntaggedOnly: $('#filter-unrated').checked,
+                            genres: new Set([...$$('input[id^="filter-genre-"]:checked')].map(cb => cb.value)),
+                            rating: { value: tempRating.value, type: $('#filter-rating-above').checked ? 'above' : 'exact' },
+                            andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
+                            dateFilter: {
+                                mode: $(`input[name="date-filter-mode-list"]:checked`).value,
+                                date: App.getDateInputValue('date-filter-specific-date-list'),
+                                startDate: App.getDateInputValue('date-filter-start-date-list'),
+                                endDate: App.getDateInputValue('date-filter-end-date-list')
+                            }
+                        };
+
+                        const filtered = App.getFilteredWorks(filters);
+
+                        countEl.textContent = `対象: ${filtered.length} 作品`;
+                        gridEl.innerHTML = filtered.slice(0, 50).map(w => `<div class="text-center"><img src="${w.imageUrl||'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${w.name}" class="w-full h-16 object-cover rounded-md"><p class="text-xs truncate mt-1">${w.name}</p></div>`).join('');
+                    };
+
+                    App.setupDateFilterEventListeners('list', updatePreview);
+                    $$('input[id^="filter-genre-"]').forEach(cb => cb.addEventListener('change', updatePreview));
+
+                    const ratingSection = $('#filter-rating-section');
+                    const ratingStars = $('#filter-rating');
+                    const unratedToggle = $('#filter-unrated');
+
+                    unratedToggle.addEventListener('change', () => {
+                        const isDisabled = unratedToggle.checked;
+                        ratingSection.classList.toggle('opacity-50', isDisabled);
+                        ratingSection.querySelectorAll('input, button').forEach(el => el.disabled = isDisabled);
+                        updatePreview();
+                    });
+
+                    const renderStars = r => { ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= r ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join(''); };
+                    renderStars(tempRating.value);
+                    // 修正: ratingStars が null でないことを確認
+                    if (ratingStars) {
+                        ratingStars.addEventListener('click', e => {
+                            if (e.target.matches('.fa-star')) {
+                                const r = parseInt(e.target.dataset.value);
+                                tempRating.value = (tempRating.value === r) ? 0 : r;
+                                renderStars(tempRating.value); // 修正: 星の再描画
+                                updatePreview();
+                            }
+                        });
+                    }
+                    $('#filter-rating-above').addEventListener('change', updatePreview);
+                    $('#filter-rating-clear').addEventListener('click', () => { tempRating.value = 0; renderStars(0); updatePreview(); });
+
+                    const renderCombinedTags = () => {
+                        const container = $('#filter-tags-display');
+                        if (!container) return;
+                        let html = '';
+                        const renderSet = (ids, className, prefix) => {
+                            [...ids].map(id => AppState.tags.get(id)).filter(Boolean).forEach(tag => { // 修正済み
+                                html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${tag.name}</span>`;
+                            });
+                        };
+                        renderSet(tempAndTags, 'tag-item-and text-white', 'AND');
+                        renderSet(tempOrTags, 'tag-item-or text-white', 'OR');
+                        renderSet(tempNotTags, 'tag-item-not text-white', 'NOT');
+
+                        container.innerHTML = html || `<span class="text-xs text-gray-500">タグ未選択</span>`;
+                    };
+                    renderCombinedTags();
+
+                    $('#filter-select-tags').addEventListener('click', () => {
+                        const capturedState = {
+                            genres: new Set([...$$('input[id^="filter-genre-"]:checked')].map(cb => cb.value)),
+                            rating: { value: tempRating.value, type: $('#filter-rating-above').checked ? 'above' : 'exact' },
+                            andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
+                            unratedOrUntaggedOnly: unratedToggle.checked,
+                            dateFilter: {
+                                mode: $(`input[name="date-filter-mode-list"]:checked`).value,
+                                date: App.getDateInputValue('date-filter-specific-date-list'),
+                                startDate: App.getDateInputValue('date-filter-start-date-list'),
+                                endDate: App.getDateInputValue('date-filter-end-date-list'),
+                            }
+                        };
+                        App.openTagFilterModal({
+                            and: tempAndTags, or: tempOrTags, not: tempNotTags,
+                            onConfirm: (newTags) => {
+                                if (newTags) {
+                                    capturedState.andTagIds = newTags.and;
+                                    capturedState.orTagIds = newTags.or;
+                                    capturedState.notTagIds = newTags.not;
+                                }
+                                App.openFilterModal(capturedState);
+                            }
+                        });
+                    });
+
+                    // New Site Icon Toggle Logic
+                    $('#filter-show-site-icon').addEventListener('change', (e) => {
+                        tempShowSiteIcon = e.target.checked;
+                    });
+
+                    $('#filter-apply').addEventListener('click', () => {
+                        AppState.listFilters.genres = new Set([...$$('#modal-wrapper input[id^="filter-genre-"]:checked')].map(el => el.value));
+                        AppState.listFilters.unratedOrUntaggedOnly = unratedToggle.checked;
+                        AppState.listFilters.rating = { value: tempRating.value, type: $('#filter-rating-above').checked ? 'above' : 'exact' };
+                        AppState.listFilters.andTagIds = tempAndTags;
+                        AppState.listFilters.orTagIds = tempOrTags;
+                        AppState.listFilters.notTagIds = tempNotTags;
+                        App.saveShowSiteIcon(tempShowSiteIcon);
+
+                        const mode = $(`input[name="date-filter-mode-list"]:checked`).value;
+                        AppState.listFilters.dateFilter.mode = mode;
+                        if (mode === 'specific') {
+                            const dateVal = App.getDateInputValue('date-filter-specific-date-list');
+                            if (dateVal && !App.isValidDate(dateVal)) return App.showToast("特定日の形式が不正です。", "error");
+                            AppState.listFilters.dateFilter.date = dateVal;
+                        } else if (mode === 'range') {
+                            const startVal = App.getDateInputValue('date-filter-start-date-list'), endVal = App.getDateInputValue('date-filter-end-date-list');
+                            if ((startVal && !App.isValidDate(startVal)) || (endVal && !App.isValidDate(endVal))) return App.showToast("期間の形式が不正です。", "error");
+                            AppState.listFilters.dateFilter.startDate = startVal; AppState.listFilters.dateFilter.endDate = endVal;
+                        } else { AppState.listFilters.dateFilter = AppState.defaultDateFilter(); }
+
+                        const filtersToSave = {
+                            ...AppState.listFilters,
+                            genres: [...AppState.listFilters.genres],
+                            andTagIds: [...AppState.listFilters.andTagIds],
+                            orTagIds: [...AppState.listFilters.orTagIds],
+                            notTagIds: [...AppState.listFilters.notTagIds]
+                        };
+                        localStorage.setItem('listFilters', JSON.stringify(filtersToSave));
+                        App.renderAll(); App.closeModal();
+                    });
+                    $('#filter-cancel').addEventListener('click', App.closeModal);
+                    $('#filter-reset').addEventListener('click', () => {
+                        AppState.listFilters = { genres: new Set(), rating: { type: 'exact', value: 0 }, andTagIds: new Set(), orTagIds: new Set(), notTagIds: new Set(), dateFilter: AppState.defaultDateFilter(), unratedOrUntaggedOnly: false };
+                        App.saveShowSiteIcon(true);
+
+                        const filtersToSave = { // Resetした後の値を保存
+                            ...AppState.listFilters,
+                            genres: [], andTagIds: [], orTagIds: [], notTagIds: []
+                        };
+                        localStorage.setItem('listFilters', JSON.stringify(filtersToSave));
+
+                        App.renderAll();
+                        App.closeModal();
+                    });
+
+                    // Initial setup for disabled state
+                    const isDisabled = unratedToggle.checked;
+                    ratingSection.classList.toggle('opacity-50', isDisabled);
+                    ratingSection.querySelectorAll('input, button').forEach(el => el.disabled = isDisabled);
+                    updatePreview();
+                });
             },
             
             openTagModal: (options) => {
-                // ... (すべての内部ロジックを App. や AppState. を使うように変更) ...
-            },
+                const { mode = 'manage', currentTagIds = new Set(), workName = '', onConfirm } = options;
+                let tempSelectedTagIds = new Set(currentTagIds);
+                const titleMap = { manage: 'タグ管理', assign: `「${workName}」のタグを割り当て`, filter: '抽選条件のタグを選択' };
+                const content = `
+                    <div class="flex flex-col h-[70vh]">
+                        ${['manage', 'assign'].includes(mode) ? `<div class="flex flex-wrap gap-2 mb-4 p-1 bg-gray-900 rounded-lg"><input type="text" id="newTagName" placeholder="新しいタグ名" class="flex-grow min-w-[150px] bg-gray-700 p-2 rounded-lg"><div class="flex gap-2"><input type="color" id="newTagColor" value="#581c87" class="h-11 w-12 p-1 bg-gray-700 rounded-lg cursor-pointer"><button id="addTagBtn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold"><i class="fas fa-plus"></i> 追加</button></div></div>` : ''}
+                        <div class="flex items-center gap-2 mb-2"><div class="flex-grow relative"><i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i><input type="search" id="tagSearchInput" placeholder="タグを検索..." class="w-full bg-gray-700 p-2 pl-10 rounded-lg"></div>${mode === 'assign' ? `<select id="tagFilterSelect" class="bg-gray-700 p-2 rounded-lg"><option value="all">すべて</option><option value="assigned">設定済</option><option value="unassigned">未設定</option></select>`: ''}<select id="tagSortSelect" class="bg-gray-700 p-2 rounded-lg"><option value="createdAt_desc">追加順 (新しい)</option><option value="createdAt_asc">追加順 (古い)</option><option value="name_asc">名前順 (昇順)</option><option value="useCount_desc">頻度順</option></select></div>
+                        ${!['manage'].includes(mode) ? `<div class="mb-4">
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="block text-sm text-gray-400">選択中のタグ</label>
+                                <button type="button" id="reset-selected-tags-btn" class="text-xs text-gray-400 hover:text-white px-2 py-1 rounded hover:bg-gray-700">リセット <i class="fas fa-times ml-1"></i></button>
+                            </div>
+                            <div id="tag-selector-preview" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px]"></div>
+                        </div>` : ''}
+                        <div id="tag-list" class="flex-grow overflow-y-auto pr-2 gap-2 grid grid-cols-2 md:grid-cols-3 lg:block lg:space-y-2"></div>
+                        ${!['manage'].includes(mode) ? `<div class="pt-4 mt-4 border-t border-gray-700 flex justify-end space-x-3"><button id="tag-modal-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button><button id="tag-modal-confirm" class="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold">決定</button></div>` : ''}
+                    </div>`;
+
+                App.openModal(titleMap[mode], content, () => {
+                    let tagSearchQuery = '', tagFilter = 'all', tagSort = { by: 'createdAt', order: 'desc' };
+                    const tagListEl = $('#tag-list'), tagPreviewEl = $('#tag-selector-preview');
+
+                    const renderTagPreview = () => {
+                        if(!tagPreviewEl) return;
+                        const objects = App.getTagObjects(tempSelectedTagIds);
+                        tagPreviewEl.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color}; color:${App.getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグ未選択</span>`;
+                    };
+
+                    const renderTagList = () => {
+                        let tagsToRender = [...AppState.tags.values()]; // 修正済み
+                        if(tagSearchQuery) tagsToRender = tagsToRender.filter(t => t.name.toLowerCase().includes(tagSearchQuery.toLowerCase()));
+                        if(mode === 'assign') {
+                            if (tagFilter === 'assigned') tagsToRender = tagsToRender.filter(t => tempSelectedTagIds.has(t.id));
+                            if (tagFilter === 'unassigned') tagsToRender = tagsToRender.filter(t => !tempSelectedTagIds.has(t.id));
+                        }
+                        tagsToRender.sort((a, b) => { const o = tagSort.order === 'asc' ? 1 : -1; switch (tagSort.by) { case 'name': return a.name.localeCompare(b.name, 'ja') * o; case 'createdAt': return ((a.createdAt?.toMillis()||0) - (b.createdAt?.toMillis()||0)) * o; case 'useCount': return ((a.useCount||0) - (b.useCount||0)) * o; default: return 0; }});
+                        tagListEl.innerHTML = tagsToRender.map(t => `<div class="tag-item flex items-center p-2 rounded-lg ${!['manage'].includes(mode) ? 'cursor-pointer hover:bg-gray-600' : ''} ${tempSelectedTagIds.has(t.id) ? 'bg-purple-900 ring-2 ring-purple-500' : 'bg-gray-700'}" data-id="${t.id}"><div class="w-4 h-4 rounded-full mr-3 shrink-0" style="background-color: ${t.color};"></div><span class="grow font-semibold truncate">${t.name}</span>${['manage', 'assign'].includes(mode) ? `<button data-action="delete-tag" data-id="${t.id}" class="ml-auto text-gray-400 hover:text-red-500 px-2 shrink-0"><i class="fas fa-trash-alt"></i></button>` : ''}</div>`).join('');
+                    };
+
+                    renderTagList();
+                    renderTagPreview();
+
+                    tagListEl.addEventListener('refresh-tags', renderTagList); // リフレッシュイベントをリッスン
+
+                    $('#tagSearchInput')?.addEventListener('input', App.debounce(e => { tagSearchQuery = e.target.value; renderTagList(); }, 200));
+                    $('#tagFilterSelect')?.addEventListener('change', e => { tagFilter = e.target.value; renderTagList(); });
+                    $('#tagSortSelect')?.addEventListener('change', e => { const [by, order] = e.target.value.split('_'); tagSort = { by, order }; renderTagList(); });
+
+                    $('#addTagBtn')?.addEventListener('click', async () => {
+                        const nameInput = $('#newTagName');
+                        if (nameInput.value) {
+                            const newTag = await App.addTag(nameInput.value, $('#newTagColor').value);
+                            if (newTag && mode === 'assign') { tempSelectedTagIds.add(newTag.id); renderTagList(); renderTagPreview(); }
+                            nameInput.value = '';
+                        }
+                    });
+
+                    tagListEl.addEventListener('click', e => {
+                        const tagItem = e.target.closest('.tag-item'), deleteBtn = e.target.closest('button[data-action="delete-tag"]');
+                        if (deleteBtn) {
+                            e.stopPropagation();
+                            App.deleteTag(deleteBtn.dataset.id); // 削除後、onSnapshotが発火してリストが更新される
+                            return;
+                        }
+                        if (tagItem && !['manage'].includes(mode)) {
+                            const tagId = tagItem.dataset.id;
+                            tempSelectedTagIds.has(tagId) ? tempSelectedTagIds.delete(tagId) : tempSelectedTagIds.add(tagId);
+                            renderTagList(); // クリックで即時反映
+                            renderTagPreview();
+                        }
+                    });
+
+                    const resetBtn = $('#reset-selected-tags-btn');
+                    if (resetBtn) {
+                        resetBtn.addEventListener('click', () => {
+                            tempSelectedTagIds.clear();
+                            renderTagPreview();
+                            renderTagList(); // リストの選択状態もリセット
+                        });
+                    }
+
+                    $('#tag-modal-confirm')?.addEventListener('click', () => { onConfirm(tempSelectedTagIds); App.closeModal(); }); // 決定時に閉じる
+                    $('#tag-modal-cancel')?.addEventListener('click', () => { onConfirm(null); App.closeModal(); }); // キャンセル時に閉じる
+                });
+            }, // ← App.openTagModal の終わりカンマ
             
             openTagFilterModal: (options) => {
-                // ... (すべての内部ロジックを App. や AppState. を使うように変更) ...
+                const { and = new Set(), or = new Set(), not = new Set(), onConfirm } = options;
+                let tempAnd = new Set(and), tempOr = new Set(or), tempNot = new Set(not);
+
+                const content = `
+                    <div class="flex flex-col h-[70vh]">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="flex-grow relative">
+                                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                                <input type="search" id="tagSearchInput" placeholder="タグを検索..." class="w-full bg-gray-700 p-2 pl-10 rounded-lg">
+                            </div>
+                            <select id="tagSortSelect" class="bg-gray-700 p-2 rounded-lg">
+                                <option value="createdAt_desc">追加順 (新しい)</option>
+                                <option value="createdAt_asc">追加順 (古い)</option>
+                                <option value="name_asc">名前順 (昇順)</option>
+                                <option value="useCount_desc">頻度順</option>
+                            </select>
+                        </div>
+                        <div class="flex justify-between items-center mb-4">
+                            <p class="text-xs text-gray-400">タグをクリックして条件を変更 ( 緑: AND → 青: OR → 赤: NOT → 解除 )</p>
+                            <button type="button" id="reset-tag-filters-btn" class="text-xs text-gray-400 hover:text-white px-2 py-1 rounded hover:bg-gray-700">リセット</button>
+                        </div>
+                        <div id="tag-list" class="flex-grow overflow-y-auto pr-2 space-y-2"></div>
+                        <div class="pt-4 mt-4 border-t border-gray-700 flex justify-end space-x-3">
+                            <button id="tag-modal-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
+                            <button id="tag-modal-confirm" class="px-6 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold">決定</button>
+                        </div>
+                    </div>`;
+
+                App.openModal("タグの条件を選択", content, () => {
+                    let tagSearchQuery = '', tagSort = { by: 'createdAt', order: 'desc' };
+                    const tagListEl = $('#tag-list');
+
+                    const renderTagList = () => {
+                        let tagsToRender = [...AppState.tags.values()]; // 修正済み
+                        if(tagSearchQuery) tagsToRender = tagsToRender.filter(t => t.name.toLowerCase().includes(tagSearchQuery.toLowerCase()));
+
+                        tagsToRender.sort((a, b) => { const o = tagSort.order === 'asc' ? 1 : -1; switch (tagSort.by) { case 'name': return a.name.localeCompare(b.name, 'ja') * o; case 'createdAt': return ((a.createdAt?.toMillis()||0) - (b.createdAt?.toMillis()||0)) * o; case 'useCount': return ((a.useCount||0) - (b.useCount||0)) * o; default: return 0; }});
+
+                        tagListEl.innerHTML = tagsToRender.map(t => {
+                            let stateClass = 'bg-gray-700';
+                            if (tempAnd.has(t.id)) stateClass = 'tag-item-and';
+                            else if (tempOr.has(t.id)) stateClass = 'tag-item-or';
+                            else if (tempNot.has(t.id)) stateClass = 'tag-item-not';
+
+                            return `<div class="tag-item flex items-center p-2 rounded-lg cursor-pointer hover:bg-gray-600 ${stateClass}" data-id="${t.id}">
+                                        <div class="w-4 h-4 rounded-full mr-3 shrink-0" style="background-color: ${t.color};"></div>
+                                        <span class="grow font-semibold truncate">${t.name}</span>
+                                    </div>`;
+                        }).join('');
+                    };
+
+                    renderTagList();
+                    tagListEl.addEventListener('refresh-tags', renderTagList); // リフレッシュイベントをリッスン
+
+                    $('#tagSearchInput')?.addEventListener('input', App.debounce(e => { tagSearchQuery = e.target.value; renderTagList(); }, 200));
+                    $('#tagSortSelect')?.addEventListener('change', e => { const [by, order] = e.target.value.split('_'); tagSort = { by, order }; renderTagList(); });
+
+                    tagListEl.addEventListener('click', e => {
+                        const tagItem = e.target.closest('.tag-item');
+                        if (tagItem) {
+                            const tagId = tagItem.dataset.id;
+                            if (tempAnd.has(tagId)) {
+                                tempAnd.delete(tagId);
+                                tempOr.add(tagId);
+                            } else if (tempOr.has(tagId)) {
+                                tempOr.delete(tagId);
+                                tempNot.add(tagId);
+                            } else if (tempNot.has(tagId)) {
+                                tempNot.delete(tagId);
+                            } else {
+                                tempAnd.add(tagId);
+                            }
+                            renderTagList(); // クリックで即時反映
+                        }
+                    });
+
+                    $('#reset-tag-filters-btn').addEventListener('click', () => {
+                        tempAnd.clear(); tempOr.clear(); tempNot.clear();
+                        renderTagList(); // リストの選択状態もリセット
+                    });
+
+                    $('#tag-modal-confirm')?.addEventListener('click', () => { onConfirm({and: tempAnd, or: tempOr, not: tempNot}); App.closeModal(); }); // 決定時に閉じる
+                    $('#tag-modal-cancel')?.addEventListener('click', () => { onConfirm(null); App.closeModal(); }); // キャンセル時に閉じる
+                });
             },
             
             // --- Date Filter UI & Logic ---
@@ -1884,11 +2752,290 @@
             },
 
             openLotterySettingsModal: (tempState = null) => {
-                // ... (すべての内部ロジックを App. や AppState. を使うように変更) ...
+                const source = tempState || AppState.lotterySettings; // AppState.lotterySettings を使用
+                const state = {
+                    ...source,
+                    genres: new Set(source.genres),
+                    andTagIds: new Set(source.andTagIds),
+                    orTagIds: new Set(source.orTagIds),
+                    notTagIds: new Set(source.notTagIds),
+                    dateFilter: { ...(source.dateFilter || AppState.defaultDateFilter()) } // AppState.defaultDateFilter を使用
+                };
+                // Pre-fill date inputs with today's date if they are empty
+                if (!state.dateFilter.date) state.dateFilter.date = App.formatDateForInput(new Date()); // App.formatDateForInput を使用
+                if (!state.dateFilter.startDate) state.dateFilter.startDate = App.formatDateForInput(new Date()); // App.formatDateForInput を使用
+                if (!state.dateFilter.endDate) state.dateFilter.endDate = App.formatDateForInput(new Date()); // App.formatDateForInput を使用
+
+                const genreValue = [...state.genres][0] || 'all';
+                const content = `
+                <div class="space-y-6">
+                    <div class="flex items-center justify-between">
+                         <h4 class="font-semibold">抽選設定</h4>
+                         <div class="flex items-center gap-2">
+                             <button id="lottery-apply-to-list" class="text-xs px-3 py-1 bg-teal-600 hover:bg-teal-700 rounded-full transition-colors">リストに適用</button>
+                             <button id="lottery-help-btn" class="text-gray-400 hover:text-white"><i class="fas fa-question-circle fa-lg"></i></button>
+                         </div>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold mb-2 text-sm text-gray-400">プリセット</h4>
+                        <div class="flex flex-wrap gap-2">
+                            <button data-preset="relax" class="text-xs px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-full">気分転換に</button>
+                            <button data-preset="new" class="text-xs px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-full">積みを崩す</button>
+                            <button data-preset="masterpiece" class="text-xs px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-full">傑作をもう一度</button>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex items-center mb-2">
+                             <input type="checkbox" id="lottery-unrated" class="h-4 w-4 rounded bg-gray-600 text-sky-500 border-gray-500 focus:ring-sky-600" ${state.unratedOrUntaggedOnly ? 'checked' : ''}>
+                             <label for="lottery-unrated" class="ml-2 text-sm font-medium">未評価またはタグ未設定の作品のみ</label>
+                        </div>
+                    </div>
+                    <div><label for="lottery-mood" class="block text-sm text-gray-400 mb-1">気分</label><select id="lottery-mood" class="w-full bg-gray-700 p-2 rounded-lg disabled:opacity-50" ${state.unratedOrUntaggedOnly ? 'disabled' : ''}><option value="default" ${state.mood==='default'?'selected':''}>問わない</option><option value="favorite" ${state.mood==='favorite'?'selected':''}>お気に入り</option><option value="best" ${state.mood==='best'?'selected':''}>最高評価</option><option value="hidden_gem" ${state.mood==='hidden_gem'?'selected':''}>隠れた名作</option></select></div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="block text-sm text-gray-400 mb-1">ジャンル</label><select id="lottery-genre" class="w-full bg-gray-700 p-2 rounded-lg"><option value="all">すべて</option><option value="漫画" ${genreValue==='漫画'?'selected':''}>漫画</option><option value="ゲーム" ${genreValue==='ゲーム'?'selected':''}>ゲーム</option><option value="動画" ${genreValue==='動画'?'selected':''}>動画</option></select></div>
+                        <div><label class="block text-sm text-gray-400 mb-1">登録日優先度</label><select id="lottery-priority" class="w-full bg-gray-700 p-2 rounded-lg"><option value="new" ${state.priority==='new'?'selected':''}>新しい順</option><option value="old" ${state.priority==='old'?'selected':''}>古い順</option><option value="random" ${state.priority==='random'?'selected':''}>ランダム</option></select></div>
+                    </div>
+                     <div><label class="block text-sm text-gray-400 mb-1">抽選方法</label><select id="lottery-method" class="w-full bg-gray-700 p-2 rounded-lg"><option value="normal" ${state.method==='normal'?'selected':''}>通常</option><option value="decrease_unselected" ${state.method==='decrease_unselected'?'selected':''}>未選択優先</option></select></div>
+                    <div><h4 class="text-sm text-gray-400 mb-1">登録日で絞り込む</h4>${App.createDateFilterHTML('lottery', state.dateFilter)}</div>
+                    <div>
+                        <h4 class="font-semibold mb-1">タグ絞り込み</h4>
+                        <div id="lottery-tags-display" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] mb-2"></div>
+                        <button type="button" id="lottery-select-tags" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグの条件を選択</button>
+                    </div>
+                    <div class="pt-4 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
+                        <button type="button" id="lottery-settings-reset" class="w-full sm:w-auto btn btn-secondary">リセット</button>
+                        <div class="flex space-x-3 w-full sm:w-auto">
+                            <button type="button" id="lottery-settings-cancel" class="flex-1 sm:flex-none px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
+                            <button type="button" id="lottery-settings-save" class="flex-1 sm:flex-none px-6 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold">保存</button>
+                        </div>
+                    </div>
+                </div>`;
+
+                App.openModal("抽選設定", content, () => { // App.openModal を使用
+                    let tempAndTags = new Set(state.andTagIds);
+                    let tempOrTags = new Set(state.orTagIds);
+                    let tempNotTags = new Set(state.notTagIds);
+
+                    const updatePreview = () => {
+                        const countEl = $('#date-filter-preview-count-lottery'), gridEl = $('#date-filter-preview-grid-lottery');
+                        if (!countEl || !gridEl) return;
+
+                        const filters = {
+                            unratedOrUntaggedOnly: $('#lottery-unrated').checked,
+                            mood: $('#lottery-mood').value,
+                            genres: new Set($('#lottery-genre').value === 'all' ? [] : [$('#lottery-genre').value]),
+                            andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
+                            dateFilter: {
+                                mode: $(`input[name="date-filter-mode-lottery"]:checked`).value,
+                                date: App.getDateInputValue('date-filter-specific-date-lottery'), // App.getDateInputValue を使用
+                                startDate: App.getDateInputValue('date-filter-start-date-lottery'), // App.getDateInputValue を使用
+                                endDate: App.getDateInputValue('date-filter-end-date-lottery') // App.getDateInputValue を使用
+                            }
+                        };
+                        const filtered = App.getFilteredWorks(filters); // App.getFilteredWorks を使用
+
+                        countEl.textContent = `対象: ${filtered.length} 作品`;
+                        gridEl.innerHTML = filtered.slice(0, 50).map(w => `<div class="text-center"><img src="${w.imageUrl||'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${w.name}" class="w-full h-16 object-cover rounded-md"><p class="text-xs truncate mt-1">${w.name}</p></div>`).join('');
+                    };
+
+                    App.setupDateFilterEventListeners('lottery', updatePreview); // App.setupDateFilterEventListeners を使用
+
+                    const moodSelect = $('#lottery-mood');
+                    const unratedToggle = $('#lottery-unrated');
+                    unratedToggle.addEventListener('change', () => {
+                        moodSelect.disabled = unratedToggle.checked;
+                        updatePreview();
+                    });
+
+                    $('#lottery-genre').addEventListener('change', updatePreview);
+                    $('#lottery-mood').addEventListener('change', updatePreview);
+
+                    const renderCombinedTags = () => {
+                        const container = $('#lottery-tags-display');
+                        if (!container) return;
+                        let html = '';
+                        const renderSet = (ids, className, prefix) => {
+                            [...ids].map(id => AppState.tags.get(id)).filter(Boolean).forEach(tag => { // AppState.tags.get を使用
+                                html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${tag.name}</span>`;
+                            });
+                        };
+                        renderSet(tempAndTags, 'tag-item-and text-white', 'AND');
+                        renderSet(tempOrTags, 'tag-item-or text-white', 'OR');
+                        renderSet(tempNotTags, 'tag-item-not text-white', 'NOT');
+                        container.innerHTML = html || `<span class="text-xs text-gray-500">タグ未選択</span>`;
+                    };
+                    renderCombinedTags();
+
+                    $$('button[data-preset]').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const preset = btn.dataset.preset;
+                            let presetState = { ...AppState.lotterySettings, andTagIds: new Set(), orTagIds: new Set(), notTagIds: new Set() }; // AppState.lotterySettings を使用
+                            if (preset === 'relax') {
+                                presetState.priority = 'old';
+                                presetState.method = 'decrease_unselected';
+                                presetState.unratedOrUntaggedOnly = false;
+                                presetState.mood = 'default';
+                            } else if (preset === 'new') {
+                                presetState.priority = 'new';
+                                presetState.unratedOrUntaggedOnly = true;
+                            } else if (preset === 'masterpiece') {
+                                presetState.priority = 'random';
+                                presetState.method = 'normal';
+                                presetState.unratedOrUntaggedOnly = false;
+                                presetState.mood = 'best';
+                            }
+                            App.openLotterySettingsModal(presetState); // App.openLotterySettingsModal を使用
+                        });
+                    });
+
+                    $('#lottery-select-tags').addEventListener('click', () => {
+                        const capturedState = {
+                            mood: $('#lottery-mood').value, genres: new Set($('#lottery-genre').value === 'all' ? [] : [$('#lottery-genre').value]),
+                            priority: $('#lottery-priority').value, method: $('#lottery-method').value,
+                            andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
+                            unratedOrUntaggedOnly: $('#lottery-unrated').checked,
+                            dateFilter: { mode: $(`input[name="date-filter-mode-lottery"]:checked`).value, date: App.getDateInputValue(`date-filter-specific-date-lottery`), startDate: App.getDateInputValue(`date-filter-start-date-lottery`), endDate: App.getDateInputValue(`date-filter-end-date-lottery`) }
+                        };
+                        App.openTagFilterModal({ // App.openTagFilterModal を使用
+                            and: tempAndTags, or: tempOrTags, not: tempNotTags,
+                            onConfirm: (newTags) => {
+                                if(newTags) {
+                                    capturedState.andTagIds = newTags.and;
+                                    capturedState.orTagIds = newTags.or;
+                                    capturedState.notTagIds = newTags.not;
+                                }
+                                App.openLotterySettingsModal(capturedState); // App.openLotterySettingsModal を使用
+                            }
+                        });
+                    });
+
+                    $('#lottery-settings-reset').addEventListener('click', () => {
+                        AppState.lotterySettings = { mood: 'default', genres: new Set(), andTagIds: new Set(), orTagIds: new Set(), notTagIds: new Set(), dateFilter: AppState.defaultDateFilter(), priority: 'new', method: 'normal', unratedOrUntaggedOnly: false }; // AppState.lotterySettings を使用
+                        // (Grok案: 設定の保存) リセット時も保存
+                        const settingsToSave = {
+                            ...AppState.lotterySettings,
+                            genres: [], andTagIds: [], orTagIds: [], notTagIds: []
+                        };
+                        localStorage.setItem('lotterySettings', JSON.stringify(settingsToSave));
+                        App.renderLotterySummary();
+                        App.openLotterySettingsModal();
+                    });
+
+                    const saveSettings = () => {
+                        AppState.lotterySettings.unratedOrUntaggedOnly = $('#lottery-unrated').checked;
+                        AppState.lotterySettings.mood = $('#lottery-mood').value;
+                        const genre = $('#lottery-genre').value;
+                        AppState.lotterySettings.genres = genre === 'all' ? new Set() : new Set([genre]);
+                        AppState.lotterySettings.priority = $('#lottery-priority').value;
+                        AppState.lotterySettings.method = $('#lottery-method').value;
+                        AppState.lotterySettings.andTagIds = tempAndTags;
+                        AppState.lotterySettings.orTagIds = tempOrTags;
+                        AppState.lotterySettings.notTagIds = tempNotTags;
+                        const mode = $(`input[name="date-filter-mode-lottery"]:checked`).value;
+                        AppState.lotterySettings.dateFilter.mode = mode;
+                        if (mode === 'specific') { const val = App.getDateInputValue('date-filter-specific-date-lottery'); if (val && !App.isValidDate(val)) return App.showToast("特定日の形式が不正です。", "error"); AppState.lotterySettings.dateFilter.date = val; }
+                        else if (mode === 'range') { const start = App.getDateInputValue('date-filter-start-date-lottery'), end = App.getDateInputValue('date-filter-end-date-lottery'); if ((start && !App.isValidDate(start)) || (end && !App.isValidDate(end))) return App.showToast("期間の形式が不正です。", "error"); AppState.lotterySettings.dateFilter.startDate = start; AppState.lotterySettings.dateFilter.endDate = end; }
+                        else { AppState.lotterySettings.dateFilter = AppState.defaultDateFilter(); }
+                    };
+
+                    $('#lottery-apply-to-list').addEventListener('click', () => {
+                        saveSettings();
+                        AppState.listFilters.genres = new Set(AppState.lotterySettings.genres);
+                        AppState.listFilters.andTagIds = new Set(AppState.lotterySettings.andTagIds);
+                        AppState.listFilters.orTagIds = new Set(AppState.lotterySettings.orTagIds);
+                        AppState.listFilters.notTagIds = new Set(AppState.lotterySettings.notTagIds);
+                        AppState.listFilters.dateFilter = { ...AppState.lotterySettings.dateFilter };
+                        AppState.listFilters.unratedOrUntaggedOnly = AppState.lotterySettings.unratedOrUntaggedOnly;
+
+                        // Mood to Rating conversion
+                        AppState.listFilters.rating = { type: 'exact', value: 0 }; // Reset first
+                        if (!AppState.lotterySettings.unratedOrUntaggedOnly) {
+                             if (AppState.lotterySettings.mood === 'best') AppState.listFilters.rating = { type: 'above', value: 4 };
+                        }
+                        // (Grok案: 設定の保存) localStorageにも保存 (Setは配列に変換して保存)
+                        const filtersToSave = {
+                            ...AppState.listFilters,
+                            genres: [...AppState.listFilters.genres],
+                            andTagIds: [...AppState.listFilters.andTagIds],
+                            orTagIds: [...AppState.listFilters.orTagIds],
+                            notTagIds: [...AppState.listFilters.notTagIds]
+                        };
+                        localStorage.setItem('listFilters', JSON.stringify(filtersToSave));
+
+                        App.renderAll();
+                        App.closeModal();
+                        App.showToast("抽選設定を作品リストの絞り込みに適用しました。");
+                    });
+
+                    $('#lottery-settings-save').addEventListener('click', () => {
+                        saveSettings();
+                        App.renderLotterySummary(); // App.renderLotterySummary を使用
+                        // (Grok案: 設定の保存) localStorageにも保存 (Setは配列に変換)
+                        const settingsToSave = {
+                            ...AppState.lotterySettings,
+                            genres: [...AppState.lotterySettings.genres],
+                            andTagIds: [...AppState.lotterySettings.andTagIds],
+                            orTagIds: [...AppState.lotterySettings.orTagIds],
+                            notTagIds: [...AppState.lotterySettings.notTagIds]
+                        };
+                        localStorage.setItem('lotterySettings', JSON.stringify(settingsToSave));
+                        App.closeModal(); // App.closeModal を使用
+                    });
+                    $('#lottery-settings-cancel').addEventListener('click', App.closeModal); // App.closeModal を使用
+
+                    $('#lottery-help-btn').addEventListener('click', () => {
+                        const capturedState = {
+                            mood: $('#lottery-mood').value, genres: new Set($('#lottery-genre').value === 'all' ? [] : [$('#lottery-genre').value]),
+                            priority: $('#lottery-priority').value, method: $('#lottery-method').value,
+                            andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
+                            unratedOrUntaggedOnly: $('#lottery-unrated').checked,
+                            dateFilter: { mode: $(`input[name="date-filter-mode-lottery"]:checked`).value, date: App.getDateInputValue(`date-filter-specific-date-lottery`), startDate: App.getDateInputValue(`date-filter-start-date-lottery`), endDate: App.getDateInputValue(`date-filter-end-date-lottery`) }
+                        };
+                        AppState.modalStateStack.push(() => App.openLotterySettingsModal(capturedState)); // AppState.modalStateStack, App.openLotterySettingsModal を使用
+                        App.openHelpModal(); // App.openHelpModal を使用
+                    });
+                    updatePreview();
+                });
             },
             
             openHelpModal: () => {
-                // ... (すべての内部ロジックを App. や AppState. を使うように変更) ...
+                const content = `
+                    <div class="space-y-6 text-gray-300">
+                        <div>
+                            <h4 class="font-bold text-lg text-sky-400 mb-2">未評価またはタグ未設定の作品のみ</h4>
+                            <p>このオプションを有効にすると、まだ評価がされていない(★が0個)、またはタグが1つも設定されていない作品のみが抽選対象になります。作品の整理をしたい場合に便利です。</p>
+                            <p class="text-sm text-yellow-400 mt-2">※このオプションが有効な間、「気分」による絞り込みは無効になります。</p>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-lg text-sky-400 mb-2">気分</h4>
+                            <p>特定の評価を持つ作品に絞り込んで抽選します。</p>
+                            <ul class="list-disc list-inside mt-2 pl-4 space-y-1 text-sm">
+                                <li><strong>問わない:</strong> 全ての作品を対象にします。</li>
+                                <li><strong>お気に入り:</strong> 評価が高い作品ほど選ばれやすくなります。(★3以上推奨)</li>
+                                <li><strong>最高評価:</strong> 評価が★4以上の作品のみを対象にします。</li>
+                                <li><strong>隠れた名作:</strong> 評価が★2以下の作品のみを対象にします。まだ評価していない名作を探すのに役立ちます。</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-lg text-sky-400 mb-2">登録日優先度</h4>
+                            <p>作品の登録日に基づいて、選ばれやすさを調整します。</p>
+                            <ul class="list-disc list-inside mt-2 pl-4 space-y-1 text-sm">
+                                <li><strong>新しい順:</strong> 最近登録した作品ほど選ばれやすくなります。</li>
+                                <li><strong>古い順:</strong> 昔に登録した作品ほど選ばれやすくなります。</li>
+                                <li><strong>ランダム:</strong> 登録日は考慮されません。</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-lg text-sky-400 mb-2">抽選方法</h4>
+                            <p>抽選回数に基づいて、選ばれやすさを調整します。</p>
+                            <ul class="list-disc list-inside mt-2 pl-4 space-y-1 text-sm">
+                                <li><strong>通常:</strong> 既に選ばれたことがある作品は、選ばれた回数に応じて少しずつ選ばれにくくなります。</li>
+                                <li><strong>未選択優先:</strong> まだ一度も選ばれていない作品を最優先で抽選します。全ての作品が一度は選ばれるまで、既に選ばれた作品はほとんど選ばれません。</li>
+                            </ul>
+                        </div>
+                    </div>
+                `;
+                App.openModal("ヘルプ：抽選設定", content); // App.openModal を使用
             },
 
             performLottery: async () => {
@@ -1910,50 +3057,645 @@
                         selectionHistory: arrayUnion(newHistoryEntry)
                     });
                 } else {
-                     const workIndex = AppState.works.findIndex(w => w.id === selectedWork.id); // 修正
+                     const workIndex = AppState.works.findIndex(w => w.id === selectedWork.id);
                      if (workIndex !== -1) {
-                        AppState.works[workIndex].selectionCount = (AppState.works[workIndex].selectionCount || 0) + 1; // 修正
-                        // ...
+                        AppState.works[workIndex].selectionCount = (AppState.works[workIndex].selectionCount || 0) + 1;
+                        const now = Timestamp.now(); // Use Firestore Timestamp for consistency
+                        AppState.works[workIndex].lastSelectedAt = now;
+                        if (!AppState.works[workIndex].selectionHistory) {
+                            AppState.works[workIndex].selectionHistory = [];
+                        }
+                        // Ensure selectionHistory is an array before pushing
+                        if (Array.isArray(AppState.works[workIndex].selectionHistory)) {
+                           AppState.works[workIndex].selectionHistory.push(now);
+                        } else {
+                           // Handle case where selectionHistory might not be an array (though unlikely)
+                           console.warn(`selectionHistory for work ${selectedWork.id} was not an array. Resetting.`);
+                           AppState.works[workIndex].selectionHistory = [now];
+                        }
                      }
                 }
                 App.openLotteryResultModal(selectedWork); // 修正
             },
             
             openLotteryResultModal: (work, tempState = null) => {
-                // ... (すべての内部ロジックを App. や AppState. を使うように変更) ...
+                let currentRating = tempState?.rating ?? (work.rating || 0);
+                let currentTagIds = tempState?.tagIds ?? new Set(work.tagIds || []);
+
+                const getFormState = () => ({
+                    rating: currentRating,
+                    tagIds: JSON.stringify([...currentTagIds].sort())
+                });
+                const initialState = getFormState();
+                AppState.checkModalDirtyState = () => JSON.stringify(initialState) !== JSON.stringify(getFormState()); // AppState を使用
+
+                const content = `
+                    <div class="text-center">
+                        <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${work.name}" class="max-w-full max-h-48 object-contain mx-auto rounded-lg shadow-lg mb-4">
+                        <p class="text-lg font-bold text-sky-300">${work.genre}</p>
+                        <div class="flex items-center justify-center gap-2 my-2">
+                            <h3 class="text-3xl font-bold text-white">${work.name}</h3>
+                            <button id="copy-result-title-btn" class="p-2 text-gray-400 hover:text-white transition-colors" title="タイトルをコピー">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mt-6 space-y-4">
+                        <div><label class="block text-center text-sm text-gray-400 mb-2">評価</label><div class="flex items-center justify-center space-x-2 text-3xl" id="result-rating"></div></div>
+                        <div><label class="block text-center text-sm text-gray-400 mb-1">タグ</label><div id="result-tags" class="flex flex-wrap justify-center gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] mb-2"></div><button type="button" id="result-assign-tags-btn" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグを割り当て/編集</button></div>
+                    </div>
+                    <div class="pt-6 mt-6 border-t border-gray-700 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
+                        <button id="lottery-reroll" class="w-full sm:w-auto px-6 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold">もう一度抽選</button>
+                        <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto"> <button id="result-close-nosave-btn" class="w-full sm:w-auto px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">保存せずに閉じる</button> <button id="result-close-btn" class="w-full sm:w-auto btn btn-secondary">閉じる</button>
+                            <button id="result-save-btn" class="w-full sm:w-auto btn btn-primary">保存</button>
+                        </div>
+                    </div>`;
+
+                const onModalOpen = () => {
+                    const ratingStars = $('#result-rating');
+                    const tagsContainer = $('#result-tags'); // tagsContainer をここで定義
+
+                    const renderStars = r => {
+                        if (ratingStars) { // 要素が存在するか確認
+                            ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= r ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('');
+                        }
+                    };
+                    renderStars(currentRating);
+                    if (ratingStars) { // 要素が存在するか確認
+                        ratingStars.addEventListener('click', e => {
+                            if (e.target.matches('.fa-star')) {
+                                const r = parseInt(e.target.dataset.value);
+                                currentRating = (currentRating === r) ? 0 : r;
+                                renderStars(currentRating);
+                            }
+                        });
+                    }
+
+                    const renderTags = ids => {
+                        if (tagsContainer) { // 要素が存在するか確認
+                            const objects = App.getTagObjects(ids); // App.getTagObjects を使用
+                            tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color};color:${App.getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`; // App.getContrastColor を使用
+                        }
+                    };
+                    renderTags(currentTagIds);
+
+                    $('#result-assign-tags-btn').addEventListener('click', () => {
+                        App.openTagModal({ // App.openTagModal を使用
+                            mode: 'assign', workId: work.id, currentTagIds, workName: work.name,
+                            onConfirm: (newIds) => {
+                                if(newIds !== null) {
+                                    currentTagIds = newIds;
+                                }
+                                // Re-render content within the same modal instead of opening a new one
+                                App.openLotteryResultModal(work, { rating: currentRating, tagIds: currentTagIds }); // App.openLotteryResultModal を使用
+                            }
+                        });
+                    });
+
+                    $('#copy-result-title-btn').addEventListener('click', () => {
+                        navigator.clipboard.writeText(work.name).then(() => {
+                            App.showToast(`「${work.name}」をコピーしました。`); // App.showToast を使用
+                        }).catch(err => {
+                            console.error('Copy failed: ', err);
+                            App.showToast('コピーに失敗しました。', 'error'); // App.showToast を使用
+                        });
+                    });
+
+                    $('#lottery-reroll').addEventListener('click', () => {
+                        AppState.checkModalDirtyState = () => false; // AppState を使用
+                        // Save current feedback before re-rolling
+                        App.updateWork(work.id, { rating: currentRating, tagIds: Array.from(currentTagIds) }) // App.updateWork を使用
+                            .then(() => App.performLottery()); // App.performLottery を使用
+                    });
+                    $('#result-close-btn').addEventListener('click', App.closeModal); // App.closeModal を使用
+                    $('#result-save-btn').addEventListener('click', async () => {
+                        AppState.checkModalDirtyState = () => false; // AppState を使用
+                        if (await App.updateWork(work.id, { rating: currentRating, tagIds: Array.from(currentTagIds) })) { // App.updateWork を使用
+                            App.showToast(`「${work.name}」の情報を更新しました。`); App.closeModal(); // App.showToast, App.closeModal を使用
+                        }
+                    });
+                    $('#result-close-nosave-btn').addEventListener('click', () => {
+                        AppState.checkModalDirtyState = () => false; // 確認ダイアログをスキップするために false に設定
+                        App.closeModal();
+                    });
+                };
+
+                // If modal is already open, just update its content. Otherwise, open it fresh.
+                if (!AppState.ui.modalWrapper.classList.contains('hidden') && AppState.ui.modalTitle.textContent === "抽選結果") { // AppState.ui を使用
+                    AppState.ui.modalContentHost.innerHTML = content; // AppState.ui を使用
+                    App.initializeDateInputs(AppState.ui.modalContentHost); // App.initializeDateInputs, AppState.ui を使用
+                    onModalOpen();
+                } else {
+                    App.openModal("抽選結果", content, onModalOpen); // App.openModal を使用
+                }
             },
 
             openFeedbackModal: (work, tempState = null) => {
-                // ... (すべての内部ロジックを App. や AppState. を使うように変更) ...
-            },
+                let currentRating = tempState?.rating ?? (work.rating || 0);
+                let currentTagIds = tempState?.tagIds ?? new Set(work.tagIds || []);
+
+                const getFormState = () => ({
+                    rating: currentRating,
+                    tagIds: JSON.stringify([...currentTagIds].sort())
+                });
+                const initialState = getFormState();
+                AppState.checkModalDirtyState = () => JSON.stringify(initialState) !== JSON.stringify(getFormState()); // AppState を使用
+
+                const content = `
+                    <div class="text-center">
+                        <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${work.name}" class="max-w-xs max-h-48 object-contain mx-auto rounded-lg mb-4">
+                        <h4 class="text-lg font-bold">${work.name}</h4><p class="text-gray-400 mb-4">前回の抽選作品の評価をお願いします！</p>
+                        <div class="my-6"><label class="block text-sm text-gray-400 mb-2">評価</label><div class="flex items-center justify-center space-x-2 text-3xl" id="feedback-rating"></div></div>
+                        <div class="my-6"><label class="block text-sm text-gray-400 mb-1">タグ</label><div id="feedback-tags" class="flex flex-wrap justify-center gap-2 p-2 bg-gray-700 rounded-lg min-h-[40px] mb-2"></div><button type="button" id="feedback-assign-tags-btn" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグを割り当て/編集</button></div>
+                        <div class="pt-4 flex justify-end space-x-3">
+                            <button type="button" id="feedback-later-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">また今度</button>
+                            <button type="button" id="feedback-save-btn" class="px-6 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold btn-disabled" disabled>保存</button>
+                        </div>
+                    </div>`;
+
+                App.openModal("前回の作品の評価", content, () => { // App.openModal を使用
+                    const ratingStars = $('#feedback-rating');
+                    const saveBtn = $('#feedback-save-btn');
+                    const tagsContainer = $('#feedback-tags'); // tagsContainer をここで定義
+
+                    const checkSaveButton = () => {
+                        // 修正: work.tagIds が undefined の場合の考慮
+                        const originalTagIdsString = JSON.stringify((work.tagIds || []).sort());
+                        const currentTagIdsString = JSON.stringify([...currentTagIds].sort());
+                        saveBtn.disabled = currentRating === (work.rating || 0) && currentTagIdsString === originalTagIdsString;
+                        saveBtn.classList.toggle('btn-disabled', saveBtn.disabled);
+                    };
+
+                    const renderStars = r => {
+                        if (ratingStars) { // 要素が存在するか確認
+                            ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= r ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('');
+                        }
+                    };
+                    renderStars(currentRating);
+                    if (ratingStars) { // 要素が存在するか確認
+                        ratingStars.addEventListener('click', e => {
+                            if (e.target.matches('.fa-star')) {
+                                const r = parseInt(e.target.dataset.value);
+                                currentRating = (currentRating === r) ? 0 : r;
+                                renderStars(currentRating);
+                                checkSaveButton();
+                            }
+                        });
+                    }
+
+                    const renderTags = ids => {
+                        if (tagsContainer) { // 要素が存在するか確認
+                            const objects = App.getTagObjects(ids); // App.getTagObjects を使用
+                            tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color};color:${App.getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`; // App.getContrastColor を使用
+                        }
+                    };
+                    renderTags(currentTagIds);
+
+                    $('#feedback-assign-tags-btn').addEventListener('click', () => {
+                        App.openTagModal({ // App.openTagModal を使用
+                            mode: 'assign', workId: work.id, currentTagIds, workName: work.name,
+                            onConfirm: (newIds) => {
+                                if(newIds !== null) {
+                                    currentTagIds = newIds;
+                                }
+                                App.openFeedbackModal(work, { rating: currentRating, tagIds: currentTagIds }); // App.openFeedbackModal を使用
+                            }
+                        });
+                    });
+
+                    $('#feedback-later-btn').addEventListener('click', App.closeModal); // App.closeModal を使用
+                    saveBtn.addEventListener('click', async () => {
+                        AppState.checkModalDirtyState = () => false; // AppState を使用
+                        if (await App.updateWork(work.id, { rating: currentRating, tagIds: Array.from(currentTagIds) })) { // App.updateWork を使用
+                            App.showToast(`「${work.name}」の情報を更新しました。`); App.closeModal(); // App.showToast, App.closeModal を使用
+                        }
+                    });
+                    checkSaveButton(); // 初期状態のボタン有効/無効をチェック
+                });
+            }, // ← App.openFeedbackModal の終わりカンマ
 
             // --- Stats Dashboard Logic ---
+            // --- Stats Dashboard Logic ---
             openStatsDashboardModal: () => {
-                // ... (すべての内部ロジックを App. や AppState. を使うように変更) ...
-            },
+                if (AppState.works.length === 0) { // AppState.works を使用
+                    return App.openModal("統計ダッシュボード", `<div class="text-center py-16 text-gray-500"><i class="fas fa-chart-pie fa-3x"></i><p class="mt-4">分析できる作品データがありません。</p></div>`); // App.openModal を使用
+                }
+
+                const content = `
+                    <div class="space-y-4">
+                        <div class="flex flex-col sm:flex-row justify-between gap-2 items-center mb-4">
+                            <div class="bg-gray-900 p-1 rounded-lg flex space-x-1">
+                                <button id="stats-tab-overview" class="stats-tab flex-1 px-4 py-2 rounded-md text-sm font-semibold transition-colors stats-tab-active">コレクション概要</button>
+                                <button id="stats-tab-trends" class="stats-tab flex-1 px-4 py-2 rounded-md text-sm font-semibold transition-colors">登録日分析</button>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <label for="stats-genre-filter" class="text-sm text-gray-400">ジャンル:</label>
+                                <select id="stats-genre-filter" class="bg-gray-700 border border-gray-600 rounded-md p-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                                    <option value="all">すべて</option>
+                                    <option value="漫画">漫画</option>
+                                    <option value="ゲーム">ゲーム</option>
+                                    <option value="動画">動画</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="stats-content-overview">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* ... (ジャンル別統計、サイト別割合) ... */}
+                                <div class="bg-gray-900 p-4 rounded-lg flex flex-col md:col-span-2">
+                                    <h4 class="font-bold text-amber-400 mb-2 text-center">評価別 作品数</h4>
+                                    <div class="flex-grow flex items-center justify-center relative min-h-0" style="height: 250px;">
+                                        <canvas id="rating-chart"></canvas>
+                                    </div>
+                                </div>
+                                <div class="bg-gray-900 p-4 rounded-lg flex flex-col md:col-span-2">
+                                    <h4 class="font-bold text-amber-400 mb-2 text-center">タグ使用頻度 Top 10</h4>
+                                    <div class="flex-grow flex items-center justify-center relative min-h-0" style="height: 300px;">
+                                        <canvas id="tag-usage-chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="stats-content-trends" class="hidden">
+                            <div class="bg-gray-900 p-4 rounded-lg">
+                                <div class="flex justify-between items-center mb-3">
+                                    <h4 class="font-bold text-amber-400">登録数の推移</h4>
+                                    <div class="flex space-x-1 bg-gray-800 p-1 rounded-lg">
+                                        <button id="trends-view-monthly" class="px-3 py-1 text-xs rounded stats-tab-active">月別</button>
+                                        <button id="trends-view-yearly" class="px-3 py-1 text-xs rounded">年別</button>
+                                    </div>
+                                </div>
+                                <div class="h-48 relative mb-4"><canvas id="trends-chart"></canvas></div>
+                            </div>
+                            <div id="trends-detail-panel" class="mt-4 bg-gray-900 p-4 rounded-lg min-h-[200px] hidden">
+                                <h4 id="trends-detail-title" class="font-bold text-amber-400 mb-3 text-center"></h4>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div class="md:col-span-1 flex flex-col items-center">
+                                        <h5 class="text-sm text-gray-400 mb-2">ジャンル内訳</h5>
+                                        <div class="w-32 h-32 relative"><canvas id="trends-detail-genre-chart"></canvas></div>
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <h5 class="text-sm text-gray-400 mb-2">登録作品リスト</h5>
+                                        <ul id="trends-detail-list" class="text-sm space-y-1 overflow-y-auto max-h-40 pr-2"></ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                App.openModal("統計ダッシュボード", content, () => { // App.openModal を使用
+                    App.setupChartDefaults(); // App.setupChartDefaults を使用
+                    App.renderStatsOverview(); // App.renderStatsOverview を使用
+
+                    // Tab switching logic
+                    const overviewTab = $('#stats-tab-overview'), trendsTab = $('#stats-tab-trends');
+                    const overviewContent = $('#stats-content-overview'), trendsContent = $('#stats-content-trends');
+
+                    overviewTab.addEventListener('click', () => {
+                        overviewTab.classList.add('stats-tab-active');
+                        trendsTab.classList.remove('stats-tab-active');
+                        overviewContent.classList.remove('hidden');
+                        trendsContent.classList.add('hidden');
+                        App.renderStatsOverview(); // Re-render in case data changed // App.renderStatsOverview を使用
+                    });
+
+                    trendsTab.addEventListener('click', () => {
+                        trendsTab.classList.add('stats-tab-active');
+                        overviewTab.classList.remove('stats-tab-active');
+                        trendsContent.classList.remove('hidden');
+                        overviewContent.classList.add('hidden');
+                        App.renderTrendsChart('monthly'); // App.renderTrendsChart を使用
+                    });
+
+                    $('#trends-view-monthly').addEventListener('click', (e) => {
+                        e.target.classList.add('stats-tab-active');
+                        $('#trends-view-yearly').classList.remove('stats-tab-active');
+                        App.renderTrendsChart('monthly'); // App.renderTrendsChart を使用
+                    });
+                    $('#trends-view-yearly').addEventListener('click', (e) => {
+                        e.target.classList.add('stats-tab-active');
+                        $('#trends-view-monthly').classList.remove('stats-tab-active');
+                        App.renderTrendsChart('yearly'); // App.renderTrendsChart を使用
+                    });
+
+                    const genreFilterSelect = $('#stats-genre-filter');
+                    if (genreFilterSelect) {
+                        genreFilterSelect.addEventListener('change', () => {
+                            // 現在表示中のタブに応じて再描画
+                            if (trendsContent.classList.contains('hidden')) { // overviewContent の hidden ではなく、trendsContent が hidden かで判定
+                                // Overviewタブが表示中
+                                App.renderStatsOverview();
+                            } else {
+                                // Trendsタブが表示中
+                                const currentMode = $('#trends-view-monthly').classList.contains('stats-tab-active') ? 'monthly' : 'yearly';
+                                App.renderTrendsChart(currentMode);
+                                $('#trends-detail-panel').classList.add('hidden'); // 詳細パネルは隠す
+                            }
+                        });
+                    }
+
+                }, { size: 'max-w-5xl' });
+            }, // ← App.openStatsDashboardModal の終わりカンマ
             
             setupChartDefaults: () => {
-                // ... (変更なし) ...
-            },
+                Chart.defaults.color = '#9ca3af'; // gray-400
+                Chart.defaults.font.family = 'sans-serif';
+                Chart.defaults.plugins.legend.position = 'bottom';
+                Chart.defaults.plugins.tooltip.backgroundColor = '#1f2937'; // gray-800
+                Chart.defaults.plugins.tooltip.titleColor = '#e5e7eb'; // gray-200
+                Chart.defaults.plugins.tooltip.bodyColor = '#d1d5db'; // gray-300
+                Chart.defaults.plugins.tooltip.borderColor = '#374151'; // gray-700
+                Chart.defaults.plugins.tooltip.borderWidth = 1;
+            }, // ← App.setupChartDefaults の終わりカンマ
 
             renderStatsOverview: () => {
-                // ... (すべての内部ロジックを App. や AppState. を使うように変更) ...
-            },
+                // Genre Stats (Progress Bars)
+                const genreFilterSelect = $('#stats-genre-filter'); // セレクトボックスを取得
+                const genreFilter = genreFilterSelect ? genreFilterSelect.value : 'all'; // 値を取得 (要素がなければ 'all')
+                const filteredWorks = genreFilter === 'all'
+                    ? AppState.works // 「すべて」なら全作品
+                    : AppState.works.filter(w => w.genre === genreFilter); // それ以外ならジャンルで絞り込み
+
+                const genreContainer = $('#genre-stats-container');
+                const genreTitle = $('#genre-stats-title');
+                if (!genreContainer || !genreTitle) return;
+
+                const totalWorks = filteredWorks.length; // ← 変更
+                genreTitle.textContent = `ジャンル別統計 (${genreFilter === 'all' ? `全${AppState.works.length}` : genreFilter} / ${totalWorks}件)`; // ← タイトルも変更
+                const genreCounts = filteredWorks.reduce(...); // ← 変更
+                
+                genreTitle.textContent = `ジャンル別統計 (全${totalWorks}件)`;
+
+                const genreCounts = AppState.works.reduce((acc, work) => ({ ...acc, [work.genre]: (acc[work.genre] || 0) + 1 }), {}); // AppState.works を使用
+                const genreColors = { '漫画': '#3b82f6', 'ゲーム': '#10b981', '動画': '#8b5cf6' };
+                genreContainer.innerHTML = Object.entries(genreCounts).sort((a,b) => b[1] - a[1]).map(([genre, count]) => {
+                const percentage = totalWorks > 0 ? ((count / totalWorks) * 100).toFixed(1) : 0;
+                return `<div><div class="flex justify-between mb-1 text-sm"><span class="font-bold" style="color:${genreColors[genre] || '#9ca3af'}">${genre}</span><span>${count}件 (${percentage}%)</span></div><div class="w-full bg-gray-700 rounded-full h-2.5"><div class="h-2.5 rounded-full" style="width: ${percentage}%; background-color:${genreColors[genre] || '#9ca3af'}"></div></div></div>`;
+                }).join('') || '<p class="text-sm text-gray-500">データがありません</p>';
+
+                // Site Distribution Chart (Doughnut)
+                const siteChartCanvas = $('#site-distribution-chart');
+                if (siteChartCanvas) {
+                    const siteCounts = filteredWorks.reduce((acc, work) => { // AppState.works を使用
+                        const url = work.sourceUrl || '';
+                        if (url.includes('dlsite.com')) acc.DLsite++;
+                        else if (url.includes('dmm.co.jp')) acc.FANZA++;
+                        else acc.Other++;
+                        return acc;
+                    }, { DLsite: 0, FANZA: 0, Other: 0 });
+
+                    if (AppState.activeCharts.site) AppState.activeCharts.site.destroy(); // AppState.activeCharts を使用
+                    AppState.activeCharts.site = new Chart(siteChartCanvas.getContext('2d'), { // AppState.activeCharts を使用
+                        type: 'doughnut',
+                        data: {
+                            labels: ['DLsite', 'FANZA', 'その他'],
+                            datasets: [{
+                                data: [siteCounts.DLsite, siteCounts.FANZA, siteCounts.Other],
+                                backgroundColor: ['#0ea5e9', '#ef4444', '#6b7280'],
+                                borderColor: '#1f2937',
+                                borderWidth: 4,
+                            }]
+                        },
+                        options: {
+                            responsive: true, maintainAspectRatio: false,
+                            plugins: {
+                                legend: { position: 'bottom', labels: { padding: 20, boxWidth: 12 } },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (context) => {
+                                            const total = context.chart.getDatasetMeta(0).total;
+                                            const percentage = total > 0 ? (context.raw / total * 100).toFixed(1) : 0;
+                                            return `${context.label}: ${context.raw}件 (${percentage}%)`;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+
+                // Rating Chart (Bar)
+                const ratingCounts = filteredWorks.reduce((acc, work) => { // ← 変更
+                    const r = work.rating || 0; acc[r] = (acc[r] || 0) + 1; return acc;
+                }, {});
+                const ratingLabels = ['未評価', '★1', '★2', '★3', '★4', '★5'];
+                const ratingDataPoints = [ratingCounts[0] || 0, ratingCounts[1] || 0, ratingCounts[2] || 0, ratingCounts[3] || 0, ratingCounts[4] || 0, ratingCounts[5] || 0];
+                const ratingData = {
+                    labels: ratingLabels,
+                    datasets: [{
+                        label: '作品数',
+                        data: ratingDataPoints,
+                        backgroundColor: 'rgba(251, 191, 36, 0.6)',
+                        borderColor: 'rgba(251, 191, 36, 1)',
+                        borderWidth: 1
+                    }]
+                };
+                const ratingChartCanvas = $('#rating-chart'); // 要素を取得
+                if (ratingChartCanvas) { // 要素が存在するか確認
+                    if(AppState.activeCharts.rating) AppState.activeCharts.rating.destroy(); // AppState.activeCharts を使用
+                    AppState.activeCharts.rating = new Chart(ratingChartCanvas.getContext('2d'), { // AppState.activeCharts を使用
+                        type: 'bar', data: ratingData,
+                        options: {
+                            responsive: true, maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                y: { beginAtZero: true, grid: { color: '#374151' }, ticks: { stepSize: 1 } },
+                                x: { grid: { color: '#374151' } }
+                            }
+                        }
+                    });
+                }
+                const tagUsageChartCanvas = $('#tag-usage-chart');
+                if (tagUsageChartCanvas) {
+                    // filteredWorks からタグの出現回数を集計
+                    const tagCounts = filteredWorks.reduce((acc, work) => {
+                        (work.tagIds || []).forEach(tagId => {
+                            acc[tagId] = (acc[tagId] || 0) + 1;
+                        });
+                        return acc;
+                    }, {});
+
+                    // 回数が多い順にソートして上位10件を取得
+                    const sortedTags = Object.entries(tagCounts)
+                        .sort(([, countA], [, countB]) => countB - countA)
+                        .slice(0, 10);
+
+                    // Chart.js 用のデータを作成
+                    const tagLabels = sortedTags.map(([tagId]) => AppState.tags.get(tagId)?.name || '不明'); // Mapからタグ名を取得
+                    const tagDataPoints = sortedTags.map(([, count]) => count);
+                    const tagColors = sortedTags.map(([tagId]) => AppState.tags.get(tagId)?.color || '#6b7280'); // Mapから色を取得
+
+                    // グラフを描画 (既存のグラフがあれば破棄)
+                    if (AppState.activeCharts.tagUsage) AppState.activeCharts.tagUsage.destroy();
+                    AppState.activeCharts.tagUsage = new Chart(tagUsageChartCanvas.getContext('2d'), {
+                        type: 'bar', // 棒グラフ
+                        data: {
+                            labels: tagLabels,
+                            datasets: [{
+                                label: '使用回数',
+                                data: tagDataPoints,
+                                backgroundColor: tagColors.map(color => `${color}B3`), // 色を少し透過させる
+                                borderColor: tagColors,
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            indexAxis: 'y', // 横棒グラフにする
+                            responsive: true, maintainAspectRatio: false,
+                            plugins: { legend: { display: false } }, // 凡例は非表示
+                            scales: {
+                                x: { beginAtZero: true, grid: { color: '#374151' }, ticks: { stepSize: 1 } }, // X軸設定
+                                y: { grid: { display: false } } // Y軸のグリッド線は非表示
+                            }
+                        }
+                    });
+                }
+            }, // ← App.renderStatsOverview の終わりカンマ
             
             renderTrendsChart: (mode) => {
-                // ... (すべての内部ロジックを App. や AppState. を使うように変更) ...
-            },
+                const trendsChartCanvas = $('#trends-chart'); // 要素を取得
+                if (!trendsChartCanvas) return; // 要素がなければ何もしない
+
+                if(AppState.activeCharts.trends) AppState.activeCharts.trends.destroy(); // AppState.activeCharts を使用
+                $('#trends-detail-panel').classList.add('hidden');
+
+                const genreFilterSelect = $('#stats-genre-filter');
+                const genreFilter = genreFilterSelect ? genreFilterSelect.value : 'all';
+                const filteredWorks = genreFilter === 'all'
+                    ? AppState.works
+                    : AppState.works.filter(w => w.genre === genreFilter);
+
+                const trendData = filteredWorks.reduce((acc, work) => { // AppState.works を使用
+                    if (!work.registeredAt) return acc;
+                    const date = work.registeredAt.toDate();
+                    const key = mode === 'monthly' ? `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}` : `${date.getFullYear()}`;
+                    if (!acc[key]) acc[key] = { count: 0, works: [] };
+                    acc[key].count++;
+                    acc[key].works.push(work);
+                    return acc;
+                }, {});
+
+                const sortedKeys = Object.keys(trendData).sort();
+                const labels = sortedKeys;
+                const dataPoints = sortedKeys.map(key => trendData[key].count);
+
+                AppState.activeCharts.trends = new Chart(trendsChartCanvas.getContext('2d'), { // AppState.activeCharts を使用
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: '登録作品数',
+                            data: dataPoints,
+                            fill: true,
+                            backgroundColor: 'rgba(14, 165, 233, 0.2)',
+                            borderColor: 'rgba(14, 165, 233, 1)',
+                            tension: 0.2,
+                            pointBackgroundColor: 'rgba(14, 165, 233, 1)',
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { beginAtZero: true, grid: { color: '#374151' }, ticks: { stepSize: 1 } },
+                            x: { grid: { display: false } }
+                        },
+                        onClick: (e, elements) => {
+                            if (elements.length > 0) {
+                                const index = elements[0].index;
+                                const key = labels[index];
+                                App.renderTrendsDetail(key, trendData[key]); // App.renderTrendsDetail を使用
+                            }
+                        }
+                    }
+                });
+            }, // ← App.renderTrendsChart の終わりカンマ
             
-            renderTrendsDetail: (key, data) => {
-                // ... (すべての内部ロジックを App. や AppState. を使うように変更) ...
+            renderTrendsDetail: (key, detailData) => { // 引数名を data から detailData に変更 (可読性のため)
+                const panel = $('#trends-detail-panel');
+                if (!panel) return;
+                panel.classList.remove('hidden');
+                $('#trends-detail-title').textContent = `${key} の詳細`;
+
+                // Render genre doughnut chart for the period
+                const genreCounts = detailData.works.reduce((acc, work) => ({ ...acc, [work.genre]: (acc[work.genre] || 0) + 1 }), {}); // ← detailData.works を使用
+                const genreChartCanvas = $('#trends-detail-genre-chart');
+                if (genreChartCanvas) {
+                    if(AppState.activeCharts.trendsDetailGenre) AppState.activeCharts.trendsDetailGenre.destroy();
+                    AppState.activeCharts.trendsDetailGenre = new Chart(genreChartCanvas.getContext('2d'), {
+                        type: 'doughnut',
+                        data: {
+                            labels: Object.keys(genreCounts),
+                            datasets: [{ data: Object.values(genreCounts), backgroundColor: ['#3b82f6', '#10b981', '#8b5cf6'], borderColor: '#1f2937', borderWidth: 2 }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                    });
+                }
+
+                // Render list of works
+                const detailList = $('#trends-detail-list');
+                if (detailList) {
+                    detailList.innerHTML = detailData.works.map(w => `<li>- ${w.name}</li>`).join(''); // ← detailData.works を使用
+                }
+
+                panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             },
             
             // --- Debug Mode ---
+            // --- Debug Mode ---
             generateDebugData: () => {
-                // ... (変更なし、ただし Timestamp を AppState.Timestamp にする必要があるが、
-                // この関数内ではTimestampはグローバルスコープのimportから直接参照されているためOK) ...
-                return { works: newWorks, tags: newTags };
-            },
+                const newTags = [];
+                const tagNames = ['アクション', 'RPG', 'ファンタジー', 'シミュレーション', 'パズル', 'アドベンチャー', 'コメディ', 'ホラー', 'ドット絵', '3D', '学園モノ', '異世界', 'ボイスあり', '放置ゲーム', 'ローグライク'];
+                const colors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899'];
+                for (let i = 0; i < tagNames.length; i++) {
+                    newTags.push({ id: `debug_tag_${i}`, name: tagNames[i], color: colors[i], useCount: Math.floor(Math.random() * 50), createdAt: Timestamp.now() }); // createdAt を追加
+                }
+
+                const newWorks = [];
+                const genres = ['ゲーム', '漫画', '動画'];
+                const workPrefixes = ['超次元', 'ドキドキ', '異世界転生したら', '新人', '隣の', '学園の', '魔王と', '聖なる', '禁断の', '伝説の'];
+                const workSuffixes = ['プリンセス', 'クエスト', 'ハーレム物語', 'デイズ', '事件簿', 'ファンタジア', 'サバイバル', 'ロマンス', '英雄譚'];
+
+                for (let i = 0; i < 50; i++) {
+                    const randomDate = new Date(Date.now() - Math.floor(Math.random() * 365 * 2 * 24 * 60 * 60 * 1000)); // Within last 2 years
+                    const numTags = Math.floor(Math.random() * 5);
+                    const workTags = new Set();
+                    while (workTags.size < numTags && newTags.length > 0) { // newTagsが空でないことを確認
+                        workTags.add(newTags[Math.floor(Math.random() * newTags.length)].id);
+                    }
+                    const selectionHistory = [];
+                    const selectionCount = Math.floor(Math.random() * 20);
+                    for (let j = 0; j < selectionCount; j++) {
+                        selectionHistory.push(Timestamp.fromDate(new Date(Date.now() - Math.floor(Math.random() * 60 * 24 * 60 * 60 * 1000))));
+                    }
+                    selectionHistory.sort((a,b) => a.toMillis() - b.toMillis());
+
+                    const siteRoll = Math.random();
+                    let url;
+                    if (siteRoll < 0.45) url = 'https://www.dlsite.com/maniax/work/=/product_id/RJ12345.html';
+                    else if (siteRoll < 0.8) url = 'https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=d_12345/';
+                    else url = `https://example.com/other/${i}`; // ユニークなURLにする
+
+
+                    newWorks.push({
+                        id: `debug_work_${i}`,
+                        name: `${workPrefixes[Math.floor(Math.random() * workPrefixes.length)]} ${workSuffixes[Math.floor(Math.random() * workSuffixes.length)]} ${i + 1}`,
+                        genre: genres[Math.floor(Math.random() * genres.length)],
+                        registeredAt: Timestamp.fromDate(randomDate),
+                        lastSelectedAt: selectionHistory.length > 0 ? selectionHistory[selectionHistory.length -1] : null,
+                        rating: Math.floor(Math.random() * 6),
+                        selectionCount: selectionCount,
+                        selectionHistory: selectionHistory,
+                        tagIds: Array.from(workTags),
+                        sourceUrl: url,
+                        imageUrl: `https://placehold.co/600x400/1f2937/4b5563?text=Debug+${i+1}`
+                    });
+                }
+
+                return { works: newWorks, tags: new Map(newTags.map(tag => [tag.id, tag])) }; // Map で返すように変更
+            }, // ← App.generateDebugData の終わりカンマ
             
             toggleDebugMode: async () => {
                 const btn = $('#toggleDebugModeBtn');
