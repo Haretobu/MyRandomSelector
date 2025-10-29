@@ -8,7 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <style>
+    <style type="text/tailwindcss">
         /* Custom scrollbar for webkit browsers */
         ::-webkit-scrollbar {
             width: 8px;
@@ -138,41 +138,44 @@
             box-shadow: 0 1px 2px rgba(0,0,0,0.5);
             pointer-events: none;
         }
+        
+        /* ↓↓↓ ここからが修正箇所です ↓↓↓ */
         .btn {
+            /* .btn の定義自体は残しても良いですが、他では使えません */
             @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed;
         }
         .btn-primary {
-            @apply btn bg-sky-600 hover:bg-sky-700 text-white;
+            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-sky-600 hover:bg-sky-700 text-white;
         }
         .btn-secondary {
-            @apply btn bg-gray-600 hover:bg-gray-700 text-gray-100;
+            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-700 text-gray-100;
         }
         .btn-danger {
-            @apply btn bg-red-600 hover:bg-red-700 text-white;
+            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-red-600 hover:bg-red-700 text-white;
         }
         .btn-teal {
-            @apply btn bg-teal-600 hover:bg-teal-700 text-white;
+            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-700 text-white;
         }
         .btn-purple {
-            @apply btn bg-purple-600 hover:bg-purple-700 text-white;
+            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-purple-600 hover:bg-purple-700 text-white;
         }
         .btn-emerald {
-            @apply btn bg-emerald-600 hover:bg-emerald-700 text-white;
+            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700 text-white;
         }
         .btn-amber {
-            @apply btn bg-amber-600 hover:bg-amber-700 text-black; /* Text color for amber */
+            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-amber-600 hover:bg-amber-700 text-black;
         }
         .btn-lime {
-            @apply btn bg-lime-600 hover:bg-lime-700 text-white;
+            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-lime-600 hover:bg-lime-700 text-white;
         }
         .btn-indigo {
-            @apply btn bg-indigo-600 hover:bg-indigo-700 text-white;
+            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-600 hover:bg-indigo-700 text-white;
         }
         .btn-icon {
             @apply w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
         }
         .btn-icon-secondary {
-            @apply btn-icon bg-gray-600 hover:bg-gray-500;
+            @apply w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500;
         }
     </style>
 </head>
@@ -610,6 +613,17 @@
                     }
                 } catch (e) { console.error("Error loading sortState from localStorage", e); }
 
+                const initialSortOptions = [ // setupSortOptions 内の options と同じもの
+                    { by: 'registeredAt', order: 'desc', label: '登録日 (新しい順)' }, { by: 'registeredAt', order: 'asc', label: '登録日 (古い順)' },
+                    { by: 'name', order: 'asc', label: '作品名 (昇順)' }, { by: 'name', order: 'desc', label: '作品名 (降順)' },
+                    { by: 'lastSelectedAt', order: 'desc', label: '抽選日 (新しい順)' }, { by: 'lastSelectedAt', order: 'asc', label: '抽選日 (古い順)' },
+                    { by: 'genre', order: 'asc', label: 'ジャンル (昇順)' },
+                ];
+                const currentSortOption = initialSortOptions.find(opt => opt.by === AppState.sortState.by && opt.order === AppState.sortState.order);
+                if (currentSortOption && AppState.ui.sortStateLabel) {
+                    AppState.ui.sortStateLabel.textContent = `並び替え: ${currentSortOption.label}`;
+                }
+
                 try {
                     const savedLotterySettings = JSON.parse(localStorage.getItem('lotterySettings'));
                     if (savedLotterySettings) {
@@ -949,7 +963,15 @@
                 if (!AppState.loadingStatus.tags) statusParts.push('タグ');
                 if (!AppState.loadingStatus.works) statusParts.push('作品');
 
-                AppState.ui.loadingContent.innerHTML = `... (エラーHTML) ...`; // (省略)
+                AppState.ui.loadingContent.innerHTML = `
+                    <i class="fas fa-exclamation-triangle fa-3x text-red-400"></i>
+                    <p class="mt-4 text-red-300 font-semibold">${errorMessageTitle || '読み込みエラー'}</p>
+                    <p class="mt-2 text-gray-400 text-sm">
+                        ${statusParts ? `未完了: ${statusParts.join(', ')}` : (error ? error.message : '不明なエラー')}
+                    </P>
+                    <p class="mt-4 text-sm text-gray-500">ページを再読み込みするか、同期IDを確認してください。</p>
+                    <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg">再読み込み</button>
+                `;
             },
             
             startLoadingTimeout: () => {
@@ -961,7 +983,15 @@
                  if (AppState.isLoadComplete) return;
                  console.error(`Error fetching ${type}: `, error);
                  clearTimeout(AppState.loadingTimeout);
-                 AppState.ui.loadingContent.innerHTML = `... (エラーHTML) ...`; // (省略)
+                 AppState.ui.loadingContent.innerHTML = `
+                    <i class="fas fa-exclamation-triangle fa-3x text-red-400"></i>
+                    <p class="mt-4 text-red-300 font-semibold">${errorMessageTitle || '読み込みエラー'}</p>
+                    <p class="mt-2 text-gray-400 text-sm">
+                        ${statusParts ? `未完了: ${statusParts.join(', ')}` : (error ? error.message : '不明なエラー')}
+                    </P>
+                    <p class="mt-4 text-sm text-gray-500">ページを再読み込みするか、同期IDを確認してください。</p>
+                    <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg">再読み込み</button>
+                `;
             },
 
             checkLoadingComplete: () => {
@@ -1053,7 +1083,7 @@
                 AppState.unsubscribeTags();
 
                 AppState.works = [];
-                AppState.tags = [];
+                AppState.tags = new Map();
                 App.renderAll();
 
                 if (AppState.currentUser && AppState.syncId && !AppState.isDebugMode) {
@@ -1414,14 +1444,20 @@
 
                 return `
                 <div class="bg-gray-800 rounded-xl shadow-lg overflow-hidden flex flex-col transition-transform hover:scale-[1.02]">
-                    {/* ... (img, siteBadge, buttons, genre) ... */}
+                    <div class="relative">
+                        <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${safeWorkName}" class="w-full h-40 object-cover">
+                        ${siteBadge}
+                        <div class="absolute top-2 right-2 flex space-x-2">
+                            <button data-action="edit" data-id="${work.id}" class="btn-icon-secondary w-8 h-8 text-sm"><i class="fas fa-edit"></i></button>
+                            <button data-action="delete" data-id="${work.id}" data-name="${safeWorkName}" class="btn-icon bg-red-600 hover:bg-red-700 w-8 h-8 text-sm"><i class="fas fa-trash"></i></button>
+                        </div>
+                        <span class="absolute bottom-2 left-2 px-2 py-0.5 bg-black bg-opacity-60 text-xs rounded">${work.genre}</span>
+                    </div>
                     <div class="p-4 flex flex-col flex-grow">
                         <p class="text-sm text-gray-400">${work.registeredAt ? App.formatDate(work.registeredAt, false) : 'N/A'}</p>
                         <h3 class="text-lg font-bold mt-1 mb-2 flex-grow cursor-pointer" data-action="copy-name" data-name="${safeWorkName}">${work.name}</h3>
-                        {/* ▼▼▼ 変更 ▼▼▼ */}
                         <div class="flex items-center space-x-1 mb-3">${App._renderRatingStars(work.rating)}</div>
                         ${App._renderTagsHTML(work.tagIds, 5, work.id)}
-                        {/* ▲▲▲ 変更 ▲▲▲ */}
                     </div>
                 </div>`;
             },
@@ -1434,16 +1470,22 @@
 
                 return `
                 <div class="work-list-item">
-                    {/* ... (img, siteBadge) ... */}
+                    <div class="relative flex-shrink-0">
+                        <img src="${work.imageUrl || 'https://placehold.co/150x100/1f2937/4b5563?text=No+Img'}" alt="${safeWorkName}" class="w-20 h-16 object-cover rounded-md">
+                        ${siteBadge}
+                    </div>
                     <div class="flex-grow min-w-0">
                         <p class="font-bold truncate cursor-pointer" data-action="copy-name" data-name="${safeWorkName}">${work.name}</p>
                         <div class="flex items-center flex-wrap gap-x-4 text-sm text-gray-400">
                             <span>${work.genre}</span><span>${work.registeredAt ? App.formatDate(work.registeredAt, false) : 'N/A'}</span>
                             <span class="flex items-center space-x-1">${App._renderRatingStars(work.rating)}</span>
                         </div>
-                        ${App._renderTagsHTML(work.tagIds, 4)} {/* リスト表示では省略(...)ボタンは不要 */}
+                        ${App._renderTagsHTML(work.tagIds, 4)} 
                     </div>
-                    {/* ... (buttons) ... */}
+                    <div class="flex-shrink-0 flex space-x-2">
+                         <button data-action="edit" data-id="${work.id}" class="btn-icon-secondary w-9 h-9 text-sm"><i class="fas fa-edit"></i></button>
+                         <button data-action="delete" data-id="${work.id}" data-name="${safeWorkName}" class="btn-icon bg-red-600 hover:bg-red-700 w-9 h-9 text-sm"><i class="fas fa-trash"></i></button>
+                    </div>
                 </div>`;
             },
             
@@ -1536,7 +1578,30 @@
                 // 並び替え処理 (変更なし)
                 return tempWorks.sort((a, b) => {
                     const order = sortState.order === 'asc' ? 1 : -1;
-                    // ... (省略) ...
+                    const by = sortState.by;
+
+                    if (by === 'name' || by === 'genre') {
+                        const valA = a[by] || '';
+                        const valB = b[by] || '';
+                        return valA.localeCompare(valB, 'ja') * order;
+                    }
+                    
+                    // 日付や数値の比較
+                    let valA, valB;
+                    if (by === 'registeredAt' || by === 'lastSelectedAt') {
+                        // Timestamp オブジェクトまたは null/undefined を想定
+                        valA = a[by] ? a[by].toMillis() : 0;
+                        valB = b[by] ? b[by].toMillis() : 0;
+                        // 日付の場合、null/undefined は最後に来るように調整
+                        if (valA === 0) valA = (order === 1 ? Infinity : -Infinity);
+                        if (valB === 0) valB = (order === 1 ? Infinity : -Infinity);
+                    } else {
+                        // rating, selectionCount など
+                        valA = a[by] || 0;
+                        valB = b[by] || 0;
+                    }
+
+                    return (valA - valB) * order;
                 });
             },
 
@@ -1568,7 +1633,12 @@
                 AppState.ui.activeFiltersEl.innerHTML = (filters.length === 0)
                     ? `<span class="text-sm text-gray-400">絞り込み: なし</span>`
                     : `<span class="text-sm text-gray-400 mr-2">絞り込み:</span>` + filters.map(f => `
-                        <span class... (HTMLは変更なし) ...>...</span>`).join('');
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-600 text-gray-100">
+                            ${f.label}
+                            <button data-action="remove-filter" data-type="${f.type}" data-value="${f.value || ''}" class="ml-1.5 inline-flex text-gray-300 hover:text-white">
+                                <i class="fas fa-times-circle"></i>
+                            </button>
+                        </span>`).join('');
             },
             
             renderLotterySummary: () => {
@@ -1807,6 +1877,7 @@
                             case 'notTag': AppState.listFilters.notTagIds.delete(value); break;
                             case 'date': AppState.listFilters.dateFilter = AppState.defaultDateFilter(); break;
                         }
+                        AppState.currentPage = 1; // ページを1に戻す
                         App.renderAll();
                     }
                 });
@@ -1940,6 +2011,7 @@
                             ui.sortStateLabel.textContent = `並び替え: ${target.textContent}`;
                             // (Grok案: 設定の保存) localStorageにも保存
                             localStorage.setItem('sortState', JSON.stringify(AppState.sortState));
+                            AppState.currentPage = 1;
                             ui.sortDropdown.classList.add('hidden'); App.renderWorkList();
                          }
                     });
@@ -2139,12 +2211,72 @@
                      probabilityText = `<span class="font-bold text-gray-500">対象外</span>`;
                 }
 
-                const content = `... (HTMLは変更なし、ただし createDateInputHTML を App.createDateInputHTML に) ...`;
-                // createDateInputHTML(...) を App.createDateInputHTML(...) に変更
-                content = content.replace(
-                    '${createDateInputHTML(\'editWorkRegisteredAt\',', 
-                    '${App.createDateInputHTML(\'editWorkRegisteredAt\','
-                );
+                const registeredAtStr = work.registeredAt ? App.formatDate(work.registeredAt, false) : App.formatDateForInput(new Date());
+                const content = `
+                    <form id="editWorkForm" class="space-y-4">
+                        <div class="space-y-2">
+                            <div>
+                                <label for="editWorkName" class="block text-sm font-medium text-gray-400 mb-1">作品名</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="text" id="editWorkName" value="${safeWorkName}" class="flex-grow bg-gray-700 p-2 rounded-lg" required>
+                                    <button type="button" id="copy-edit-title-btn" class="btn-icon-secondary" title="コピー"><i class="fas fa-copy"></i></button>
+                                </div>
+                            </div>
+                            <div>
+                                <label for="editWorkUrl" class="block text-sm font-medium text-gray-400 mb-1">作品URL</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="url" id="editWorkUrl" value="${safeWorkUrl}" placeholder="https://..." class="flex-grow bg-gray-700 p-2 rounded-lg">
+                                    <button type="button" id="openWorkUrlBtn" class="btn-icon-secondary" title="URLを開く" ${!safeWorkUrl ? 'disabled' : ''}><i class="fas fa-external-link-alt"></i></button>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label for="editWorkGenre" class="block text-sm font-medium text-gray-400 mb-1">ジャンル</label>
+                                    <select id="editWorkGenre" class="w-full bg-gray-700 p-2 rounded-lg">
+                                        <option value="漫画" ${work.genre === '漫画' ? 'selected' : ''}>漫画</option>
+                                        <option value="ゲーム" ${work.genre === 'ゲーム' ? 'selected' : ''}>ゲーム</option>
+                                        <option value="動画" ${work.genre === '動画' ? 'selected' : ''}>動画</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="editWorkRegisteredAt" class="block text-sm font-medium text-gray-400 mb-1">登録日</label>
+                                    ${App.createDateInputHTML('editWorkRegisteredAt', registeredAtStr)}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-2">画像</label>
+                            <div class="flex items-center gap-4">
+                                <div id="edit-no-image-placeholder" class="w-32 h-20 bg-gray-700 rounded-lg flex items-center justify-center text-gray-500 ${work.imageUrl ? 'hidden' : ''}">
+                                    <i class="fas fa-image fa-2x"></i>
+                                </div>
+                                <img id="edit-current-image-preview" src="${work.imageUrl || ''}" class="w-32 h-20 object-contain rounded-lg ${!work.imageUrl ? 'hidden' : ''}">
+                                <div class="flex-grow space-y-2">
+                                    <input type="file" id="edit-image-upload" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700">
+                                    <button type="button" id="edit-image-delete-btn" class="w-full btn btn-danger text-sm py-1 ${!work.imageUrl ? 'hidden' : ''}">画像を削除</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <div><label class="block text-sm font-medium text-gray-400 mb-1">評価 (現在: ${currentRating} / 5)</label><div class="flex items-center space-x-2 text-2xl" id="editWorkRating"></div></div>
+                            <div><label class="block text-sm font-medium text-gray-400 mb-1">タグ</label><div id="editWorkTags" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] mb-2"></div><button type="button" id="editWorkAssignTagsBtn" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグを割り当て/編集</button></div>
+                        </div>
+                        
+                        <div>
+                            <p class="text-sm text-gray-400">抽選確率 (現在設定): ${probabilityText}</p>
+                        </div>
+                        
+                        <div class="pt-4 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
+                            <button type="button" id="edit-external-search" class="w-full sm:w-auto btn btn-emerald">外部サイト検索</button>
+                            <div class="flex space-x-3 w-full sm:w-auto">
+                                <button type="button" id="edit-cancel-btn" class="flex-1 sm:flex-none px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
+                                <button type="submit" class="flex-1 sm:flex-none btn btn-primary">保存</button>
+                            </div>
+                        </div>
+                    </form>
+                `;
 
 
                 App.openModal(`「${work.name}」を編集`, content, () => {
@@ -2691,8 +2823,33 @@
             // --- Date Filter UI & Logic ---
             createDateFilterHTML: (context, state) => {
                 // ... (内部の createDateInputHTML を App.createDateInputHTML に変更) ...
-                const html = `...`;
-                return html.replace(/createDateInputHTML/g, 'App.createDateInputHTML');
+                const html = `
+                    <div class="space-y-3">
+                        <div class="flex flex-wrap gap-x-6 gap-y-2">
+                            <label class="flex items-center"><input type="radio" name="date-filter-mode-${context}" value="none" class="mr-2" ${state.mode === 'none' ? 'checked' : ''}>指定なし</label>
+                            <label class="flex items-center"><input type="radio" name="date-filter-mode-${context}" value="specific" class="mr-2" ${state.mode === 'specific' ? 'checked' : ''}>特定日</label>
+                            <label class="flex items-center"><input type="radio" name="date-filter-mode-${context}" value="range" class="mr-2" ${state.mode === 'range' ? 'checked' : ''}>期間</label>
+                        </div>
+                        <div id="date-filter-specific-${context}" class="${state.mode === 'specific' ? '' : 'hidden'}">
+                            ${App.createDateInputHTML(`date-filter-specific-date-${context}`, state.date)}
+                        </div>
+                        <div id="date-filter-range-${context}" class="${state.mode === 'range' ? '' : 'hidden'} space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-2">
+                            ${App.createDateInputHTML(`date-filter-start-date-${context}`, state.startDate)}
+                            <span class="text-center block sm:inline">～</span>
+                            ${App.createDateInputHTML(`date-filter-end-date-${context}`, state.endDate)}
+                        </div>
+                        <details class="bg-gray-700 rounded-lg">
+                            <summary class="px-3 py-2 text-xs text-gray-400 cursor-pointer">対象作品プレビュー (最大50件)</summary>
+                            <div class="p-3 border-t border-gray-600">
+                                <p id="date-filter-preview-count-${context}" class="text-sm mb-2">対象: 0 作品</p>
+                                <div id="date-filter-preview-grid-${context}" class="date-filter-preview-grid max-h-48 overflow-y-auto">
+                                    </div>
+                            </div>
+                        </details>
+                    </div>
+                `;
+                // return html.replace(...) の行は不要になりました
+                return html;
             },
             
             setupDateFilterEventListeners: (context, updateCallback) => {
@@ -2746,8 +2903,49 @@
                 let pool = App.getFilteredWorks(poolFilters); // 修正
                 
                 const { priority, method, mood, unratedOrUntaggedOnly } = AppState.lotterySettings; // 修正
-                // ... (残りのロジックは変更なし) ...
-                return pool.map(work => { ... });
+                const now = Date.now();
+                const oneDay = 1000 * 60 * 60 * 24;
+
+                // 未選択優先の場合、まず未選択の作品をプールする
+                if (method === 'decrease_unselected') {
+                    const unselectedPool = pool.filter(w => (w.selectionCount || 0) === 0);
+                    if (unselectedPool.length > 0) {
+                        pool = unselectedPool; // プールを未選択作品のみに絞る
+                    }
+                    // 未選択が0件なら、全員が対象の通常のロジックに進む
+                }
+
+                return pool.map(work => {
+                    let weight = 100.0;
+                    
+                    // 1. 登録日 (Priority)
+                    if (work.registeredAt) {
+                        const daysAgo = (now - work.registeredAt.toMillis()) / oneDay;
+                        if (priority === 'new') {
+                            weight *= Math.max(0.1, 100 / (daysAgo + 10)); // 新しいほど重い
+                        } else if (priority === 'old') {
+                            weight *= Math.log10(daysAgo + 10) * 50; // 古いほど重い
+                        }
+                    }
+
+                    const selectionCount = work.selectionCount || 0;
+                    if (method === 'normal') {
+                        weight /= (selectionCount + 1); // 選ばれた回数が多いほど選ばれにくい
+                    }
+                    // 'decrease_unselected' は上記でプール絞り込み済み
+
+                    // 3. 気分 (Mood) - unratedOrUntaggedOnly が false の時のみ
+                    if (!unratedOrUntaggedOnly) {
+                        const rating = work.rating || 0;
+                        if (mood === 'favorite') {
+                            const ratingWeight = [0.1, 0.2, 0.5, 1.0, 1.5, 2.0]; // 評価0～5
+                            weight *= ratingWeight[rating];
+                        }
+                        // 'best' と 'hidden_gem' は getFilteredWorks で絞り込み済み
+                    }
+
+                    return { ...work, weight: Math.max(1, weight) }; // 最低でも重み1を保証
+                });
             },
 
             openLotterySettingsModal: (tempState = null) => {
@@ -3423,11 +3621,8 @@
 
                 const totalWorks = filteredWorks.length; // ← 変更
                 genreTitle.textContent = `ジャンル別統計 (${genreFilter === 'all' ? `全${AppState.works.length}` : genreFilter} / ${totalWorks}件)`; // ← タイトルも変更
-                const genreCounts = filteredWorks.reduce(...); // ← 変更
-                
-                genreTitle.textContent = `ジャンル別統計 (全${totalWorks}件)`;
 
-                const genreCounts = AppState.works.reduce((acc, work) => ({ ...acc, [work.genre]: (acc[work.genre] || 0) + 1 }), {}); // AppState.works を使用
+                const genreCounts = filteredWorks.reduce((acc, work) => ({ ...acc, [work.genre]: (acc[work.genre] || 0) + 1 }), {});
                 const genreColors = { '漫画': '#3b82f6', 'ゲーム': '#10b981', '動画': '#8b5cf6' };
                 genreContainer.innerHTML = Object.entries(genreCounts).sort((a,b) => b[1] - a[1]).map(([genre, count]) => {
                 const percentage = totalWorks > 0 ? ((count / totalWorks) * 100).toFixed(1) : 0;
@@ -3710,12 +3905,12 @@
                     // ... (ボタンのスタイル変更) ...
                     
                     AppState.works = []; // 修正
-                    AppState.tags = []; // 修正
+                    AppState.tags = new Map();// 修正
                     App.showToast("デバッグモードを終了しました。"); // 修正
                     App.loadDataSet(AppState.syncId); // 修正
                 } else {
                     // --- Enter Debug Mode ---
-                    if (!await App.showConfirm("デバッグモード開始", "デバッグモードを開始しますか？<br>...")) return; // 修正
+                    if (!await App.showConfirm("デバッグモード開始", "デバッグモードを開始しますか？<br>現在の接続は切れ、リフレッシュするまでテストデータが表示されます。データは保存されません。")) return; // 修正 (`...` を正しい説明文に置き換え、バッククォート `)` で閉じる)
 
                     AppState.isDebugMode = true; // 修正
                     AppState.unsubscribeWorks(); // 修正
