@@ -297,7 +297,7 @@
                             </div>
                         <div class="md:col-span-2 relative">
                             <button id="sortBtn" class="w-full h-full flex items-center justify-between bg-gray-700 p-2 rounded-lg hover:bg-gray-600 transition-colors">
-                                <span id="sortStateLabel">並び替え: 登録日 (降順)</span><i class="fas fa-chevron-down text-sm"></i>
+                                <span id="sortStateLabel">並び替え: 登録日 (新しい順)</span><i class="fas fa-chevron-down text-sm"></i>
                             </button>
                             <div id="sortDropdown" class="hidden absolute z-20 mt-1 w-full bg-gray-700 rounded-lg shadow-xl py-1">
                                 <!-- Sort options will be injected by JS -->
@@ -613,17 +613,6 @@
                     }
                 } catch (e) { console.error("Error loading sortState from localStorage", e); }
 
-                const initialSortOptions = [ // setupSortOptions 内の options と同じもの
-                    { by: 'registeredAt', order: 'desc', label: '登録日 (新しい順)' }, { by: 'registeredAt', order: 'asc', label: '登録日 (古い順)' },
-                    { by: 'name', order: 'asc', label: '作品名 (昇順)' }, { by: 'name', order: 'desc', label: '作品名 (降順)' },
-                    { by: 'lastSelectedAt', order: 'desc', label: '抽選日 (新しい順)' }, { by: 'lastSelectedAt', order: 'asc', label: '抽選日 (古い順)' },
-                    { by: 'genre', order: 'asc', label: 'ジャンル (昇順)' },
-                ];
-                const currentSortOption = initialSortOptions.find(opt => opt.by === AppState.sortState.by && opt.order === AppState.sortState.order);
-                if (currentSortOption && AppState.ui.sortStateLabel) {
-                    AppState.ui.sortStateLabel.textContent = `並び替え: ${currentSortOption.label}`;
-                }
-
                 try {
                     const savedLotterySettings = JSON.parse(localStorage.getItem('lotterySettings'));
                     if (savedLotterySettings) {
@@ -713,6 +702,13 @@
                     pageInfo: $('#pageInfo'),
                     nextPageBtn: $('#nextPageBtn'),
                 };
+
+                const sortOptions = App.getSortOptions(); // 修正3で作成した共通関数
+                const currentSortOption = sortOptions.find(opt => opt.by === AppState.sortState.by && opt.order === AppState.sortState.order);
+                // AppState.ui.sortStateLabel が読み込まれた「後」なので安全に実行できる
+                if (currentSortOption) { 
+                    AppState.ui.sortStateLabel.textContent = `並び替え: ${currentSortOption.label}`;
+                }
 
                 // パスワード認証のイベントリスナーを設定
                 AppState.ui.passwordForm.addEventListener('submit', (e) => {
@@ -965,11 +961,11 @@
 
                 AppState.ui.loadingContent.innerHTML = `
                     <i class="fas fa-exclamation-triangle fa-3x text-red-400"></i>
-                    <p class="mt-4 text-red-300 font-semibold">${errorMessageTitle || '読み込みエラー'}</p>
+                    <p class="mt-4 text-red-300 font-semibold">${type}データの取得に失敗</p>
                     <p class="mt-2 text-gray-400 text-sm">
-                        ${statusParts ? `未完了: ${statusParts.join(', ')}` : (error ? error.message : '不明なエラー')}
-                    </P>
-                    <p class="mt-4 text-sm text-gray-500">ページを再読み込みするか、同期IDを確認してください。</p>
+                        ${error ? error.message : '不明なエラー'}
+                    </p>
+                    <p class="mt-4 text-sm text-gray-500">ページを再読み込みするか、Firebaseのセキュリティルールを確認してください。</p>
                     <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg">再読み込み</button>
                 `;
             },
@@ -1877,6 +1873,17 @@
                             case 'notTag': AppState.listFilters.notTagIds.delete(value); break;
                             case 'date': AppState.listFilters.dateFilter = AppState.defaultDateFilter(); break;
                         }
+
+                        const filtersToSave = {
+                            ...AppState.listFilters,
+                            genres: [...AppState.listFilters.genres],
+                            andTagIds: [...AppState.listFilters.andTagIds],
+                            orTagIds: [...AppState.listFilters.orTagIds],
+                            notTagIds: [...AppState.listFilters.notTagIds]
+                        };
+
+                        localStorage.setItem('listFilters', JSON.stringify(filtersToSave));
+
                         AppState.currentPage = 1; // ページを1に戻す
                         App.renderAll();
                     }
@@ -1926,7 +1933,44 @@
                 });
                 
                 ui.addWorkForm.addEventListener('submit', App.handleAddWork);
-                
+                const workNameInput = $('#workNameInput'); // 登録フォームの入力欄
+                if (workNameInput) {
+                    // 1. 入力中にサジェストを表示 (メイン検索とは独立)
+                    workNameInput.addEventListener('input', App.debounce(() => {
+                        const query = workNameInput.value;
+                        // メインのサジェストボックス(#search-suggest-box)ではなく、
+                        // 登録フォーム用のサジェストボックスを別途用意する必要がある...
+                        // → 今回は簡易版として、メインのサジェストボックスを「間借り」します。
+                        const suggestBox = $('#search-suggest-box');
+                        if (query.length > 0) {
+                            // 登録欄の下にサジェストボックスを移動
+                            workNameInput.parentElement.appendChild(suggestBox);
+                            App.renderSuggestions(query); // メインのサジェスト描画関数を流用
+                        } else {
+                            App.closeSuggestBox(); // 空になったら閉じる
+                        }
+                    }, 300));
+
+                    // 2. 登録欄がフォーカスを失ったらサジェストを閉じる
+                    workNameInput.addEventListener('blur', () => {
+                        // 少し遅らせて、サジェストクリックを検知できるようにする
+                        setTimeout(() => {
+                            App.closeSuggestBox();
+                            // サジェストボックスをメイン検索の下に戻す
+                            ui.searchInput.closest('div.relative').appendChild($('#search-suggest-box'));
+                        }, 200);
+                    });
+
+                    // 3. 登録欄にフォーカスしたらサジェストを開く
+                    workNameInput.addEventListener('focus', () => {
+                        const query = workNameInput.value;
+                        if (query.length > 0) {
+                            const suggestBox = $('#search-suggest-box');
+                            workNameInput.parentElement.appendChild(suggestBox);
+                            App.renderSuggestions(query);
+                        }
+                    });
+                }
                 $('#workRegisteredAt').value = App.formatDateForInput(new Date()); // これは動的要素なので$のまま
                 $('#toggleDebugModeBtn').addEventListener('click', App.toggleDebugMode); // 同上
 
@@ -1996,12 +2040,7 @@
                 document.addEventListener('click', () => ui.sortDropdown.classList.add('hidden'));
                 
                 const setupSortOptions = () => {
-                    const options = [
-                        { by: 'registeredAt', order: 'desc', label: '登録日 (新しい順)' }, { by: 'registeredAt', order: 'asc', label: '登録日 (古い順)' },
-                        { by: 'name', order: 'asc', label: '作品名 (昇順)' }, { by: 'name', order: 'desc', label: '作品名 (降順)' },
-                        { by: 'lastSelectedAt', order: 'desc', label: '抽選日 (新しい順)' }, { by: 'lastSelectedAt', order: 'asc', label: '抽選日 (古い順)' },
-                        { by: 'genre', order: 'asc', label: 'ジャンル (昇順)' },
-                    ];
+                    const options = App.getSortOptions();
                     ui.sortDropdown.innerHTML = options.map(opt => `<a href="#" data-by="${opt.by}" data-order="${opt.order}" class="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">${opt.label}</a>`).join('');
                     ui.sortDropdown.addEventListener('click', (e) => {
                          e.preventDefault();
@@ -2378,8 +2417,10 @@
 
                     const renderStars = r => { ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= r ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join(''); };
                     const renderTags = ids => {
-                        const objects = App.getTagObjects(ids); // 修正
-                        tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span ...>${t.name}</span>`).join('') : `<span ...>タグなし</span>`;
+                        if (tagsContainer) { // (安全のため要素の存在確認を追加)
+                            const objects = App.getTagObjects(ids);
+                            tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded font-semibold text-xs" style="background-color:${t.color}; color:${App.getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`;
+                        }
                     };
                     renderStars(currentRating);
                     renderTags(currentTagIds);
@@ -2728,8 +2769,8 @@
                         });
                     }
 
-                    $('#tag-modal-confirm')?.addEventListener('click', () => { onConfirm(tempSelectedTagIds); App.closeModal(); }); // 決定時に閉じる
-                    $('#tag-modal-cancel')?.addEventListener('click', () => { onConfirm(null); App.closeModal(); }); // キャンセル時に閉じる
+                    $('#tag-modal-confirm')?.addEventListener('click', () => { onConfirm({and: tempAnd, or: tempOr, not: tempNot}); }); // 決定時
+                    $('#tag-modal-cancel')?.addEventListener('click', () => { onConfirm(null); }); // キャンセル時
                 });
             }, // ← App.openTagModal の終わりカンマ
             
@@ -2818,6 +2859,15 @@
                     $('#tag-modal-confirm')?.addEventListener('click', () => { onConfirm({and: tempAnd, or: tempOr, not: tempNot}); App.closeModal(); }); // 決定時に閉じる
                     $('#tag-modal-cancel')?.addEventListener('click', () => { onConfirm(null); App.closeModal(); }); // キャンセル時に閉じる
                 });
+            },
+
+            getSortOptions: () => {
+                return [
+                    { by: 'registeredAt', order: 'desc', label: '登録日 (新しい順)' }, { by: 'registeredAt', order: 'asc', label: '登録日 (古い順)' },
+                    { by: 'name', order: 'asc', label: '作品名 (昇順)' }, { by: 'name', order: 'desc', label: '作品名 (降順)' },
+                    { by: 'lastSelectedAt', order: 'desc', label: '抽選日 (新しい順)' }, { by: 'lastSelectedAt', order: 'asc', label: '抽選日 (古い順)' },
+                    { by: 'genre', order: 'asc', label: 'ジャンル (昇順)' },
+                ];
             },
             
             // --- Date Filter UI & Logic ---
@@ -3498,7 +3548,16 @@
 
                         <div id="stats-content-overview">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* ... (ジャンル別統計、サイト別割合) ... */}
+                                <div class="bg-gray-900 p-4 rounded-lg">
+                                    <h4 id="genre-stats-title" class="font-bold text-amber-400 mb-3">ジャンル別統計</h4>
+                                    <div id="genre-stats-container" class="space-y-4"></div>
+                                </div>
+                                <div class="bg-gray-900 p-4 rounded-lg flex flex-col">
+                                    <h4 class="font-bold text-amber-400 mb-2 text-center">販売サイト別 割合</h4>
+                                    <div class="flex-grow flex items-center justify-center relative min-h-0" style="height: 250px;">
+                                        <canvas id="site-distribution-chart"></canvas>
+                                    </div>
+                                </div>
                                 <div class="bg-gray-900 p-4 rounded-lg flex flex-col md:col-span-2">
                                     <h4 class="font-bold text-amber-400 mb-2 text-center">評価別 作品数</h4>
                                     <div class="flex-grow flex items-center justify-center relative min-h-0" style="height: 250px;">
@@ -3898,21 +3957,24 @@
                 
                 if (AppState.isDebugMode) { // 修正
                     // --- Exit Debug Mode ---
-                    if (!await App.showConfirm("デバッグモード終了", "デバッグモードを終了し、データベースからデータを再読み込みしますか？")) return; // 修正
+                    if (!await App.showConfirm("デバッグモード終了", "デバッグモードを終了します。<br>変更を反映するにはページのリロードが必要です。今すぐリロードしますか？")) return;
                     
                     AppState.isDebugMode = false; // 修正
                     $('#debug-banner').classList.add('hidden');
                     // ... (ボタンのスタイル変更) ...
                     
-                    AppState.works = []; // 修正
-                    AppState.tags = new Map();// 修正
-                    App.showToast("デバッグモードを終了しました。"); // 修正
-                    App.loadDataSet(AppState.syncId); // 修正
+                    App.showToast("デバッグモードを終了しました。ページをリロードします。");
+                    
+                    // データをリセットする代わりに、ページ全体をリロード
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000); // トースト表示の猶予
                 } else {
                     // --- Enter Debug Mode ---
                     if (!await App.showConfirm("デバッグモード開始", "デバッグモードを開始しますか？<br>現在の接続は切れ、リフレッシュするまでテストデータが表示されます。データは保存されません。")) return; // 修正 (`...` を正しい説明文に置き換え、バッククォート `)` で閉じる)
 
                     AppState.isDebugMode = true; // 修正
+                    $('#debug-banner').classList.remove('hidden'); // バナーを表示
                     AppState.unsubscribeWorks(); // 修正
                     AppState.unsubscribeTags(); // 修正
                     
