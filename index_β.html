@@ -183,18 +183,31 @@
     
     <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]"></div>
 
-    <div id="debug-banner" class="hidden bg-amber-600 text-black text-center py-1 font-bold text-sm sticky top-0 z-[60]">
-          デバッグモード実行中 - データは保存されません
+    <div class="sticky top-0 z-[60]">
+    
+        <div id="lite-mode-banner" class="hidden bg-sky-700 text-white text-center py-1 font-bold text-sm">
+            Liteモードで実行中 (50件のみ表示 / 画像・リアルタイム更新は制限されています)
+        </div>
+        <div id="debug-banner" class="hidden bg-amber-600 text-black text-center py-1 font-bold text-sm">
+            デバッグモード実行中 - データは保存されません
+        </div>
+
     </div>
     
     <!-- Loading Overlay -->
     <div id="loading-overlay" class="fixed inset-0 bg-gray-900 z-[100] flex items-center justify-center p-4">
+        <button id="lite-mode-switch-debug" class="absolute top-4 left-4 px-3 py-1 text-xs bg-sky-800 hover:bg-sky-700 text-gray-300 rounded-lg transition-opacity duration-300">
+            Liteモード (Debug)
+        </button>
         <div id="loading-content" class="text-center transition-opacity duration-300 opacity-0">
             <i class="fas fa-spinner fa-spin fa-3x text-teal-400"></i>
             <p id="loading-text" class="mt-4 text-gray-400">アプリケーションを初期化中...</p>
             <div class="w-64 mx-auto mt-4 bg-gray-700 rounded-full h-2.5">
                 <div id="loading-progress-bar" class="bg-teal-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
             </div>
+            <button id="lite-mode-switch-prod" class="hidden mt-6 px-4 py-2 text-sm bg-sky-700 hover:bg-sky-600 text-white rounded-lg transition-opacity duration-300">
+                読み込みが遅い場合はこちら (Liteモードで再試行)
+            </button>
         </div>
     </div>
 
@@ -478,7 +491,9 @@
             getDocs,
             arrayUnion,
             arrayRemove,
-            deleteField
+            deleteField,
+            orderBy,
+            limit
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // --- 1. UI Helper Functions ---
@@ -527,6 +542,7 @@
             activeCharts: {},
             isDebugMode: false,
             checkModalDirtyState: () => false,
+            isLiteMode: false,
 
             // Image Edit State
             tempNewImageUrl: null,
@@ -589,6 +605,12 @@
                 $('#version-display').textContent = AppState.appVersion;
 
                 AppState.listViewMode = localStorage.getItem('listViewMode') || 'grid';
+                if (localStorage.getItem('isLiteMode') === 'true') {
+                    AppState.isLiteMode = true;
+                    // ★読み込んだらすぐに削除する
+                    // これにより、次回の通常リロードでは通常モードに戻る
+                    localStorage.removeItem('isLiteMode');
+                }
                 AppState.showSiteIcon = localStorage.getItem('showSiteIcon') !== 'false'; // デフォルトtrue
                 AppState.itemsPerPage = parseInt(localStorage.getItem('itemsPerPage') || '20', 10);
 
@@ -961,11 +983,11 @@
 
                 AppState.ui.loadingContent.innerHTML = `
                     <i class="fas fa-exclamation-triangle fa-3x text-red-400"></i>
-                    <p class="mt-4 text-red-300 font-semibold">${type}データの取得に失敗</p>
+                    <p class="mt-4 text-red-300 font-semibold">${errorMessageTitle || '読み込みタイムアウト'}</p>
                     <p class="mt-2 text-gray-400 text-sm">
-                        ${error ? error.message : '不明なエラー'}
+                        ${statusParts ? `未完了: ${statusParts.join(', ')}` : 'タイムアウトしました。'}
                     </p>
-                    <p class="mt-4 text-sm text-gray-500">ページを再読み込みするか、Firebaseのセキュリティルールを確認してください。</p>
+                    <p class="mt-4 text-sm text-gray-500">ページを再読み込みするか、同期IDを確認してください。</p>
                     <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg">再読み込み</button>
                 `;
             },
@@ -973,6 +995,16 @@
             startLoadingTimeout: () => {
                 clearTimeout(AppState.loadingTimeout);
                 AppState.loadingTimeout = setTimeout(() => App.handleLoadingTimeout(false), 90000);
+                setTimeout(() => {
+                    // isLoadComplete でチェックするのが一番確実
+                    if (!AppState.isLoadComplete) { 
+                        // Spec通り: works「か」tags (どちらか片方) がまだなら
+                        if (!AppState.loadingStatus.works || !AppState.loadingStatus.tags) {
+                            const btn = $('#lite-mode-switch-prod'); // $() ヘルパーは AppState.ui の外でも使える
+                            if (btn) btn.classList.remove('hidden');
+                        }
+                    }
+                }, 30000);
             },
 
             handleDataFetchError: (error, type) => {
@@ -981,11 +1013,11 @@
                  clearTimeout(AppState.loadingTimeout);
                  AppState.ui.loadingContent.innerHTML = `
                     <i class="fas fa-exclamation-triangle fa-3x text-red-400"></i>
-                    <p class="mt-4 text-red-300 font-semibold">${errorMessageTitle || '読み込みエラー'}</p>
+                    <p class="mt-4 text-red-300 font-semibold">${type}データの取得に失敗</p>
                     <p class="mt-2 text-gray-400 text-sm">
-                        ${statusParts ? `未完了: ${statusParts.join(', ')}` : (error ? error.message : '不明なエラー')}
-                    </P>
-                    <p class="mt-4 text-sm text-gray-500">ページを再読み込みするか、同期IDを確認してください。</p>
+                        ${error ? error.message : '不明なエラー'}
+                    </p>
+                    <p class="mt-4 text-sm text-gray-500">ページを再読み込みするか、Firebaseのセキュリティルールを確認してください。</p>
                     <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg">再読み込み</button>
                 `;
             },
@@ -1015,6 +1047,11 @@
                             if (work && ((work.rating || 0) === 0 || !work.tagIds || work.tagIds.length === 0)) {
                                 setTimeout(() => App.openFeedbackModal(work), 1000); 
                             }
+                        }
+                        if (AppState.isLiteMode) {
+                            const banner = $('#lite-mode-banner');
+                            if (banner) banner.classList.remove('hidden');
+                            App.showToast("Liteモードで起動中 (50件のみ表示、画像と更新を制限)", "info", 4000);
                         }
                     }, 500);
                 }
@@ -1083,11 +1120,51 @@
                 App.renderAll();
 
                 if (AppState.currentUser && AppState.syncId && !AppState.isDebugMode) {
-                    App.subscribeToWorks();
-                    App.subscribeToTags();
+                    if (AppState.isLiteMode) {
+                        // Liteモード時: onSnapshot を使わず、静的に取得
+                        console.log("Lite Mode: Bypassing subscriptions, fetching limited data...");
+                        App.fetchLimitedData(); // 新しいヘルパー関数を呼ぶ
+                    } else {
+                        // 通常モード時: 従来通り onSnapshot で購読
+                        App.subscribeToWorks();
+                        App.subscribeToTags();
+                    }
                 }
             },
             
+            fetchLimitedData: async () => {
+                console.log("Lite Mode: Fetching limited works and all tags...");
+                try {
+                    // 1. Fetch Limited Works
+                    AppState.ui.loadingText.textContent = '作品データを取得中... (Lite)';
+                    const worksRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`);
+                    // 登録日の新しい順 (sortState.by は 'registeredAt' がデフォルト) で 50件取得
+                    const worksQuery = query(worksRef, orderBy(AppState.sortState.by, AppState.sortState.order), limit(50));
+                    const worksSnapshot = await getDocs(worksQuery);
+                    AppState.works = worksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    AppState.loadingStatus.works = true;
+                    App.checkLoadingComplete(); // ワークス完了を通知
+
+                    // 2. Fetch All Tags (statically) - タグはフィルタリングに必須なので全件取得
+                    AppState.ui.loadingText.textContent = 'タグデータを取得中... (Lite)';
+                    const tagsRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/tags`);
+                    const tagsSnapshot = await getDocs(tagsRef);
+                    AppState.tags = new Map(tagsSnapshot.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() }]));
+                    AppState.loadingStatus.tags = true;
+                    App.checkLoadingComplete(); // タグ完了を通知
+                    
+                    App.renderAll(); 
+
+                } catch (error) {
+                    // どちらかで失敗したらエラー
+                    if (!AppState.loadingStatus.works) {
+                        App.handleDataFetchError(error, '作品 (Lite)');
+                    } else {
+                        App.handleDataFetchError(error, 'タグ (Lite)');
+                    }
+                }
+            },
+
             updateSyncIdHistory: (newId) => {
                 let history = JSON.parse(localStorage.getItem('r18_sync_id_history') || '[]');
                 if (newId && !history.includes(newId)) {
@@ -1437,7 +1514,6 @@
                 // const hasMoreTags = ... ; // ← 削除 (ヘルパー内で行う)
                 const safeWorkName = App.escapeHTML(work.name);
                 const siteBadge = App.getSiteBadgeHTML(work.sourceUrl);
-
                 return `
                 <div class="bg-gray-800 rounded-xl shadow-lg overflow-hidden flex flex-col transition-transform hover:scale-[1.02]">
                     <div class="relative">
@@ -1464,6 +1540,12 @@
                 const safeWorkName = App.escapeHTML(work.name);
                 const siteBadge = App.getSiteBadgeHTML(work.sourceUrl);
 
+                const imageUrl = AppState.isLiteMode 
+                    ? 'https://placehold.co/600x400/1f2937/4b5563?text=Lite+Mode' 
+                    : (work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image');
+                // Liteモード時は遅延読み込みを強制
+                const loadingAttr = AppState.isLiteMode ? 'loading="lazy"' : '';
+                
                 return `
                 <div class="work-list-item">
                     <div class="relative flex-shrink-0">
@@ -2140,6 +2222,29 @@
                     // (Grok案: 設定の保存) localStorageにも保存
                     localStorage.setItem('itemsPerPage', AppState.itemsPerPage);
                 });
+                const activateLiteMode = () => {
+                    AppState.isLiteMode = true;
+                    localStorage.setItem('isLiteMode', 'true');
+                    App.showToast("Liteモードで再読み込みします...", "info");
+                    
+                    // 1秒後にリロード
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                };
+
+                // 両方のボタンに同じイベントリスナーを設定
+                // (※HTML側で ID が "lite-mode-switch-debug" と "lite-mode-switch-prod" に
+                // 変更されていることが前提です)
+                const liteModeDebugBtn = $('#lite-mode-switch-debug');
+                const liteModeProdBtn = $('#lite-mode-switch-prod');
+                
+                if (liteModeDebugBtn) {
+                    liteModeDebugBtn.addEventListener('click', activateLiteMode);
+                }
+                if (liteModeProdBtn) {
+                    liteModeProdBtn.addEventListener('click', activateLiteMode);
+                }
             },
 
             // --- Modal Implementations ---
