@@ -239,6 +239,14 @@
                                 <button id="clearHistoryBtn" class="w-full text-sm px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors">履歴クリア</button>
                                 <button id="deleteDataBtn" class="w-full text-sm px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors">全作品削除</button>
                             </div>
+                            <div class="flex space-x-2 pt-2 border-t border-gray-700 mt-3">
+                                <button id="exportBackupBtn" class="w-full text-sm btn btn-emerald">
+                                    <i class="fas fa-download mr-2"></i>バックアップ
+                                </button>
+                                <button id="importBackupBtn" class="w-full text-sm btn btn-amber">
+                                    <i class="fas fa-upload mr-2"></i>インポート (未)
+                                </button>
+                            </div>
                              <div class="pt-2">
                                 <button id="toggleDebugModeBtn" class="w-full text-sm px-4 py-2 bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors">デバッグモード開始</button>
                             </div>
@@ -674,6 +682,8 @@
                     syncIdHistoryEl: $('#syncIdHistory'),
                     clearHistoryBtn: $('#clearHistoryBtn'),
                     deleteDataBtn: $('#deleteDataBtn'),
+                    exportBackupBtn: $('#exportBackupBtn'),
+                    importBackupBtn: $('#importBackupBtn'),
                     addWorkForm: $('#addWorkForm'),
                     searchInput: $('#searchInput'),
                     sortBtn: $('#sortBtn'),
@@ -2012,6 +2022,12 @@
                             App.showToast("データ削除中にエラーが発生しました。"); 
                         }
                      }
+                });
+                // (エクスポート実行)
+                ui.exportBackupBtn.addEventListener('click', App.handleExportBackup);
+                // (インポート未実装通知)
+                ui.importBackupBtn.addEventListener('click', () => { 
+                    App.showToast("インポート機能は現在未実装です。", "error"); 
                 });
                 
                 ui.addWorkForm.addEventListener('submit', App.handleAddWork);
@@ -4135,6 +4151,75 @@
                     
                     App.showToast("デバッグモードを開始しました。"); // 修正
                     App.renderAll(); // 修正
+                }
+            },
+
+            // 1. バックアップデータ（JSON文字列）を生成する関数
+            generateBackupJSON: () => {
+                // タグデータを前処理 (Map -> Array)
+                const tagsToSave = Array.from(AppState.tags.values()).map(tag => {
+                    return {
+                        ...tag,
+                        createdAt: tag.createdAt ? tag.createdAt.toMillis() : null,
+                        lastUsedAt: tag.lastUsedAt ? tag.lastUsedAt.toMillis() : null
+                        // (Grok/ChatGPT案: 安定版 index.html の generateDebugData に合わせる)
+                        // (もし安定版のタグデータ構造に lastSelectedAt がある場合は、そちらも変換してください)
+                        // lastSelectedAt: tag.lastSelectedAt ? tag.lastSelectedAt.toMillis() : null
+                    };
+                });
+
+                // 作品データを前処理 (Timestamp -> Milliseconds)
+                const worksToSave = AppState.works.map(work => {
+                    return {
+                        ...work,
+                        registeredAt: work.registeredAt ? work.registeredAt.toMillis() : null,
+                        lastSelectedAt: work.lastSelectedAt ? work.lastSelectedAt.toMillis() : null,
+                        selectionHistory: (work.selectionHistory || []).map(ts => ts.toMillis())
+                    };
+                });
+                
+                // 1つのオブジェクトにまとめる
+                const backupData = {
+                    version: AppState.appVersion,
+                    exportedAt: new Date().toISOString(), // いつエクスポートしたか
+                    syncId: AppState.syncId, // どのIDのデータか
+                    tags: tagsToSave,
+                    works: worksToSave
+                };
+
+                // オブジェクトをJSON文字列に変換 (null, 2 は「読みやすくインデントする」)
+                return JSON.stringify(backupData, null, 2); 
+            },
+
+            // 2. データをファイルとしてダウンロードさせる関数
+            downloadJSON: (jsonString, fileName) => {
+                const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8;' });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                
+                link.setAttribute("href", url);
+                link.setAttribute("download", fileName); // ファイル名を指定
+                link.style.visibility = 'hidden';
+                
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                App.showToast("バックアップファイルがダウンロードされました。");
+            },
+
+            // 3. 実行用の関数 (これをボタンから呼び出す)
+            handleExportBackup: () => {
+                try {
+                    const jsonString = App.generateBackupJSON();
+                    const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+                    const fileName = `selector_backup_${AppState.syncId}_${dateStr}.json`;
+                    
+                    App.downloadJSON(jsonString, fileName);
+
+                } catch (error) {
+                    console.error("バックアップの生成に失敗しました:", error);
+                    App.showToast("バックアップファイルの生成に失敗しました。", "error");
                 }
             }
         }; // --- End of App Object ---
