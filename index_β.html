@@ -972,7 +972,7 @@
             
             startLoadingTimeout: () => {
                 clearTimeout(AppState.loadingTimeout);
-                AppState.loadingTimeout = setTimeout(() => App.handleLoadingTimeout(false), 30000);
+                AppState.loadingTimeout = setTimeout(() => App.handleLoadingTimeout(false), 90000);
             },
 
             handleDataFetchError: (error, type) => {
@@ -2032,6 +2032,19 @@
                         const button = e.target.closest('button[data-query]');
                         if (button) {
                             const query = button.dataset.query;
+                            if (suggestBox.parentElement === AppState.ui.searchInput.closest('div.relative')) {
+                                // A. メイン検索のサジェストの場合
+                                App.performSearch(query);
+                            } else {
+                                // B. 作品登録のサジェストの場合
+                                // 1. メイン検索ボックスにコピー
+                                AppState.ui.searchInput.value = query;
+                                // 2. メイン検索を実行
+                                App.performSearch(query);
+                                // 3. メイン検索ボックスにフォーカスを当てる
+                                AppState.ui.searchInput.focus();
+                                App.showToast(`「${query}」を検索しました。`);
+                            }
                             App.performSearch(query);
                         }
                     });
@@ -2724,7 +2737,25 @@
                             if (tagFilter === 'unassigned') tagsToRender = tagsToRender.filter(t => !tempSelectedTagIds.has(t.id));
                         }
                         tagsToRender.sort((a, b) => { const o = tagSort.order === 'asc' ? 1 : -1; switch (tagSort.by) { case 'name': return a.name.localeCompare(b.name, 'ja') * o; case 'createdAt': return ((a.createdAt?.toMillis()||0) - (b.createdAt?.toMillis()||0)) * o; case 'useCount': return ((a.useCount||0) - (b.useCount||0)) * o; default: return 0; }});
-                        tagListEl.innerHTML = tagsToRender.map(t => `<div class="tag-item flex items-center p-2 rounded-lg ${!['manage'].includes(mode) ? 'cursor-pointer hover:bg-gray-600' : ''} ${tempSelectedTagIds.has(t.id) ? 'bg-purple-900 ring-2 ring-purple-500' : 'bg-gray-700'}" data-id="${t.id}"><div class="w-4 h-4 rounded-full mr-3 shrink-0" style="background-color: ${t.color};"></div><span class="grow font-semibold truncate">${t.name}</span>${['manage', 'assign'].includes(mode) ? `<button data-action="delete-tag" data-id="${t.id}" class="ml-auto text-gray-400 hover:text-red-500 px-2 shrink-0"><i class="fas fa-trash-alt"></i></button>` : ''}</div>`).join('');
+                        tagListEl.innerHTML = tagsToRender.map(t => {
+                            const isManageMode = mode === 'manage';
+                            const isAssignMode = mode === 'assign';
+                            
+                            // 「管理」または「割当」モードの時のみ削除ボタンを表示
+                            const deleteBtnHtml = (isManageMode || isAssignMode) ? 
+                                `<button data-action="delete-tag" data-id="${t.id}" class="ml-auto text-gray-400 hover:text-red-500 px-2 shrink-0" title="タグ削除"><i class="fas fa-trash-alt"></i></button>` : '';
+
+                            // 「管理」モードの時のみ検索ボタンを表示
+                            const searchBtnHtml = isManageMode ? 
+                                `<button data-action="search-tag" data-name="${App.escapeHTML(t.name)}" class="ml-2 text-gray-400 hover:text-sky-400 px-2 shrink-0" title="このタグで作品を検索"><i class="fas fa-search"></i></button>` : '';
+
+                            return `<div class="tag-item flex items-center p-2 rounded-lg ${!isManageMode ? 'cursor-pointer hover:bg-gray-600' : ''} ${tempSelectedTagIds.has(t.id) ? 'bg-purple-900 ring-2 ring-purple-500' : 'bg-gray-700'}" data-id="${t.id}">
+                                        <div class="w-4 h-4 rounded-full mr-3 shrink-0" style="background-color: ${t.color};"></div>
+                                        <span class="grow font-semibold truncate">${t.name}</span>
+                                        ${searchBtnHtml}
+                                        ${deleteBtnHtml}
+                                    </div>`;
+                        }).join('');
                     };
 
                     renderTagList();
@@ -2746,7 +2777,17 @@
                     });
 
                     tagListEl.addEventListener('click', e => {
-                        const tagItem = e.target.closest('.tag-item'), deleteBtn = e.target.closest('button[data-action="delete-tag"]');
+                        const tagItem = e.target.closest('.tag-item');
+                        const deleteBtn = e.target.closest('button[data-action="delete-tag"]');
+                        const searchBtn = e.target.closest('button[data-action="search-tag"]');
+                        if (searchBtn) { // 検索ボタンが押された場合
+                            e.stopPropagation();
+                            const tagName = searchBtn.dataset.name;
+                            AppState.ui.searchInput.value = tagName; // メイン検索にセット
+                            App.performSearch(tagName); // 検索実行
+                            App.closeModal(); // タグ管理モーダルを閉じる
+                            return;
+                        }
                         if (deleteBtn) {
                             e.stopPropagation();
                             App.deleteTag(deleteBtn.dataset.id); // 削除後、onSnapshotが発火してリストが更新される
@@ -2809,7 +2850,10 @@
 
                     const renderTagList = () => {
                         let tagsToRender = [...AppState.tags.values()]; // 修正済み
-                        if(tagSearchQuery) tagsToRender = tagsToRender.filter(t => t.name.toLowerCase().includes(tagSearchQuery.toLowerCase()));
+                        if(tagSearchQuery) {
+                            const normalizedQuery = App.normalizeString(tagSearchQuery);
+                            tagsToRender = tagsToRender.filter(t => App.normalizeString(t.name).includes(normalizedQuery));
+                        }
 
                         tagsToRender.sort((a, b) => { const o = tagSort.order === 'asc' ? 1 : -1; switch (tagSort.by) { case 'name': return a.name.localeCompare(b.name, 'ja') * o; case 'createdAt': return ((a.createdAt?.toMillis()||0) - (b.createdAt?.toMillis()||0)) * o; case 'useCount': return ((a.useCount||0) - (b.useCount||0)) * o; default: return 0; }});
 
