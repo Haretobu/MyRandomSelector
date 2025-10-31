@@ -88,6 +88,7 @@
             background-color: #1f2937; /* gray-800 */
             border-radius: 0.75rem;
             transition: background-color 0.2s;
+            min-height: 7.5rem;
         }
         .work-list-item:hover {
             background-color: #374151; /* gray-700 */
@@ -1405,7 +1406,7 @@
                 ).join('');
             },
 
-            _renderTagsHTML: (tagIds, maxToShow = Infinity, workId = null) => {
+            _renderTagsHTML: (tagIds, maxToShow = Infinity, workId = null, viewMode = 'grid') => {
                 const tagObjects = App.getTagObjects(tagIds); // App.getTagObjects を使用
                 if (tagObjects.length === 0) return ''; // タグがなければ空文字
 
@@ -1414,17 +1415,28 @@
                 const displayedTags = tagObjects.slice(0, displayLimit);
                 const hasMoreTags = tagObjects.length > maxToShow && !isExpanded;
 
-                let html = displayedTags.map(tag =>
-                    `<span class="px-2 py-1 rounded font-semibold text-xs" style="background-color:${tag.color}; color:${App.getContrastColor(tag.color)}">${tag.name}</span>` // App.getContrastColor を使用
-                ).join('');
+                // Custom viewMode logic
+                const gapClass = viewMode === 'list' ? 'gap-1' : 'gap-2';
+                const tagPaddingClass = viewMode === 'list' ? 'px-1 py-0' : 'px-1.5 py-0.5';
 
+                let html = displayedTags.map(tag => {
+                    const safeName = App.escapeHTML(tag.name); // (安全のためエスケープ処理)
+                    return `<span class="${tagPaddingClass} rounded font-semibold text-xs" style="background-color:${tag.color}; color:${App.getContrastColor(tag.color)}">${safeName}</span>`;
+                }).join('');
+
+                // ↓ 修正: 'else if (hasMoreTags && !workId)' のブロックを追加
                 if (hasMoreTags && workId) {
+                    // Grid view: "expand" button
                     html += ` <button data-action="toggle-tags" data-id="${workId}" class="px-2 py-1 rounded bg-gray-600 hover:bg-gray-500 text-xs">+${tagObjects.length - maxToShow}</button>`;
                 } else if (isExpanded && tagObjects.length > maxToShow && workId) {
+                    // Grid view: "show less" button
                     html += ` <button data-action="toggle-tags" data-id="${workId}" class="px-2 py-1 rounded bg-gray-600 hover:bg-gray-500 text-xs">一部に戻す</button>`;
+                } else if (hasMoreTags && !workId) {
+                    // List view: "+X" badge
+                    html += ` <span class="px-1.5 py-0.5 rounded bg-gray-600 font-semibold text-xs">+${tagObjects.length - maxToShow}</span>`;
                 }
 
-                return `<div class="flex flex-wrap gap-2 text-xs">${html}</div>`;
+                return `<div class="flex flex-wrap ${gapClass} text-xs">${html}</div>`;
             },
 
             saveShowSiteIcon: (value) => {
@@ -1539,8 +1551,7 @@
                         <p class="text-sm text-gray-400">${work.registeredAt ? App.formatDate(work.registeredAt, false) : 'N/A'}</p>
                         <h3 class="text-lg font-bold mt-1 mb-2 flex-grow cursor-pointer" data-action="copy-name" data-name="${safeWorkName}">${work.name}</h3>
                         <div class="flex items-center space-x-1 mb-3">${App._renderRatingStars(work.rating)}</div>
-                        ${App._renderTagsHTML(work.tagIds, 5, work.id)}
-                    </div>
+                        ${App._renderTagsHTML(work.tagIds, 5, work.id, 'grid')} </div>
                 </div>`;
             },
 
@@ -1562,13 +1573,13 @@
                         <img src="${work.imageUrl || 'https://placehold.co/150x100/1f2937/4b5563?text=No+Img'}" alt="${safeWorkName}" class="w-20 h-16 object-cover rounded-md">
                         ${siteBadge}
                     </div>
-                    <div class="flex-grow min-w-0">
-                        <p class="font-bold truncate cursor-pointer" data-action="copy-name" data-name="${safeWorkName}">${work.name}</p>
-                        <div class="flex items-center flex-wrap gap-x-4 text-sm text-gray-400">
+                    <div class="flex-grow min-w-0 overflow-hidden">
+                        <p class="font-bold cursor-pointer line-clamp-2" data-action="copy-name" data-name="${safeWorkName}">${work.name}</p>
+                        <div class="flex items-center flex-wrap gap-x-4 text-sm text-gray-400 truncate">
                             <span>${work.genre}</span><span>${work.registeredAt ? App.formatDate(work.registeredAt, false) : 'N/A'}</span>
                             <span class="flex items-center space-x-1">${App._renderRatingStars(work.rating)}</span>
                         </div>
-                        ${App._renderTagsHTML(work.tagIds, 4)} 
+                        ${App._renderTagsHTML(work.tagIds, 4, null, 'list')} 
                     </div>
                     <div class="flex-shrink-0 flex space-x-2">
                          <button data-action="edit" data-id="${work.id}" class="btn-icon-secondary w-9 h-9 text-sm"><i class="fas fa-edit"></i></button>
@@ -2828,7 +2839,21 @@
                 const content = `
                     <div class="flex flex-col h-[70vh]">
                         ${['manage', 'assign'].includes(mode) ? `<div class="flex flex-wrap gap-2 mb-4 p-1 bg-gray-900 rounded-lg"><input type="text" id="newTagName" placeholder="新しいタグ名" class="flex-grow min-w-[150px] bg-gray-700 p-2 rounded-lg"><div class="flex gap-2"><input type="color" id="newTagColor" value="#581c87" class="h-11 w-12 p-1 bg-gray-700 rounded-lg cursor-pointer"><button id="addTagBtn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold"><i class="fas fa-plus"></i> 追加</button></div></div>` : ''}
-                        <div class="flex items-center gap-2 mb-2"><div class="flex-grow relative"><i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i><input type="search" id="tagSearchInput" placeholder="タグを検索..." class="w-full bg-gray-700 p-2 pl-10 rounded-lg"></div>${mode === 'assign' ? `<select id="tagFilterSelect" class="bg-gray-700 p-2 rounded-lg"><option value="all">すべて</option><option value="assigned">設定済</option><option value="unassigned">未設定</option></select>`: ''}<select id="tagSortSelect" class="bg-gray-700 p-2 rounded-lg"><option value="createdAt_desc">追加順 (新しい)</option><option value="createdAt_asc">追加順 (古い)</option><option value="name_asc">名前順 (昇順)</option><option value="useCount_desc">頻度順</option></select></div>
+                        
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="flex-grow relative">
+                                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                                <input type="search" id="tagSearchInput" placeholder="タグを検索..." class="w-full bg-gray-700 p-2 pl-10 rounded-lg">
+                            </div>
+                            ${mode === 'manage' ? `
+                                <button id="search-selected-tag-btn" class="btn-icon bg-emerald-600 hover:bg-emerald-700" title="選択したタグで検索" disabled>
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            ` : ''}
+                            ${mode === 'assign' ? `<select id="tagFilterSelect" class="bg-gray-700 p-2 rounded-lg"><option value="all">すべて</option><option value="assigned">設定済</option><option value="unassigned">未設定</option></select>`: ''}
+                            <select id="tagSortSelect" class="bg-gray-700 p-2 rounded-lg"><option value="createdAt_desc">追加順 (新しい)</option><option value="createdAt_asc">追加順 (古い)</option><option value="name_asc">名前順 (昇順)</option><option value="useCount_desc">頻度順</option></select>
+                        </div>
+
                         ${!['manage'].includes(mode) ? `<div class="mb-4">
                             <div class="flex justify-between items-center mb-1">
                                 <label class="block text-sm text-gray-400">選択中のタグ</label>
@@ -2836,13 +2861,19 @@
                             </div>
                             <div id="tag-selector-preview" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px]"></div>
                         </div>` : ''}
-                        <div id="tag-list" class="flex-grow overflow-y-auto pr-2 gap-2 grid grid-cols-2 md:grid-cols-3 lg:block lg:space-y-2"></div>
+                        
+                        <div id="tag-list" class="flex-grow overflow-y-auto pr-2 gap-2 grid grid-cols-1 md:grid-cols-2"></div>
+                        
                         ${!['manage'].includes(mode) ? `<div class="pt-4 mt-4 border-t border-gray-700 flex justify-end space-x-3"><button id="tag-modal-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button><button id="tag-modal-confirm" class="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold">決定</button></div>` : ''}
                     </div>`;
 
                 App.openModal(titleMap[mode], content, () => {
                     let tagSearchQuery = '', tagFilter = 'all', tagSort = { by: 'createdAt', order: 'desc' };
                     const tagListEl = $('#tag-list'), tagPreviewEl = $('#tag-selector-preview');
+
+                    // ↓ 修正: 検索ボタン用の変数を追加
+                    let selectedTagForSearch = null; // 選択されたタグ名
+                    const searchSelectedBtn = $('#search-selected-tag-btn'); // 新しいボタン
 
                     const renderTagPreview = () => {
                         if(!tagPreviewEl) return;
@@ -2866,21 +2897,29 @@
                             const deleteBtnHtml = (isManageMode || isAssignMode) ? 
                                 `<button data-action="delete-tag" data-id="${t.id}" class="ml-auto text-gray-400 hover:text-red-500 px-2 shrink-0" title="タグ削除"><i class="fas fa-trash-alt"></i></button>` : '';
 
-                            // 「管理」モードの時のみ検索ボタンを表示
-                            const searchBtnHtml = isManageMode ? 
-                                `<button data-action="search-tag" data-name="${App.escapeHTML(t.name)}" class="ml-2 text-gray-400 hover:text-sky-400 px-2 shrink-0" title="このタグで作品を検索"><i class="fas fa-search"></i></button>` : '';
+                            // ↓ 修正: 選択状態のクラスを決定
+                            let selectedClass = '';
+                            // 'manage' モードは保持している「名前」で選択状態を判断
+                            if (isManageMode && selectedTagForSearch === t.name) {
+                                 selectedClass = 'bg-purple-900 ring-2 ring-purple-500';
+                            // 'assign'/'filter' モードは保持している「IDのSet」で判断
+                            } else if (!isManageMode && tempSelectedTagIds.has(t.id)) {
+                                 selectedClass = 'bg-purple-900 ring-2 ring-purple-500';
+                            } else {
+                                 selectedClass = 'bg-gray-700';
+                            }
 
-                            return `<div class="tag-item flex items-center p-2 rounded-lg ${!isManageMode ? 'cursor-pointer hover:bg-gray-600' : ''} ${tempSelectedTagIds.has(t.id) ? 'bg-purple-900 ring-2 ring-purple-500' : 'bg-gray-700'}" data-id="${t.id}">
+                            // ↓ 修正: data-name の追加 と 'truncate' の追加
+                            return `<div class="tag-item flex items-center p-2 rounded-lg ${isManageMode ? 'hover:bg-gray-600' : 'cursor-pointer hover:bg-gray-600'} ${selectedClass}" data-id="${t.id}" data-name="${App.escapeHTML(t.name)}">
                                         <div class="w-4 h-4 rounded-full mr-3 shrink-0" style="background-color: ${t.color};"></div>
                                         <span class="grow font-semibold truncate">${t.name}</span>
-                                        ${searchBtnHtml}
                                         ${deleteBtnHtml}
                                     </div>`;
                         }).join('');
                     };
 
                     renderTagList();
-                    renderTagPreview();
+                    if (tagPreviewEl) renderTagPreview(); // 修正: 存在確認
 
                     tagListEl.addEventListener('refresh-tags', renderTagList); // リフレッシュイベントをリッスン
 
@@ -2897,30 +2936,80 @@
                         }
                     });
 
+                    // ↓ 修正: tagListEl のクリックイベントを 'manage' と 'assign'/'filter' で分岐
                     tagListEl.addEventListener('click', e => {
                         const tagItem = e.target.closest('.tag-item');
                         const deleteBtn = e.target.closest('button[data-action="delete-tag"]');
-                        const searchBtn = e.target.closest('button[data-action="search-tag"]');
-                        if (searchBtn) { // 検索ボタンが押された場合
-                            e.stopPropagation();
-                            const tagName = searchBtn.dataset.name;
-                            AppState.ui.searchInput.value = tagName; // メイン検索にセット
-                            App.performSearch(tagName); // 検索実行
-                            App.closeModal(); // タグ管理モーダルを閉じる
-                            return;
+
+                        if (deleteBtn) { 
+                            e.stopPropagation(); 
+                            App.deleteTag(deleteBtn.dataset.id); 
+                            // ↓ 修正: タグ削除時に選択状態をリセット
+                            if (mode === 'manage') {
+                                selectedTagForSearch = null;
+                                if (searchSelectedBtn) searchSelectedBtn.disabled = true;
+                            }
+                            return; 
                         }
-                        if (deleteBtn) {
-                            e.stopPropagation();
-                            App.deleteTag(deleteBtn.dataset.id); // 削除後、onSnapshotが発火してリストが更新される
-                            return;
-                        }
-                        if (tagItem && !['manage'].includes(mode)) {
+                        
+                        if (tagItem) {
+                            e.stopPropagation(); 
                             const tagId = tagItem.dataset.id;
-                            tempSelectedTagIds.has(tagId) ? tempSelectedTagIds.delete(tagId) : tempSelectedTagIds.add(tagId);
-                            renderTagList(); // クリックで即時反映
-                            renderTagPreview();
+                            const tagName = tagItem.dataset.name; // ← 修正: data-name からタグ名を取得
+
+                            if (mode === 'manage') {
+                                // (管理モード): 選択のトグルと検索ボタンの制御
+                                if (selectedTagForSearch === tagName) {
+                                    // 同じものをクリックしたら選択解除
+                                    selectedTagForSearch = null;
+                                    if (searchSelectedBtn) searchSelectedBtn.disabled = true;
+                                    tagItem.classList.remove('bg-purple-900', 'ring-2', 'ring-purple-500');
+                                    tagItem.classList.add('bg-gray-700');
+                                } else {
+                                    // 違うものをクリックしたら、他を解除してこれを選択
+                                    $$('.tag-item', tagListEl).forEach(el => {
+                                        el.classList.remove('bg-purple-900', 'ring-2', 'ring-purple-500');
+                                        el.classList.add('bg-gray-700');
+                                    });
+                                    tagItem.classList.add('bg-purple-900', 'ring-2', 'ring-purple-500');
+                                    tagItem.classList.remove('bg-gray-700');
+                                    
+                                    selectedTagForSearch = tagName;
+                                    if (searchSelectedBtn) searchSelectedBtn.disabled = false;
+                                }
+
+                            } else { // 'assign' または 'filter'
+                                // (割当/絞込モード): tempSelectedTagIds の Set をトグル
+                                if (tempSelectedTagIds.has(tagId)) {
+                                    tempSelectedTagIds.delete(tagId);
+                                    tagItem.classList.remove('bg-purple-900', 'ring-2', 'ring-purple-500');
+                                    tagItem.classList.add('bg-gray-700');
+                                } else {
+                                    tempSelectedTagIds.add(tagId);
+                                    tagItem.classList.add('bg-purple-900', 'ring-2', 'ring-purple-500');
+                                    tagItem.classList.remove('bg-gray-700');
+                                }
+                                if (tagPreviewEl) renderTagPreview(); // プレビューを更新
+                            }
                         }
                     });
+
+                    // ↓ 修正: 新しい検索ボタンのロジック
+                    if (searchSelectedBtn) {
+                        searchSelectedBtn.addEventListener('click', () => {
+                            if (selectedTagForSearch) {
+                                // 1. メインの検索ボックスに選択したタグ名を入力
+                                AppState.ui.searchInput.value = selectedTagForSearch;
+                                // 2. メインの検索を実行
+                                App.performSearch(selectedTagForSearch);
+                                // 3. モーダルを閉じる
+                                App.closeModal();
+                                // 4. (おまけ) メインの検索ボックスにフォーカス
+                                setTimeout(() => AppState.ui.searchInput.focus(), 300); 
+                                App.showToast(`タグ「${selectedTagForSearch}」で検索しました。`);
+                            }
+                        });
+                    }
 
                     const resetBtn = $('#reset-selected-tags-btn');
                     if (resetBtn) {
@@ -2931,7 +3020,8 @@
                         });
                     }
 
-                    $('#tag-modal-confirm')?.addEventListener('click', () => { onConfirm({and: tempAnd, or: tempOr, not: tempNot}); }); // 決定時
+                    // ↓ 修正: 'filter' モードを削除し、'assign' モードのみを想定
+                    $('#tag-modal-confirm')?.addEventListener('click', () => { onConfirm(tempSelectedTagIds); }); // 決定時
                     $('#tag-modal-cancel')?.addEventListener('click', () => { onConfirm(null); }); // キャンセル時
                 });
             }, // ← App.openTagModal の終わりカンマ
