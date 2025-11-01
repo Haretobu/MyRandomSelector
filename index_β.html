@@ -469,7 +469,8 @@
             arrayRemove,
             deleteField,
             orderBy,
-            limit
+            limit,
+            select
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // --- 1. UI Helper Functions ---
@@ -1118,7 +1119,16 @@
                     AppState.ui.loadingText.textContent = '作品データを取得中... (Lite)';
                     const worksRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`);
                     // 登録日の新しい順 (sortState.by は 'registeredAt' がデフォルト) で 50件取得
-                    const worksQuery = query(worksRef, orderBy('registeredAt', 'desc'), limit(50));
+                    const worksQuery = query(
+                        worksRef, 
+                        orderBy('registeredAt', 'desc'), 
+                        limit(50),
+                        select(
+                            "name", "genre", "sourceUrl", "registeredAt", 
+                            "selectionCount", "rating", "tagIds", "lastSelectedAt", 
+                            "selectionHistory", "memo"
+                        )
+                    );
                     const worksSnapshot = await getDocs(worksQuery);
                     AppState.works = worksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     AppState.loadingStatus.works = true;
@@ -1581,7 +1591,7 @@
                         tempWorks = tempWorks.filter(w => (w.rating || 0) === filters.rating.value);
                     } else if (filters.rating.type === 'above') {
                         tempWorks = tempWorks.filter(w => (w.rating || 0) >= filters.rating.value);
-                    } else if (filters.rating.type === 'below') {
+                    } else if (filters.rating.type === 'below') { 
                         tempWorks = tempWorks.filter(w => (w.rating || 0) <= filters.rating.value);
                     }
                     // ↑↑↑ 修正ここまで ↑↑↑
