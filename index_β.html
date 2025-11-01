@@ -2379,12 +2379,16 @@
             openEditModal: (workId, tempState = null) => {
                 const work = AppState.works.find(w => w.id === workId);
                 if (!work) return;
+                
+                // フォームの内部状態を管理する変数をここで定義
                 let currentRating = tempState?.rating ?? (work.rating || 0);
                 let currentTagIds = tempState?.tagIds ?? new Set(work.tagIds || []);
+                let currentMemo = tempState?.memo ?? (work.memo || ''); // ← 修正: メモ用の変数を追加
+
                 const safeWorkName = App.escapeHTML(work.name);
                 const safeWorkUrl = App.escapeHTML(work.sourceUrl || '');
 
-                const pool = App.getLotteryPool(); // 修正
+                const pool = App.getLotteryPool();
                 const thisWorkInPool = pool.find(w => w.id === workId);
                 const totalWeight = pool.reduce((sum, w) => sum + w.weight, 0);
                 let probabilityText;
@@ -2396,63 +2400,87 @@
                 }
 
                 const registeredAtStr = work.registeredAt ? App.formatDate(work.registeredAt, false) : App.formatDateForInput(new Date());
+                
+                // --- ▼ 修正: content HTML を PC/スマホ対応の2カラムレイアウトに大幅変更 ▼ ---
                 const content = `
-                    <form id="editWorkForm" class="space-y-4">
-                        <div class="space-y-2">
-                            <div>
-                                <label for="editWorkName" class="block text-sm font-medium text-gray-400 mb-1">作品名</label>
-                                <div class="flex items-center gap-2">
-                                    <input type="text" id="editWorkName" value="${safeWorkName}" class="flex-grow bg-gray-700 p-2 rounded-lg" required>
-                                    <button type="button" id="copy-edit-title-btn" class="btn-icon-secondary" title="コピー"><i class="fas fa-copy"></i></button>
-                                </div>
-                            </div>
-                            <div>
-                                <label for="editWorkUrl" class="block text-sm font-medium text-gray-400 mb-1">作品URL</label>
-                                <div class="flex items-center gap-2">
-                                    <input type="url" id="editWorkUrl" value="${safeWorkUrl}" placeholder="https://..." class="flex-grow bg-gray-700 p-2 rounded-lg">
-                                    <button type="button" id="openWorkUrlBtn" class="btn-icon-secondary" title="URLを開く" ${!safeWorkUrl ? 'disabled' : ''}><i class="fas fa-external-link-alt"></i></button>
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label for="editWorkGenre" class="block text-sm font-medium text-gray-400 mb-1">ジャンル</label>
-                                    <select id="editWorkGenre" class="w-full bg-gray-700 p-2 rounded-lg">
-                                        <option value="漫画" ${work.genre === '漫画' ? 'selected' : ''}>漫画</option>
-                                        <option value="ゲーム" ${work.genre === 'ゲーム' ? 'selected' : ''}>ゲーム</option>
-                                        <option value="動画" ${work.genre === '動画' ? 'selected' : ''}>動画</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label for="editWorkRegisteredAt" class="block text-sm font-medium text-gray-400 mb-1">登録日</label>
-                                    ${App.createDateInputHTML('editWorkRegisteredAt', registeredAtStr)}
-                                </div>
-                            </div>
-                        </div>
+                    <form id="editWorkForm">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-                        <div>
-                            <label class="block text-sm font-medium text-gray-400 mb-2">画像</label>
-                            <div class="flex items-center gap-4">
-                                <div id="edit-no-image-placeholder" class="w-32 h-20 bg-gray-700 rounded-lg flex items-center justify-center text-gray-500 ${work.imageUrl ? 'hidden' : ''}">
-                                    <i class="fas fa-image fa-2x"></i>
+                            <div class="md:col-span-2 space-y-4">
+                                <div>
+                                    <label for="editWorkName" class="block text-sm font-medium text-gray-400 mb-1">作品名</label>
+                                    <div class="flex items-center gap-2">
+                                        <input type="text" id="editWorkName" value="${safeWorkName}" class="flex-grow bg-gray-700 p-2 rounded-lg" required>
+                                        <button type="button" id="copy-edit-title-btn" class="btn-icon-secondary" title="コピー"><i class="fas fa-copy"></i></button>
+                                    </div>
                                 </div>
-                                <img id="edit-current-image-preview" src="${work.imageUrl || ''}" class="w-32 h-20 object-contain rounded-lg ${!work.imageUrl ? 'hidden' : ''}">
-                                <div class="flex-grow space-y-2">
+                                <div>
+                                    <label for="editWorkUrl" class="block text-sm font-medium text-gray-400 mb-1">作品URL</label>
+                                    <div class="flex items-center gap-2">
+                                        <input type="url" id="editWorkUrl" value="${safeWorkUrl}" placeholder="https://..." class="flex-grow bg-gray-700 p-2 rounded-lg">
+                                        <button type="button" id="openWorkUrlBtn" class="btn-icon-secondary" title="URLを開く" ${!safeWorkUrl ? 'disabled' : ''}><i class="fas fa-external-link-alt"></i></button>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="editWorkGenre" class="block text-sm font-medium text-gray-400 mb-1">ジャンル</label>
+                                        <select id="editWorkGenre" class="w-full bg-gray-700 p-2 rounded-lg">
+                                            <option value="漫画" ${work.genre === '漫画' ? 'selected' : ''}>漫画</option>
+                                            <option value="ゲーム" ${work.genre === 'ゲーム' ? 'selected' : ''}>ゲーム</option>
+                                            <option value="動画" ${work.genre === '動画' ? 'selected' : ''}>動画</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="editWorkRegisteredAt" class="block text-sm font-medium text-gray-400 mb-1">登録日</label>
+                                        ${App.createDateInputHTML('editWorkRegisteredAt', registeredAtStr)}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-400 mb-1">評価 (現在: ${currentRating} / 5)</label>
+                                    <div class="flex items-center space-x-2 text-2xl" id="editWorkRating"></div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-400 mb-1">タグ</label>
+                                    <div id="editWorkTags" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] mb-2"></div>
+                                    <button type="button" id="editWorkAssignTagsBtn" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグを割り当て/編集</button>
+                                </div>
+
+                                <div class="space-y-2 md:hidden">
+                                    <label class="block text-sm font-medium text-gray-400">メモ</label>
+                                    <div id="memo-preview-display" class="w-full p-3 bg-gray-900 rounded-lg text-sm text-gray-400 min-h-[44px] italic break-words line-clamp-3">
+                                        ${currentMemo || 'メモなし'}
+                                    </div>
+                                    <button type="button" id="open-memo-modal-btn" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">メモを編集</button>
+                                </div>
+                            </div>
+                            <div class="md:col-span-1 space-y-6">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-400 mb-2">画像</label>
+                                    <div class="relative w-full h-32 bg-gray-700 rounded-lg flex items-center justify-center mb-2">
+                                        <img id="edit-current-image-preview" src="${work.imageUrl || ''}" class="w-full h-full object-contain rounded-lg ${!work.imageUrl ? 'hidden' : ''}">
+                                        <div id="edit-no-image-placeholder" class="text-gray-500 ${work.imageUrl ? 'hidden' : ''}">
+                                            <i class="fas fa-image fa-3x"></i>
+                                        </div>
+                                        <button type="button" id="edit-image-delete-btn" class="absolute top-2 right-2 btn-icon bg-red-600 hover:bg-red-700 w-9 h-9 ${!work.imageUrl ? 'hidden' : ''}" title="画像を削除">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
                                     <input type="file" id="edit-image-upload" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700">
-                                    <button type="button" id="edit-image-delete-btn" class="w-full btn btn-danger text-sm py-1 ${!work.imageUrl ? 'hidden' : ''}">画像を削除</button>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-400 mb-1">現在の抽選確率</label>
+                                    <p class="text-sm text-gray-300">${probabilityText}</p>
+                                </div>
+
+                                <div class="hidden md:block space-y-2">
+                                    <label for="editWorkMemo" class="block text-sm font-medium text-gray-400">メモ欄</label>
+                                    <textarea id="editWorkMemo" rows="10" class="w-full bg-gray-700 p-2 rounded-lg text-sm" placeholder="感想やメモ...">${currentMemo}</textarea>
                                 </div>
                             </div>
-                        </div>
-
-                        <div class="space-y-2">
-                            <div><label class="block text-sm font-medium text-gray-400 mb-1">評価 (現在: ${currentRating} / 5)</label><div class="flex items-center space-x-2 text-2xl" id="editWorkRating"></div></div>
-                            <div><label class="block text-sm font-medium text-gray-400 mb-1">タグ</label><div id="editWorkTags" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] mb-2"></div><button type="button" id="editWorkAssignTagsBtn" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグを割り当て/編集</button></div>
-                        </div>
+                            </div>
                         
-                        <div>
-                            <p class="text-sm text-gray-400">抽選確率 (現在設定): ${probabilityText}</p>
-                        </div>
-                        
-                        <div class="pt-4 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
+                        <div class="pt-6 mt-6 border-t border-gray-700 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
                             <button type="button" id="edit-external-search" class="w-full sm:w-auto btn btn-emerald">外部サイト検索</button>
                             <div class="flex space-x-3 w-full sm:w-auto">
                                 <button type="button" id="edit-cancel-btn" class="flex-1 sm:flex-none px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
@@ -2461,21 +2489,56 @@
                         </div>
                     </form>
                 `;
+                // --- ▲ content HTML 修正ここまで ▲ ---
 
 
                 App.openModal(`「${work.name}」を編集`, content, () => {
+                    // --- 既存のUI要素の取得 ---
                     const ratingStars = $('#editWorkRating'), tagsContainer = $('#editWorkTags');
                     const workNameInput = $('#editWorkName');
                     const workUrlInput = $('#editWorkUrl');
-                    
                     const editImageUpload = $('#edit-image-upload');
                     const editCurrentImagePreview = $('#edit-current-image-preview');
                     const editImageDeleteBtn = $('#edit-image-delete-btn');
                     const editNoImagePlaceholder = $('#edit-no-image-placeholder');
                     
+                    // --- 修正: メモ関連のUI要素を取得 ---
+                    const pcMemoTextarea = $('#editWorkMemo');
+                    const smMemoPreview = $('#memo-preview-display');
+                    const smMemoButton = $('#open-memo-modal-btn');
+
                     AppState.tempNewImageUrl = null;
                     AppState.deleteImageFlag = false;
 
+                    // --- 修正: PC版メモ欄の入力イベント ---
+                    if (pcMemoTextarea) {
+                        pcMemoTextarea.addEventListener('input', () => {
+                            currentMemo = pcMemoTextarea.value; // PCの入力を内部状態に反映
+                        });
+                    }
+
+                    // --- 修正: スマホ版メモボタンのクリックイベント ---
+                    if (smMemoButton) {
+                        smMemoButton.addEventListener('click', () => {
+                            // 段階1で追加した App.openMemoModal を呼び出す
+                            App.openMemoModal(currentMemo, (newMemoText) => {
+                                // openMemoModal が閉じたときのコールバック
+                                if (newMemoText !== null) {
+                                    currentMemo = newMemoText; // 内部状態を更新
+                                    // スマホのプレビューも更新
+                                    if (smMemoPreview) {
+                                        smMemoPreview.textContent = currentMemo || 'メモなし';
+                                        smMemoPreview.classList.toggle('italic', !currentMemo);
+                                    }
+                                }
+                                // App.closeModal() は App.openMemoModal が自動で行う
+                                // (スタックから復元するため)
+                            });
+                        });
+                    }
+
+
+                    // --- 画像削除ボタンのロジック (変更なし) ---
                     editImageDeleteBtn.addEventListener('click', () => {
                         if (confirm('本当に画像を削除しますか？')) {
                             editCurrentImagePreview.src = '';
@@ -2489,6 +2552,7 @@
                         }
                     });
 
+                    // --- 画像アップロードのロジック (変更なし) ---
                     editImageUpload.addEventListener('change', async (e) => {
                         const file = e.target.files[0];
                         if (!file) {
@@ -2506,6 +2570,7 @@
                         }
                     });
 
+                    // --- URL開く/コピーボタンのロジック (変更なし) ---
                     const openUrlBtn = $('#openWorkUrlBtn');
                     workUrlInput.addEventListener('input', () => {
                         openUrlBtn.disabled = !workUrlInput.value.trim();
@@ -2514,21 +2579,20 @@
                         const url = workUrlInput.value.trim();
                         if (url) window.open(url, '_blank', 'noopener,noreferrer');
                     });
-                    
                     $('#copy-edit-title-btn').addEventListener('click', () => {
                         navigator.clipboard.writeText(workNameInput.value).then(() => {
                             App.showToast(`「${workNameInput.value}」をコピーしました。`);
                         });
                     });
 
+                    // --- 修正: getFormState / checkModalDirtyState に 'memo' を追加 ---
                     const getFormState = () => {
                         const nameInput = $('#editWorkName');
-                        // 修正: モーダルが閉じられた後などに要素がない場合nullを返す
                         if (!nameInput) return null;
                         const registeredAtInput = $('#editWorkRegisteredAt');
                         const urlInput = $('#editWorkUrl');
                         const genreSelect = $('#editWorkGenre');
-                        // 修正: 要素が存在するか確認
+                        
                         const registeredAtStr = registeredAtInput ? App.getDateInputValue('editWorkRegisteredAt') : '';
                         const urlValue = urlInput ? urlInput.value.trim() : '';
                         const genreValue = genreSelect ? genreSelect.value : '';
@@ -2539,7 +2603,8 @@
                             genre: genreValue,
                             registeredAt: registeredAtStr,
                             rating: currentRating,
-                            tagIds: JSON.stringify([...currentTagIds].sort()) // Setをソート済み配列のJSON文字列に変換して比較
+                            tagIds: JSON.stringify([...currentTagIds].sort()),
+                            memo: currentMemo // ← 修正: memo を状態に含める
                         };
                     };
 
@@ -2547,22 +2612,30 @@
 
                     AppState.checkModalDirtyState = () => {
                         const currentState = getFormState();
-                        // 修正: どちらかの状態が取得できなかった場合は dirty とみなさない
                         if (initialState === null || currentState === null) return false;
-                        // 修正: 画像変更フラグもチェックに加える
                         const imageChanged = AppState.tempNewImageUrl !== null || AppState.deleteImageFlag;
                         return JSON.stringify(initialState) !== JSON.stringify(currentState) || imageChanged;
                     };
                     
-                    $('#edit-external-search').addEventListener('click', () => {
-                         const capturedState = { rating: currentRating, tagIds: currentTagIds };
-                        AppState.modalStateStack.push(() => App.openEditModal(workId, capturedState)); // 修正
-                        App.openExternalSearchModal(workNameInput.value); // 修正
+                    // --- 外部サイト検索 (変更なし) ---
+                    // 修正: ボタンが2つになったため、両方にリスナーをセット
+                    $('#edit-external-search')?.addEventListener('click', () => {
+                         const capturedState = { rating: currentRating, tagIds: currentTagIds, memo: currentMemo };
+                        AppState.modalStateStack.push(() => App.openEditModal(workId, capturedState));
+                        App.openExternalSearchModal(workNameInput.value);
+                    });
+                    // (PCヘッダー版のボタン)
+                    $('#edit-external-search-header')?.addEventListener('click', () => {
+                         const capturedState = { rating: currentRating, tagIds: currentTagIds, memo: currentMemo };
+                        AppState.modalStateStack.push(() => App.openEditModal(workId, capturedState));
+                        App.openExternalSearchModal(workNameInput.value);
                     });
 
+
+                    // --- 評価・タグの描画 (変更なし) ---
                     const renderStars = r => { ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= r ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join(''); };
                     const renderTags = ids => {
-                        if (tagsContainer) { // (安全のため要素の存在確認を追加)
+                        if (tagsContainer) { 
                             const objects = App.getTagObjects(ids);
                             tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded font-semibold text-xs" style="background-color:${t.color}; color:${App.getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`;
                         }
@@ -2570,61 +2643,59 @@
                     renderStars(currentRating);
                     renderTags(currentTagIds);
 
+                    // --- 評価・タグのイベントリスナー (変更なし) ---
                     if (ratingStars) {
                         ratingStars.addEventListener('click', e => {
-                            // クリックされたのが星アイコンか確認
                             if (e.target.matches('.fa-star')) {
                                 const newRating = parseInt(e.target.dataset.value, 10);
-                                // 同じ星をクリックしたら評価を0にする、そうでなければ新しい評価を設定
                                 currentRating = (currentRating === newRating) ? 0 : newRating;
-                                renderStars(currentRating); // 星の表示を更新
-                                // 変更があったことを示す (checkModalDirtyState で使われる)
-                                // AppState.checkModalDirtyState(); // 必要に応じて呼び出す
+                                renderStars(currentRating);
                             }
                         });
                     }
-                    
                     $('#editWorkAssignTagsBtn').addEventListener('click', () => {
-                        App.openTagModal({ // 修正
+                        App.openTagModal({
                             mode: 'assign', workId, currentTagIds, workName: work.name,
                             onConfirm: (newTagIds) => {
                                  if(newTagIds) currentTagIds = newTagIds;
-                                 App.openEditModal(workId, { rating: currentRating, tagIds: currentTagIds }) // 修正
+                                 // 修正: 戻ってきたときに memo の状態も引き継ぐ
+                                 App.openEditModal(workId, { rating: currentRating, tagIds: currentTagIds, memo: currentMemo })
                             }
                         });
                     });
                     
-                    $('#edit-cancel-btn').addEventListener('click', App.closeModal); // 修正
+                    // --- キャンセルボタン (変更なし) ---
+                    $('#edit-cancel-btn').addEventListener('click', App.closeModal);
                     
+                    // --- 修正: フォーム送信（保存）時に 'memo' を追加 ---
                     $('#editWorkForm').addEventListener('submit', async e => {
                         e.preventDefault();
                         if (!workNameInput || !workNameInput.value.trim()){
-                            return App.showToast("作品名は必須です。", "error"); // 修正
+                            return App.showToast("作品名は必須です。", "error");
                         }
-                        const registeredAtStr = App.getDateInputValue('editWorkRegisteredAt'); // 修正
-                        if (!App.isValidDate(registeredAtStr)) return App.showToast("登録日の形式が不正です (YYYY/MM/DD)。", "error"); // 修正
+                        const registeredAtStr = App.getDateInputValue('editWorkRegisteredAt');
+                        if (!App.isValidDate(registeredAtStr)) return App.showToast("登録日の形式が不正です (YYYY/MM/DD)。", "error");
                         
                         const updatedData = {
                             name: workNameInput.value.trim(),
                             sourceUrl: workUrlInput.value.trim(),
-                            genre: $('#editWorkGenre').value, // Get value from select element
-                            // Convert YYYY/MM/DD string back to Firestore Timestamp
+                            genre: $('#editWorkGenre').value,
                             registeredAt: Timestamp.fromDate(new Date(registeredAtStr.replace(/\//g, '-'))),
-                            rating: currentRating, // Use the potentially updated rating
-                            tagIds: Array.from(currentTagIds), // Convert Set back to Array
-                            // lastUpdated: serverTimestamp() // Add this if you want to track updates
-                        }; // (変更なし)
+                            rating: currentRating,
+                            tagIds: Array.from(currentTagIds),
+                            memo: currentMemo // ← 修正: memo データを保存オブジェクトに追加
+                        };
                         
-                        if (AppState.tempNewImageUrl) { // 修正
-                            updatedData.imageUrl = AppState.tempNewImageUrl; // 修正
-                        } else if (AppState.deleteImageFlag) { // 修正
+                        if (AppState.tempNewImageUrl) {
+                            updatedData.imageUrl = AppState.tempNewImageUrl;
+                        } else if (AppState.deleteImageFlag) {
                             updatedData.imageUrl = deleteField();
                         }
 
                         AppState.checkModalDirtyState = () => false;
-                        if (await App.updateWork(workId, updatedData)) { // 修正
-                            App.showToast("作品情報を更新しました。");  // 修正
-                            App.closeModal(); // 修正
+                        if (await App.updateWork(workId, updatedData)) {
+                            App.showToast("作品情報を更新しました。");
+                            App.closeModal();
                         }
                     });
                 });
@@ -3538,6 +3609,39 @@
                     </div>
                 `;
                 App.openModal("ヘルプ：抽選設定", content); // App.openModal を使用
+            },
+
+            openMemoModal: (currentMemo, onConfirm) => {
+                // 現在の編集モーダルの状態をスタックに保存
+                const capturedState = {
+                    rating: currentRating, // openEditModal スコープ内の変数
+                    tagIds: currentTagIds, // openEditModal スコープ内の変数
+                    memo: currentMemo
+                };
+                AppState.modalStateStack.push(() => App.openEditModal(workId, capturedState)); // openEditModal の workId を参照
+
+                const content = `
+                    <div class="flex flex-col h-[60vh]">
+                        <textarea id="memo-editor-textarea" class="w-full h-full bg-gray-700 p-3 rounded-lg text-sm flex-grow" placeholder="感想やメモ...">${currentMemo}</textarea>
+                        <div class="pt-4 mt-4 border-t border-gray-700 flex justify-end">
+                            <button id="memo-modal-save" class="px-6 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold">決定</button>
+                        </div>
+                    </div>
+                `;
+                
+                // 既存の openModal を上書き利用
+                App.openModal("メモを編集", content, () => {
+                    const textarea = $('#memo-editor-textarea');
+                    setTimeout(() => textarea.focus(), 100); // モーダルが開いたらすぐにフォーカス
+
+                    $('#memo-modal-save').addEventListener('click', () => {
+                        onConfirm(textarea.value); // 新しいメモの内容をコールバックで返す
+                        // App.closeModal() は onConfirm の中で自動的に呼び出される
+                    });
+                    
+                    // App.closeModal (標準のXボタンや背景クリック) が押された時は、
+                    // 保存せずに元の編集モーダルに戻る (onConfirm(null) と同じ)
+                });
             },
 
             performLottery: async () => {
