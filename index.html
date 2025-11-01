@@ -227,9 +227,10 @@
                          <div id="addWorkError" class="hidden text-sm text-center bg-red-900 border border-red-700 text-red-300 p-2 rounded-lg mb-4"></div>
                          <form id="addWorkForm" class="space-y-4 pt-2 border-t border-gray-700">
                             <div class="relative"> <label for="workNameInput" class="block text-sm font-medium text-gray-400 mb-1">作品名</label>
-                                <div class="flex items-center gap-2 relative"> <input type="text" name="workName" id="workNameInput" placeholder="作品名" class="flex-grow bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500 pr-20" required autocomplete="off"> <button type="button" id="clear-workNameInput" class="absolute inset-y-0 right-12 flex items-center pr-2 text-gray-400 hover:text-white hidden">
-                                        <i class="fas fa-times-circle"></i>
-                                    </button>
+                                <div class="flex items-center gap-2"> <div class="relative flex-grow">
+                                        <input type="text" name="workName" id="workNameInput" placeholder="作品名" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500 pr-10" required autocomplete="off"> <button type="button" id="clear-workNameInput" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"> <i class="fas fa-times-circle"></i>
+                                        </button>
+                                    </div>
                                     <button type="button" data-action="external-search-reg" class="flex-shrink-0 w-10 h-10 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-white flex items-center justify-center" title="外部サイトで検索"><i class="fas fa-globe-asia"></i></button>
                                 </div>
                             </div>
