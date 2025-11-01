@@ -139,45 +139,6 @@
             box-shadow: 0 1px 2px rgba(0,0,0,0.5);
             pointer-events: none;
         }
-        
-        /* ↓↓↓ ここからが修正箇所です ↓↓↓ */
-        .btn {
-            /* .btn の定義自体は残しても良いですが、他では使えません */
-            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed;
-        }
-        .btn-primary {
-            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-sky-600 hover:bg-sky-700 text-white;
-        }
-        .btn-secondary {
-            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-700 text-gray-100;
-        }
-        .btn-danger {
-            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-red-600 hover:bg-red-700 text-white;
-        }
-        .btn-teal {
-            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-700 text-white;
-        }
-        .btn-purple {
-            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-purple-600 hover:bg-purple-700 text-white;
-        }
-        .btn-emerald {
-            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700 text-white;
-        }
-        .btn-amber {
-            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-amber-600 hover:bg-amber-700 text-black;
-        }
-        .btn-lime {
-            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-lime-600 hover:bg-lime-700 text-white;
-        }
-        .btn-indigo {
-            @apply px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-600 hover:bg-indigo-700 text-white;
-        }
-        .btn-icon {
-            @apply w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
-        }
-        .btn-icon-secondary {
-            @apply w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500;
-        }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans antialiased">
@@ -215,7 +176,7 @@
 
     <!-- Main Container -->
     <div id="app-container" class="min-h-screen p-4 md:p-8 opacity-0 transition-opacity duration-500">
-        <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
             
             <!-- Left Column: Controls -->
             <aside class="lg:col-span-1 space-y-6">
@@ -234,17 +195,17 @@
                             <select id="syncIdHistory" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500"></select>
                             <div class="flex items-center">
                                 <input type="text" id="newSyncIdInput" placeholder="新しい同期IDをペースト" class="w-full bg-gray-700 border border-gray-600 rounded-l-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500" autocomplete="off">
-                                <button id="loadSyncIdBtn" class="btn btn-teal rounded-l-none flex-shrink-0">読込</button>
+                                <button id="loadSyncIdBtn" class="px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-700 text-white rounded-l-none flex-shrink-0">読込</button>
                             </div>
                             <div class="flex space-x-2 pt-2">
                                 <button id="clearHistoryBtn" class="w-full text-sm px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors">履歴クリア</button>
                                 <button id="deleteDataBtn" class="w-full text-sm px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors">全作品削除</button>
                             </div>
                             <div class="flex space-x-2 pt-2 border-t border-gray-700 mt-3">
-                                <button id="exportBackupBtn" class="w-full text-sm btn btn-emerald">
+                                <button id="exportBackupBtn" class="w-full text-sm px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700 text-white">
                                     <i class="fas fa-download mr-2"></i>バックアップ
                                 </button>
-                                <button id="importBackupBtn" class="w-full text-sm btn btn-amber">
+                                <button id="importBackupBtn" class="w-full text-sm px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-amber-600 hover:bg-amber-700 text-black">
                                     <i class="fas fa-upload mr-2"></i>インポート (未)
                                 </button>
                             </div>
@@ -280,7 +241,7 @@
                                 <label for="workUrlInput" class="block text-sm font-medium text-gray-400 mb-1">作品URL (任意)</label>
                                 <input type="url" name="workUrl" id="workUrlInput" placeholder="https://..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500" autocomplete="off">
                             </div>
-                            <input type="text" id="workRegisteredAt" name="workRegisteredAt" placeholder="YYYY/MM/DD" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500" required autocomplete="off">
+                            <input type="text" id="workRegisteredAt" name="workRegisteredAt" placeholder="YYYY/MM/DD" data-role="date-input" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500" required autocomplete="off">
                             <div>
                                 <label for="workImage" class="block text-sm font-medium text-gray-400 mb-2">画像 (任意, 900KB以下)</label>
                                 <input type="file" name="workImage" id="workImage" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-lime-600 file:text-white hover:file:bg-lime-700">
@@ -307,7 +268,7 @@
             </aside>
 
             <!-- Right Column: Content -->
-            <main class="lg:col-span-2 space-y-6 pb-24">
+            <main class="lg:col-span-3 space-y-6 pb-24">
                 <!-- List Controls -->
                 <div class="bg-gray-800 p-4 rounded-xl shadow-lg">
                      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
@@ -403,7 +364,10 @@
         <div id="modal-container" class="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-transform scale-95 opacity-0">
              <div class="flex justify-between items-center p-4 border-b border-gray-700">
                 <h3 id="modal-title" class="text-xl font-bold">Modal Title</h3>
-                <button id="modal-close-btn" aria-label="閉じる" class="text-gray-400 hover:text-white"><i class="fas fa-times fa-lg"></i></button>
+                <div class="flex items-center gap-3">
+                    <div id="modal-header-actions" class="ml-auto"></div>
+                    <button id="modal-close-btn" aria-label="閉じる" class="text-gray-400 hover:text-white"><i class="fas fa-times fa-lg"></i></button>
+                </div>
             </div>
             <div id="modal-content-host" class="p-6 overflow-y-auto modal-content">
                 <!-- Modal content will be injected here -->
@@ -498,6 +462,7 @@
             Timestamp,
             serverTimestamp,
             getDocs,
+            addDoc,
             arrayUnion,
             arrayRemove,
             deleteField,
@@ -800,13 +765,13 @@
 
             showToast: (message, type = 'info', duration = 3000) => {
                 let finalDuration = duration;
+                AppState.ui.toastEl.classList.remove('bg-red-600', 'bg-gray-700');
+
                 if (type === 'error') {
                     finalDuration = 5000; // エラー時は5秒
                     AppState.ui.toastEl.classList.add('bg-red-600'); // 色も赤くする
-                    AppState.ui.toastEl.classList.remove('bg-gray-700');
                 } else {
                     AppState.ui.toastEl.classList.add('bg-gray-700');
-                    AppState.ui.toastEl.classList.remove('bg-red-600');
                 }
                 AppState.ui.toastMessageEl.textContent = message;
                 AppState.ui.toastEl.classList.remove('translate-y-20', 'opacity-0');
@@ -895,14 +860,15 @@
             openModal: (title, contentHtml, onOpen = null, options = {}) => {
                 App.closeFabMenu();
                 AppState.checkModalDirtyState = () => false;
-                const { size = 'max-w-2xl' } = options;
+                const { size = 'max-w-2xl', headerActions = '' } = options; // ← 修正: headerActions を追加
                 
                 Object.values(AppState.activeCharts).forEach(chart => chart.destroy());
                 AppState.activeCharts = {};
 
-                AppState.ui.modalContainer.classList.remove('max-w-2xl', 'max-w-4xl', 'max-w-5xl');
+                AppState.ui.modalContainer.classList.remove('max-w-2xl', 'max-w-4xl', 'max-w-5xl', 'max-w-7xl');
                 AppState.ui.modalContainer.classList.add(size);
                 
+                $('#modal-header-actions').innerHTML = headerActions; // ← 修正: ヘッダーにボタンを挿入
                 AppState.ui.modalTitle.textContent = title;
                 AppState.ui.modalContentHost.innerHTML = contentHtml;
                 App.initializeDateInputs(AppState.ui.modalContentHost); 
@@ -1150,7 +1116,7 @@
                     AppState.ui.loadingText.textContent = '作品データを取得中... (Lite)';
                     const worksRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`);
                     // 登録日の新しい順 (sortState.by は 'registeredAt' がデフォルト) で 50件取得
-                    const worksQuery = query(worksRef, orderBy(AppState.sortState.by, AppState.sortState.order), limit(50));
+                    const worksQuery = query(worksRef, orderBy('registeredAt', 'desc'), limit(50));
                     const worksSnapshot = await getDocs(worksQuery);
                     AppState.works = worksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     AppState.loadingStatus.works = true;
@@ -1237,7 +1203,7 @@
                 const tagsRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/tags`);
                 AppState.unsubscribeTags = onSnapshot(tagsRef, (snapshot) => {
                     AppState.ui.loadingText.textContent = 'タグデータを取得中...'; // ← 具体的なテキストを追加
-                    AppState.tags = new Map(snapshot.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() }]));
+                    AppState.tags = new Map(snapshot.docs.map(d => [d.id, { id: d.id, ...d.data() }]));
                      if (isFirstLoad) {
                         isFirstLoad = false;
                         AppState.loadingStatus.tags = true;
@@ -1315,7 +1281,7 @@
                 };
                 try {
                     const worksRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`);
-                    await setDoc(doc(worksRef), newWork);
+                    await addDoc(worksRef, newWork);
                     App.showToast(`"${name}" を登録しました。`);
                     form.reset();
                     $('#imagePreview').classList.add('hidden');
@@ -1482,9 +1448,13 @@
 
                 ui.viewGridBtn.classList.toggle('view-btn-active', listViewMode === 'grid');
                 ui.viewListBtn.classList.toggle('view-btn-active', listViewMode === 'list');
-                ui.workListEl.className = listViewMode === 'grid'
-                    ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6'
-                    : 'space-y-2';
+                const isGrid = listViewMode === 'grid';
+                ui.workListEl.classList.toggle('grid', isGrid);
+                ui.workListEl.classList.toggle('grid-cols-1', isGrid);
+                ui.workListEl.classList.toggle('md:grid-cols-2', isGrid);
+                ui.workListEl.classList.toggle('xl:grid-cols-3', isGrid);
+                ui.workListEl.classList.toggle('gap-6', isGrid);
+                ui.workListEl.classList.toggle('space-y-2', !isGrid);
 
                 // メッセージ表示とリスト/ページネーションの表示切り替え
                 if (works.length === 0) {
@@ -1514,8 +1484,8 @@
                     const tempDiv = document.createElement('div');
                     tempDiv.innerHTML = elementHtml.trim(); // trim() で前後の空白を除去
                     // 最初の要素 (work card or list item) を fragment に追加
-                    if (tempDiv.firstChild) {
-                        fragment.appendChild(tempDiv.firstChild);
+                    if (tempDiv.firstElementChild) {
+                        fragment.appendChild(tempDiv.firstElementChild);
                     }
                 });
                 // 既存の内容をクリアしてから、fragment を一括で追加
@@ -1542,8 +1512,8 @@
                         <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${safeWorkName}" class="w-full h-40 object-cover">
                         ${siteBadge}
                         <div class="absolute top-2 right-2 flex space-x-2">
-                            <button data-action="edit" data-id="${work.id}" class="btn-icon-secondary w-8 h-8 text-sm"><i class="fas fa-edit"></i></button>
-                            <button data-action="delete" data-id="${work.id}" data-name="${safeWorkName}" class="btn-icon bg-red-600 hover:bg-red-700 w-8 h-8 text-sm"><i class="fas fa-trash"></i></button>
+                            <button data-action="edit" data-id="${work.id}" class="w-8 h-8 text-sm rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500"><i class="fas fa-edit"></i></button>
+                            <button data-action="delete" data-id="${work.id}" data-name="${safeWorkName}" class="w-8 h-8 text-sm rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-red-600 hover:bg-red-700"><i class="fas fa-trash"></i></button>
                         </div>
                         <span class="absolute bottom-2 left-2 px-2 py-0.5 bg-black bg-opacity-60 text-xs rounded">${work.genre}</span>
                     </div>
@@ -1582,8 +1552,8 @@
                         ${App._renderTagsHTML(work.tagIds, 4, null, 'list')} 
                     </div>
                     <div class="flex-shrink-0 flex space-x-2">
-                         <button data-action="edit" data-id="${work.id}" class="btn-icon-secondary w-9 h-9 text-sm"><i class="fas fa-edit"></i></button>
-                         <button data-action="delete" data-id="${work.id}" data-name="${safeWorkName}" class="btn-icon bg-red-600 hover:bg-red-700 w-9 h-9 text-sm"><i class="fas fa-trash"></i></button>
+                         <button data-action="edit" data-id="${work.id}" class="w-9 h-9 text-sm rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500"><i class="fas fa-edit"></i></button>
+                         <button data-action="delete" data-id="${work.id}" data-name="${safeWorkName}" class="w-9 h-9 text-sm rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-red-600 hover:bg-red-700"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>`;
             },
@@ -2411,14 +2381,14 @@
                                     <label for="editWorkName" class="block text-sm font-medium text-gray-400 mb-1">作品名</label>
                                     <div class="flex items-center gap-2">
                                         <input type="text" id="editWorkName" value="${safeWorkName}" class="flex-grow bg-gray-700 p-2 rounded-lg" required>
-                                        <button type="button" id="copy-edit-title-btn" class="btn-icon-secondary" title="コピー"><i class="fas fa-copy"></i></button>
+                                        <button type="button" id="copy-edit-title-btn" class="w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" title="コピー"><i class="fas fa-copy"></i></button>
                                     </div>
                                 </div>
                                 <div>
                                     <label for="editWorkUrl" class="block text-sm font-medium text-gray-400 mb-1">作品URL</label>
                                     <div class="flex items-center gap-2">
                                         <input type="url" id="editWorkUrl" value="${safeWorkUrl}" placeholder="https://..." class="flex-grow bg-gray-700 p-2 rounded-lg">
-                                        <button type="button" id="openWorkUrlBtn" class="btn-icon-secondary" title="URLを開く" ${!safeWorkUrl ? 'disabled' : ''}><i class="fas fa-external-link-alt"></i></button>
+                                        <button type="button" id="openWorkUrlBtn" class="w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" title="URLを開く" ${!safeWorkUrl ? 'disabled' : ''}><i class="fas fa-external-link-alt"></i></button>
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-2 gap-4">
@@ -2465,7 +2435,13 @@
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </div>
-                                    <input type="file" id="edit-image-upload" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700">
+                                    <div class="flex items-center">
+                                        <label for="edit-image-upload" class="flex-shrink-0 cursor-pointer text-sm font-semibold px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                                            参照...
+                                        </label>
+                                        <span id="edit-image-filename" class="ml-3 text-sm text-gray-400 break-words min-w-0">ファイルが選択されていません。</span>
+                                        <input type="file" id="edit-image-upload" accept="image/*" class="hidden">
+                                    </div>
                                 </div>
                                 
                                 <div>
@@ -2480,18 +2456,21 @@
                             </div>
                             </div>
                         
-                        <div class="pt-6 mt-6 border-t border-gray-700 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
-                            <button type="button" id="edit-external-search" class="w-full sm:w-auto btn btn-emerald">外部サイト検索</button>
+                        <div class="pt-6 mt-6 border-t border-gray-700 flex justify-end gap-3 flex-wrap sm:flex-nowrap">
                             <div class="flex space-x-3 w-full sm:w-auto">
                                 <button type="button" id="edit-cancel-btn" class="flex-1 sm:flex-none px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
-                                <button type="submit" class="flex-1 sm:flex-none btn btn-primary">保存</button>
+                                <button type="submit" class="flex-1 sm:flex-none px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-sky-600 hover:bg-sky-700 text-white">保存</button>
                             </div>
                         </div>
                     </form>
                 `;
                 // --- ▲ content HTML 修正ここまで ▲ ---
 
+                // ↓↓↓ ★★★ 修正箇所 ★★★ ↓↓↓
+                // App.openModal を呼び出す「前」にヘッダーボタンのHTMLを定義
+                const headerSearchBtn = `<button type="button" id="edit-external-search-header" class="text-sm py-1 px-3 rounded-lg flex items-center transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700 text-white"><i class="fas fa-globe-asia mr-2"></i>外部サイト検索</button>`;
 
+                // App.openModal の第3引数 (onOpen コールバック) を開始
                 App.openModal(`「${work.name}」を編集`, content, () => {
                     // --- 既存のUI要素の取得 ---
                     const ratingStars = $('#editWorkRating'), tagsContainer = $('#editWorkTags');
@@ -2501,6 +2480,7 @@
                     const editCurrentImagePreview = $('#edit-current-image-preview');
                     const editImageDeleteBtn = $('#edit-image-delete-btn');
                     const editNoImagePlaceholder = $('#edit-no-image-placeholder');
+                    const editImageFilename = $('#edit-image-filename');
                     
                     // --- 修正: メモ関連のUI要素を取得 ---
                     const pcMemoTextarea = $('#editWorkMemo');
@@ -2521,7 +2501,8 @@
                     if (smMemoButton) {
                         smMemoButton.addEventListener('click', () => {
                             // 段階1で追加した App.openMemoModal を呼び出す
-                            App.openMemoModal(currentMemo, (newMemoText) => {
+                            // ↓ 修正: workId, currentRating, currentTagIds を渡す
+                            App.openMemoModal(workId, currentMemo, currentRating, currentTagIds, (newMemoText) => {
                                 // openMemoModal が閉じたときのコールバック
                                 if (newMemoText !== null) {
                                     currentMemo = newMemoText; // 内部状態を更新
@@ -2531,14 +2512,12 @@
                                         smMemoPreview.classList.toggle('italic', !currentMemo);
                                     }
                                 }
-                                // App.closeModal() は App.openMemoModal が自動で行う
-                                // (スタックから復元するため)
                             });
                         });
                     }
 
 
-                    // --- 画像削除ボタンのロジック (変更なし) ---
+                    // --- 画像削除ボタンのロジック (ファイル名テキスト更新を追加) ---
                     editImageDeleteBtn.addEventListener('click', () => {
                         if (confirm('本当に画像を削除しますか？')) {
                             editCurrentImagePreview.src = '';
@@ -2548,17 +2527,22 @@
                             AppState.deleteImageFlag = true;
                             AppState.tempNewImageUrl = null;
                             editImageUpload.value = '';
+                            if (editImageFilename) editImageFilename.textContent = 'ファイルが選択されていません。';
                             App.showToast("画像を削除候補にしました。保存で確定されます。", "info");
                         }
                     });
 
-                    // --- 画像アップロードのロジック (変更なし) ---
+                    // --- 画像アップロードのロジック (ファイル名テキスト更新を追加) ---
                     editImageUpload.addEventListener('change', async (e) => {
                         const file = e.target.files[0];
                         if (!file) {
                             AppState.tempNewImageUrl = null;
+                            if (editImageFilename) editImageFilename.textContent = 'ファイルが選択されていません。';
                             return;
                         }
+                        
+                        if (editImageFilename) editImageFilename.textContent = file.name;
+
                         try {
                             const newUrl = await App.processImage(file);
                             App.openImageCompareModal(work.imageUrl || '', newUrl);
@@ -2567,6 +2551,7 @@
                             App.showToast(error.message || "画像処理に失敗しました。", "error");
                             editImageUpload.value = '';
                             AppState.tempNewImageUrl = null;
+                            if (editImageFilename) editImageFilename.textContent = 'ファイルが選択されていません。';
                         }
                     });
 
@@ -2585,7 +2570,7 @@
                         });
                     });
 
-                    // --- 修正: getFormState / checkModalDirtyState に 'memo' を追加 ---
+                    // --- getFormState / checkModalDirtyState に 'memo' を追加 ---
                     const getFormState = () => {
                         const nameInput = $('#editWorkName');
                         if (!nameInput) return null;
@@ -2604,27 +2589,20 @@
                             registeredAt: registeredAtStr,
                             rating: currentRating,
                             tagIds: JSON.stringify([...currentTagIds].sort()),
-                            memo: currentMemo // ← 修正: memo を状態に含める
+                            memo: currentMemo
                         };
                     };
 
                     const initialState = getFormState();
 
                     AppState.checkModalDirtyState = () => {
-                        const currentState = getFormState();
+                        const currentState = getFormState(); // ← 修正: Ztate -> State
                         if (initialState === null || currentState === null) return false;
                         const imageChanged = AppState.tempNewImageUrl !== null || AppState.deleteImageFlag;
                         return JSON.stringify(initialState) !== JSON.stringify(currentState) || imageChanged;
                     };
                     
-                    // --- 外部サイト検索 (変更なし) ---
-                    // 修正: ボタンが2つになったため、両方にリスナーをセット
-                    $('#edit-external-search')?.addEventListener('click', () => {
-                         const capturedState = { rating: currentRating, tagIds: currentTagIds, memo: currentMemo };
-                        AppState.modalStateStack.push(() => App.openEditModal(workId, capturedState));
-                        App.openExternalSearchModal(workNameInput.value);
-                    });
-                    // (PCヘッダー版のボタン)
+                    // --- 外部サイト検索 (フッターボタンを削除し、ヘッダーボタンのみに) ---
                     $('#edit-external-search-header')?.addEventListener('click', () => {
                          const capturedState = { rating: currentRating, tagIds: currentTagIds, memo: currentMemo };
                         AppState.modalStateStack.push(() => App.openEditModal(workId, capturedState));
@@ -2658,7 +2636,6 @@
                             mode: 'assign', workId, currentTagIds, workName: work.name,
                             onConfirm: (newTagIds) => {
                                  if(newTagIds) currentTagIds = newTagIds;
-                                 // 修正: 戻ってきたときに memo の状態も引き継ぐ
                                  App.openEditModal(workId, { rating: currentRating, tagIds: currentTagIds, memo: currentMemo })
                             }
                         });
@@ -2667,7 +2644,7 @@
                     // --- キャンセルボタン (変更なし) ---
                     $('#edit-cancel-btn').addEventListener('click', App.closeModal);
                     
-                    // --- 修正: フォーム送信（保存）時に 'memo' を追加 ---
+                    // --- フォーム送信（保存）時に 'memo' を追加 ---
                     $('#editWorkForm').addEventListener('submit', async e => {
                         e.preventDefault();
                         if (!workNameInput || !workNameInput.value.trim()){
@@ -2683,7 +2660,7 @@
                             registeredAt: Timestamp.fromDate(new Date(registeredAtStr.replace(/\//g, '-'))),
                             rating: currentRating,
                             tagIds: Array.from(currentTagIds),
-                            memo: currentMemo // ← 修正: memo データを保存オブジェクトに追加
+                            memo: currentMemo
                         };
                         
                         if (AppState.tempNewImageUrl) {
@@ -2698,209 +2675,10 @@
                             App.closeModal();
                         }
                     });
-                });
-            },
-            
-            openFilterModal: (tempState = null) => {
-                let tempGenres = tempState?.genres ?? new Set(AppState.listFilters.genres);
-                let tempRating = tempState?.rating ?? { ...AppState.listFilters.rating };
-                let tempAndTags = tempState?.andTagIds ?? new Set(AppState.listFilters.andTagIds);
-                let tempOrTags = tempState?.orTagIds ?? new Set(AppState.listFilters.orTagIds);
-                let tempNotTags = tempState?.notTagIds ?? new Set(AppState.listFilters.notTagIds);
-                let tempDateFilter = tempState?.dateFilter ?? { ...AppState.listFilters.dateFilter };
-                if (!tempDateFilter.date) tempDateFilter.date = App.formatDateForInput(new Date());
-                if (!tempDateFilter.startDate) tempDateFilter.startDate = App.formatDateForInput(new Date());
-                if (!tempDateFilter.endDate) tempDateFilter.endDate = App.formatDateForInput(new Date());
-                let tempUnrated = tempState?.unratedOrUntaggedOnly ?? AppState.listFilters.unratedOrUntaggedOnly;
-                let tempShowSiteIcon = AppState.showSiteIcon;
-
-                const content = `
-                    <div class="space-y-4">
-                        <div class="flex items-center">
-                            <input type="checkbox" id="filter-unrated" class="h-4 w-4 rounded bg-gray-600 text-sky-500 border-gray-500 focus:ring-sky-600" ${tempUnrated ? 'checked' : ''}>
-                            <label for="filter-unrated" class="ml-2 text-sm font-medium">未評価またはタグ未設定の作品のみ</label>
-                        </div>
-                        <div><h4 class="font-semibold mb-2">ジャンル</h4><div class="flex flex-wrap gap-3">${['漫画', 'ゲーム', '動画'].map(g => `<div><input type="checkbox" id="filter-genre-${g}" value="${g}" class="hidden peer" ${tempGenres.has(g) ? 'checked' : ''}><label for="filter-genre-${g}" class="px-4 py-2 border-2 border-gray-600 rounded-lg cursor-pointer peer-checked:bg-teal-600 peer-checked:border-teal-500">${g}</label></div>`).join('')}</div></div>
-                        <div><h4 class="font-semibold mb-2">登録日</h4>${App.createDateFilterHTML('list', tempDateFilter)}</div>
-                        <div id="filter-rating-section" class="${tempUnrated ? 'opacity-50' : ''}"><h4 class="font-semibold mb-2">評価</h4><div class="flex items-center space-x-4"><div class="flex items-center space-x-2 text-2xl" id="filter-rating"></div><div class="flex items-center"><input type="checkbox" id="filter-rating-above" class="h-4 w-4 rounded bg-gray-700 text-teal-500" ${tempRating.type === 'above' ? 'checked': ''}><label for="filter-rating-above" class="ml-2 text-sm">以上</label></div><button id="filter-rating-clear" class="text-sm text-gray-400 hover:text-white">クリア</button></div></div>
-
-                        <div>
-                            <h4 class="font-semibold mb-1">タグ絞り込み</h4>
-                            <div id="filter-tags-display" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] mb-2"></div>
-                            <button type="button" id="filter-select-tags" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグの条件を選択</button>
-                        </div>
-
-                        <div>
-                            <h4 class="font-semibold mb-2">表示設定</h4>
-                            <div class="flex items-center bg-gray-900 p-3 rounded-lg">
-                                <input type="checkbox" id="filter-show-site-icon" class="h-4 w-4 rounded bg-gray-600 text-sky-500 border-gray-500 focus:ring-sky-600" ${tempShowSiteIcon ? 'checked' : ''}>
-                                <label for="filter-show-site-icon" class="ml-3 text-sm font-medium">作品画像のサイトアイコンを表示する</label>
-                            </div>
-                        </div>
-
-                        <div class="pt-4 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
-                            <button id="filter-reset" class="w-full sm:w-auto btn btn-secondary">全リセット</button>
-                            <div class="flex space-x-3 w-full sm:w-auto">
-                                <button id="filter-cancel" class="flex-1 sm:flex-none px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
-                                <button id="filter-apply" class="flex-1 sm:flex-none px-6 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold">適用</button>
-                            </div>
-                        </div>
-                    </div>`;
-
-                App.openModal("作品リストの絞り込み", content, () => {
-                    const updatePreview = () => {
-                        const countEl = $('#date-filter-preview-count-list'), gridEl = $('#date-filter-preview-grid-list');
-                        if (!countEl || !gridEl) return;
-
-                        const filters = {
-                            unratedOrUntaggedOnly: $('#filter-unrated').checked,
-                            genres: new Set([...$$('input[id^="filter-genre-"]:checked')].map(cb => cb.value)),
-                            rating: { value: tempRating.value, type: $('#filter-rating-above').checked ? 'above' : 'exact' },
-                            andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
-                            dateFilter: {
-                                mode: $(`input[name="date-filter-mode-list"]:checked`).value,
-                                date: App.getDateInputValue('date-filter-specific-date-list'),
-                                startDate: App.getDateInputValue('date-filter-start-date-list'),
-                                endDate: App.getDateInputValue('date-filter-end-date-list')
-                            }
-                        };
-
-                        const filtered = App.getFilteredWorks(filters);
-
-                        countEl.textContent = `対象: ${filtered.length} 作品`;
-                        gridEl.innerHTML = filtered.slice(0, 50).map(w => `<div class="text-center"><img src="${w.imageUrl||'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${w.name}" class="w-full h-16 object-cover rounded-md"><p class="text-xs truncate mt-1">${w.name}</p></div>`).join('');
-                    };
-
-                    App.setupDateFilterEventListeners('list', updatePreview);
-                    $$('input[id^="filter-genre-"]').forEach(cb => cb.addEventListener('change', updatePreview));
-
-                    const ratingSection = $('#filter-rating-section');
-                    const ratingStars = $('#filter-rating');
-                    const unratedToggle = $('#filter-unrated');
-
-                    unratedToggle.addEventListener('change', () => {
-                        const isDisabled = unratedToggle.checked;
-                        ratingSection.classList.toggle('opacity-50', isDisabled);
-                        ratingSection.querySelectorAll('input, button').forEach(el => el.disabled = isDisabled);
-                        updatePreview();
-                    });
-
-                    const renderStars = r => { ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= r ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join(''); };
-                    renderStars(tempRating.value);
-                    // 修正: ratingStars が null でないことを確認
-                    if (ratingStars) {
-                        ratingStars.addEventListener('click', e => {
-                            if (e.target.matches('.fa-star')) {
-                                const r = parseInt(e.target.dataset.value);
-                                tempRating.value = (tempRating.value === r) ? 0 : r;
-                                renderStars(tempRating.value); // 修正: 星の再描画
-                                updatePreview();
-                            }
-                        });
-                    }
-                    $('#filter-rating-above').addEventListener('change', updatePreview);
-                    $('#filter-rating-clear').addEventListener('click', () => { tempRating.value = 0; renderStars(0); updatePreview(); });
-
-                    const renderCombinedTags = () => {
-                        const container = $('#filter-tags-display');
-                        if (!container) return;
-                        let html = '';
-                        const renderSet = (ids, className, prefix) => {
-                            [...ids].map(id => AppState.tags.get(id)).filter(Boolean).forEach(tag => { // 修正済み
-                                html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${tag.name}</span>`;
-                            });
-                        };
-                        renderSet(tempAndTags, 'tag-item-and text-white', 'AND');
-                        renderSet(tempOrTags, 'tag-item-or text-white', 'OR');
-                        renderSet(tempNotTags, 'tag-item-not text-white', 'NOT');
-
-                        container.innerHTML = html || `<span class="text-xs text-gray-500">タグ未選択</span>`;
-                    };
-                    renderCombinedTags();
-
-                    $('#filter-select-tags').addEventListener('click', () => {
-                        const capturedState = {
-                            genres: new Set([...$$('input[id^="filter-genre-"]:checked')].map(cb => cb.value)),
-                            rating: { value: tempRating.value, type: $('#filter-rating-above').checked ? 'above' : 'exact' },
-                            andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
-                            unratedOrUntaggedOnly: unratedToggle.checked,
-                            dateFilter: {
-                                mode: $(`input[name="date-filter-mode-list"]:checked`).value,
-                                date: App.getDateInputValue('date-filter-specific-date-list'),
-                                startDate: App.getDateInputValue('date-filter-start-date-list'),
-                                endDate: App.getDateInputValue('date-filter-end-date-list'),
-                            }
-                        };
-                        App.openTagFilterModal({
-                            and: tempAndTags, or: tempOrTags, not: tempNotTags,
-                            onConfirm: (newTags) => {
-                                if (newTags) {
-                                    capturedState.andTagIds = newTags.and;
-                                    capturedState.orTagIds = newTags.or;
-                                    capturedState.notTagIds = newTags.not;
-                                }
-                                App.openFilterModal(capturedState);
-                            }
-                        });
-                    });
-
-                    // New Site Icon Toggle Logic
-                    $('#filter-show-site-icon').addEventListener('change', (e) => {
-                        tempShowSiteIcon = e.target.checked;
-                    });
-
-                    $('#filter-apply').addEventListener('click', () => {
-                        AppState.listFilters.genres = new Set([...$$('#modal-wrapper input[id^="filter-genre-"]:checked')].map(el => el.value));
-                        AppState.listFilters.unratedOrUntaggedOnly = unratedToggle.checked;
-                        AppState.listFilters.rating = { value: tempRating.value, type: $('#filter-rating-above').checked ? 'above' : 'exact' };
-                        AppState.listFilters.andTagIds = tempAndTags;
-                        AppState.listFilters.orTagIds = tempOrTags;
-                        AppState.listFilters.notTagIds = tempNotTags;
-                        App.saveShowSiteIcon(tempShowSiteIcon);
-
-                        const mode = $(`input[name="date-filter-mode-list"]:checked`).value;
-                        AppState.listFilters.dateFilter.mode = mode;
-                        if (mode === 'specific') {
-                            const dateVal = App.getDateInputValue('date-filter-specific-date-list');
-                            if (dateVal && !App.isValidDate(dateVal)) return App.showToast("特定日の形式が不正です。", "error");
-                            AppState.listFilters.dateFilter.date = dateVal;
-                        } else if (mode === 'range') {
-                            const startVal = App.getDateInputValue('date-filter-start-date-list'), endVal = App.getDateInputValue('date-filter-end-date-list');
-                            if ((startVal && !App.isValidDate(startVal)) || (endVal && !App.isValidDate(endVal))) return App.showToast("期間の形式が不正です。", "error");
-                            AppState.listFilters.dateFilter.startDate = startVal; AppState.listFilters.dateFilter.endDate = endVal;
-                        } else { AppState.listFilters.dateFilter = AppState.defaultDateFilter(); }
-
-                        const filtersToSave = {
-                            ...AppState.listFilters,
-                            genres: [...AppState.listFilters.genres],
-                            andTagIds: [...AppState.listFilters.andTagIds],
-                            orTagIds: [...AppState.listFilters.orTagIds],
-                            notTagIds: [...AppState.listFilters.notTagIds]
-                        };
-                        localStorage.setItem('listFilters', JSON.stringify(filtersToSave));
-                        App.renderAll(); App.closeModal();
-                    });
-                    $('#filter-cancel').addEventListener('click', App.closeModal);
-                    $('#filter-reset').addEventListener('click', () => {
-                        AppState.listFilters = { genres: new Set(), rating: { type: 'exact', value: 0 }, andTagIds: new Set(), orTagIds: new Set(), notTagIds: new Set(), dateFilter: AppState.defaultDateFilter(), unratedOrUntaggedOnly: false };
-                        App.saveShowSiteIcon(true);
-
-                        const filtersToSave = { // Resetした後の値を保存
-                            ...AppState.listFilters,
-                            genres: [], andTagIds: [], orTagIds: [], notTagIds: []
-                        };
-                        localStorage.setItem('listFilters', JSON.stringify(filtersToSave));
-
-                        App.renderAll();
-                        App.closeModal();
-                    });
-
-                    // Initial setup for disabled state
-                    const isDisabled = unratedToggle.checked;
-                    ratingSection.classList.toggle('opacity-50', isDisabled);
-                    ratingSection.querySelectorAll('input, button').forEach(el => el.disabled = isDisabled);
-                    updatePreview();
-                });
+                // ↓↓↓ ★★★ 修正箇所 ★★★ ↓↓↓
+                // 修正: onModalOpen コールバックの「外側」でオプションを渡す
+                // 修正: 'max-w-7xl' から 'max-w-5xl' に戻す (バランスのため)
+                }, { size: 'max-w-5xl', headerActions: headerSearchBtn }); 
             },
             
             openTagModal: (options) => {
@@ -2917,7 +2695,7 @@
                                 <input type="search" id="tagSearchInput" placeholder="タグを検索..." class="w-full bg-gray-700 p-2 pl-10 rounded-lg">
                             </div>
                             ${mode === 'manage' ? `
-                                <button id="search-selected-tag-btn" class="btn-icon bg-emerald-600 hover:bg-emerald-700" title="選択したタグで検索" disabled>
+                                <button id="search-selected-tag-btn" class="w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700" title="選択したタグで検索" disabled>
                                     <i class="fas fa-search"></i>
                                 </button>
                             ` : ''}
@@ -3249,11 +3027,11 @@
             },
             
             createDateInputHTML: (id, value) => {
-                return `<input type="text" id="${id}" value="${value}" placeholder="YYYY/MM/DD" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-sky-500">`;
+                return `<input type="text" id="${id}" value="${value}" placeholder="YYYY/MM/DD" data-role="date-input" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-sky-500">`;
             },
             
             initializeDateInputs: (container) => {
-                container.querySelectorAll('input[placeholder="YYYY/MM/DD"]').forEach(textInput => {
+                container.querySelectorAll('input[data-role="date-input"]').forEach(textInput => {
                     if (textInput.dataset.initialized) return;
                     textInput.dataset.initialized = 'true';
                     const validateDateInput = () => {
@@ -3376,7 +3154,7 @@
                         <button type="button" id="lottery-select-tags" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグの条件を選択</button>
                     </div>
                     <div class="pt-4 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
-                        <button type="button" id="lottery-settings-reset" class="w-full sm:w-auto btn btn-secondary">リセット</button>
+                        <button type="button" id="lottery-settings-reset" class="w-full sm:w-auto px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-700 text-gray-100">リセット</button>
                         <div class="flex space-x-3 w-full sm:w-auto">
                             <button type="button" id="lottery-settings-cancel" class="flex-1 sm:flex-none px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
                             <button type="button" id="lottery-settings-save" class="flex-1 sm:flex-none px-6 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold">保存</button>
@@ -3611,14 +3389,14 @@
                 App.openModal("ヘルプ：抽選設定", content); // App.openModal を使用
             },
 
-            openMemoModal: (currentMemo, onConfirm) => {
+            openMemoModal: (workId, currentMemo, currentRating, currentTagIds, onConfirm) => { // ← 修正: 引数を追加
                 // 現在の編集モーダルの状態をスタックに保存
                 const capturedState = {
-                    rating: currentRating, // openEditModal スコープ内の変数
-                    tagIds: currentTagIds, // openEditModal スコープ内の変数
+                    rating: currentRating, // ← 修正: 引数から受け取る
+                    tagIds: currentTagIds, // ← 修正: 引数から受け取る
                     memo: currentMemo
                 };
-                AppState.modalStateStack.push(() => App.openEditModal(workId, capturedState)); // openEditModal の workId を参照
+                AppState.modalStateStack.push(() => App.openEditModal(workId, capturedState)); // ← 修正: 引数から受け取る
 
                 const content = `
                     <div class="flex flex-col h-[60vh]">
@@ -3712,8 +3490,8 @@
                     </div>
                     <div class="pt-6 mt-6 border-t border-gray-700 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
                         <button id="lottery-reroll" class="w-full sm:w-auto px-6 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold">もう一度抽選</button>
-                        <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto"> <button id="result-close-nosave-btn" class="w-full sm:w-auto px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">保存せずに閉じる</button> <button id="result-close-btn" class="w-full sm:w-auto btn btn-secondary">閉じる</button>
-                            <button id="result-save-btn" class="w-full sm:w-auto btn btn-primary">保存</button>
+                        <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto"> <button id="result-close-nosave-btn" class="w-full sm:w-auto px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">保存せずに閉じる</button> <button id="result-close-btn" class="w-full sm:w-auto px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-700 text-gray-100">閉じる</button>
+                            <button id="result-save-btn" class="w-full sm:w-auto px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-sky-600 hover:bg-sky-700 text-white">保存</button>
                         </div>
                     </div>`;
 
