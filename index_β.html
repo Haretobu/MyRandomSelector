@@ -176,7 +176,7 @@
 
     <!-- Main Container -->
     <div id="app-container" class="min-h-screen p-4 md:p-8 opacity-0 transition-opacity duration-500">
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
             
             <!-- Left Column: Controls -->
             <aside class="lg:col-span-1 space-y-6">
@@ -268,7 +268,7 @@
             </aside>
 
             <!-- Right Column: Content -->
-            <main class="lg:col-span-3 space-y-6 pb-24">
+            <main class="lg:col-span-2 space-y-6 pb-24">
                 <!-- List Controls -->
                 <div class="bg-gray-800 p-4 rounded-xl shadow-lg">
                      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
@@ -1574,9 +1574,15 @@
                     if (filters.mood === 'best') tempWorks = tempWorks.filter(w => (w.rating || 0) >= 4);
                     if (filters.mood === 'hidden_gem') tempWorks = tempWorks.filter(w => (w.rating || 0) <= 2);
                 } else if (filters.rating && filters.rating.value > 0) { // List
-                    tempWorks = filters.rating.type === 'exact' 
-                        ? tempWorks.filter(w => w.rating === filters.rating.value)
-                        : tempWorks.filter(w => w.rating >= filters.rating.value);
+                    // ↓↓↓ 修正: "below" (以下) のロジックと、(w.rating || 0) の安全対策を追加 ↓↓↓
+                    if (filters.rating.type === 'exact') {
+                        tempWorks = tempWorks.filter(w => (w.rating || 0) === filters.rating.value);
+                    } else if (filters.rating.type === 'above') {
+                        tempWorks = tempWorks.filter(w => (w.rating || 0) >= filters.rating.value);
+                    } else if (filters.rating.type === 'below') {
+                        tempWorks = tempWorks.filter(w => (w.rating || 0) <= filters.rating.value);
+                    }
+                    // ↑↑↑ 修正ここまで ↑↑↑
                 }
 
                 // Genre filter
@@ -2681,6 +2687,246 @@
                 }, { size: 'max-w-5xl', headerActions: headerSearchBtn }); 
             },
             
+            openFilterModal: (tempState = null) => {
+                const source = tempState || AppState.listFilters;
+                const state = {
+                    ...source,
+                    genres: new Set(source.genres),
+                    andTagIds: new Set(source.andTagIds),
+                    orTagIds: new Set(source.orTagIds),
+                    notTagIds: new Set(source.notTagIds),
+                    dateFilter: { ...(source.dateFilter || AppState.defaultDateFilter()) },
+                    rating: { ...(source.rating || { type: 'exact', value: 0 }) }
+                };
+                
+                // Pre-fill date inputs
+                if (!state.dateFilter.date) state.dateFilter.date = App.formatDateForInput(new Date());
+                if (!state.dateFilter.startDate) state.dateFilter.startDate = App.formatDateForInput(new Date());
+                if (!state.dateFilter.endDate) state.dateFilter.endDate = App.formatDateForInput(new Date());
+
+                const genreValue = [...state.genres][0] || 'all';
+                
+                const content = `
+                <div class="space-y-6">
+                    <div>
+                        <h4 class="font-semibold mb-2 text-sm text-gray-400">ジャンル</h4>
+                        <select id="filter-genre" class="w-full bg-gray-700 p-2 rounded-lg">
+                            <option value="all">すべて</option>
+                            <option value="漫画" ${genreValue==='漫画'?'selected':''}>漫画</option>
+                            <option value="ゲーム" ${genreValue==='ゲーム'?'selected':''}>ゲーム</option>
+                            <option value="動画" ${genreValue==='動画'?'selected':''}>動画</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <div class="flex items-center mb-2">
+                             <input type="checkbox" id="filter-unrated" class="h-4 w-4 rounded bg-gray-600 text-sky-500 border-gray-500 focus:ring-sky-600" ${state.unratedOrUntaggedOnly ? 'checked' : ''}>
+                             <label for="filter-unrated" class="ml-2 text-sm font-medium">未評価またはタグ未設定の作品のみ</label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 class="font-semibold mb-2 text-sm text-gray-400">評価 (★)</h4>
+                        <div class="flex items-center space-x-4 mb-2">
+                            <select id="filter-rating-type" class="bg-gray-700 p-2 rounded-lg" ${state.unratedOrUntaggedOnly ? 'disabled' : ''}>
+                                <option value="exact" ${state.rating.type === 'exact' ? 'selected' : ''}>と等しい</option>
+                                <option value="above" ${state.rating.type === 'above' ? 'selected' : ''}>以上</option>
+                                <option value="below" ${state.rating.type === 'below' ? 'selected' : ''}>以下</option>
+                            </select>
+                            <span class="text-gray-400 text-sm">（星をクリックして指定）</span>
+                        </div>
+                        <div id="filter-rating-stars" class="flex items-center space-x-2 text-3xl ${state.unratedOrUntaggedOnly ? 'opacity-50 pointer-events-none' : ''}">
+                            </div>
+                    </div>
+
+                    <div><h4 class="text-sm text-gray-400 mb-1">登録日で絞り込む</h4>${App.createDateFilterHTML('filter', state.dateFilter, true)}</div>
+
+                    <div>
+                        <h4 class="font-semibold mb-1">タグ絞り込み</h4>
+                        <div id="filter-tags-display" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] mb-2"></div>
+                        <button type="button" id="filter-select-tags" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグの条件を選択</button>
+                    </div>
+
+                    <div class="pt-4 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
+                        <button type="button" id="filter-settings-reset" class="w-full sm:w-auto px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-700 text-gray-100">リセット</button>
+                        <div class="flex space-x-3 w-full sm:w-auto">
+                            <button type="button" id="filter-settings-cancel" class="flex-1 sm:flex-none px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
+                            <button type="button" id="filter-settings-save" class="flex-1 sm:flex-none px-6 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-sky-600 hover:bg-sky-700 text-white">適用</button>
+                        </div>
+                    </div>
+                </div>`;
+
+                App.openModal("作品リストの絞り込み", content, () => {
+                    let tempAndTags = new Set(state.andTagIds);
+                    let tempOrTags = new Set(state.orTagIds);
+                    let tempNotTags = new Set(state.notTagIds);
+
+                    let currentRating = state.rating.value;
+                    const ratingStars = $('#filter-rating-stars');
+                    const ratingTypeSelect = $('#filter-rating-type'); // ← 修正: select を取得
+                    const unratedToggle = $('#filter-unrated');
+
+                    const updatePreview = () => {
+                        const countEl = $('#date-filter-preview-count-filter'), gridEl = $('#date-filter-preview-grid-filter');
+                        if (!countEl || !gridEl) return;
+
+                        const filters = {
+                            unratedOrUntaggedOnly: unratedToggle.checked,
+                            rating: {
+                                type: ratingTypeSelect.value, // ← 修正: select から type を取得
+                                value: currentRating
+                            },
+                            genres: new Set($('#filter-genre').value === 'all' ? [] : [$('#filter-genre').value]),
+                            andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
+                            dateFilter: {
+                                mode: $(`input[name="date-filter-mode-filter"]:checked`).value,
+                                date: App.getDateInputValue('date-filter-specific-date-filter'),
+                                startDate: App.getDateInputValue('date-filter-start-date-filter'),
+                                endDate: App.getDateInputValue('date-filter-end-date-filter')
+                            }
+                        };
+                        const filtered = App.getFilteredWorks(filters);
+
+                        countEl.textContent = `対象: ${filtered.length} 作品`;
+                        gridEl.innerHTML = filtered.slice(0, 50).map(w => `<div class="text-center"><img src="${w.imageUrl||'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${w.name}" class="w-full h-16 object-cover rounded-md"><p class="text-xs truncate mt-1">${w.name}</p></div>`).join('');
+                    };
+
+                    App.setupDateFilterEventListeners('filter', updatePreview);
+
+                    unratedToggle.addEventListener('change', () => {
+                        const isDisabled = unratedToggle.checked;
+                        ratingStars.classList.toggle('opacity-50', isDisabled);
+                        ratingStars.classList.toggle('pointer-events-none', isDisabled);
+                        ratingTypeSelect.disabled = isDisabled; // ← 修正: select も無効化
+                        updatePreview();
+                    });
+
+                    $('#filter-genre').addEventListener('change', updatePreview);
+                    ratingTypeSelect.addEventListener('change', updatePreview); // ← 修正: select のリスナーを追加
+
+                    const renderStars = r => {
+                        if (ratingStars) {
+                            ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= r ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('');
+                        }
+                    };
+                    renderStars(currentRating); 
+
+                    if (ratingStars) {
+                        ratingStars.addEventListener('click', e => {
+                            if (e.target.matches('.fa-star')) {
+                                const r = parseInt(e.target.dataset.value);
+                                currentRating = (currentRating === r) ? 0 : r;
+                                renderStars(currentRating);
+                                updatePreview(); 
+                            }
+                        });
+                    }
+
+                    const renderCombinedTags = () => {
+                        const container = $('#filter-tags-display');
+                        if (!container) return;
+                        let html = '';
+                        const renderSet = (ids, className, prefix) => {
+                            [...ids].map(id => AppState.tags.get(id)).filter(Boolean).forEach(tag => {
+                                html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${tag.name}</span>`;
+                            });
+                        };
+                        renderSet(tempAndTags, 'tag-item-and text-white', 'AND');
+                        renderSet(tempOrTags, 'tag-item-or text-white', 'OR');
+                        renderSet(tempNotTags, 'tag-item-not text-white', 'NOT');
+                        container.innerHTML = html || `<span class="text-xs text-gray-500">タグ未選択</span>`;
+                    };
+                    renderCombinedTags();
+
+                    $('#filter-select-tags').addEventListener('click', () => {
+                        const capturedState = {
+                            genres: new Set($('#filter-genre').value === 'all' ? [] : [$('#filter-genre').value]),
+                            rating: {
+                                type: ratingTypeSelect.value, // ← 修正: type をキャプチャ
+                                value: currentRating
+                            },
+                            andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
+                            unratedOrUntaggedOnly: unratedToggle.checked,
+                            dateFilter: { 
+                                mode: $(`input[name="date-filter-mode-filter"]:checked`).value, 
+                                date: App.getDateInputValue(`date-filter-specific-date-filter`), 
+                                startDate: App.getDateInputValue(`date-filter-start-date-filter`), 
+                                endDate: App.getDateInputValue(`date-filter-end-date-filter`) 
+                            }
+                        };
+                        App.openTagFilterModal({
+                            and: tempAndTags, or: tempOrTags, not: tempNotTags,
+                            onConfirm: (newTags) => {
+                                if(newTags) {
+                                    capturedState.andTagIds = newTags.and;
+                                    capturedState.orTagIds = newTags.or;
+                                    capturedState.notTagIds = newTags.not;
+                                }
+                                App.openFilterModal(capturedState);
+                            }
+                        });
+                    });
+
+                    $('#filter-settings-reset').addEventListener('click', () => {
+                        AppState.listFilters = {
+                            genres: new Set(),
+                            rating: { type: 'exact', value: 0 },
+                            andTagIds: new Set(),
+                            orTagIds: new Set(),
+                            notTagIds: new Set(),
+                            dateFilter: AppState.defaultDateFilter(),
+                            unratedOrUntaggedOnly: false,
+                        };
+                        localStorage.removeItem('listFilters');
+                        App.openFilterModal();
+                    });
+
+                    $('#filter-settings-save').addEventListener('click', () => {
+                        AppState.listFilters.unratedOrUntaggedOnly = unratedToggle.checked;
+                        AppState.listFilters.rating.type = ratingTypeSelect.value; // ← 修正: type を保存
+                        AppState.listFilters.rating.value = currentRating;
+                        const genre = $('#filter-genre').value;
+                        AppState.listFilters.genres = genre === 'all' ? new Set() : new Set([genre]);
+                        AppState.listFilters.andTagIds = tempAndTags;
+                        AppState.listFilters.orTagIds = tempOrTags;
+                        AppState.listFilters.notTagIds = tempNotTags;
+
+                        const mode = $(`input[name="date-filter-mode-filter"]:checked`).value;
+                        AppState.listFilters.dateFilter.mode = mode;
+                        if (mode === 'specific') { 
+                            const val = App.getDateInputValue('date-filter-specific-date-filter'); 
+                            if (val && !App.isValidDate(val)) return App.showToast("特定日の形式が不正です。", "error"); 
+                            AppState.listFilters.dateFilter.date = val; 
+                        } else if (mode === 'range') { 
+                            const start = App.getDateInputValue('date-filter-start-date-filter');
+                            const end = App.getDateInputValue('date-filter-end-date-filter'); 
+                            if ((start && !App.isValidDate(start)) || (end && !App.isValidDate(end))) return App.showToast("期間の形式が不正です。", "error"); 
+                            AppState.listFilters.dateFilter.startDate = start; 
+                            AppState.listFilters.dateFilter.endDate = end; 
+                        } else { 
+                            AppState.listFilters.dateFilter = AppState.defaultDateFilter(); 
+                        }
+                        
+                        const filtersToSave = {
+                            ...AppState.listFilters,
+                            genres: [...AppState.listFilters.genres],
+                            andTagIds: [...AppState.listFilters.andTagIds],
+                            orTagIds: [...AppState.listFilters.orTagIds],
+                            notTagIds: [...AppState.listFilters.notTagIds]
+                        };
+                        localStorage.setItem('listFilters', JSON.stringify(filtersToSave));
+
+                        AppState.currentPage = 1;
+                        App.renderAll();
+                        App.closeModal();
+                    });
+                    
+                    $('#filter-settings-cancel').addEventListener('click', App.closeModal);
+
+                    updatePreview();
+                });
+            },
+
             openTagModal: (options) => {
                 const { mode = 'manage', currentTagIds = new Set(), workName = '', onConfirm } = options;
                 let tempSelectedTagIds = new Set(currentTagIds);
@@ -2960,8 +3206,8 @@
                         renderTagList(); // リストの選択状態もリセット
                     });
 
-                    $('#tag-modal-confirm')?.addEventListener('click', () => { onConfirm({and: tempAnd, or: tempOr, not: tempNot}); App.closeModal(); }); // 決定時に閉じる
-                    $('#tag-modal-cancel')?.addEventListener('click', () => { onConfirm(null); App.closeModal(); }); // キャンセル時に閉じる
+                    $('#tag-modal-confirm')?.addEventListener('click', () => { onConfirm({and: tempAnd, or: tempOr, not: tempNot}); }); // 修正: App.closeModal() を削除
+                    $('#tag-modal-cancel')?.addEventListener('click', () => { onConfirm(null); }); // 修正: App.closeModal() を削除
                 });
             },
 
@@ -2975,8 +3221,7 @@
             },
             
             // --- Date Filter UI & Logic ---
-            createDateFilterHTML: (context, state) => {
-                // ... (内部の createDateInputHTML を App.createDateInputHTML に変更) ...
+            createDateFilterHTML: (context, state, isOpen = false) => { // ← 修正: isOpen 引数を追加
                 const html = `
                     <div class="space-y-3">
                         <div class="flex flex-wrap gap-x-6 gap-y-2">
@@ -2992,8 +3237,7 @@
                             <span class="text-center block sm:inline">～</span>
                             ${App.createDateInputHTML(`date-filter-end-date-${context}`, state.endDate)}
                         </div>
-                        <details class="bg-gray-700 rounded-lg">
-                            <summary class="px-3 py-2 text-xs text-gray-400 cursor-pointer">対象作品プレビュー (最大50件)</summary>
+                        <details class="bg-gray-700 rounded-lg" ${isOpen ? 'open' : ''}> <summary class="px-3 py-2 text-xs text-gray-400 cursor-pointer">対象作品プレビュー (最大50件)</summary>
                             <div class="p-3 border-t border-gray-600">
                                 <p id="date-filter-preview-count-${context}" class="text-sm mb-2">対象: 0 作品</p>
                                 <div id="date-filter-preview-grid-${context}" class="date-filter-preview-grid max-h-48 overflow-y-auto">
@@ -3002,7 +3246,6 @@
                         </details>
                     </div>
                 `;
-                // return html.replace(...) の行は不要になりました
                 return html;
             },
             
@@ -3010,8 +3253,22 @@
                  $$(`input[name="date-filter-mode-${context}"]`).forEach(radio => {
                     radio.addEventListener('change', () => {
                         const mode = radio.value;
-                        $('#date-filter-specific-' + context).classList.toggle('hidden', mode !== 'specific');
-                        $('#date-filter-range-' + context).classList.toggle('hidden', mode !== 'range');
+                        const specificPanel = $('#date-filter-specific-' + context);
+                        const rangePanel = $('#date-filter-range-' + context);
+
+                        // ↓↓↓ 修正: toggle を、より確実な add/remove に変更 ↓↓↓
+                        if (mode === 'specific') {
+                            specificPanel.classList.remove('hidden');
+                            rangePanel.classList.add('hidden');
+                        } else if (mode === 'range') {
+                            specificPanel.classList.add('hidden');
+                            rangePanel.classList.remove('hidden');
+                        } else { // mode === 'none'
+                            specificPanel.classList.add('hidden');
+                            rangePanel.classList.add('hidden');
+                        }
+                        // ↑↑↑ 修正ここまで ↑↑↑
+                        
                         updateCallback();
                     });
                 });
@@ -3019,7 +3276,7 @@
                     const input = $(`#${id}`);
                     if (!input) return;
                     input.addEventListener('change', updateCallback);
-                    input.addEventListener('input', App.debounce(updateCallback, 300)); // 修正
+                    input.addEventListener('input', App.debounce(updateCallback, 300));
                 };
                 addListener(`date-filter-specific-date-${context}`);
                 addListener(`date-filter-start-date-${context}`);
@@ -3147,7 +3404,7 @@
                         <div><label class="block text-sm text-gray-400 mb-1">登録日優先度</label><select id="lottery-priority" class="w-full bg-gray-700 p-2 rounded-lg"><option value="new" ${state.priority==='new'?'selected':''}>新しい順</option><option value="old" ${state.priority==='old'?'selected':''}>古い順</option><option value="random" ${state.priority==='random'?'selected':''}>ランダム</option></select></div>
                     </div>
                      <div><label class="block text-sm text-gray-400 mb-1">抽選方法</label><select id="lottery-method" class="w-full bg-gray-700 p-2 rounded-lg"><option value="normal" ${state.method==='normal'?'selected':''}>通常</option><option value="decrease_unselected" ${state.method==='decrease_unselected'?'selected':''}>未選択優先</option></select></div>
-                    <div><h4 class="text-sm text-gray-400 mb-1">登録日で絞り込む</h4>${App.createDateFilterHTML('lottery', state.dateFilter)}</div>
+                    <div><h4 class="text-sm text-gray-400 mb-1">登録日で絞り込む</h4>${App.createDateFilterHTML('lottery', state.dateFilter, true)}</div>
                     <div>
                         <h4 class="font-semibold mb-1">タグ絞り込み</h4>
                         <div id="lottery-tags-display" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] mb-2"></div>
@@ -3157,7 +3414,7 @@
                         <button type="button" id="lottery-settings-reset" class="w-full sm:w-auto px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-700 text-gray-100">リセット</button>
                         <div class="flex space-x-3 w-full sm:w-auto">
                             <button type="button" id="lottery-settings-cancel" class="flex-1 sm:flex-none px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
-                            <button type="button" id="lottery-settings-save" class="flex-1 sm:flex-none px-6 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold">保存</button>
+                            <button type="button" id="lottery-settings-save" class="flex-1 sm:flex-none px-6 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-sky-600 hover:bg-sky-700 text-white">保存</button>
                         </div>
                     </div>
                 </div>`;
