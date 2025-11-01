@@ -8,6 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="manifest" href="manifest.json">
     <style type="text/tailwindcss">
         /* Custom scrollbar for webkit browsers */
         ::-webkit-scrollbar {
@@ -578,6 +579,17 @@
 
             // --- Initialization ---
             init: () => {
+                if ('serviceWorker' in navigator) {
+                    window.addEventListener('load', () => {
+                        navigator.serviceWorker.register('sw.js')
+                            .then(registration => {
+                                console.log('Service Worker 登録成功:', registration.scope);
+                            })
+                            .catch(error => {
+                                console.log('Service Worker 登録失敗:', error);
+                            });
+                    });
+                }
                 $('#version-display').textContent = AppState.appVersion;
 
                 AppState.listViewMode = localStorage.getItem('listViewMode') || 'grid';
