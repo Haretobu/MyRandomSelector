@@ -469,8 +469,7 @@
             arrayRemove,
             deleteField,
             orderBy,
-            limit,
-            select
+            limit
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // --- 1. UI Helper Functions ---
@@ -1119,16 +1118,7 @@
                     AppState.ui.loadingText.textContent = '作品データを取得中... (Lite)';
                     const worksRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`);
                     // 登録日の新しい順 (sortState.by は 'registeredAt' がデフォルト) で 50件取得
-                    const worksQuery = query(
-                        worksRef, 
-                        orderBy('registeredAt', 'desc'), 
-                        limit(50),
-                        select(
-                            "name", "genre", "sourceUrl", "registeredAt", 
-                            "selectionCount", "rating", "tagIds", "lastSelectedAt", 
-                            "selectionHistory", "memo"
-                        )
-                    );
+                    const worksQuery = query(worksRef, orderBy('registeredAt', 'desc'), limit(50));
                     const worksSnapshot = await getDocs(worksQuery);
                     AppState.works = worksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     AppState.loadingStatus.works = true;
