@@ -2470,18 +2470,22 @@
                             <div class="md:col-span-2 space-y-4">
                                 <div>
                                     <label for="editWorkName" class="block text-sm font-medium text-gray-400 mb-1">作品名</label>
-                                    <div class="flex items-center gap-2 relative"> <input type="text" id="editWorkName" value="${safeWorkName}" class="flex-grow bg-gray-700 p-2 rounded-lg pr-20" required> <button type="button" id="clear-editWorkName" class="absolute inset-y-0 right-12 flex items-center pr-2 text-gray-400 hover:text-white hidden">
-                                            <i class="fas fa-times-circle"></i>
-                                        </button>
-                                        <button type="button" id="copy-edit-title-btn" class="w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" title="コピー"><i class="fas fa-copy"></i></button>
+                                    <div class="flex items-center gap-2">
+                                        <div class="relative flex-grow">
+                                            <input type="text" id="editWorkName" value="${safeWorkName}" class="w-full bg-gray-700 p-2 rounded-lg pr-10" required> <button type="button" id="clear-editWorkName" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"> <i class="fas fa-times-circle"></i>
+                                            </button>
+                                        </div>
+                                        <button type="button" id="copy-edit-title-btn" class="flex-shrink-0 w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" title="コピー"><i class="fas fa-copy"></i></button>
                                     </div>
                                 </div>
                                 <div>
                                     <label for="editWorkUrl" class="block text-sm font-medium text-gray-400 mb-1">作品URL</label>
-                                    <div class="flex items-center gap-2 relative"> <input type="url" id="editWorkUrl" value="${safeWorkUrl}" placeholder="https://..." class="flex-grow bg-gray-700 p-2 rounded-lg pr-20"> <button type="button" id="clear-editWorkUrl" class="absolute inset-y-0 right-12 flex items-center pr-2 text-gray-400 hover:text-white hidden">
-                                            <i class="fas fa-times-circle"></i>
-                                        </button>
-                                        <button type="button" id="openWorkUrlBtn" class="w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" title="URLを開く" ${!safeWorkUrl ? 'disabled' : ''}><i class="fas fa-external-link-alt"></i></button>
+                                    <div class="flex items-center gap-2">
+                                        <div class="relative flex-grow">
+                                            <input type="url" id="editWorkUrl" value="${safeWorkUrl}" placeholder="https://..." class="w-full bg-gray-700 p-2 rounded-lg pr-10"> <button type="button" id="clear-editWorkUrl" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"> <i class="fas fa-times-circle"></i>
+                                            </button>
+                                        </div>
+                                        <button type="button" id="openWorkUrlBtn" class="flex-shrink-0 w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" title="URLを開く" ${!safeWorkUrl ? 'disabled' : ''}><i class="fas fa-external-link-alt"></i></button>
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-2 gap-4">
