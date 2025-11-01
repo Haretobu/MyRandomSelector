@@ -227,7 +227,7 @@
                          <div id="addWorkError" class="hidden text-sm text-center bg-red-900 border border-red-700 text-red-300 p-2 rounded-lg mb-4"></div>
                          <form id="addWorkForm" class="space-y-4 pt-2 border-t border-gray-700">
                             <div class="relative"> <label for="workNameInput" class="block text-sm font-medium text-gray-400 mb-1">作品名</label>
-                                <div class="flex items-center gap-2 relative"> <input type="text" name="workName" id="workNameInput" placeholder="作品名" class="flex-grow bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500 pr-8" required autocomplete="off"> <button type="button" id="clear-workNameInput" class="absolute inset-y-0 right-12 flex items-center pr-2 text-gray-400 hover:text-white hidden">
+                                <div class="flex items-center gap-2 relative"> <input type="text" name="workName" id="workNameInput" placeholder="作品名" class="flex-grow bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500 pr-20" required autocomplete="off"> <button type="button" id="clear-workNameInput" class="absolute inset-y-0 right-12 flex items-center pr-2 text-gray-400 hover:text-white hidden">
                                         <i class="fas fa-times-circle"></i>
                                     </button>
                                     <button type="button" data-action="external-search-reg" class="flex-shrink-0 w-10 h-10 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-white flex items-center justify-center" title="外部サイトで検索"><i class="fas fa-globe-asia"></i></button>
@@ -239,7 +239,7 @@
                                 <option value="動画">動画</option>
                             </select>
                             <div class="relative"> <label for="workUrlInput" class="block text-sm font-medium text-gray-400 mb-1">作品URL (任意)</label>
-                                <input type="url" name="workUrl" id="workUrlInput" placeholder="https://..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500 pr-8" autocomplete="off"> <button type="button" id="clear-workUrlInput" class="absolute inset-y-0 right-0 top-7 flex items-center pr-2 text-gray-400 hover:text-white hidden">
+                                <input type="url" name="workUrl" id="workUrlInput" placeholder="https://..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500 pr-10" autocomplete="off"> <button type="button" id="clear-workUrlInput" class="absolute inset-y-0 right-0 top-7 flex items-center pr-3 text-gray-400 hover:text-white hidden">
                                     <i class="fas fa-times-circle"></i>
                                 </button>
                                 </div>
@@ -275,7 +275,7 @@
                 <div class="bg-gray-800 p-4 rounded-xl shadow-lg">
                      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
                         <div class="md:col-span-2 relative"> <div class="flex items-center bg-gray-700 rounded-lg px-3 relative"> <i class="fas fa-search text-gray-500"></i>
-                                <input type="search" id="searchInput" placeholder="作品名・ジャンル・タグ名で検索..." class="w-full bg-transparent p-2 focus:outline-none ml-2 pr-8" autocomplete="off"> <button type="button" id="clear-searchInput" class="absolute inset-y-0 right-0 flex items-center pr-2 text-gray-400 hover:text-white hidden">
+                                <input type="search" id="searchInput" placeholder="作品名・ジャンル・タグ名で検索..." class="w-full bg-transparent p-2 focus:outline-none ml-2 pr-10" autocomplete="off"> <button type="button" id="clear-searchInput" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden">
                                     <i class="fas fa-times-circle"></i>
                                 </button>
                                 </div>
@@ -491,7 +491,7 @@
             // App Config
             DEFAULT_APP_ID: 'r18-random-selector',
             appId: typeof __app_id !== 'undefined' ? __app_id : 'r18-random-selector',
-            appVersion: 'v2.20.1-refactor', // バージョンを更新
+            appVersion: 'v2.3.1', // バージョンを更新
             MASTER_PASSWORD: '07143674',
             firebaseConfig: typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
                 "apiKey": "AIzaSyAnlTrmb0MW8yznBxpWF6B83R9luFnGVts",
@@ -2342,8 +2342,8 @@
                         <div>
                             <label for="externalSearchInput" class="block text-sm font-medium text-gray-400 mb-1">検索クエリ</label>
                             <div class="relative">
-                                <input type="text" id="externalSearchInput" value="${safeQuery}" placeholder="作品名などを入力..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 pr-8">
-                                <button type="button" id="clear-externalSearchInput" class="absolute inset-y-0 right-0 flex items-center pr-2 text-gray-400 hover:text-white hidden">
+                                <input type="text" id="externalSearchInput" value="${safeQuery}" placeholder="作品名などを入力..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 pr-10">
+                                <button type="button" id="clear-externalSearchInput" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden">
                                     <i class="fas fa-times-circle"></i>
                                 </button>
                             </div>
@@ -2470,7 +2470,7 @@
                             <div class="md:col-span-2 space-y-4">
                                 <div>
                                     <label for="editWorkName" class="block text-sm font-medium text-gray-400 mb-1">作品名</label>
-                                    <div class="flex items-center gap-2 relative"> <input type="text" id="editWorkName" value="${safeWorkName}" class="flex-grow bg-gray-700 p-2 rounded-lg pr-8" required> <button type="button" id="clear-editWorkName" class="absolute inset-y-0 right-12 flex items-center pr-2 text-gray-400 hover:text-white hidden">
+                                    <div class="flex items-center gap-2 relative"> <input type="text" id="editWorkName" value="${safeWorkName}" class="flex-grow bg-gray-700 p-2 rounded-lg pr-20" required> <button type="button" id="clear-editWorkName" class="absolute inset-y-0 right-12 flex items-center pr-2 text-gray-400 hover:text-white hidden">
                                             <i class="fas fa-times-circle"></i>
                                         </button>
                                         <button type="button" id="copy-edit-title-btn" class="w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" title="コピー"><i class="fas fa-copy"></i></button>
@@ -2478,7 +2478,7 @@
                                 </div>
                                 <div>
                                     <label for="editWorkUrl" class="block text-sm font-medium text-gray-400 mb-1">作品URL</label>
-                                    <div class="flex items-center gap-2 relative"> <input type="url" id="editWorkUrl" value="${safeWorkUrl}" placeholder="https://..." class="flex-grow bg-gray-700 p-2 rounded-lg pr-8"> <button type="button" id="clear-editWorkUrl" class="absolute inset-y-0 right-12 flex items-center pr-2 text-gray-400 hover:text-white hidden">
+                                    <div class="flex items-center gap-2 relative"> <input type="url" id="editWorkUrl" value="${safeWorkUrl}" placeholder="https://..." class="flex-grow bg-gray-700 p-2 rounded-lg pr-20"> <button type="button" id="clear-editWorkUrl" class="absolute inset-y-0 right-12 flex items-center pr-2 text-gray-400 hover:text-white hidden">
                                             <i class="fas fa-times-circle"></i>
                                         </button>
                                         <button type="button" id="openWorkUrlBtn" class="w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" title="URLを開く" ${!safeWorkUrl ? 'disabled' : ''}><i class="fas fa-external-link-alt"></i></button>
@@ -2559,11 +2559,12 @@
                 `;
                 // --- ▲ content HTML 修正ここまで ▲ ---
 
-                // ↓↓↓ ★★★ 修正箇所 ★★★ ↓↓↓
                 // App.openModal を呼び出す「前」にヘッダーボタンのHTMLを定義
-                const headerSearchBtn = `<button type="button" id="edit-external-search-header" class="text-sm py-1 px-3 rounded-lg flex items-center transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700 text-white"><i class="fas fa-globe-asia mr-2"></i>外部サイト検索</button>`;
+                const headerSearchBtn = `<button type="button" id="edit-external-search-header" class="text-sm py-1 rounded-lg flex items-center transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700 text-white px-2 md:px-3">
+                                            <i class="fas fa-globe-asia md:mr-2"></i>
+                                            <span class="hidden md:inline">外部サイト検索</span>
+                                        </button>`;
 
-                // App.openModal の第3引数 (onOpen コールバック) を開始
                 App.openModal(`「${work.name}」を編集`, content, () => {
                     // --- 既存のUI要素の取得 ---
                     const ratingStars = $('#editWorkRating'), tagsContainer = $('#editWorkTags');
