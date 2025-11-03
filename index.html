@@ -455,7 +455,8 @@
         import { 
             getAuth, 
             signInWithEmailAndPassword, 
-            onAuthStateChanged 
+            onAuthStateChanged,
+            signOut
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, 
@@ -746,6 +747,9 @@
                                 // (onAuthStateChanged が自動で検知するので、ここでは何もしなくてよい)
                                 loginError.classList.add('hidden');
                                 AppState.ui.loadingOverlay.classList.remove('hidden'); // ローディング画面を再表示
+
+                                localStorage.setItem('lastLoginTimestamp', Date.now().toString());
+
                             })
                             .catch((error) => {
                                 // 失敗
@@ -1096,6 +1100,20 @@
                 onAuthStateChanged(AppState.auth, user => {
                     if (user) {
                         // --- 1. ログイン済みの(または成功した)場合 ---
+
+                        const lastLogin = parseInt(localStorage.getItem('lastLoginTimestamp') || '0', 10);
+                        const thirtyDays = 30 * 24 * 60 * 60 * 1000; // 30日
+
+                        if (Date.now() - lastLogin > thirtyDays) {
+                            // 30日以上経過している場合、強制的にログアウトさせる
+                            console.log("最終ログインから30日経過したため、再認証を要求します。");
+                            localStorage.removeItem('lastLoginTimestamp'); // タイムスタンプを削除
+                            signOut(AppState.auth).catch(err => console.error("Sign out failed", err));
+                            
+                            // この後の処理（App.setupSyncId()など）は実行させない
+                            return; 
+                        }
+
                         AppState.ui.loadingText.textContent = '認証情報を確認中...';
                         
                         // ログイン画面が表示されていれば隠す
