@@ -1,65 +1,91 @@
-// キャッシュするアセット（アプリの「殻」）のリスト
-const CACHE_NAME = 'r18-selector-shell-v1';
-const APP_SHELL_URLS = [
-  'index.html', // 修正点
-  'https://cdn.tailwindcss.com',
-  'https://cdn.jsdelivr.net/npm/chart.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-  'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js',
-  'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js',
-  'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js'
+// --- Service Worker (sw.js) ---
+
+// 1. キャッシュのバージョン管理
+// index.htmlのappVersionと連動させます。
+// アプリを更新するたびに、このバージョンも変更する必要があります。
+const APP_VERSION = 'v2.3.4';
+const CACHE_NAME = `r18-selector-shell-${APP_VERSION}`;
+
+// 2. キャッシュするファイルの厳密な指定 (方針7準拠)
+// 外部CDN (Tailwind, FontAwesome等) はキャッシュせず、
+// 自分のアプリの核となるファイルのみキャッシュします。
+const FILES_TO_CACHE = [
+  './',          // アプリのルート
+  'index.html',  // メインのHTML
+  'manifest.json' // マニフェストファイル
 ];
 
-// 1. インストール時: アプリの「殻」をキャッシュする
-self.addEventListener('install', (event) => {
+// 3. インストール (install) イベント
+// アプリの核となるファイルをキャッシュします。
+self.addEventListener('install', event => {
+  console.log('[SW] Install event');
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Service Worker: Caching App Shell');
-        // CDNからのリソースもキャッシュする
-        const requests = APP_SHELL_URLS.map(url => 
-            new Request(url, { mode: 'no-cors' }) // no-corsモードでCDNリソースをリクエスト
-        );
-        return cache.addAll(requests);
+      .then(cache => {
+        console.log('[SW] Caching app shell:', FILES_TO_CACHE);
+        return cache.addAll(FILES_TO_CACHE);
       })
-      .catch(err => console.error('Service Worker: Cache addAll failed', err))
+      .then(() => {
+        // 新しいワーカーをすぐに有効化
+        return self.skipWaiting();
+      })
   );
 });
 
-// 2. 有効化時: 古いキャッシュを削除する
-self.addEventListener('activate', (event) => {
+// 4. 有効化 (activate) イベント
+// 古いバージョンのキャッシュを削除します (方針7準拠)。
+self.addEventListener('activate', event => {
+  console.log('[SW] Activate event');
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Service Worker: Deleting old cache', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
+    caches.keys().then(keyList => {
+      return Promise.all(keyList.map(key => {
+        // CACHE_NAMEと異なるキャッシュ(＝古いバージョン)を削除
+        if (key !== CACHE_NAME) {
+          console.log('[SW] Removing old cache:', key);
+          return caches.delete(key);
+        }
+      }));
     })
   );
+  // クライアントを即座に制御
+  return self.clients.claim();
 });
 
-// 3. フェッチ時: キャッシュを優先して返す (Cache-First戦略)
+// 5. 通信傍受 (fetch) イベント
+// 通信を監視し、キャッシュ戦略を実行します。
 self.addEventListener('fetch', event => {
   const requestUrl = new URL(event.request.url);
 
-  // リクエスト先が Firebase (googleapis.com) 宛の場合、
-  // Service Worker は何もしない (キャッシュしようとしない)
-  if (requestUrl.hostname.includes('googleapis.com')) {
-    return; // Service Worker の処理をスキップし、通常の通信を許可
+  // 方針7: Firebase/API/AppCheck通信は除外
+  if (requestUrl.hostname.includes('googleapis.com') || 
+      requestUrl.hostname.includes('firebaseappcheck.googleapis.com')) {
+    return; // Service Workerは何もしない
   }
 
-  // それ以外のリクエスト (index.html, CSS, FontAwesome など) はキャッシュを利用
+  // 方針7: GETメソッド以外はキャッシュしない
+  if (event.request.method !== 'GET') {
+    return; // Service Workerは何もしない
+  }
+
+  // 方針7: 外部CDN (Tailwind, Chart.js, FontAwesome) はキャッシュしない
+  // 自分のオリジン(haretobu.github.io)からのリクエストでない場合は、
+  // ネットワークに任せます。
+  if (!event.request.url.startsWith(self.location.origin)) {
+    return; // Service Workerは何もしない
+  }
+  
+  // 上記の除外ルールをすべて通過したリクエスト (自分のファイル)
+  // → キャッシュを優先して返す (Cache First)
   event.respondWith(
     caches.match(event.request)
       .then(response => {
         if (response) {
-          return response; // キャッシュから返す
+          // キャッシュに存在した場合
+          return response;
         }
-        return fetch(event.request); // ネットワークから取得
+        // キャッシュにない場合はネットワークから取得
+        // (FILES_TO_CACHEにないリクエストがここに来ることは稀)
+        return fetch(event.request);
       })
   );
 });

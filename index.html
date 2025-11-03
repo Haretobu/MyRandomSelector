@@ -247,7 +247,7 @@
                             <input type="text" id="workRegisteredAt" name="workRegisteredAt" placeholder="YYYY/MM/DD" data-role="date-input" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500" required autocomplete="off">
                             <div>
                                 <label for="workImage" class="block text-sm font-medium text-gray-400 mb-2">画像 (任意, 900KB以下)</label>
-                                <input type="file" name="workImage" id="workImage" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-lime-600 file:text-white hover:file:bg-lime-700">
+                                <input type="file" name="workImage" id="workImage" accept="image/jpeg,image/png,image/webp" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-lime-600 file:text-white hover:file:bg-lime-700">
                             </div>
                             <img id="imagePreview" src="" class="hidden max-w-full h-auto mx-auto rounded-lg mt-2">
                             <button type="submit" class="w-full px-4 py-3 bg-lime-600 hover:bg-lime-700 rounded-lg font-bold text-lg transition-colors">登録する</button>
@@ -455,8 +455,7 @@
         import { 
             getAuth, 
             signInWithEmailAndPassword, 
-            onAuthStateChanged,
-            signOut
+            onIdTokenChanged
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, 
@@ -498,7 +497,7 @@
             // App Config
             DEFAULT_APP_ID: 'r18-random-selector',
             appId: typeof __app_id !== 'undefined' ? __app_id : 'r18-random-selector',
-            appVersion: 'v2.3.4', // バージョンを更新
+            appVersion: 'v2.3.5', // バージョンを更新
             firebaseConfig: typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
                 "apiKey": "AIzaSyAnlTrmb0MW8yznBxpWF6B83R9luFnGVts",
                 "authDomain": "serecter222.firebaseapp.com",
@@ -748,13 +747,17 @@
                                 loginError.classList.add('hidden');
                                 AppState.ui.loadingOverlay.classList.remove('hidden'); // ローディング画面を再表示
 
-                                localStorage.setItem('lastLoginTimestamp', Date.now().toString());
 
                             })
                             .catch((error) => {
                                 // 失敗
                                 const errorCode = error.code;
-                                console.error("Login failed:", errorCode);
+                                // ★ 修正: isDebugMode で分岐 ★
+                                if (AppState.isDebugMode) {
+                                    console.error("Login failed (Debug):", error.code, error.message);
+                                } else {
+                                    console.error("Login attempt failed."); // 本番では詳細を出力しない
+                                }
                                 if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/wrong-password' || errorCode === 'auth/user-not-found') {
                                     loginError.textContent = 'メールアドレスまたはパスワードが違います。';
                                 } else {
@@ -1024,7 +1027,12 @@
 
             handleDataFetchError: (error, type) => {
                  if (AppState.isLoadComplete) return;
-                 console.error(`Error fetching ${type}: `, error);
+                 // ★ 修正: isDebugMode で分岐 ★
+                 if (AppState.isDebugMode) {
+                     console.error(`Error fetching ${type} (Debug): `, error);
+                 } else {
+                     console.error(`Error fetching ${type}.`); // 本番では詳細を出力しない
+                 }
                  clearTimeout(AppState.loadingTimeout);
                  AppState.ui.loadingContent.innerHTML = `
                     <i class="fas fa-exclamation-triangle fa-3x text-red-400"></i>
@@ -1091,28 +1099,21 @@
                     AppState.db = getFirestore(AppState.firebaseApp);
                     App.setupAuthObserver();
                 } catch (error) {
-                    console.error("Firebase initialization failed:", error);
+                    // ★ 修正: isDebugMode で分岐 ★
+                    if (AppState.isDebugMode) {
+                        console.error("Firebase initialization failed (Debug):", error);
+                    } else {
+                        console.error("Firebase initialization failed."); // 本番では詳細を出力しない
+                    }
                     AppState.ui.loadingContent.innerHTML = `<p class="text-red-400">Firebaseの初期化に失敗しました。</p>`;
                 }
             },
 
             setupAuthObserver: () => {
-                onAuthStateChanged(AppState.auth, user => {
+                // ★ 変更: onAuthStateChanged -> onIdTokenChanged
+                onIdTokenChanged(AppState.auth, user => { 
                     if (user) {
                         // --- 1. ログイン済みの(または成功した)場合 ---
-
-                        const lastLogin = parseInt(localStorage.getItem('lastLoginTimestamp') || '0', 10);
-                        const thirtyDays = 30 * 24 * 60 * 60 * 1000; // 30日
-
-                        if (Date.now() - lastLogin > thirtyDays) {
-                            // 30日以上経過している場合、強制的にログアウトさせる
-                            console.log("最終ログインから30日経過したため、再認証を要求します。");
-                            localStorage.removeItem('lastLoginTimestamp'); // タイムスタンプを削除
-                            signOut(AppState.auth).catch(err => console.error("Sign out failed", err));
-                            
-                            // この後の処理（App.setupSyncId()など）は実行させない
-                            return; 
-                        }
 
                         AppState.ui.loadingText.textContent = '認証情報を確認中...';
                         
@@ -1288,7 +1289,15 @@
             // --- Image Processing ---
             processImage: (file) => {
                 return new Promise((resolve, reject) => {
+                    // ★ 修正: MIMEタイプチェックを追加 (方針5準拠) ★
+                    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+                    if (!allowedTypes.includes(file.type)) {
+                        return reject(new Error("ファイル形式が正しくありません。(JPEG, PNG, WebP のみ可)"));
+                    }
+                    
+                    // ★ 修正: ファイルサイズチェック (既存) ★
                     if (file.size > 900 * 1024) return reject(new Error("ファイルサイズが900KBを超えています。別の画像をお試しください。"));
+                    
                     const reader = new FileReader();
                     reader.onload = e => {
                         const img = new Image();
@@ -1356,7 +1365,12 @@
                     $('#imagePreview').classList.add('hidden');
                     $('#workRegisteredAt').value = App.formatDateForInput(new Date());
                 } catch (error) {
-                    console.error("Error adding work: ", error);
+                    // ★ 修正: isDebugMode で分岐 ★
+                    if (AppState.isDebugMode) {
+                        console.error("Error adding work (Debug): ", error);
+                    } else {
+                        console.error("Error adding work."); // 本番では詳細を出力しない
+                    }
                     App.showToast("作品の登録に失敗しました。時間をおいて再度お試しください。", "error");
                 }
             },
@@ -1375,7 +1389,12 @@
                     await updateDoc(workRef, updatedData);
                     return true;
                 } catch (error) {
-                    console.error("Error updating work:", error);
+                    // ★ 修正: isDebugMode で分岐 ★
+                    if (AppState.isDebugMode) {
+                        console.error("Error updating work (Debug):", error);
+                    } else {
+                        console.error("Error updating work."); // 本番では詳細を出力しない
+                    }
                     App.showToast("作品の更新に失敗しました。", "error");
                     return false;
                 }
@@ -1388,7 +1407,12 @@
                     await deleteDoc(doc(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`, workId));
                     App.showToast(`「${workName}」を削除しました。`);
                 } catch (error) {
-                    console.error("Error deleting work: ", error);
+                    // ★ 修正: isDebugMode で分岐 ★
+                    if (AppState.isDebugMode) {
+                        console.error("Error deleting work (Debug): ", error);
+                    } else {
+                        console.error("Error deleting work."); // 本番では詳細を出力しない
+                    }
                     App.showToast("作品の削除に失敗しました。", "error");
                 }
             },
@@ -1409,7 +1433,12 @@
                     App.showToast(`タグ「${name}」を作成しました。`);
                     return { id: docRef.id, ...newTag };
                  } catch (error) {
-                    console.error("Error adding tag:", error);
+                    // ★ 修正: isDebugMode で分岐 ★
+                    if (AppState.isDebugMode) {
+                        console.error("Error adding tag (Debug):", error);
+                    } else {
+                        console.error("Error adding tag."); // 本番では詳細を出力しない
+                    }
                     App.showToast("タグの作成に失敗しました。", "error"); return null;
                  }
             },
@@ -1428,7 +1457,12 @@
                     await batch.commit();
                     App.showToast(`タグ「${tagToDelete.name}」を削除しました。`);
                  } catch(error) {
-                    console.error("Error deleting tag:", error);
+                    // ★ 修正: isDebugMode で分岐 ★
+                    if (AppState.isDebugMode) {
+                        console.error("Error deleting tag (Debug):", error);
+                    } else {
+                        console.error("Error deleting tag."); // 本番では詳細を出力しない
+                    }
                     App.showToast("タグの削除中にエラーが発生しました。", "error");
                  }
             },
@@ -2109,7 +2143,12 @@
                             await batch.commit();
                             App.showToast("全ての作品・タグデータを削除しました。");
                         } catch(error) { 
-                            console.error("Error deleting all data:", error);
+                            // ★ 修正: isDebugMode で分岐 ★
+                            if (AppState.isDebugMode) {
+                                console.error("Error deleting all data (Debug):", error);
+                            } else {
+                                console.error("Error deleting all data."); // 本番では詳細を出力しない
+                            }
                             App.showToast("データ削除中にエラーが発生しました。"); 
                         }
                      }
@@ -2592,7 +2631,7 @@
                                             参照...
                                         </label>
                                         <span id="edit-image-filename" class="ml-3 text-sm text-gray-400 break-words min-w-0">ファイルが選択されていません。</span>
-                                        <input type="file" id="edit-image-upload" accept="image/*" class="hidden">
+                                        <input type="file" id="edit-image-upload" accept="image/jpeg,image/png,image/webp" class="hidden">
                                     </div>
                                 </div>
                                 
@@ -4589,7 +4628,12 @@
                     App.downloadJSON(jsonString, fileName);
 
                 } catch (error) {
-                    console.error("バックアップの生成に失敗しました:", error);
+                    // ★ 修正: isDebugMode で分岐 ★
+                    if (AppState.isDebugMode) {
+                        console.error("バックアップの生成に失敗しました (Debug):", error);
+                    } else {
+                        console.error("バックアップの生成に失敗しました。"); // 本番では詳細を出力しない
+                    }
                     App.showToast("バックアップファイルの生成に失敗しました。", "error");
                 }
             }
@@ -4597,7 +4641,6 @@
         
 
         // --- 4. App Initialization ---
-        // (Grok/ChatGPT案: 構造化)
         // 起動処理を App.init() の呼び出しに変更
         document.addEventListener('DOMContentLoaded', App.init);
 
