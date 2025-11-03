@@ -941,9 +941,11 @@
                     AppState.ui.modalContainer.classList.remove('scale-95', 'opacity-0');
                     if (onOpen) onOpen();
                     
-                    const firstFocusable = AppState.ui.modalContentHost.querySelector('input, select, button');
-                    if (firstFocusable) {
-                        setTimeout(() => firstFocusable.focus(), 100);
+                    if (autoFocus) {
+                        const firstFocusable = AppState.ui.modalContentHost.querySelector('input, select, button');
+                        if (firstFocusable) {
+                            setTimeout(() => firstFocusable.focus(), 100);
+                        }
                     }
                 }, 10);
             },
@@ -2898,7 +2900,7 @@
                 // ↓↓↓ ★★★ 修正箇所 ★★★ ↓↓↓
                 // 修正: onModalOpen コールバックの「外側」でオプションを渡す
                 // 修正: 'max-w-7xl' から 'max-w-5xl' に戻す (バランスのため)
-                }, { size: 'max-w-5xl', headerActions: headerSearchBtn }); 
+                }, { size: 'max-w-5xl', headerActions: headerSearchBtn, autoFocus: false });
             },
             
             openFilterModal: (tempState = null) => {
@@ -3335,7 +3337,7 @@
                     // ↓ 修正: 'filter' モードを削除し、'assign' モードのみを想定
                     $('#tag-modal-confirm')?.addEventListener('click', () => { onConfirm(tempSelectedTagIds); }); // 決定時
                     $('#tag-modal-cancel')?.addEventListener('click', () => { onConfirm(null); }); // キャンセル時
-                });
+                }, { autoFocus: false });
             }, // ← App.openTagModal の終わりカンマ
             
             openTagFilterModal: (options) => {
@@ -3425,7 +3427,7 @@
 
                     $('#tag-modal-confirm')?.addEventListener('click', () => { onConfirm({and: tempAnd, or: tempOr, not: tempNot}); }); // 修正: App.closeModal() を削除
                     $('#tag-modal-cancel')?.addEventListener('click', () => { onConfirm(null); }); // 修正: App.closeModal() を削除
-                });
+                }, { autoFocus: false });
             },
 
             getSortOptions: () => {
