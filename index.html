@@ -1038,7 +1038,7 @@
                     <i class="fas fa-exclamation-triangle fa-3x text-red-400"></i>
                     <p class="mt-4 text-red-300 font-semibold">${type}データの取得に失敗</p>
                     <p class="mt-2 text-gray-400 text-sm">
-                        ${error ? error.message : '不明なエラー'}
+                        ${error ? App.escapeHTML(error.message) : '不明なエラー'}
                     </p>
                     <p class="mt-4 text-sm text-gray-500">ページを再読み込みするか、Firebaseのセキュリティルールを確認してください。</p>
                     <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg">再読み込み</button>
@@ -1402,7 +1402,7 @@
 
             deleteWork: async (workId, workName) => {
                 if (AppState.isDebugMode) { return App.showToast("デバッグモード中は作品を削除できません。"); }
-                if (!await App.showConfirm("作品の削除", `「${workName}」を本当に削除しますか？<br>この操作は取り消せません。`)) return;
+                if (!await App.showConfirm("作品の削除", `「${App.escapeHTML(workName)}」を本当に削除しますか？<br>この操作は取り消せません。`)) return;
                 try {
                     await deleteDoc(doc(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`, workId));
                     App.showToast(`「${workName}」を削除しました。`);
@@ -1446,7 +1446,7 @@
             deleteTag: async (tagId) => {
                  if (AppState.isDebugMode) { return App.showToast("デバッグモード中はタグを削除できません。"); }
                  const tagToDelete = AppState.tags.get(tagId);
-                 if (!tagToDelete || !await App.showConfirm("タグの削除", `タグ「${tagToDelete.name}」を削除しますか？<br>全ての作品からこのタグが解除されます。`)) return;
+                 if (!tagToDelete || !await App.showConfirm("タグの削除", `タグ「${App.escapeHTML(tagToDelete.name)}」を削除しますか？<br>全ての作品からこのタグが解除されます。`)) return;
                  try {
                     const batch = writeBatch(AppState.db);
                     batch.delete(doc(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/tags`, tagId));
@@ -1622,7 +1622,7 @@
                     </div>
                     <div class="p-4 flex flex-col flex-grow">
                         <p class="text-sm text-gray-400">${work.registeredAt ? App.formatDate(work.registeredAt, false) : 'N/A'}</p>
-                        <h3 class="text-lg font-bold mt-1 mb-2 flex-grow cursor-pointer" data-action="copy-name" data-name="${safeWorkName}">${work.name}</h3>
+                        <h3 class="text-lg font-bold mt-1 mb-2 flex-grow cursor-pointer" data-action="copy-name" data-name="${safeWorkName}">${safeWorkName}</h3>
                         <div class="flex items-center space-x-1 mb-3">${App._renderRatingStars(work.rating)}</div>
                         ${App._renderTagsHTML(work.tagIds, 5, work.id, 'grid')} </div>
                 </div>`;
@@ -1647,7 +1647,7 @@
                         ${siteBadge}
                     </div>
                     <div class="flex-grow min-w-0 overflow-hidden">
-                        <p class="font-bold cursor-pointer line-clamp-2" data-action="copy-name" data-name="${safeWorkName}">${work.name}</p>
+                        <p class="font-bold cursor-pointer line-clamp-2" data-action="copy-name" data-name="${safeWorkName}">${safeWorkName}</p>
                         <div class="flex items-center flex-wrap gap-x-4 text-sm text-gray-400 truncate">
                             <span>${work.genre}</span><span>${work.registeredAt ? App.formatDate(work.registeredAt, false) : 'N/A'}</span>
                             <span class="flex items-center space-x-1">${App._renderRatingStars(work.rating)}</span>
@@ -1797,7 +1797,7 @@
                 const addTagFilters = (tagIds, prefix, type) => {
                     tagIds.forEach(tId => {
                         const tag = tags.get(tId);
-                        if (tag) filters.push({type: type, value: tId, label: `${prefix}: ${tag.name}`});
+                        if (tag) filters.push({type: type, value: tId, label: `${prefix}: ${App.escapeHTML(tag.name)}`});
                     });
                 };
                 addTagFilters(listFilters.andTagIds, 'AND', 'andTag');
@@ -2502,7 +2502,7 @@
                             <ul id="history-list-ul" class="space-y-2"> ${allHistory.map(entry => `
                                     <li>
                                         <button data-id="${entry.workId}" class="w-full text-left bg-gray-700 p-3 rounded-lg flex justify-between items-center text-sm transition-colors hover:bg-gray-600">
-                                            <span class="font-semibold">${entry.workName}</span>
+                                            <span class="font-semibold">${App.escapeHTML(entry.workName)}</span>
                                             <span class="text-gray-400">${App.formatDate(entry.timestamp)}</span>
                                         </button>
                                     </li>
@@ -2978,7 +2978,7 @@
                         const filtered = App.getFilteredWorks(filters);
 
                         countEl.textContent = `対象: ${filtered.length} 作品`;
-                        gridEl.innerHTML = filtered.slice(0, 50).map(w => `<div class="text-center"><img src="${w.imageUrl||'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${w.name}" class="w-full h-16 object-cover rounded-md"><p class="text-xs truncate mt-1">${w.name}</p></div>`).join('');
+                        gridEl.innerHTML = filtered.slice(0, 50).map(w => `<div class="text-center"><img src="${w.imageUrl||'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${App.escapeHTML(w.name)}" class="w-full h-16 object-cover rounded-md"><p class="text-xs truncate mt-1">${App.escapeHTML(w.name)}</p></div>`).join('');
                     };
 
                     App.setupDateFilterEventListeners('filter', updatePreview);
@@ -3018,7 +3018,7 @@
                         let html = '';
                         const renderSet = (ids, className, prefix) => {
                             [...ids].map(id => AppState.tags.get(id)).filter(Boolean).forEach(tag => {
-                                html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${tag.name}</span>`;
+                                html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${App.escapeHTML(tag.name)}</span>`;
                             });
                         };
                         renderSet(tempAndTags, 'tag-item-and text-white', 'AND');
@@ -3163,7 +3163,7 @@
                     const renderTagPreview = () => {
                         if(!tagPreviewEl) return;
                         const objects = App.getTagObjects(tempSelectedTagIds);
-                        tagPreviewEl.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color}; color:${App.getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグ未選択</span>`;
+                        tagPreviewEl.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color}; color:${App.getContrastColor(t.color)}">${App.escapeHTML(t.name)}</span>`).join('') : `<span class="text-xs text-gray-500">タグ未選択</span>`;
                     };
 
                     const renderTagList = () => {
@@ -3197,7 +3197,7 @@
                             // ↓ 修正: data-name の追加 と 'truncate' の追加
                             return `<div class="tag-item flex items-center p-2 rounded-lg ${isManageMode ? 'hover:bg-gray-600' : 'cursor-pointer hover:bg-gray-600'} ${selectedClass}" data-id="${t.id}" data-name="${App.escapeHTML(t.name)}">
                                         <div class="w-4 h-4 rounded-full mr-3 shrink-0" style="background-color: ${t.color};"></div>
-                                        <span class="grow font-semibold truncate">${t.name}</span>
+                                        <span class="grow font-semibold truncate">${App.escapeHTML(t.name)}</span>
                                         ${deleteBtnHtml}
                                     </div>`;
                         }).join('');
@@ -3361,7 +3361,7 @@
 
                             return `<div class="tag-item flex items-center p-2 rounded-lg cursor-pointer hover:bg-gray-600 ${stateClass}" data-id="${t.id}">
                                         <div class="w-4 h-4 rounded-full mr-3 shrink-0" style="background-color: ${t.color};"></div>
-                                        <span class="grow font-semibold truncate">${t.name}</span>
+                                        <span class="grow font-semibold truncate">${App.escapeHTML(t.name)}</span>
                                     </div>`;
                         }).join('');
                     };
@@ -3624,7 +3624,7 @@
                         const filtered = App.getFilteredWorks(filters); // App.getFilteredWorks を使用
 
                         countEl.textContent = `対象: ${filtered.length} 作品`;
-                        gridEl.innerHTML = filtered.slice(0, 50).map(w => `<div class="text-center"><img src="${w.imageUrl||'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${w.name}" class="w-full h-16 object-cover rounded-md"><p class="text-xs truncate mt-1">${w.name}</p></div>`).join('');
+                        gridEl.innerHTML = filtered.slice(0, 50).map(w => `<div class="text-center"><img src="${w.imageUrl||'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${App.escapeHTML(w.name)}" class="w-full h-16 object-cover rounded-md"><p class="text-xs truncate mt-1">${App.escapeHTML(w.name)}</p></div>`).join('');
                     };
 
                     App.setupDateFilterEventListeners('lottery', updatePreview); // App.setupDateFilterEventListeners を使用
@@ -3645,7 +3645,7 @@
                         let html = '';
                         const renderSet = (ids, className, prefix) => {
                             [...ids].map(id => AppState.tags.get(id)).filter(Boolean).forEach(tag => { // AppState.tags.get を使用
-                                html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${tag.name}</span>`;
+                                html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${App.escapeHTML(tag.name)}</span>`;
                             });
                         };
                         renderSet(tempAndTags, 'tag-item-and text-white', 'AND');
@@ -3916,7 +3916,7 @@
                         <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${work.name}" class="max-w-full max-h-48 object-contain mx-auto rounded-lg shadow-lg mb-4">
                         <p class="text-lg font-bold text-sky-300">${work.genre}</p>
                         <div class="flex items-center justify-center gap-2 my-2">
-                            <h3 class="text-3xl font-bold text-white">${work.name}</h3>
+                            <h3 class="text-3xl font-bold text-white">${App.escapeHTML(work.name)}</h3>
                             <button id="copy-result-title-btn" class="p-2 text-gray-400 hover:text-white transition-colors" title="タイトルをコピー">
                                 <i class="fas fa-copy"></i>
                             </button>
@@ -3956,7 +3956,7 @@
                     const renderTags = ids => {
                         if (tagsContainer) { // 要素が存在するか確認
                             const objects = App.getTagObjects(ids); // App.getTagObjects を使用
-                            tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color};color:${App.getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`; // App.getContrastColor を使用
+                            tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color};color:${App.getContrastColor(t.color)}">${App.escapeHTML(t.name)}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`; // App.getContrastColor を使用
                         }
                     };
                     renderTags(currentTagIds);
@@ -4025,8 +4025,8 @@
 
                 const content = `
                     <div class="text-center">
-                        <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${work.name}" class="max-w-xs max-h-48 object-contain mx-auto rounded-lg mb-4">
-                        <h4 class="text-lg font-bold">${work.name}</h4><p class="text-gray-400 mb-4">前回の抽選作品の評価をお願いします！</p>
+                        <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${App.escapeHTML(work.name)}" class="max-w-xs max-h-48 object-contain mx-auto rounded-lg mb-4">
+                        <h4 class="text-lg font-bold">${App.escapeHTML(work.name)}</h4><p class="text-gray-400 mb-4">前回の抽選作品の評価をお願いします！</p>
                         <div class="my-6"><label class="block text-sm text-gray-400 mb-2">評価</label><div class="flex items-center justify-center space-x-2 text-3xl" id="feedback-rating"></div></div>
                         <div class="my-6"><label class="block text-sm text-gray-400 mb-1">タグ</label><div id="feedback-tags" class="flex flex-wrap justify-center gap-2 p-2 bg-gray-700 rounded-lg min-h-[40px] mb-2"></div><button type="button" id="feedback-assign-tags-btn" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグを割り当て/編集</button></div>
                         <div class="pt-4 flex justify-end space-x-3">
@@ -4068,7 +4068,7 @@
                     const renderTags = ids => {
                         if (tagsContainer) { // 要素が存在するか確認
                             const objects = App.getTagObjects(ids); // App.getTagObjects を使用
-                            tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color};color:${App.getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`; // App.getContrastColor を使用
+                            tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color};color:${App.getContrastColor(t.color)}">${App.escapeHTML(t.name)}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`; // App.getContrastColor を使用
                         }
                     };
                     renderTags(currentTagIds);
@@ -4465,7 +4465,7 @@
                 // Render list of works
                 const detailList = $('#trends-detail-list');
                 if (detailList) {
-                    detailList.innerHTML = detailData.works.map(w => `<li>- ${w.name}</li>`).join(''); // ← detailData.works を使用
+                    detailList.innerHTML = detailData.works.map(w => `<li>- ${App.escapeHTML(w.name)}</li>`).join(''); // ← detailData.works を使用
                 }
 
                 panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
