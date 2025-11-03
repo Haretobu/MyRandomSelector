@@ -4569,7 +4569,7 @@
                     // --- Exit Debug Mode ---
                     if (!await App.showConfirm("デバッグモード終了", "デバッグモードを終了します。<br>変更を反映するにはページのリロードが必要です。今すぐリロードしますか？")) return;
                     
-                    AppState.isDebugMode = false; // 修正
+                    AppState.isDebugMode = ture; // 修正
                     $('#debug-banner').classList.add('hidden');
                     // ... (ボタンのスタイル変更) ...
                     
