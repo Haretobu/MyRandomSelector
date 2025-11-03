@@ -920,7 +920,8 @@
             openModal: (title, contentHtml, onOpen = null, options = {}) => {
                 App.closeFabMenu();
                 AppState.checkModalDirtyState = () => false;
-                const { size = 'max-w-2xl', headerActions = '' } = options; // ← 修正: headerActions を追加
+                // ★ 修正: autoFocus オプションを追加 (デフォルトは true) ★
+                const { size = 'max-w-2xl', headerActions = '', autoFocus = true } = options;
                 
                 Object.values(AppState.activeCharts).forEach(chart => chart.destroy());
                 AppState.activeCharts = {};
