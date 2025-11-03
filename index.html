@@ -384,21 +384,6 @@
         <p id="toast-message">Message</p>
     </div>
 
-    <!-- Simple Password Overlay -->
-    <div id="password-overlay" class="hidden fixed inset-0 bg-gray-900 bg-opacity-95 z-[90] flex items-center justify-center p-4">
-        <div class="w-full max-w-sm">
-            <form id="password-form" class="bg-gray-800 p-8 rounded-2xl shadow-2xl space-y-6">
-                <h2 class="text-2xl font-bold text-center text-gray-300">認証</h2>
-                <div id="password-error" class="hidden text-sm text-center bg-red-900 border border-red-700 text-red-300 p-2 rounded-lg"></div>
-                <div>
-                    <label for="password-input" class="block text-sm font-medium text-gray-400 mb-1">パスワード</label>
-                    <input type="password" id="password-input" required class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-sky-500" autocomplete="current-password">
-                </div>
-                <button type="submit" class="w-full px-4 py-3 bg-sky-600 hover:bg-sky-700 rounded-lg font-bold text-lg transition-colors">入室</button>
-            </form>
-        </div>
-    </div>
-
     <!-- Confirmation Modal -->
     <div id="confirm-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[80] flex items-center justify-center p-4">
         <div class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-sm w-full">
@@ -493,7 +478,6 @@
             DEFAULT_APP_ID: 'r18-random-selector',
             appId: typeof __app_id !== 'undefined' ? __app_id : 'r18-random-selector',
             appVersion: 'v2.3.4', // バージョンを更新
-            MASTER_PASSWORD: '07143674',
             firebaseConfig: typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
                 "apiKey": "AIzaSyAnlTrmb0MW8yznBxpWF6B83R9luFnGVts",
                 "authDomain": "serecter222.firebaseapp.com",
@@ -722,38 +706,7 @@
                 if (currentSortOption) { 
                     AppState.ui.sortStateLabel.textContent = `並び替え: ${currentSortOption.label}`;
                 }
-
-                // パスワード認証のイベントリスナーを設定
-                AppState.ui.passwordForm.addEventListener('submit', (e) => {
-                    e.preventDefault();
-                    if (AppState.ui.passwordInput.value === AppState.MASTER_PASSWORD) {
-                        localStorage.setItem('passwordAuthTimestamp', Date.now().toString());
-                        AppState.ui.passwordOverlay.classList.add('hidden');
-                        AppState.ui.passwordError.classList.add('hidden');
-                        App.startApp();
-                    } else {
-                        AppState.ui.passwordError.textContent = 'パスワードが違います。';
-                        AppState.ui.passwordError.classList.remove('hidden');
-                    }
-                });
-
                 App.checkSimpleAuth();
-            },
-
-            checkSimpleAuth: () => {
-                const authTimestamp = localStorage.getItem('passwordAuthTimestamp');
-                if (authTimestamp) {
-                    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-                    if (Date.now() - parseInt(authTimestamp, 10) < thirtyDays) {
-                        AppState.ui.passwordOverlay.classList.add('hidden');
-                        App.startApp();
-                        return;
-                    } else {
-                        localStorage.removeItem('passwordAuthTimestamp');
-                    }
-                }
-                AppState.ui.passwordOverlay.classList.remove('hidden');
-                AppState.ui.loadingOverlay.classList.add('hidden');
             },
             
             startApp: () => {
@@ -769,7 +722,18 @@
             },
 
             // --- Utility Functions ---
-            escapeHTML: (str) => str.replace(/"/g, '&quot;').replace(/'/g, '&#39;'),
+            escapeHTML: (str) => {
+                if (typeof str !== 'string' || !str) return '';
+                return str.replace(/[&<>"']/g, function(match) {
+                    return {
+                        '&': '&amp;',
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '"': '&quot;',
+                        "'": '&#39;'
+                    }[match];
+                });
+            },
             
             isValidDate: (dateString) => {
                 if (!/^\d{4}\/\d{2}\/\d{2}$/.test(dateString)) return false;
