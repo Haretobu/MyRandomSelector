@@ -384,6 +384,25 @@
         <p id="toast-message">Message</p>
     </div>
 
+
+    <div id="login-overlay" class="hidden fixed inset-0 bg-gray-900 bg-opacity-95 z-[90] flex items-center justify-center p-4">
+        <div class="w-full max-w-sm">
+            <form id="login-form" class="bg-gray-800 p-8 rounded-2xl shadow-2xl space-y-6">
+                <h2 class="text-2xl font-bold text-center text-gray-300">ログイン</h2>
+                <div id="login-error" class="hidden text-sm text-center bg-red-900 border border-red-700 text-red-300 p-2 rounded-lg"></div>
+                <div>
+                    <label for="login-email" class="block text-sm font-medium text-gray-400 mb-1">メールアドレス</label>
+                    <input type="email" id="login-email" required class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-sky-500" autocomplete="email">
+                </div>
+                <div>
+                    <label for="login-password" class="block text-sm font-medium text-gray-400 mb-1">パスワード</label>
+                    <input type="password" id="login-password" required class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-sky-500" autocomplete="current-password">
+                </div>
+                <button type="submit" class="w-full px-4 py-3 bg-sky-600 hover:bg-sky-700 rounded-lg font-bold text-lg transition-colors">入室</button>
+            </form>
+        </div>
+    </div>
+
     <!-- Confirmation Modal -->
     <div id="confirm-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[80] flex items-center justify-center p-4">
         <div class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-sm w-full">
@@ -434,7 +453,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { 
             getAuth, 
-            signInAnonymously, 
+            signInWithEmailAndPassword, 
             onAuthStateChanged 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
@@ -706,6 +725,41 @@
                 if (currentSortOption) { 
                     AppState.ui.sortStateLabel.textContent = `並び替え: ${currentSortOption.label}`;
                 }
+
+                // --- ログインフォームのイベントリスナーを設定 ---
+                const loginForm = $('#login-form');
+                const loginEmail = $('#login-email');
+                const loginPassword = $('#login-password');
+                const loginError = $('#login-error');
+
+                if (loginForm) {
+                    loginForm.addEventListener('submit', (e) => {
+                        e.preventDefault();
+                        const email = loginEmail.value;
+                        const password = loginPassword.value;
+                        
+                        // ログイン処理を実行
+                        signInWithEmailAndPassword(AppState.auth, email, password)
+                            .then((userCredential) => {
+                                // 成功
+                                // (onAuthStateChanged が自動で検知するので、ここでは何もしなくてよい)
+                                loginError.classList.add('hidden');
+                                AppState.ui.loadingOverlay.classList.remove('hidden'); // ローディング画面を再表示
+                            })
+                            .catch((error) => {
+                                // 失敗
+                                const errorCode = error.code;
+                                console.error("Login failed:", errorCode);
+                                if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/wrong-password' || errorCode === 'auth/user-not-found') {
+                                    loginError.textContent = 'メールアドレスまたはパスワードが違います。';
+                                } else {
+                                    loginError.textContent = 'ログインに失敗しました。';
+                                }
+                                loginError.classList.remove('hidden');
+                            });
+                    });
+                }
+
                 App.startApp();
             },
             
@@ -1033,7 +1087,13 @@
             setupAuthObserver: () => {
                 onAuthStateChanged(AppState.auth, user => {
                     if (user) {
-                        AppState.ui.loadingText.textContent = '認証情報を確認中...'; // ← 具体的なテキストを追加
+                        // --- 1. ログイン済みの(または成功した)場合 ---
+                        AppState.ui.loadingText.textContent = '認証情報を確認中...';
+                        
+                        // ログイン画面が表示されていれば隠す
+                        const loginOverlay = $('#login-overlay');
+                        if (loginOverlay) loginOverlay.classList.add('hidden');
+
                         if (!AppState.loadingStatus.auth) {
                             AppState.currentUser = user;
                             AppState.loadingStatus.auth = true;
@@ -1045,8 +1105,12 @@
                             App.setupSyncId();
                         }
                     } else {
-                        AppState.ui.loadingText.textContent = '匿名ユーザーでサインイン中...'; // ← 具体的なテキストを追加
-                        signInAnonymously(AppState.auth).catch(error => App.handleDataFetchError(error, '匿名認証'));
+                        // --- 2. 未ログインの場合 ---
+                        // 匿名認証は行わず、ログイン画面を表示する
+                        AppState.ui.loadingOverlay.classList.add('hidden'); // ローディング画面は隠す
+                        
+                        const loginOverlay = $('#login-overlay');
+                        if (loginOverlay) loginOverlay.classList.remove('hidden');
                     }
                 });
             },
