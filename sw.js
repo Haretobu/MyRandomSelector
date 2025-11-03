@@ -43,18 +43,23 @@ self.addEventListener('activate', (event) => {
 });
 
 // 3. フェッチ時: キャッシュを優先して返す (Cache-First戦略)
-self.addEventListener('fetch', (event) => {
+self.addEventListener('fetch', event => {
+  const requestUrl = new URL(event.request.url);
+
+  // リクエスト先が Firebase (googleapis.com) 宛の場合、
+  // Service Worker は何もしない (キャッシュしようとしない)
+  if (requestUrl.hostname.includes('googleapis.com')) {
+    return; // Service Worker の処理をスキップし、通常の通信を許可
+  }
+
+  // それ以外のリクエスト (index.html, CSS, FontAwesome など) はキャッシュを利用
   event.respondWith(
     caches.match(event.request)
-      .then((cachedResponse) => {
-        // キャッシュにあれば、それを即座に返す
-        if (cachedResponse) {
-          return cachedResponse;
+      .then(response => {
+        if (response) {
+          return response; // キャッシュから返す
         }
-        
-        // キャッシュになければ、ネットワークから取得する
-        // (Firebaseのデータ通信などはここを通る)
-        return fetch(event.request);
+        return fetch(event.request); // ネットワークから取得
       })
   );
 });
