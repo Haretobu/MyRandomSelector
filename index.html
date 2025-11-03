@@ -2721,19 +2721,16 @@
                     // --- 修正: スマホ版メモボタンのクリックイベント ---
                     if (smMemoButton) {
                         smMemoButton.addEventListener('click', () => {
-                            // 段階1で追加した App.openMemoModal を呼び出す
-                            // ↓ 修正: workId, currentRating, currentTagIds を渡す
                             App.openMemoModal(workId, currentMemo, currentRating, currentTagIds, (newMemoText) => {
                                 // openMemoModal が閉じたときのコールバック
                                 if (newMemoText !== null) {
                                     currentMemo = newMemoText; // 内部状態を更新
-                                    // スマホのプレビューも更新
-                                    if (smMemoPreview) {
-                                        smMemoPreview.textContent = currentMemo || 'メモなし';
-                                        smMemoPreview.classList.toggle('italic', !currentMemo);
-                                    }
+                                    // プレビューの更新は openEditModal が自動で行う
                                 }
-                                App.closeModal();
+                                
+                                // ★ 修正: App.closeModal() の代わりに、openEditModal を再呼び出しする
+                                // (openTagModal と同じ方式)
+                                App.openEditModal(workId, { rating: currentRating, tagIds: currentTagIds, memo: currentMemo });
                             });
                         });
                     }
@@ -3864,14 +3861,10 @@
                 App.openModal("ヘルプ：抽選設定", content); // App.openModal を使用
             },
 
-            openMemoModal: (workId, currentMemo, currentRating, currentTagIds, onConfirm) => { // ← 修正: 引数を追加
-                // 現在の編集モーダルの状態をスタックに保存
-                const capturedState = {
-                    rating: currentRating, // ← 修正: 引数から受け取る
-                    tagIds: currentTagIds, // ← 修正: 引数から受け取る
-                    memo: currentMemo
-                };
-                AppState.modalStateStack.push(() => App.openEditModal(workId, capturedState)); // ← 修正: 引数から受け取る
+            openMemoModal: (workId, currentMemo, currentRating, currentTagIds, onConfirm) => { 
+                // ★ 修正: modalStateStack を使わない (openTagModal と同じ方式にする)
+                // const capturedState = { ... };
+                // AppState.modalStateStack.push(...); // ★ この3行を削除
 
                 const content = `
                     <div class="flex flex-col h-[60vh]">
@@ -3882,18 +3875,14 @@
                     </div>
                 `;
                 
-                // 既存の openModal を上書き利用
                 App.openModal("メモを編集", content, () => {
                     const textarea = $('#memo-editor-textarea');
-                    setTimeout(() => textarea.focus(), 100); // モーダルが開いたらすぐにフォーカス
+                    setTimeout(() => textarea.focus(), 100); 
 
                     $('#memo-modal-save').addEventListener('click', () => {
-                        onConfirm(textarea.value); // 新しいメモの内容をコールバックで返す
-                        // App.closeModal() は onConfirm の中で自動的に呼び出される
+                        onConfirm(textarea.value); // 1. コールバックを呼ぶ
+                        App.closeModal(); // 2. ★ 修正: 自分でモーダルを閉じる
                     });
-                    
-                    // App.closeModal (標準のXボタンや背景クリック) が押された時は、
-                    // 保存せずに元の編集モーダルに戻る (onConfirm(null) と同じ)
                 });
             },
 
