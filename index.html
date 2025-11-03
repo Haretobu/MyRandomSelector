@@ -1420,21 +1420,10 @@
             },
 
             deleteWork: async (workId, workName) => {
-                if (AppState.isDebugMode) { return App.showToast("デバッグモード中は作品を削除できません。"); }
-                if (!await App.showConfirm("作品の削除", `「${App.escapeHTML(workName)}」を本当に削除しますか？<br>この操作は取り消せません。`)) return;
-                try {
-                    await deleteDoc(doc(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`, workId));
-                    App.showToast(`「${workName}」を削除しました。`);
-                } catch (error) {
-                    // ★ 修正: isDebugMode で分岐 ★
-                    if (AppState.isDebugMode) {
-                        console.error("Error deleting work (Debug): ", error);
-                    } else {
-                        console.error("Error deleting work."); // 本番では詳細を出力しない
-                    }
-                    App.showToast("作品の削除に失敗しました。", "error");
-                }
+                console.log("Attempting delete:", workId, workName);
+                App.showToast(`削除テスト: 「${workName}」を削除予定 (workId=${workId})`);
             },
+
 
             addTag: async (name, color) => {
                  if (AppState.isDebugMode) { return App.showToast("デバッグモード中はタグを作成できません。"); }
