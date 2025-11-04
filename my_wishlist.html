@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ウィッシュリスト | 作品ランダムセレクター</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' fill='%23f0abfc'><path d='M225.8 468.2L194.6 448H317.4l-31.1 20.2c-4.7 3-10.4 3-15.1 0zM504 288h-4.2c.1-3.2 .2-6.5 .2-9.8C500 123.4 386.6 10 256 10S12 123.4 12 278.2c0 3.3 .1 6.6 .2 9.8H8c-4.4 0-8 3.6-8 8v16c0 4.4 3.6 8 8 8h32c0 3.3 .1 6.6 .2 9.8C42 423 155.1 502 288 502h5.4c1.1 0 2.2-.1 3.3-.2c.1 0 .2 0 .3 0c2.3-.2 4.6-.4 6.9-.7c.3 0 .7 0 1 0c25.4-3.1 49.8-10.3 72.4-21c.3-.1 .5-.2 .8-.4c1-.4 1.9-.9 2.9-1.3c.3-.1 .6-.3 .9-.4c1-.5 2-1 3-1.6c.3-.2 .6-.4 .9-.5c1.1-.6 2.2-1.3 3.3-1.9c.3-.2 .6-.4 .9-.6c1.1-.6 2.2-1.3 3.3-2c.3-.2 .6-.4 .9-.6c1-.6 2-1.3 3-2c.3-.2 .6-.4 .9-.6c.9-.6 1.8-1.2 2.7-1.9c.3-.2 .6-.4 .9-.6c.9-.6 1.8-1.2 2.7-1.9c.3-.2 .6-.4 .9-.6c.8-.6 1.6-1.2 2.5-1.8c.3-.2 .6-.4 .9-.6c.8-.6 1.6-1.2 2.4-1.8c.3-.2 .6-.4 .9-.6c.8-.6 1.6-1.2 2.4-1.8c.2-.2 .5-.3 .7-.5c1.5-1.2 3-2.5 4.5-3.8c.3-.3 .7-.5 1-.8c.7-.6 1.4-1.3 2.1-1.9c.3-.3 .6-.5 .9-.8c.7-.6 1.4-1.3 2.1-2c.3-.3 .6-.5 .9-.8c.7-.6 1.3-1.3 2-2c.3-.3 .6-.5 .9-.8c.6-.6 1.3-1.3 1.9-1.9c.3-.3 .6-.5 .9-.8c.6-.6 1.2-1.3 1.8-1.9c.3-.3 .6-.5 .9-.8c.6-.6 1.2-1.3 1.8-1.9c.3-.3 .5-.5 .8-.8c.5-.6 1.1-1.2 1.6-1.8c.3-.3 .5-.5 .8-.8c.5-.6 1-1.2 1.5-1.8c.2-.3 .5-.5 .7-.8c.5-.6 1-1.2 1.5-1.8c.2-.3 .5-.5 .7-.8c.5-.6 .9-1.2 1.4-1.8c.2-.3 .4-.5 .7-.8c.4-.6 .9-1.2 1.3-1.8c.2-.3 .4-.5 .7-.8c.4-.6 .8-1.2 1.2-1.8c.2-.3 .4-.5 .6-.8c.4-.6 .8-1.2 1.2-1.8c.2-.3 .4-.5 .6-.8c.3-.6 .7-1.2 1-1.8c.2-.3 .4-.5 .6-.8c.3-.6 .6-1.2 .9-1.8c.2-.3 .3-.5 .5-.8c.3-.6 .6-1.2 .8-1.8c.2-.3 .3-.5 .5-.8c.2-.6 .5-1.2 .7-1.8c.1-.3 .3-.5 .4-.8c.2-.6 .4-1.2 .6-1.8c.1-.3 .3-.5 .4-.8c.2-.6 .3-1.2 .5-1.8c.1-.3 .2-.5 .4-.8c.2-.6 .3-1.2 .4-1.8c.1-.3 .2-.5 .3-.8c.1-.6 .3-1.2 .4-1.8c.1-.3 .2-.5 .3-.7c.1-.6 .2-1.2 .3-1.8c.1-.3 .1-.5 .2-.7c.1-.6 .2-1.1 .2-1.7c0-.2 .1-.3 .1-.5C468.2 301.1 468 294.6 468 288h32c4.4 0 8-3.6 8-8v-16c0-4.4-3.6-8-8-8zM288 384c-44.2 0-80-35.8-80-80s35.8-80 80-80 80 35.8 80 80-35.8 80-80 80z'/></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style type="text/tailwindcss">
+        /* スクロールバーのスタイルをindex.htmlから拝借 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        .wishlist-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 1rem;
+            background-color: #1f2937; /* gray-800 */
+            border-radius: 0.75rem;
+            transition: background-color 0.2s;
+        }
+        .wishlist-item:hover { background-color: #374151; }
+        .btn-icon {
+            flex-shrink: 0;
+            width: 2.25rem; /* w-9 */
+            height: 2.25rem; /* h-9 */
+            font-size: 0.875rem; /* text-sm */
+            border-radius: 0.5rem; /* rounded-lg */
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+            color: white;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, onIdTokenChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, doc, onSnapshot, collection, query, 
+            writeBatch, Timestamp, serverTimestamp, addDoc, deleteDoc, getDocs
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- 1. App State (index.htmlから流用・簡略化) ---
+        const AppState = {
+            firebaseApp: null,
+            auth: null,
+            db: null,
+            
+            // index.html と同じ設定を使います
+            appId: typeof __app_id !== 'undefined' ? __app_id : 'r18-random-selector',
+            firebaseConfig: typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+                "apiKey": "AIzaSyAnlTrmb0MW8yznBxpWF6B83R9luFnGVts",
+                "authDomain": "serecter222.firebaseapp.com",
+                "projectId": "serecter222",
+                "storageBucket": "serecter222.appspot.com",
+                "messagingSenderId": "1019715441654",
+                "appId": "1:1019715441654:web:6caa7779148cce46c92dd7"
+            },
+
+            syncId: '',
+            currentUser: null,
+            isLoadComplete: false,
+            unsubscribeWishlist: () => {},
+            wishlist: [], // ウィッシュリストのアイテムを保持
+            
+            ui: {} // UI要素のキャッシュ
+        };
+
+        // --- 2. App Logic ---
+        const App = {
+            // --- Utility Functions (index.htmlから流用) ---
+            $: (selector) => document.querySelector(selector),
+            $$: (selector) => document.querySelectorAll(selector),
+            escapeHTML: (str) => {
+                if (typeof str !== 'string' || !str) return '';
+                return str.replace(/[&<>"']/g, function(match) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[match];
+                });
+            },
+            showToast: (message, type = 'info', duration = 3000) => {
+                const toastEl = App.ui.toastEl;
+                if (!toastEl) return;
+                toastEl.classList.remove('bg-red-600', 'bg-gray-700');
+                toastEl.classList.add(type === 'error' ? 'bg-red-600' : 'bg-gray-700');
+                App.ui.toastMessageEl.textContent = message;
+                toastEl.classList.remove('translate-y-20', 'opacity-0');
+                setTimeout(() => {
+                    toastEl.classList.add('translate-y-20', 'opacity-0');
+                }, duration);
+            },
+            showConfirm: (title, message) => {
+                return new Promise((resolve) => {
+                    App.ui.confirmTitle.textContent = title;
+                    App.ui.confirmMessage.innerHTML = message;
+                    App.ui.confirmModal.classList.remove('hidden');
+
+                    const okHandler = () => {
+                        App.ui.confirmModal.classList.add('hidden');
+                        App.ui.confirmOkBtn.removeEventListener('click', okHandler);
+                        App.ui.confirmCancelBtn.removeEventListener('click', cancelHandler);
+                        resolve(true);
+                    };
+                    const cancelHandler = () => {
+                        App.ui.confirmModal.classList.add('hidden');
+                        App.ui.confirmOkBtn.removeEventListener('click', okHandler);
+                        App.ui.confirmCancelBtn.removeEventListener('click', cancelHandler);
+                        resolve(false);
+                    };
+                    App.ui.confirmOkBtn.addEventListener('click', okHandler);
+                    App.ui.confirmCancelBtn.addEventListener('click', cancelHandler);
+                });
+            },
+
+            // --- Initialization ---
+            init: () => {
+                // UI要素の参照をキャッシュ
+                App.ui = {
+                    loadingOverlay: App.$('#loading-overlay'),
+                    loadingText: App.$('#loading-text'),
+                    appContainer: App.$('#app-container'),
+                    loginOverlay: App.$('#login-overlay'),
+                    loginForm: App.$('#login-form'),
+                    loginError: App.$('#login-error'),
+                    wishlistContainer: App.$('#wishlist-container'),
+                    wishlistMessage: App.$('#wishlist-message'),
+                    clearAllBtn: App.$('#clear-all-btn'),
+                    toastEl: App.$('#toast'),
+                    toastMessageEl: App.$('#toast-message'),
+                    confirmModal: App.$('#confirm-modal'),
+                    confirmTitle: App.$('#confirm-title'),
+                    confirmMessage: App.$('#confirm-message'),
+                    confirmOkBtn: App.$('#confirm-ok'),
+                    confirmCancelBtn: App.$('#confirm-cancel'),
+                };
+
+                App.ui.loadingOverlay.classList.remove('hidden');
+                App.initializeFirebase();
+            },
+
+            // --- Firebase & Auth (index.htmlから流用・簡略化) ---
+            initializeFirebase: () => {
+                try {
+                    AppState.firebaseApp = initializeApp(AppState.firebaseConfig);
+                    AppState.auth = getAuth(AppState.firebaseApp);
+                    AppState.db = getFirestore(AppState.firebaseApp);
+                    App.setupAuthObserver();
+                } catch (error) {
+                    console.error("Firebase initialization failed:", error);
+                    App.ui.loadingText.textContent = 'Firebaseの初期化に失敗しました。';
+                }
+            },
+
+            setupAuthObserver: () => {
+                onIdTokenChanged(AppState.auth, user => {
+                    if (user) {
+                        // --- ログイン済み ---
+                        App.ui.loginOverlay.classList.add('hidden');
+                        App.ui.loadingOverlay.classList.remove('hidden');
+                        App.ui.loadingText.textContent = '認証情報を確認中...';
+
+                        if (!AppState.currentUser) {
+                            AppState.currentUser = user;
+                            // index.html と同じ syncId を使用
+                            AppState.syncId = localStorage.getItem('r18_sync_id'); 
+                            if (!AppState.syncId) {
+                                // もしindex.htmlを一度も開いていない場合、syncIdがない
+                                App.ui.loadingText.textContent = 'エラー: メインアプリ(index.html)を先に開いて同期IDを生成してください。';
+                                return;
+                            }
+                            App.loadWishlist(); // ウィッシュリストの読み込み開始
+                        }
+                    } else {
+                        // --- 未ログイン ---
+                        App.ui.loadingOverlay.classList.add('hidden');
+                        App.ui.appContainer.classList.add('opacity-0');
+                        App.ui.loginOverlay.classList.remove('hidden');
+                    }
+                });
+                
+                // ログインフォームの処理 (index.htmlからそのままコピー)
+                App.ui.loginForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const email = App.$('#login-email').value;
+                    const password = App.$('#login-password').value;
+                    
+                    signInWithEmailAndPassword(AppState.auth, email, password)
+                        .then(() => {
+                            App.ui.loginError.classList.add('hidden');
+                            App.ui.loadingOverlay.classList.remove('hidden');
+                        })
+                        .catch(() => {
+                            App.ui.loginError.textContent = 'メールアドレスまたはパスワードが違います。';
+                            App.ui.loginError.classList.remove('hidden');
+                        });
+                });
+            },
+
+            // --- Wishlist Logic ---
+            loadWishlist: () => {
+                App.ui.loadingText.textContent = 'ウィッシュリストを読み込み中...';
+                
+                // ★★★ 新しいコレクション（保存場所）を参照 ★★★
+                // index.htmlの `items` とは別の `wishlist` を参照します
+                const wishlistRef = collection(AppState.db, 
+                    `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/wishlist`
+                );
+                
+                AppState.unsubscribeWishlist = onSnapshot(query(wishlistRef), (snapshot) => {
+                    AppState.wishlist = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    // 登録日 (createdAt) で並び替え
+                    AppState.wishlist.sort((a, b) => 
+                        (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)
+                    );
+                    
+                    App.renderWishlist();
+
+                    if (!AppState.isLoadComplete) {
+                        // 読み込み完了
+                        AppState.isLoadComplete = true;
+                        App.ui.loadingOverlay.classList.add('opacity-0');
+                        App.ui.appContainer.classList.remove('opacity-0');
+                        setTimeout(() => App.ui.loadingOverlay.classList.add('hidden'), 500);
+                        
+                        // ★ロード完了後にURLパラメータをチェック
+                        App.checkAndAddItemFromUrl(); 
+                    }
+                }, (error) => {
+                    console.error("Wishlist fetch error: ", error);
+                    App.ui.loadingText.textContent = `リストの読み込みに失敗しました: ${error.message}`;
+                });
+                
+                App.setupEventListeners();
+            },
+
+            checkAndAddItemFromUrl: () => {
+                const params = new URLSearchParams(window.location.search);
+                const title = params.get('title');
+                const url = params.get('url');
+
+                if (title && url) {
+                    // 既に同じURLがリストにないかチェック
+                    const isDuplicate = AppState.wishlist.some(item => item.url === url);
+                    
+                    if (isDuplicate) {
+                        App.showToast("この作品は既にリストにあります。", "info");
+                    } else {
+                        // URLが重複していなければ追加
+                        App.addItem(title, url);
+                    }
+                    
+                    // 処理が終わったらURLからパラメータを消す
+                    history.replaceState(null, '', window.location.pathname);
+                }
+            },
+
+            addItem: async (title, url) => {
+                try {
+                    const wishlistRef = collection(AppState.db, 
+                        `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/wishlist`
+                    );
+                    await addDoc(wishlistRef, {
+                        title: title,
+                        url: url,
+                        createdAt: serverTimestamp() // 登録日時を記録
+                    });
+                    App.showToast(`「${title}」を追加しました。`);
+                } catch (error) {
+                    console.error("Error adding item: ", error);
+                    App.showToast("アイテムの追加に失敗しました。", "error");
+                }
+            },
+
+            renderWishlist: () => {
+                const items = AppState.wishlist;
+                if (items.length === 0) {
+                    App.ui.wishlistMessage.classList.remove('hidden');
+                    App.ui.wishlistContainer.innerHTML = '';
+                    App.ui.clearAllBtn.disabled = true;
+                    return;
+                }
+                
+                App.ui.wishlistMessage.classList.add('hidden');
+                App.ui.clearAllBtn.disabled = false;
+                
+                App.ui.wishlistContainer.innerHTML = items.map(item => {
+                    const safeTitle = App.escapeHTML(item.title);
+                    const safeUrl = App.escapeHTML(item.url);
+                    // URLからホスト名を取得 (dlsite.com など)
+                    let hostname = '';
+                    try { hostname = new URL(item.url).hostname.replace('www.', ''); } catch (e) {}
+
+                    return `
+                    <div class="wishlist-item">
+                        <div class="flex-grow min-w-0">
+                            <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="font-bold cursor-pointer line-clamp-2 hover:underline">${safeTitle}</a>
+                            <p class="text-sm text-gray-400 truncate">${hostname}</p>
+                        </div>
+                        <div class="flex-shrink-0 flex space-x-2">
+                            <a href="price_comparison.html" target="_blank" class="btn-icon bg-cyan-600 hover:bg-cyan-700" title="価格比較">
+                                <i class="fas fa-balance-scale-right"></i>
+                            </a>
+                            <button data-action="purchased" data-id="${item.id}" data-title="${safeTitle}" data-url="${safeUrl}" class="btn-icon bg-emerald-600 hover:bg-emerald-700" title="購入済み (メインアプリに登録)">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            <button data-action="delete" data-id="${item.id}" data-title="${safeTitle}" class="btn-icon bg-red-600 hover:bg-red-700" title="削除">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    `;
+                }).join('');
+            },
+
+            setupEventListeners: () => {
+                App.ui.wishlistContainer.addEventListener('click', (e) => {
+                    const button = e.target.closest('button[data-action]');
+                    if (!button) return;
+
+                    const { action, id, title, url } = button.dataset;
+
+                    if (action === 'delete') {
+                        App.handleDelete(id, title);
+                    } else if (action === 'purchased') {
+                        App.handlePurchased(id, title, url);
+                    }
+                });
+
+                App.ui.clearAllBtn.addEventListener('click', async () => {
+                    if (await App.showConfirm("全件削除", "本当にウィッシュリストをすべて削除しますか？<br>この操作は取り消せません。")) {
+                        try {
+                            const batch = writeBatch(AppState.db);
+                            const wishlistRef = collection(AppState.db, 
+                                `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/wishlist`
+                            );
+                            const snapshot = await getDocs(wishlistRef);
+                            snapshot.docs.forEach(doc => {
+                                batch.delete(doc.ref);
+                            });
+                            await batch.commit();
+                            App.showToast("ウィッシュリストを全件削除しました。");
+                        } catch (error) {
+                            console.error("Error clearing wishlist: ", error);
+                            App.showToast("削除中にエラーが発生しました。", "error");
+                        }
+                    }
+                });
+            },
+
+            handleDelete: async (id, title) => {
+                if (await App.showConfirm("削除の確認", `「${title}」をリストから削除しますか？`)) {
+                    try {
+                        const docRef = doc(AppState.db, 
+                            `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/wishlist`, id
+                        );
+                        await deleteDoc(docRef);
+                        App.showToast("削除しました。");
+                    } catch (error) {
+                        console.error("Error deleting item: ", error);
+                        App.showToast("削除に失敗しました。", "error");
+                    }
+                }
+            },
+
+            handlePurchased: async (id, title, url) => {
+                try {
+                    // 1. メインアプリに渡すデータをlocalStorageにセット
+                    const dataToImport = JSON.stringify({ name: title, url: url });
+                    localStorage.setItem('pending_import', dataToImport);
+
+                    // 2. ウィッシュリストから削除
+                    const docRef = doc(AppState.db, 
+                        `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/wishlist`, id
+                    );
+                    await deleteDoc(docRef);
+
+                    // 3. メインアプリ(index.html)にリダイレクト
+                    App.showToast(`「${title}」を購入済みにしました。メインアプリに移動します...`, "info");
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 1500);
+
+                } catch (error) {
+                    console.error("Error handling purchase: ", error);
+                    App.showToast("購入処理に失敗しました。", "error");
+                    localStorage.removeItem('pending_import'); // 念のためクリア
+                }
+            }
+        };
+
+        // --- 3. App Initialization ---
+        document.addEventListener('DOMContentLoaded', App.init);
+    </script>
+</head>
+<body class="bg-gray-900 text-gray-200 font-sans antialiased">
+
+    <div id="loading-overlay" class="fixed inset-0 bg-gray-900 z-[100] flex items-center justify-center p-4">
+        <div class="text-center">
+            <i class="fas fa-spinner fa-spin fa-3x text-fuchsia-400"></i>
+            <p id="loading-text" class="mt-4 text-gray-400">アプリケーションを初期化中...</p>
+        </div>
+    </div>
+    
+    <div id="login-overlay" class="hidden fixed inset-0 bg-gray-900 bg-opacity-95 z-[90] flex items-center justify-center p-4">
+        <div class="w-full max-w-sm">
+            <form id="login-form" class="bg-gray-800 p-8 rounded-2xl shadow-2xl space-y-6">
+                <h2 class="text-2xl font-bold text-center text-gray-300">ウィッシュリスト ログイン</h2>
+                <div id="login-error" class="hidden text-sm text-center bg-red-900 border border-red-700 text-red-300 p-2 rounded-lg"></div>
+                <div>
+                    <label for="login-email" class="block text-sm font-medium text-gray-400 mb-1">メールアドレス</label>
+                    <input type="email" id="login-email" required class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-sky-500" autocomplete="email">
+                </div>
+                <div>
+                    <label for="login-password" class="block text-sm font-medium text-gray-400 mb-1">パスワード</label>
+                    <input type="password" id="login-password" required class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-sky-500" autocomplete="current-password">
+                </div>
+                <button type="submit" class="w-full px-4 py-3 bg-sky-600 hover:bg-sky-700 rounded-lg font-bold text-lg transition-colors">入室</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="app-container" class="min-h-screen opacity-0 transition-opacity duration-500">
+        
+        <header class="bg-gray-800 shadow-md p-4">
+            <div class="max-w-7xl mx-auto flex justify-between items-center">
+                <h1 class="text-xl font-bold text-fuchsia-400 flex items-center">
+                    <i class="fas fa-heart mr-3"></i>ウィッシュリスト
+                </h1>
+                <a href="index.html" class="px-3 py-2 text-sm bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors">
+                    <i class="fas fa-home mr-2"></i>メインアプリに戻る
+                </a>
+            </div>
+        </header>
+
+        <main class="max-w-4xl mx-auto p-4 md:p-8">
+            <div class="bg-gray-800 p-4 rounded-xl shadow-lg mb-6">
+                <h2 class="text-lg font-semibold mb-2">ブックマークレットの使い方</h2>
+                <p class="text-sm text-gray-400">
+                    下の「ほしい物に追加」ボタン（ブックマークレット）をブラウザのブックマークバーにドラッグ＆ドロップしてください。
+                    <br>
+                    欲しい作品のページ（DLsiteなど）でそのブックマークをクリックすると、このリストに自動で追加されます。
+                </p>
+                <div class="mt-4">
+                    <a id="bookmarklet-link" href="#" class="inline-block px-4 py-2 bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold rounded-lg shadow-lg"
+                       title="これをブックマークバーにドラッグ">
+                        <i class="fas fa-heart-circle-plus"></i> ほしい物に追加
+                    </a>
+                    <span class="text-xs text-gray-500 ml-2">← これをドラッグ</span>
+                </div>
+            </div>
+
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">登録リスト</h2>
+                <button id="clear-all-btn" class="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    <i class="fas fa-trash-alt mr-2"></i>全件削除
+                </button>
+            </div>
+
+            <div id="wishlist-message" class="text-center py-10 text-gray-500 hidden">
+                <i class="fas fa-box-open fa-3x"></i>
+                <p class="mt-4 text-base">ウィッシュリストは空です。<br>ブックマークレットを使って作品を追加してみましょう。</p>
+            </div>
+            
+            <div id="wishlist-container" class="space-y-2">
+                </div>
+        </main>
+    </div>
+
+    <div id="toast" class="fixed bottom-5 right-5 bg-gray-700 text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-[70]">
+        <p id="toast-message">Message</p>
+    </div>
+
+    <div id="confirm-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[80] flex items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-sm w-full">
+            <h3 id="confirm-title" class="text-lg font-bold mb-4">確認</h3>
+            <p id="confirm-message" class="text-gray-300 mb-6"></p>
+            <div class="flex justify-end space-x-4">
+                <button id="confirm-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors">キャンセル</button>
+                <button id="confirm-ok" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors">OK</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // このスクリプトは、ブックマークレットのリンク先(href)を、
+        // 現在開いているページのURL (GitHub PagesのURL) を使って自動的に設定します。
+        // これにより、ローカルテスト(file://)でも本番(https://)でも機能します。
+        document.addEventListener('DOMContentLoaded', () => {
+            const bookmarkletLink = document.getElementById('bookmarklet-link');
+            if (bookmarkletLink) {
+                // 現在のページのURLから、ファイル名(my_wishlist.html)とクエリパラメータ(?)を削除
+                const baseUrl = window.location.href.split('?')[0];
+                
+                const bookmarkletCode = `javascript:void(window.open('${baseUrl}?title='+encodeURIComponent(document.title)+'&url='+encodeURIComponent(location.href)));`;
+                
+                bookmarkletLink.setAttribute('href', bookmarkletCode);
+                
+                // ドラッグ＆ドロップで追加するよう促すため、クリックでは何もしない
+                bookmarkletLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    alert('このボタンをクリックするのではなく、お使いのブラウザのブックマークバーに「ドラッグ＆ドロップ」してください。');
+                });
+            }
+        });
+    </script>
+
+</body>
+</html>
