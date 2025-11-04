@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ブックマークレット テスト</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #111827; color: #d1d5db; }
+        .item { background-color: #1f2937; padding: 1rem; border-radius: 0.5rem; margin-bottom: 0.5rem; }
+        .item a { color: #60a5fa; }
+    </style>
+</head>
+<body class="p-8">
+
+    <div class="max-w-2xl mx-auto">
+        <h1 class="text-2xl font-bold mb-4">ウィッシュリスト (テスト)</h1>
+        
+        <p class="text-sm text-gray-400 mb-4">
+            ブックマークレットから追加されたアイテムがここに表示されます。<br>
+            このデータはFirebaseではなく、お使いのブラウザ (localStorage) に保存されています。
+        </p>
+
+        <button id="clear-wishlist" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded mb-4">
+            リストを全消去
+        </button>
+
+        <div id="wishlist-output">
+            </div>
+    </div>
+
+    <script>
+        const storageKey = 'myTestWishlist';
+        const outputEl = document.getElementById('wishlist-output');
+        const clearBtn = document.getElementById('clear-wishlist');
+
+        // 1. リストを描画する関数
+        function renderList() {
+            const items = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            if (items.length === 0) {
+                outputEl.innerHTML = '<p class="text-gray-500">アイテムはまだありません。</p>';
+                return;
+            }
+            outputEl.innerHTML = items.map(item => `
+                <div class="item">
+                    <p class="font-semibold">${item.title}</p>
+                    <p class="text-sm truncate"><a href="${item.url}" target="_blank">${item.url}</a></p>
+                </div>
+            `).join('');
+        }
+
+        // 2. URLパラメータをチェックして、ローカルストレージに保存する関数
+        function checkAndAddItem() {
+            const params = new URLSearchParams(window.location.search);
+            const title = params.get('title');
+            const url = params.get('url');
+
+            // URLに title と url が含まれていれば
+            if (title && url) {
+                // 既存のリストを取得
+                const items = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                
+                // 新しいアイテムを追加
+                items.unshift({ title, url }); // unshiftで先頭に追加
+                
+                // 保存
+                localStorage.setItem(storageKey, JSON.stringify(items));
+
+                // ★重要: リロードで二重登録されるのを防ぐため、URLからパラメータを消す
+                history.replaceState(null, '', window.location.pathname);
+            }
+        }
+
+        // --- 実行 ---
+
+        // ページ読み込み時に、まずURLパラメータをチェック
+        checkAndAddItem();
+        
+        // 次に、現在のリストを描画
+        renderList();
+
+        // クリアボタンの動作
+        clearBtn.addEventListener('click', () => {
+            if (confirm('本当にリストを消去しますか？')) {
+                localStorage.removeItem(storageKey);
+                renderList();
+            }
+        });
+    </script>
+</body>
+</html>
