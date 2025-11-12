@@ -3,7 +3,7 @@
 // 1. キャッシュのバージョン管理
 // index.htmlのappVersionと連動させます。
 // アプリを更新するたびに、このバージョンも変更する必要があります。
-const APP_VERSION = 'v2.3.7';
+const APP_VERSION = 'v2.3.9';
 const CACHE_NAME = `r18-selector-shell-${APP_VERSION}`;
 
 // 2. キャッシュするファイルの厳密な指定 (方針7準拠)
@@ -68,24 +68,49 @@ self.addEventListener('fetch', event => {
   }
 
   // 方針7: 外部CDN (Tailwind, Chart.js, FontAwesome) はキャッシュしない
-  // 自分のオリジン(haretobu.github.io)からのリクエストでない場合は、
-  // ネットワークに任せます。
   if (!event.request.url.startsWith(self.location.origin)) {
     return; // Service Workerは何もしない
   }
   
-  // 上記の除外ルールをすべて通過したリクエスト (自分のファイル)
-  // → キャッシュを優先して返す (Cache First)
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        if (response) {
-          // キャッシュに存在した場合
+  // ★ 修正: ページナビゲーションリクエスト (index.htmlへのアクセス) は Network First に変更
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      // 1. ネットワークにまず接続
+      fetch(event.request)
+        .then(response => {
+          // 1a. 成功したら、レスポンスをキャッシュに保存して...
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME)
+            .then(cache => {
+              cache.put(event.request, responseToCache);
+              console.log('[SW] Fetched and cached new page:', event.request.url);
+            });
+          // ...ネットワークから取得した最新版を返す
           return response;
-        }
-        // キャッシュにない場合はネットワークから取得
-        // (FILES_TO_CACHEにないリクエストがここに来ることは稀)
-        return fetch(event.request);
-      })
-  );
+        })
+        .catch(error => {
+          // 1b. 失敗したら (オフライン)、キャッシュから探す
+          console.log('[SW] Network failed, using cache for:', event.request.url);
+          return caches.match(event.request)
+            .then(response => {
+              // 'FILES_TO_CACHE' には './' があるので、それがフォールバックになる
+              return response || caches.match('./'); 
+            });
+        })
+    );
+  } else {
+    // ★ 既存の戦略: manifest.json などは Cache First
+    // (ナビゲーション以外のリクエスト。例: manifest.json)
+    event.respondWith(
+      caches.match(event.request)
+        .then(response => {
+          if (response) {
+            // キャッシュに存在した場合
+            return response;
+          }
+          // キャッシュにない場合はネットワークから取得
+          return fetch(event.request);
+        })
+    );
+  }
 });

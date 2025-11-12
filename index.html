@@ -502,7 +502,7 @@
             // App Config
             DEFAULT_APP_ID: 'r18-random-selector',
             appId: typeof __app_id !== 'undefined' ? __app_id : 'r18-random-selector',
-            appVersion: 'v2.3.8', // バージョンを更新
+            appVersion: 'v.UNKNOWN', // バージョンを更新
             firebaseConfig: typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
                 "apiKey": "AIzaSyAnlTrmb0MW8yznBxpWF6B83R9luFnGVts",
                 "authDomain": "serecter222.firebaseapp.com",
@@ -4025,9 +4025,11 @@
                     </div>
                     <div class="pt-6 mt-6 border-t border-gray-700 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
                         <button id="lottery-reroll" class="w-full sm:w-auto px-6 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold">もう一度抽選</button>
-                        <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto"> <button id="result-close-nosave-btn" class="w-full sm:w-auto px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">保存せずに閉じる</button> <button id="result-close-btn" class="w-full sm:w-auto px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-700 text-gray-100">閉じる</button>
+                        <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
                             <button id="result-edit-details-btn" class="w-full sm:w-auto px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">詳細編集</button>
-                            <button id="result-close-btn" class="w-full sm:w-auto px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-700 text-gray-100">閉じる</button>
+                            
+                            <button id="result-close-btn" class="w-full sm:w-auto px-4 py-2 rounded-lg transition-colors font-semibold bg-gray-600 hover:bg-gray-700 text-gray-100">閉じる</button>
+                            
                             <button id="result-save-btn" class="w-full sm:w-auto px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-sky-600 hover:bg-sky-700 text-white">保存</button>
                         </div>
                     </div>`;
@@ -4147,10 +4149,6 @@
                         if (await App.updateWork(work.id, { rating: currentRating, tagIds: Array.from(currentTagIds) })) { // App.updateWork を使用
                             App.showToast(`「${work.name}」の情報を更新しました。`); App.closeModal(); // App.showToast, App.closeModal を使用
                         }
-                    });
-                    $('#result-close-nosave-btn').addEventListener('click', () => {
-                        AppState.checkModalDirtyState = () => false; // 確認ダイアログをスキップするために false に設定
-                        App.closeModal();
                     });
                 };
 
@@ -4819,7 +4817,40 @@
 
         // --- 4. App Initialization ---
         // 起動処理を App.init() の呼び出しに変更
-        document.addEventListener('DOMContentLoaded', App.init);
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // 1. sw.js をテキストとして取得 (キャッシュを回避)
+                const response = await fetch('sw.js?t=' + Date.now());
+                if (!response.ok) {
+                    throw new Error('sw.jsの読み込みに失敗');
+                }
+                const swText = await response.text();
+                
+                // 2. 正規表現でバージョン番号を抽出
+                const match = swText.match(/const APP_VERSION = '([^']+)';/);
+                if (!match || !match[1]) {
+                    throw new Error('sw.jsからバージョンを抽出できません');
+                }
+                const version = match[1];
+                
+                // 3. AppStateにバージョンを設定
+                console.log('Detected App Version:', version);
+                AppState.appVersion = version;
+                
+                // 4. アプリを初期化
+                App.init();
+
+            } catch (error) {
+                console.error("アプリの初期化に失敗:", error);
+                document.body.innerHTML = `<div style="padding: 20px; color: red; font-family: sans-serif;">
+                    <b>アプリの起動に失敗しました:</b><br>
+                    ${error.message}<br><br>
+                    sw.jsファイルが正しくアップロードされているか、またはバージョン番号が
+                    <pre style="background: #333; padding: 5px; border-radius: 4px; margin-top: 5px;">const APP_VERSION = 'vX.X.X';</pre>
+                    の形式でsw.jsの先頭に書かれているか確認してください。
+                </div>`;
+            }
+        });
 
     </script>
 </body>
