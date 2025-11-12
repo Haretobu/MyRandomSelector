@@ -3999,6 +3999,8 @@
                 let currentRating = tempState?.rating ?? (work.rating || 0);
                 let currentTagIds = tempState?.tagIds ?? new Set(work.tagIds || []);
 
+                const siteBadge = App.getSiteBadgeHTML(work.sourceUrl);
+
                 const getFormState = () => ({
                     rating: currentRating,
                     tagIds: JSON.stringify([...currentTagIds].sort())
@@ -4006,11 +4008,12 @@
                 const initialState = getFormState();
                 AppState.checkModalDirtyState = () => JSON.stringify(initialState) !== JSON.stringify(getFormState()); // AppState を使用
 
-                const siteBadge = App.getSiteBadgeHTML(work.sourceUrl);
-
                 const content = `
                     <div class="text-center">
-                        <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${work.name}" class="max-w-full max-h-48 object-contain mx-auto rounded-lg shadow-lg mb-4">
+                        <div class="relative inline-block">
+                            <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${work.name}" class="max-w-full max-h-48 object-contain mx-auto rounded-lg shadow-lg mb-4">
+                            ${siteBadge}
+                        </div>
                         <p class="text-lg font-bold text-sky-300">${work.genre}</p>
                         <div class="flex items-center justify-center gap-2 my-2">
                             <h3 class="text-3xl font-bold text-white">${App.escapeHTML(work.name)}</h3>
