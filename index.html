@@ -1024,7 +1024,7 @@
                 if (!AppState.loadingStatus.tags) statusParts.push('タグ');
                 if (!AppState.loadingStatus.works) statusParts.push('作品');
 
-                AppState.ui.loadingContent.innerHTML = `
+                const errorHtml = `
                     <i class="fas fa-exclamation-triangle fa-3x text-red-400"></i>
                     <p class="mt-4 text-red-300 font-semibold">${errorMessageTitle || '読み込みタイムアウト'}</p>
                     <p class="mt-2 text-gray-400 text-sm">
@@ -1033,6 +1033,18 @@
                     <p class="mt-4 text-sm text-gray-500">ページを再読み込みするか、同期IDを確認してください。</p>
                     <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg">再読み込み</button>
                 `;
+
+                // ★ 修正: メインのローディングオーバーレイが表示されているか？
+                if (!AppState.ui.loadingOverlay.classList.contains('hidden')) {
+                    // 表示中 (初回ロード) なら、オーバーレイを書き換える
+                    AppState.ui.loadingContent.innerHTML = errorHtml;
+                } else {
+                    // 非表示 (データ切り替え中) なら、作品リストのメッセージ欄を書き換える
+                    AppState.ui.workListMessage.innerHTML = `<div class="text-center py-10">${errorHtml}</div>`;
+                    AppState.ui.workListMessage.classList.remove('hidden');
+                    AppState.ui.workListEl.classList.add('hidden');
+                    AppState.ui.paginationControls.classList.add('hidden');
+                }
             },
             
             startLoadingTimeout: () => {
@@ -1058,8 +1070,9 @@
                  } else {
                      console.error(`Error fetching ${type}.`); // 本番では詳細を出力しない
                  }
-                 clearTimeout(AppState.loadingTimeout);
-                 AppState.ui.loadingContent.innerHTML = `
+                clearTimeout(AppState.loadingTimeout);
+                 
+                 const errorHtml = `
                     <i class="fas fa-exclamation-triangle fa-3x text-red-400"></i>
                     <p class="mt-4 text-red-300 font-semibold">${type}データの取得に失敗</p>
                     <p class="mt-2 text-gray-400 text-sm">
@@ -1068,11 +1081,27 @@
                     <p class="mt-4 text-sm text-gray-500">ページを再読み込みするか、Firebaseのセキュリティルールを確認してください。</p>
                     <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg">再読み込み</button>
                 `;
+                
+                // ★ 修正: メインのローディングオーバーレイが表示されているか？
+                if (!AppState.ui.loadingOverlay.classList.contains('hidden')) {
+                    // 表示中 (初回ロード) なら、オーバーレイを書き換える
+                    AppState.ui.loadingContent.innerHTML = errorHtml;
+                } else {
+                    // 非表示 (データ切り替え中) なら、作品リストのメッセージ欄を書き換える
+                    AppState.ui.workListMessage.innerHTML = `<div class="text-center py-10">${errorHtml}</div>`;
+                    AppState.ui.workListMessage.classList.remove('hidden');
+                    AppState.ui.workListEl.classList.add('hidden');
+                    AppState.ui.paginationControls.classList.add('hidden');
+                }
             },
 
             checkLoadingComplete: () => {
                 if (AppState.isLoadComplete) return;
-                App.updateLoadingProgress();
+                
+                // ★ メインのローディングオーバーレイが表示されている場合のみプログレスバーを更新
+                if (!AppState.ui.loadingOverlay.classList.contains('hidden')) {
+                    App.updateLoadingProgress();
+                }
                 
                 if (AppState.loadingStatus.auth && AppState.loadingStatus.works && AppState.loadingStatus.tags) {
                     AppState.isLoadComplete = true;
@@ -1080,28 +1109,35 @@
                     clearTimeout(AppState.stallTimeout);
                     console.log("All data loaded successfully.");
                     
-                    AppState.ui.loadingText.textContent = '読み込み完了！';
-                    AppState.ui.loadingProgressBar.style.width = `100%`;
+                    // ★ メインのローディングオーバーレイが表示されている場合のみ、それを閉じる
+                    if (!AppState.ui.loadingOverlay.classList.contains('hidden')) {
+                        AppState.ui.loadingText.textContent = '読み込み完了！';
+                        AppState.ui.loadingProgressBar.style.width = `100%`;
 
-                    setTimeout(() => {
-                        AppState.ui.loadingOverlay.classList.add('opacity-0');
-                        AppState.ui.appContainer.classList.remove('opacity-0');
-                        setTimeout(() => AppState.ui.loadingOverlay.classList.add('hidden'), 500);
+                        setTimeout(() => {
+                            AppState.ui.loadingOverlay.classList.add('opacity-0');
+                            AppState.ui.appContainer.classList.remove('opacity-0');
+                            setTimeout(() => AppState.ui.loadingOverlay.classList.add('hidden'), 500);
 
-                        const lastSelectedId = localStorage.getItem('lastSelectedWorkId');
-                        if (lastSelectedId) {
-                            localStorage.removeItem('lastSelectedWorkId');
-                            const work = AppState.works.find(w => w.id === lastSelectedId);
-                            if (work && ((work.rating || 0) === 0 || !work.tagIds || work.tagIds.length === 0)) {
-                                setTimeout(() => App.openFeedbackModal(work), 1000); 
+                            const lastSelectedId = localStorage.getItem('lastSelectedWorkId');
+                            if (lastSelectedId) {
+                                localStorage.removeItem('lastSelectedWorkId');
+                                const work = AppState.works.find(w => w.id === lastSelectedId);
+                                if (work && ((work.rating || 0) === 0 || !work.tagIds || work.tagIds.length === 0)) {
+                                    setTimeout(() => App.openFeedbackModal(work), 1000); 
+                                }
                             }
-                        }
-                        if (AppState.isLiteMode) {
-                            const banner = $('#lite-mode-banner');
-                            if (banner) banner.classList.remove('hidden');
-                            App.showToast("Liteモードで起動中 (50件のみ表示、画像と更新を制限)", "info", 4000);
-                        }
-                    }, 500);
+                            if (AppState.isLiteMode) {
+                                const banner = $('#lite-mode-banner');
+                                if (banner) banner.classList.remove('hidden');
+                                App.showToast("Liteモードで起動中 (50件のみ表示、画像と更新を制限)", "info", 4000);
+                            }
+                        }, 500);
+                    } else {
+                        // データ切り替え中の読み込み完了
+                        // (onSnapshotがrenderWorkListを呼び出し、リストが自動的に描画される)
+                        console.log("Data sync complete. Rendering list.");
+                    }
                 }
             },
 
@@ -1178,7 +1214,12 @@
             },
             
             loadDataSet: (newSyncId) => {
-                if (AppState.syncId === newSyncId && AppState.isLoadComplete) return;
+                // 既に選択中のIDを再度読み込もうとした場合、リフレッシュとして処理を続行
+                if (AppState.syncId === newSyncId && AppState.isLoadComplete) {
+                    console.log("Reloading data for the same Sync ID.");
+                } else if (AppState.syncId === newSyncId) {
+                    return; // 読み込み中に同じIDがクリックされた場合は無視
+                }
                 
                 AppState.syncId = newSyncId;
                 AppState.ui.syncIdDisplay.value = AppState.syncId;
@@ -1189,7 +1230,26 @@
 
                 AppState.works = [];
                 AppState.tags = new Map();
-                App.renderAll();
+                
+                // ★ 修正: App.renderAll() の代わりに、リストエリアにローディング表示を挿入 ★
+                AppState.ui.workListEl.classList.add('hidden'); // リスト本体を隠す
+                AppState.ui.paginationControls.classList.add('hidden'); // ページネーションを隠す
+                AppState.ui.workListMessage.innerHTML = `
+                    <div class="text-center py-10 text-gray-500">
+                        <i class="fas fa-spinner fa-spin fa-3x text-teal-400"></i>
+                        <p class="mt-4 text-base">データを読み込み中...</p>
+                    </div>`;
+                AppState.ui.workListMessage.classList.remove('hidden'); // メッセージエリアを表示
+                AppState.ui.workCountEl.textContent = '読み込み中...'; // 件数表示も更新
+
+                // ★ 修正: 読み込みステータスをリセット ★
+                AppState.isLoadComplete = false;
+                AppState.loadingStatus.works = false;
+                AppState.loadingStatus.tags = false;
+                
+                // 読み込みタイムアウトも再設定
+                clearTimeout(AppState.stallTimeout);
+                AppState.stallTimeout = setTimeout(() => App.handleLoadingTimeout(true), 15000); // 15秒停滞したらタイムアウト
 
                 if (AppState.currentUser && AppState.syncId && !AppState.isDebugMode) {
                     if (AppState.isLiteMode) {
