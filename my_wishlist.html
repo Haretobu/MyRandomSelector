@@ -95,26 +95,55 @@
                     toastEl.classList.add('translate-y-20', 'opacity-0');
                 }, duration);
             },
-            showConfirm: (title, message) => {
+            showConfirm: (title, message, options = {}) => {
                 return new Promise((resolve) => {
+                    const {
+                        okText = 'OK',
+                        cancelText = 'キャンセル', // null にすると非表示
+                        okClass = 'bg-red-600 hover:bg-red-700' // デフォルトは削除用の赤
+                    } = options;
+
                     App.ui.confirmTitle.textContent = title;
                     App.ui.confirmMessage.innerHTML = message;
+
+                    // OKボタンをオプションに合わせて設定
+                    App.ui.confirmOkBtn.textContent = okText;
+                    // ボタンのクラスを一旦リセットし、指定されたクラス(okClass)を設定
+                    App.ui.confirmOkBtn.className = `px-4 py-2 rounded-lg font-semibold transition-colors ${okClass}`;
+
+                    // Cancelボタンを設定
+                    if (cancelText) {
+                        App.ui.confirmCancelBtn.textContent = cancelText;
+                        App.ui.confirmCancelBtn.classList.remove('hidden');
+                    } else {
+                        App.ui.confirmCancelBtn.classList.add('hidden'); // nullなら非表示
+                    }
+
                     App.ui.confirmModal.classList.remove('hidden');
 
-                    const okHandler = () => {
+                    // 閉じる処理を共通化
+                    const closeAndResolve = (value) => {
                         App.ui.confirmModal.classList.add('hidden');
+                        // リスナーを確実に削除
                         App.ui.confirmOkBtn.removeEventListener('click', okHandler);
                         App.ui.confirmCancelBtn.removeEventListener('click', cancelHandler);
-                        resolve(true);
+                        
+                        // ★重要★ モーダルを閉じた後、ボタンをデフォルトの「削除」スタイルに戻す
+                        App.ui.confirmOkBtn.textContent = 'OK';
+                        App.ui.confirmOkBtn.className = 'px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors';
+                        App.ui.confirmCancelBtn.classList.remove('hidden');
+                        App.ui.confirmCancelBtn.textContent = 'キャンセル';
+                        
+                        resolve(value);
                     };
-                    const cancelHandler = () => {
-                        App.ui.confirmModal.classList.add('hidden');
-                        App.ui.confirmOkBtn.removeEventListener('click', okHandler);
-                        App.ui.confirmCancelBtn.removeEventListener('click', cancelHandler);
-                        resolve(false);
-                    };
+
+                    const okHandler = () => closeAndResolve(true);
+                    const cancelHandler = () => closeAndResolve(false);
+                    
                     App.ui.confirmOkBtn.addEventListener('click', okHandler);
-                    App.ui.confirmCancelBtn.addEventListener('click', cancelHandler);
+                    if (cancelText) { // cancelTextがnullでない場合のみリスナーを追加
+                        App.ui.confirmCancelBtn.addEventListener('click', cancelHandler);
+                    }
                 });
             },
 
@@ -341,6 +370,11 @@
                             <a href="price_comparison.html" target="_blank" class="btn-icon bg-cyan-600 hover:bg-cyan-700" title="価格比較">
                                 <i class="fas fa-balance-scale-right"></i>
                             </a>
+                            
+                            <button data-action="info" data-id="${item.id}" data-title="${safeTitle}" data-url="${safeUrl}" class="btn-icon bg-gray-600 hover:bg-gray-700" title="保存内容の確認">
+                                <i class="fas fa-info-circle"></i>
+                            </button>
+
                             <button data-action="purchased" data-id="${item.id}" data-title="${safeTitle}" data-url="${safeUrl}" class="btn-icon bg-emerald-600 hover:bg-emerald-700" title="購入済み (メインアプリに登録)">
                                 <i class="fas fa-check"></i>
                             </button>
@@ -364,6 +398,9 @@
                         App.handleDelete(id, title);
                     } else if (action === 'purchased') {
                         App.handlePurchased(id, title, url);
+                    } else if (action === 'info') {
+                        // ★「詳細」ボタンが押されたら、handleShowInfoを呼び出す ★
+                        App.handleShowInfo(title, url);
                     }
                 });
 
@@ -426,7 +463,34 @@
                     App.showToast("購入処理に失敗しました。", "error");
                     localStorage.removeItem('pending_import'); // 念のためクリア
                 }
+            },
+
+            handleShowInfo: (title, url) => {
+                const safeTitle = App.escapeHTML(title);
+                const safeUrl = App.escapeHTML(url);
+                
+                const titleText = "保存された内容";
+                const messageHtml = `
+                    <div class="space-y-3 text-left">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">タイトル</label>
+                            <input type="text" readonly value="${safeTitle}" class="w-full bg-gray-900 border border-gray-600 rounded-lg p-2 text-sm text-gray-300">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">URL</label>
+                            <textarea readonly class="w-full bg-gray-900 border border-gray-600 rounded-lg p-2 text-sm text-gray-300" rows="4">${safeUrl}</textarea>
+                        </div>
+                    </div>
+                `;
+
+                // 改造した App.showConfirm を呼び出す
+                App.showConfirm(titleText, messageHtml, {
+                    okText: '閉じる',
+                    cancelText: null, // Cancelボタンを非表示
+                    okClass: 'bg-sky-600 hover:bg-sky-700' // OKボタンを赤ではなく青に
+                });
             }
+
         };
 
         // --- 3. App Initialization ---
