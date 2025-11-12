@@ -63,7 +63,7 @@
                 "messagingSenderId": "1019715441654",
                 "appId": "1:1019715441654:web:6caa7779148cce46c92dd7"
             },
-
+            appVersion: 'wishlist-v1.0.0',
             syncId: '',
             currentUser: null,
             isLoadComplete: false,
@@ -120,6 +120,12 @@
 
             // --- Initialization ---
             init: () => {
+                // ★ 追加: バージョン番号をHTMLに書き込む
+                const versionDisplay = App.$('#version-display');
+                if (versionDisplay && AppState.appVersion) {
+                    versionDisplay.textContent = AppState.appVersion;
+                }
+
                 // UI要素の参照をキャッシュ
                 App.ui = {
                     loadingOverlay: App.$('#loading-overlay'),
@@ -139,6 +145,28 @@
                     confirmOkBtn: App.$('#confirm-ok'),
                     confirmCancelBtn: App.$('#confirm-cancel'),
                 };
+                
+                // ★ 追加: ブックマークレット設定ロジックをここに移動 ★
+                const bookmarkletLink = App.$('#bookmarklet-link');
+                if (bookmarkletLink) {
+                    // 'my_wishlist.html' へのフルパスを正しく生成
+                    let baseUrl = window.location.href.split('?')[0];
+                    if (baseUrl.endsWith('my_wishlist.html')) {
+                        // もしURLがファイル名で終わっていたら、ディレクトリ部分だけ取得
+                        baseUrl = baseUrl.substring(0, baseUrl.lastIndexOf('my_wishlist.html'));
+                    }
+                    const wishlistUrl = new URL('my_wishlist.html', baseUrl).href;
+
+                    const bookmarkletCode = `javascript:void(window.open('${wishlistUrl}?title='+encodeURIComponent(document.title)+'&url='+encodeURIComponent(location.href)));`;
+                    
+                    bookmarkletLink.setAttribute('href', bookmarkletCode);
+                    
+                    bookmarkletLink.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        alert('このボタンをクリックするのではなく、お使いのブラウザのブックマークバーに「ドラッグ＆ドロップ」してください。');
+                    });
+                }
+                // ★ 移動ここまで ★
 
                 App.ui.loadingOverlay.classList.remove('hidden');
                 App.initializeFirebase();
@@ -407,6 +435,8 @@
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans antialiased">
 
+    <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]"></div>
+
     <div id="loading-overlay" class="fixed inset-0 bg-gray-900 z-[100] flex items-center justify-center p-4">
         <div class="text-center">
             <i class="fas fa-spinner fa-spin fa-3x text-fuchsia-400"></i>
@@ -493,29 +523,6 @@
             </div>
         </div>
     </div>
-    
-    <script>
-        // このスクリプトは、ブックマークレットのリンク先(href)を、
-        // 現在開いているページのURL (GitHub PagesのURL) を使って自動的に設定します。
-        // これにより、ローカルテスト(file://)でも本番(https://)でも機能します。
-        document.addEventListener('DOMContentLoaded', () => {
-            const bookmarkletLink = document.getElementById('bookmarklet-link');
-            if (bookmarkletLink) {
-                // 現在のページのURLから、ファイル名(my_wishlist.html)とクエリパラメータ(?)を削除
-                const baseUrl = window.location.href.split('?')[0];
-                
-                const bookmarkletCode = `javascript:void(window.open('${baseUrl}?title='+encodeURIComponent(document.title)+'&url='+encodeURIComponent(location.href)));`;
-                
-                bookmarkletLink.setAttribute('href', bookmarkletCode);
-                
-                // ドラッグ＆ドロップで追加するよう促すため、クリックでは何もしない
-                bookmarkletLink.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    alert('このボタンをクリックするのではなく、お使いのブラウザのブックマークバーに「ドラッグ＆ドロップ」してください。');
-                });
-            }
-        });
-    </script>
 
 </body>
 </html>
