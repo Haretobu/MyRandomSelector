@@ -502,7 +502,7 @@
             // App Config
             DEFAULT_APP_ID: 'r18-random-selector',
             appId: typeof __app_id !== 'undefined' ? __app_id : 'r18-random-selector',
-            appVersion: 'v2.3.7', // バージョンを更新
+            appVersion: 'v2.3.8', // バージョンを更新
             firebaseConfig: typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
                 "apiKey": "AIzaSyAnlTrmb0MW8yznBxpWF6B83R9luFnGVts",
                 "authDomain": "serecter222.firebaseapp.com",
@@ -1262,10 +1262,11 @@
             
             subscribeToWorks: () => {
                 if (AppState.isDebugMode) return;
+                AppState.ui.loadingText.textContent = '作品データを取得中...'; // ← 具体的なテキストを追加
                 let isFirstLoad = true;
                 const worksRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`);
                 AppState.unsubscribeWorks = onSnapshot(worksRef, (snapshot) => {
-                    AppState.ui.loadingText.textContent = '作品データを取得中...'; // ← 具体的なテキストを追加
+                    
                     const workChanges = snapshot.docChanges();
                     
                     workChanges.forEach(change => {
@@ -1294,10 +1295,10 @@
 
             subscribeToTags: () => {
                 if (AppState.isDebugMode) return;
+                AppState.ui.loadingText.textContent = 'タグデータを取得中...'; // ← 具体的なテキストを追加
                 let isFirstLoad = true;
                 const tagsRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/tags`);
                 AppState.unsubscribeTags = onSnapshot(tagsRef, (snapshot) => {
-                    AppState.ui.loadingText.textContent = 'タグデータを取得中...'; // ← 具体的なテキストを追加
                     AppState.tags = new Map(snapshot.docs.map(d => [d.id, { id: d.id, ...d.data() }]));
                      if (isFirstLoad) {
                         isFirstLoad = false;
@@ -1495,9 +1496,18 @@
             // --- Rendering Logic ---
 
             _renderRatingStars: (rating) => {
-                return Array(5).fill(0).map((_, i) =>
-                    `<i class="fa-star ${i < (rating || 0) ? 'fas text-yellow-400' : 'far text-gray-500'}"></i>`
-                ).join('');
+                const stars = [];
+                const numRating = rating || 0;
+                for (let i = 1; i <= 5; i++) {
+                    if (numRating >= i) {
+                        stars.push('<i class="fas fa-star text-yellow-400"></i>'); // Full
+                    } else if (numRating === (i - 0.5)) {
+                        stars.push('<i class="fas fa-star-half-alt text-yellow-400"></i>'); // Half
+                    } else {
+                        stars.push('<i class="far fa-star text-gray-500"></i>'); // Empty
+                    }
+                }
+                return stars.join('');
             },
 
             _renderTagsHTML: (tagIds, maxToShow = Infinity, workId = null, viewMode = 'grid') => {
@@ -2837,7 +2847,24 @@
 
 
                     // --- 評価・タグの描画 (変更なし) ---
-                    const renderStars = r => { ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= r ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join(''); };
+                    const renderStars = r => {
+                        if (!ratingStars) return;
+                        ratingStars.innerHTML = ''; // 一旦クリア
+                        for (let i = 1; i <= 5; i++) {
+                            const starIcon = document.createElement('i');
+                            starIcon.classList.add('fa-star', 'cursor-pointer');
+                            starIcon.dataset.value = i; // データ値は 1, 2, 3, 4, 5 を保持
+                            
+                            if (r >= i) {
+                                starIcon.classList.add('fas', 'text-yellow-400'); // Full star
+                            } else if (r === (i - 0.5)) {
+                                starIcon.classList.add('fas', 'fa-star-half-alt', 'text-yellow-400'); // Half star
+                            } else {
+                                starIcon.classList.add('far', 'text-gray-500'); // Empty star
+                            }
+                            ratingStars.appendChild(starIcon);
+                        }
+                    };
                     const renderTags = ids => {
                         if (tagsContainer) { 
                             const objects = App.getTagObjects(ids);
@@ -2850,9 +2877,22 @@
                     // --- 評価・タグのイベントリスナー (変更なし) ---
                     if (ratingStars) {
                         ratingStars.addEventListener('click', e => {
-                            if (e.target.matches('.fa-star')) {
-                                const newRating = parseInt(e.target.dataset.value, 10);
-                                currentRating = (currentRating === newRating) ? 0 : newRating;
+                            const star = e.target.closest('.fa-star');
+                            if (star) {
+                                const value = parseInt(star.dataset.value, 10);
+                                const rect = star.getBoundingClientRect();
+                                // 星の横幅の真ん中より右側をクリックしたか
+                                const isRightHalf = (e.clientX - rect.left) > (rect.width / 2);
+                                
+                                // 右半分なら X.0 (value)、左半分なら X.5 (value - 0.5)
+                                let newRating = isRightHalf ? value : value - 0.5;
+                                
+                                // クリックした場所が現在の評価と同じなら、評価を0に戻す
+                                if (currentRating === newRating) {
+                                    newRating = 0;
+                                }
+                                
+                                currentRating = newRating;
                                 renderStars(currentRating);
                             }
                         });
@@ -3025,17 +3065,40 @@
                     ratingTypeSelect.addEventListener('change', updatePreview); // ← 修正: select のリスナーを追加
 
                     const renderStars = r => {
-                        if (ratingStars) {
-                            ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= r ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('');
+                        if (!ratingStars) return;
+                        ratingStars.innerHTML = ''; // 一旦クリア
+                        for (let i = 1; i <= 5; i++) {
+                            const starIcon = document.createElement('i');
+                            starIcon.classList.add('fa-star', 'cursor-pointer');
+                            starIcon.dataset.value = i;
+                            
+                            if (r >= i) {
+                                starIcon.classList.add('fas', 'text-yellow-400'); // Full star
+                            } else if (r === (i - 0.5)) {
+                                starIcon.classList.add('fas', 'fa-star-half-alt', 'text-yellow-400'); // Half star
+                            } else {
+                                starIcon.classList.add('far', 'text-gray-500'); // Empty star
+                            }
+                            ratingStars.appendChild(starIcon);
                         }
                     };
                     renderStars(currentRating); 
 
                     if (ratingStars) {
                         ratingStars.addEventListener('click', e => {
-                            if (e.target.matches('.fa-star')) {
-                                const r = parseInt(e.target.dataset.value);
-                                currentRating = (currentRating === r) ? 0 : r;
+                            const star = e.target.closest('.fa-star');
+                            if (star) {
+                                const value = parseInt(star.dataset.value, 10);
+                                const rect = star.getBoundingClientRect();
+                                const isRightHalf = (e.clientX - rect.left) > (rect.width / 2);
+                                
+                                let newRating = isRightHalf ? value : value - 0.5;
+                                
+                                if (currentRating === newRating) {
+                                    newRating = 0;
+                                }
+                                
+                                currentRating = newRating;
                                 renderStars(currentRating);
                                 updatePreview(); 
                             }
@@ -3943,6 +4006,8 @@
                 const initialState = getFormState();
                 AppState.checkModalDirtyState = () => JSON.stringify(initialState) !== JSON.stringify(getFormState()); // AppState を使用
 
+                const siteBadge = App.getSiteBadgeHTML(work.sourceUrl);
+
                 const content = `
                     <div class="text-center">
                         <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${work.name}" class="max-w-full max-h-48 object-contain mx-auto rounded-lg shadow-lg mb-4">
@@ -3961,6 +4026,8 @@
                     <div class="pt-6 mt-6 border-t border-gray-700 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
                         <button id="lottery-reroll" class="w-full sm:w-auto px-6 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold">もう一度抽選</button>
                         <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto"> <button id="result-close-nosave-btn" class="w-full sm:w-auto px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">保存せずに閉じる</button> <button id="result-close-btn" class="w-full sm:w-auto px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-700 text-gray-100">閉じる</button>
+                            <button id="result-edit-details-btn" class="w-full sm:w-auto px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">詳細編集</button>
+                            <button id="result-close-btn" class="w-full sm:w-auto px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-700 text-gray-100">閉じる</button>
                             <button id="result-save-btn" class="w-full sm:w-auto px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-sky-600 hover:bg-sky-700 text-white">保存</button>
                         </div>
                     </div>`;
@@ -3970,16 +4037,40 @@
                     const tagsContainer = $('#result-tags'); // tagsContainer をここで定義
 
                     const renderStars = r => {
-                        if (ratingStars) { // 要素が存在するか確認
-                            ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= r ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('');
+                        if (!ratingStars) return;
+                        ratingStars.innerHTML = ''; // 一旦クリア
+                        for (let i = 1; i <= 5; i++) {
+                            const starIcon = document.createElement('i');
+                            starIcon.classList.add('fa-star', 'cursor-pointer');
+                            starIcon.dataset.value = i;
+                            
+                            if (r >= i) {
+                                starIcon.classList.add('fas', 'text-yellow-400'); // Full star
+                            } else if (r === (i - 0.5)) {
+                                starIcon.classList.add('fas', 'fa-star-half-alt', 'text-yellow-400'); // Half star
+                            } else {
+                                starIcon.classList.add('far', 'text-gray-500'); // Empty star
+                            }
+                            ratingStars.appendChild(starIcon);
                         }
                     };
                     renderStars(currentRating);
-                    if (ratingStars) { // 要素が存在するか確認
+                    if (ratingStars) {
                         ratingStars.addEventListener('click', e => {
-                            if (e.target.matches('.fa-star')) {
-                                const r = parseInt(e.target.dataset.value);
-                                currentRating = (currentRating === r) ? 0 : r;
+                            const star = e.target.closest('.fa-star');
+                            if (star) {
+                                const value = parseInt(star.dataset.value, 10);
+                                const rect = star.getBoundingClientRect();
+                                const isRightHalf = (e.clientX - rect.left) > (rect.width / 2);
+                                
+                                let newRating = isRightHalf ? value : value - 0.5;
+                                
+                                // クリックした場所が現在の評価と同じなら0に戻す
+                                if (currentRating === newRating) {
+                                    newRating = 0;
+                                }
+                                
+                                currentRating = newRating;
                                 renderStars(currentRating);
                             }
                         });
@@ -4021,6 +4112,35 @@
                         App.updateWork(work.id, { rating: currentRating, tagIds: Array.from(currentTagIds) }) // App.updateWork を使用
                             .then(() => App.performLottery()); // App.performLottery を使用
                     });
+
+                    $('#result-edit-details-btn').addEventListener('click', async () => {
+                        // 変更がなければそのまま詳細編集へ
+                        if (!AppState.checkModalDirtyState()) {
+                            App.closeModal();
+                            setTimeout(() => App.openEditModal(work.id), 300);
+                            return;
+                        }
+                        
+                        // 変更がある場合、保存するか確認
+                        const confirmed = await App.showConfirm(
+                            "評価の保存",
+                            "評価/タグが変更されています。保存して詳細編集に進みますか？<br>（「キャンセル」を選ぶと、変更を破棄して詳細編集に進みます）"
+                            // 注: showConfirm が OK/Cancel しか出せない場合、
+                            // 「OK」= 保存して進む
+                            // 「キャンセル」= 変更を破棄してモーダルを閉じる（何もしない）
+                            // となります。もし「破棄して進む」動作が必要な場合は showConfirm の改造が必要です。
+                            // ここでは「OK」なら保存して進む、「キャンセル」ならダイアログを閉じる、と仮定します。
+                        );
+
+                        if (confirmed) {
+                            // 保存して進む
+                            await App.updateWork(work.id, { rating: currentRating, tagIds: Array.from(currentTagIds) });
+                            App.closeModal();
+                            setTimeout(() => App.openEditModal(work.id), 300);
+                        }
+                        // キャンセルの場合は、ダイアログが閉じるだけで抽選結果モーダルに戻る
+                    });
+
                     $('#result-close-btn').addEventListener('click', App.closeModal); // App.closeModal を使用
                     $('#result-save-btn').addEventListener('click', async () => {
                         AppState.checkModalDirtyState = () => false; // AppState を使用
@@ -4081,16 +4201,39 @@
                     };
 
                     const renderStars = r => {
-                        if (ratingStars) { // 要素が存在するか確認
-                            ratingStars.innerHTML = [1,2,3,4,5].map(i => `<i class="fa-star cursor-pointer ${i <= r ? 'fas text-yellow-400' : 'far text-gray-500'}" data-value="${i}"></i>`).join('');
+                        if (!ratingStars) return;
+                        ratingStars.innerHTML = '';
+                        for (let i = 1; i <= 5; i++) {
+                            const starIcon = document.createElement('i');
+                            starIcon.classList.add('fa-star', 'cursor-pointer');
+                            starIcon.dataset.value = i;
+                            
+                            if (r >= i) {
+                                starIcon.classList.add('fas', 'text-yellow-400'); // Full star
+                            } else if (r === (i - 0.5)) {
+                                starIcon.classList.add('fas', 'fa-star-half-alt', 'text-yellow-400'); // Half star
+                            } else {
+                                starIcon.classList.add('far', 'text-gray-500'); // Empty star
+                            }
+                            ratingStars.appendChild(starIcon);
                         }
                     };
                     renderStars(currentRating);
                     if (ratingStars) { // 要素が存在するか確認
                         ratingStars.addEventListener('click', e => {
-                            if (e.target.matches('.fa-star')) {
-                                const r = parseInt(e.target.dataset.value);
-                                currentRating = (currentRating === r) ? 0 : r;
+                            const star = e.target.closest('.fa-star');
+                            if (star) {
+                                const value = parseInt(star.dataset.value, 10);
+                                const rect = star.getBoundingClientRect();
+                                const isRightHalf = (e.clientX - rect.left) > (rect.width / 2);
+                                
+                                let newRating = isRightHalf ? value : value - 0.5;
+                                
+                                if (currentRating === newRating) {
+                                    newRating = 0;
+                                }
+                                
+                                currentRating = newRating;
                                 renderStars(currentRating);
                                 checkSaveButton();
                             }
@@ -4337,8 +4480,11 @@
                 }
 
                 // Rating Chart (Bar)
-                const ratingCounts = filteredWorks.reduce((acc, work) => { // ← 変更
-                    const r = work.rating || 0; acc[r] = (acc[r] || 0) + 1; return acc;
+                const ratingCounts = filteredWorks.reduce((acc, work) => {
+                    // ★ 変更点: Math.round() を使って四捨五入
+                    const r = Math.round(work.rating || 0); 
+                    acc[r] = (acc[r] || 0) + 1; 
+                    return acc;
                 }, {});
                 const ratingLabels = ['未評価', '★1', '★2', '★3', '★4', '★5'];
                 const ratingDataPoints = [ratingCounts[0] || 0, ratingCounts[1] || 0, ratingCounts[2] || 0, ratingCounts[3] || 0, ratingCounts[4] || 0, ratingCounts[5] || 0];
