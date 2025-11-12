@@ -39,9 +39,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        // ★ 以下2行を追加 ★
+        import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app-check.js";
         import { getAuth, signInWithEmailAndPassword, onIdTokenChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
-            getFirestore, doc, onSnapshot, collection, query, 
+            getFirestore, doc, onSnapshot, collection, query,
             writeBatch, Timestamp, serverTimestamp, addDoc, deleteDoc, getDocs
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -146,6 +148,13 @@
             initializeFirebase: () => {
                 try {
                     AppState.firebaseApp = initializeApp(AppState.firebaseConfig);
+                    
+                    // ★ 以下5行を追加 (index.htmlと同じものです) ★
+                    initializeAppCheck(AppState.firebaseApp, {
+                        provider: new ReCaptchaEnterpriseProvider('6Lem8v8rAAAAAJiur2mblUOHF28x-Vh0zRjg6B6u'),
+                        isTokenAutoRefreshEnabled: true 
+                    });
+
                     AppState.auth = getAuth(AppState.firebaseApp);
                     AppState.db = getFirestore(AppState.firebaseApp);
                     App.setupAuthObserver();
