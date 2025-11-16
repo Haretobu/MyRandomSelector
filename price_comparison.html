@@ -444,7 +444,7 @@
         let uniqueId = 0;
         
         // ブックマークレットから渡されたパラメータをフォームに自動入力
-            const checkUrlParams = () => {
+            function checkUrlParams() {
                 const params = new URLSearchParams(window.location.search);
                 const title = params.get('title');
 
@@ -461,7 +461,7 @@
                 if (title) {
                     history.replaceState(null, '', window.location.pathname);
                 }
-            };
+            }
         
         
         const initializeFirebase = () => {
