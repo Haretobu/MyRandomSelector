@@ -778,32 +778,7 @@
                     alert('このボタンをクリックするのではなく、お使いのブラウザのブックマークバーに「ドラッグ＆ドロップ」してください。');
                 });
             };
-            // ▼▼▼ ここから追加 ▼▼▼
-            const copyBtn = document.getElementById('copy-bookmarklet-btn');
-            const showBtn = document.getElementById('show-bookmarklet-btn');
-
-            // (Copy button listener)
-            if (copyBtn) {
-                copyBtn.addEventListener('click', () => {
-                    // 1行に圧縮された bookmarkletCode をクリップボードにコピー
-                    navigator.clipboard.writeText(bookmarkletCode).then(() => {
-                        showToast('ブックマークレットのコードをコピーしました。');
-                    }).catch(err => {
-                        showToast('コピーに失敗しました。手動でコピーしてください。', 'error');
-                    });
-                });
-            }
-
-            // (Show code button listener)
-            if (showBtn && bookmarkletCodeModal && bookmarkletCodeDisplay) {
-                showBtn.addEventListener('click', () => {
-                    // 圧縮されたコードを <textarea> に表示
-                    bookmarkletCodeDisplay.value = bookmarkletCode;
-                    showModal(bookmarkletCodeModal, bookmarkletCodeModalContent); // 既存のモーダル関数を使用
-                    bookmarkletCodeDisplay.select(); // 表示後すぐにテキストを選択状態にする
-                });
-            }
-            // ▲▲▲ 追加ここまで ▲▲▲
+            
             setupBookmarklet();
 
             
@@ -1159,6 +1134,34 @@
                 adSettingsModal.addEventListener('click', (e) => {
                     if (e.target === adSettingsModal) hideModal(adSettingsModal, adSettingsModalContent);
                 });
+
+                // ▼▼▼ ここから追加 ▼▼▼
+                const copyBtn = document.getElementById('copy-bookmarklet-btn');
+                const showBtn = document.getElementById('show-bookmarklet-btn');
+
+                // (Copy button listener)
+                if (copyBtn) {
+                    copyBtn.addEventListener('click', () => {
+                        // 1行に圧縮された bookmarkletCode をクリップボードにコピー
+                        navigator.clipboard.writeText(bookmarkletCode).then(() => {
+                            showToast('ブックマークレットのコードをコピーしました。');
+                        }).catch(err => {
+                            showToast('コピーに失敗しました。手動でコピーしてください。', 'error');
+                        });
+                    });
+                }
+
+                // (Show code button listener)
+                if (showBtn && bookmarkletCodeModal && bookmarkletCodeDisplay) {
+                    showBtn.addEventListener('click', () => {
+                        // 圧縮されたコードを <textarea> に表示
+                        bookmarkletCodeDisplay.value = bookmarkletCode;
+                        showModal(bookmarkletCodeModal, bookmarkletCodeModalContent); // 既存のモーダル関数を使用
+                        bookmarkletCodeDisplay.select(); // 表示後すぐにテキストを選択状態にする
+                    });
+                }
+                // ▲▲▲ 追加ここまで ▲▲▲
+
                 // (Bookmarklet Code Modal)
                 document.getElementById('bookmarklet-code-modal-close').addEventListener('click', () => hideModal(bookmarkletCodeModal, bookmarkletCodeModalContent));
                 bookmarkletCodeModal.addEventListener('click', (e) => {
