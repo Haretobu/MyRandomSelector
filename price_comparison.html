@@ -632,11 +632,11 @@
                     document.querySelectorAll(`#${site}-discounts-container .discount-item`).forEach(item => {
                         const params = {};
                         // data-属性からパラメータを復元
-                        for (const key in item.dataset) {
-                            if (key !== 'id' && key !== 'type' && key !== 'id') {
+                        Object.keys(item.dataset).forEach(key => {
+                            if (key !== 'id' && key !== 'type') { // ★ 修正: 重複していた 'id' を削除
                                 params[key] = item.dataset[key];
                             }
-                        }
+                        });
                         discountsData[site].push({
                             name: item.querySelector('.font-semibold').textContent,
                             type: item.dataset.type,
@@ -1250,39 +1250,96 @@
                 });
             };
 
-            const calculateSiteTotal = (purchaseList, site) => {
-                let processedList = purchaseList.map(item => ({...item, finalPrice: Math.round(item.price * (1 - (item.discount || 0) / 100)) }));
-                const activeDiscounts = Array.from(document.querySelectorAll(`#${site}-discounts-container .discount-item`))
-                    .filter(el => el.querySelector('.discount-active').checked)
-                    .map(el => el.dataset);
-                activeDiscounts.filter(d => d.type === 'bulk').forEach(campaign => {
-                    const eligibleItems = processedList.filter(item => item.bulkEligible);
-                    if (eligibleItems.length >= parseInt(campaign.count, 10)) {
-                        eligibleItems.forEach(item => item.finalPrice *= (1 - parseInt(campaign.percent, 10) / 100));
+            const calculateSiteTotal = (site) => {
+                const workItems = getWorkItems(site);
+                let comparisonDetails = [];
+
+                // ★ 修正: 選択されたクーポンを取得
+                const selectedDiscounts = Array.from(document.querySelectorAll(`#${site}-discounts-container .discount-checkbox:checked`))
+                    .map(cb => {
+                        const item = cb.closest('.discount-item');
+                        return { ...item.dataset, name: item.querySelector('.font-semibold').textContent };
+                    });
+
+                const simpleCoupons = selectedDiscounts.filter(d => d.type === 'simple_coupon' || d.type === 'conditional_coupon');
+                const bulkDiscounts = selectedDiscounts.filter(d => d.type === 'bulk').sort((a, b) => b.rate - a.rate); // ★ 割引率が高い順
+                const bulkCouponDiscounts = selectedDiscounts.filter(d => d.type === 'bulk_coupon').sort((a, b) => b.rate - a.rate); // ★ 割引率が高い順
+
+                let bulkEligibleItems = []; // まとめ買い割引の対象アイテムを一時保存
+
+                workItems.forEach(work => {
+                    let itemPrice = work.price * (1 - work.discount / 100);
+                    let priceAfterSimpleCoupon = itemPrice;
+                    let appliedCouponName = 'なし';
+                    let isEligibleForBulk = work.bulkEligible;
+                    let bestRate = 0;
+
+                    // 1. シンプル/条件付きクーポンを適用
+                    simpleCoupons.forEach(coupon => {
+                        const rate = parseFloat(coupon.rate);
+                        const threshold = parseFloat(coupon.threshold);
+                        let applies = false;
+
+                        if (coupon.type === 'simple_coupon' && itemPrice >= threshold) {
+                            applies = true;
+                        } else if (coupon.type === 'conditional_coupon' && itemPrice <= threshold) {
+                            applies = true;
+                        }
+
+                        if (applies && rate > bestRate) {
+                            bestRate = rate;
+                            appliedCouponName = coupon.name;
+                        }
+                    });
+
+                    if (bestRate > 0) {
+                        priceAfterSimpleCoupon *= (1 - bestRate / 100);
+                        isEligibleForBulk = false; // クーポン適用アイテムはまとめ買い対象外 (仮)
+                    }
+
+                    // 2. comparisonDetails に保存
+                    comparisonDetails.push({
+                        name: work.name,
+                        finalPrice: priceAfterSimpleCoupon, // この時点での価格
+                        originalPrice: work.price,
+                        appliedDiscount: appliedCouponName // ★ 適用クーポン名
+                    });
+
+                    // 3. あとでまとめ買い割引を適用するために、対象アイテムをプール
+                    if (isEligibleForBulk) {
+                        bulkEligibleItems.push(priceAfterSimpleCoupon);
                     }
                 });
-                const conditionalCoupons = activeDiscounts.filter(d => d.type === 'conditional_coupon');
-                processedList.forEach(item => {
-                    const bestCoupon = conditionalCoupons
-                        .filter(d => item.price <= parseInt(d.price, 10))
-                        .reduce((best, current) => parseInt(current.percent, 10) > parseInt(best.percent, 10) ? current : best, { percent: 0 });
-                    if (bestCoupon.percent > 0) item.finalPrice *= (1 - parseInt(bestCoupon.percent, 10) / 100);
-                });
-                processedList.forEach(item => item.finalPrice = Math.round(item.finalPrice));
-                const subtotal = processedList.reduce((sum, item) => sum + item.finalPrice, 0);
-                let bestCartDiscountAmount = 0;
-                activeDiscounts.filter(d => d.type === 'simple_coupon' || d.type === 'bulk_coupon').forEach(coupon => {
-                    let currentDiscountAmount = 0;
-                    if (coupon.type === 'simple_coupon') {
-                        const val = parseInt(coupon.value, 10);
-                        currentDiscountAmount = coupon.type === 'yen' ? val : subtotal * (val / 100);
-                    } else if (coupon.type === 'bulk_coupon' && processedList.length >= parseInt(coupon.count, 10)) {
-                        currentDiscountAmount = subtotal * (parseInt(coupon.percent, 10) / 100);
+
+                // 4. 合計を計算 (この時点ではまとめ買い割引"前")
+                let total = comparisonDetails.reduce((sum, item) => sum + item.finalPrice, 0);
+
+                // 5. まとめ買い割引 (Bulk) を適用
+                bulkEligibleItems.sort((a, b) => a - b); // 安い順にソート
+
+                bulkDiscounts.forEach(bulk => {
+                    const count = parseInt(bulk.count, 10);
+                    const rate = parseFloat(bulk.rate);
+                    if (bulkEligibleItems.length >= count) {
+                        const itemsToDiscount = bulkEligibleItems.splice(0, count); // 安いものからN個取り出す
+                        const discountAmount = itemsToDiscount.reduce((sum, price) => sum + (price * (rate / 100)), 0);
+                        total -= discountAmount;
+
+                        // ★ comparisonDetails にも反映 (名前が 'なし' のアイテムを安い順に更新)
+                        let itemsUpdated = 0;
+                        comparisonDetails.filter(item => item.appliedDiscount === 'なし')
+                            .sort((a, b) => a.finalPrice - b.finalPrice)
+                            .forEach(item => {
+                                if (itemsUpdated < count) {
+                                    item.finalPrice *= (1 - rate / 100);
+                                    item.appliedDiscount = bulk.name;
+                                    itemsUpdated++;
+                                }
+                            });
                     }
-                    if (currentDiscountAmount > bestCartDiscountAmount) bestCartDiscountAmount = currentDiscountAmount;
                 });
-                const finalTotal = Math.max(0, subtotal - bestCartDiscountAmount);
-                return { total: Math.round(finalTotal), list: processedList };
+
+                return { total, comparisonDetails, bulkCouponDiscounts }; // ★ bulkCouponDiscounts を返す
             };
 
             const updateUI = () => {
@@ -1368,6 +1425,127 @@
                     updateUI();
                 }));
             };
+
+            const updateComparisonTable = () => {
+                const dlsiteResult = calculateSiteTotal('dlsite');
+                const fanzaResult = calculateSiteTotal('fanza');
+
+                const tableBody = document.getElementById('comparison-results-table').querySelector('tbody');
+                tableBody.innerHTML = '';
+
+                const maxRows = Math.max(dlsiteResult.comparisonDetails.length, fanzaResult.comparisonDetails.length);
+                
+                let dlsiteRows = [];
+                let fanzaRows = [];
+
+                for (let i = 0; i < maxRows; i++) {
+                    const dlsiteItem = dlsiteResult.comparisonDetails[i];
+                    const fanzaItem = fanzaResult.comparisonDetails[i];
+
+                    const row = tableBody.insertRow();
+                    
+                    // DLsite Cell
+                    const dlsiteCell = row.insertCell();
+                    if (dlsiteItem) {
+                        dlsiteCell.innerHTML = `<div class="font-semibold">${dlsiteItem.name}</div><div class="text-sm text-gray-400">${dlsiteItem.finalPrice.toLocaleString()} 円</div>`;
+                        dlsiteRows.push(row);
+                    } else {
+                        dlsiteCell.innerHTML = '-';
+                    }
+
+                    // FANZA Cell
+                    const fanzaCell = row.insertCell();
+                    if (fanzaItem) {
+                        fanzaCell.innerHTML = `<div class="font-semibold">${fanzaItem.name}</div><div class="text-sm text-gray-400">${fanzaItem.finalPrice.toLocaleString()} 円</div>`;
+                        fanzaRows.push(row);
+                    } else {
+                        fanzaCell.innerHTML = '-';
+                    }
+                }
+                
+                let dlsiteTotal = dlsiteResult.total;
+                let fanzaTotal = fanzaResult.total;
+                
+                // ★ 修正: 適用されたクーポンの名前をテーブルに追加
+                dlsiteResult.comparisonDetails.forEach((item, index) => {
+                    if (item.appliedDiscount !== 'なし') {
+                        const row = dlsiteRows[index];
+                        if (row) {
+                            row.cells[0].innerHTML += `<br><span class="text-xs text-cyan-400">${item.appliedDiscount} 適用</span>`;
+                        }
+                    }
+                });
+                fanzaResult.comparisonDetails.forEach((item, index) => {
+                    if (item.appliedDiscount !== 'なし') {
+                        const row = fanzaRows[index];
+                        if (row) {
+                            row.cells[1].innerHTML += `<br><span class="text-xs text-cyan-400">${item.appliedDiscount} 適用</span>`;
+                        }
+                    }
+                });
+
+                // --- Summary Table ---
+                const summaryBody = document.getElementById('summary-table').querySelector('tbody');
+                summaryBody.innerHTML = '';
+                
+                // ★ 修正: ここで「まとめ買いクーポン」を適用
+                let dlsiteFinalTotal = dlsiteTotal;
+                let dlsiteBulkCouponRow = '';
+                dlsiteResult.bulkCouponDiscounts.forEach(coupon => {
+                    const count = parseInt(coupon.count, 10);
+                    const rate = parseFloat(coupon.rate);
+                    if (dlsiteResult.comparisonDetails.length >= count) {
+                        const discountAmount = dlsiteFinalTotal * (rate / 100);
+                        dlsiteFinalTotal -= discountAmount;
+                        dlsiteBulkCouponRow = `<tr class="border-b border-gray-700 text-xs text-cyan-400"><td class="p-2 pl-4">- ${coupon.name}</td><td class="p-2 text-right">-${discountAmount.toLocaleString()} 円</td><td class="p-2 text-right"></td></tr>`;
+                    }
+                });
+
+                let fanzaFinalTotal = fanzaTotal;
+                let fanzaBulkCouponRow = '';
+                fanzaResult.bulkCouponDiscounts.forEach(coupon => {
+                    const count = parseInt(coupon.count, 10);
+                    const rate = parseFloat(coupon.rate);
+                    if (fanzaResult.comparisonDetails.length >= count) {
+                        const discountAmount = fanzaFinalTotal * (rate / 100);
+                        fanzaFinalTotal -= discountAmount;
+                        fanzaBulkCouponRow = `<tr class="border-b border-gray-700 text-xs text-cyan-400"><td class="p-2 pl-4">- ${coupon.name}</td><td class="p-2 text-right"></td><td class="p-2 text-right">-${discountAmount.toLocaleString()} 円</td></tr>`;
+                    }
+                });
+                
+                // 割引後 合計 (クーポン適用前)
+                summaryBody.innerHTML += `
+                    <tr class="border-b border-gray-700">
+                        <td class="p-2 font-semibold">割引後 合計 (クーポン適用前)</td>
+                        <td class="p-2 text-right">${dlsiteTotal.toLocaleString()} 円</td>
+                        <td class="p-2 text-right">${fanzaTotal.toLocaleString()} 円</td>
+                    </tr>
+                `;
+                
+                // 適用されたまとめ買いクーポン行
+                summaryBody.innerHTML += dlsiteBulkCouponRow;
+                summaryBody.innerHTML += fanzaBulkCouponRow;
+
+                // ★ NEW: 最終合計行
+                summaryBody.innerHTML += `
+                    <tr class="border-b border-gray-700 bg-gray-700">
+                        <td class="p-2 font-bold text-lg">🎉 最終合計 🎉</td>
+                        <td class="p-2 text-right text-lg ${dlsiteFinalTotal <= fanzaFinalTotal ? 'text-green-400 font-bold' : 'text-gray-300'}">${dlsiteFinalTotal.toLocaleString()} 円</td>
+                        <td class="p-2 text-right text-lg ${fanzaFinalTotal <= dlsiteFinalTotal ? 'text-green-400 font-bold' : 'text-gray-300'}">${fanzaFinalTotal.toLocaleString()} 円</td>
+                    </tr>
+                `;
+
+                // ★ MODIFIED: 差額行 (最終合計で比較)
+                const difference = Math.abs(dlsiteFinalTotal - fanzaFinalTotal);
+                const cheaperSite = dlsiteFinalTotal <= fanzaFinalTotal ? 'DLsite' : 'FANZA';
+                summaryBody.innerHTML += `
+                    <tr class="border-b border-gray-700">
+                        <td class="p-2 font-semibold">差額 (${cheaperSite} がお得)</td>
+                        <td class="p-2 text-right text-green-400 font-bold" colspan="2">${difference.toLocaleString()} 円</td>
+                    </tr>
+                `;
+            };
+
 
             // --- Ad Logic ---
             const defaultAdSettings = { showAd: true, type: 'ranking', site: 'maniax', period: 'week' };
@@ -1522,6 +1700,3 @@
     </script>
 </body>
 </html>
-
-
-
