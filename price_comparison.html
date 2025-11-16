@@ -717,14 +717,12 @@
                 let discount = '';
                 let errorMsg = null;
 
-                /* ▼▼▼ サイト固有のセレクタ (DLsite & FANZA 更新) ▼▼▼ */
                 const DLFITE_ORIGINAL_PRICE_SELECTOR = '.work_buy_content .strike .work_price_base';
                 const DLFITE_REGULAR_PRICE_SELECTOR = '.work_buy_content .price .work_price_base';
                 const DLFITE_DISCOUNT_SELECTOR = 'p.type_sale > span';
                 const FANZA_ORIGINAL_PRICE_SELECTOR = '.priceList__sub .priceList__sub--big';
                 const FANZA_REGULAR_PRICE_SELECTOR = '.priceList__main';
                 const FANZA_DISCOUNT_SELECTOR = '.campaignBalloon__ttl';
-                /* ▲▲▲ サイト固有のセレクタ (ここまで) ▲▲▲ */
 
                 try {
                     if (location.hostname.includes('dlsite.com')) {
@@ -743,35 +741,27 @@
                         }
                     }
                 } catch (e) {
-                    // 予期せぬ実行時エラー
                     errorMsg = 'ブックマークレットの実行中に予期せぬエラーが発生しました。\\n\\nエラー: ' + e.message;
-                }; /* ★★★ セミコロンを追加 ★★★ */
+                }
 
-                // ★★★ ここからが追加したエラーチェック ★★★
                 if (!errorMsg && !price && !discount) {
-                    // セレクタは実行できたが、価格も割引も何も取得できなかった場合
                     if (location.hostname.includes('dlsite.com') || location.hostname.includes('dmm.co.jp')) {
                         errorMsg = '価格と割引の自動取得に失敗しました。\\n\\nサイトの構造が変更された可能性があります。\\nお手数ですが、このページのHTMLを保存して開発者にご連絡ください。';
                     }
-                    // (DLsiteでもFANZAでもないサイトで実行された場合は、エラーにしない)
-                }; /* ★★★ セミコロンを追加 ★★★ */
+                }
 
                 if (errorMsg) {
-                    // エラーがあればアラートを表示
                     alert(errorMsg);
                 } else {
-                    // エラーがなければ、通常通りウィンドウを開く
                     const cleanPrice = (p) => p ? p.replace(/[^0-9]/g, '') : '';
                     const cleanDiscount = (d) => d ? d.replace(/[^0-9]/g, '') : '';
-
                     let params = new URLSearchParams();
                     params.set('title', title.replace(/\\|\\/g, ''));
                     if (price) params.set('price', cleanPrice(price));
                     if (discount) params.set('discount', cleanDiscount(discount));
-
                     window.open(URL + '?' + params.toString());
                 }
-            })();`.replace(/\n\s*/g, ' '); // 圧縮方法は「空白1文字」のまま
+            })();`.replace(/[\r\n\t]+/g, ' '); // ★★★ 圧縮方法を「改行とタブのみスペースに置換」に変更 ★★★
                 bookmarkletLink.setAttribute('href', bookmarkletCode);
 
                 bookmarkletLink.addEventListener('click', (e) => {
