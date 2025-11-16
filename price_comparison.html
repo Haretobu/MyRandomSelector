@@ -1255,7 +1255,7 @@
                 let comparisonDetails = [];
 
                 // ★ 修正: 選択されたクーポンを取得
-                const selectedDiscounts = Array.from(document.querySelectorAll(`#${site}-discounts-container .discount-checkbox:checked`))
+                const selectedDiscounts = Array.from(document.querySelectorAll(`#${site}-discounts-container .discount-active:checked`))
                     .map(cb => {
                         const item = cb.closest('.discount-item');
                         return { ...item.dataset, name: item.querySelector('.font-semibold').textContent };
