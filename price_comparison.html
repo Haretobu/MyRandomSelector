@@ -78,6 +78,31 @@
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans antialiased">
 
+    <div id="loading-overlay" class="fixed inset-0 bg-gray-900 z-[100] flex items-center justify-center p-4">
+        <div class="text-center">
+            <i class="fas fa-spinner fa-spin fa-3x text-cyan-400"></i>
+            <p id="loading-text" class="mt-4 text-gray-400">アプリケーションを初期化中...</p>
+        </div>
+    </div>
+
+    <div id="login-overlay" class="hidden fixed inset-0 bg-gray-900 bg-opacity-95 z-[90] flex items-center justify-center p-4">
+        <div class="w-full max-w-sm">
+            <form id="login-form" class="bg-gray-800 p-8 rounded-2xl shadow-2xl space-y-6">
+                <h2 class="text-2xl font-bold text-center text-gray-300">価格比較 ログイン</h2>
+                <div id="login-error" class="hidden text-sm text-center bg-red-900 border border-red-700 text-red-300 p-2 rounded-lg"></div>
+                <div>
+                    <label for="login-email" class="block text-sm font-medium text-gray-400 mb-1">メールアドレス</label>
+                    <input type="email" id="login-email" required class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-sky-500" autocomplete="email">
+                </div>
+                <div>
+                    <label for="login-password" class="block text-sm font-medium text-gray-400 mb-1">パスワード</label>
+                    <input type="password" id="login-password" required class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-sky-500" autocomplete="current-password">
+                </div>
+                <button type="submit" class="w-full px-4 py-3 bg-sky-600 hover:bg-sky-700 rounded-lg font-bold text-lg transition-colors">入室</button>
+            </form>
+        </div>
+    </div>
+
     <!-- Version Display -->
     <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]">v4.1 Ad Style Fix</div>
 
@@ -91,7 +116,7 @@
     </div>
 
     <!-- Main Container -->
-    <div id="app-container" class="min-h-screen p-4 md:p-6 lg:p-8">
+    <div id="app-container" class="min-h-screen p-4 md:p-6 lg:p-8 opacity-0 transition-opacity duration-500">
         <div class="max-w-screen-2xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
 
             <!-- Left Column: Controls & Inputs -->
@@ -388,7 +413,14 @@
     <script type="module">
         // --- Firebase setup (same as original) ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // ★ 以下2行を追加 ★
+        import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app-check.js";
+        import { 
+            getAuth, 
+            // ↓ 修正 (signInAnonymously, onAuthStateChanged を削除)
+            signInWithEmailAndPassword, 
+            onIdTokenChanged // ← onAuthStateChanged から変更
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const DEFAULT_APP_ID = 'r18-random-selector';
@@ -406,27 +438,63 @@
         let selectorWorks = [];
         let unsubscribeSelectorWorks = () => {};
         let syncId = '';
+        let currentUser = null;
         let ownedItems = new Set();
         let uniqueId = 0;
         
         const initializeFirebase = () => {
-             try {
+            try {
                 const firebaseConfig = JSON.parse(firebaseConfigStr);
                 firebaseApp = initializeApp(firebaseConfig);
+
+                // ★ 以下5行を追加 (AppCheck) ★
+                initializeAppCheck(firebaseApp, {
+                    provider: new ReCaptchaEnterpriseProvider('6Lem8v8rAAAAAJiur2mblUOHF28x-Vh0zRjg6B6u'),
+                    isTokenAutoRefreshEnabled: true 
+                });
+
                 auth = getAuth(firebaseApp);
                 db = getFirestore(firebaseApp);
-                
-                onAuthStateChanged(auth, user => {
-                    if (user) {
-                        setupSyncIdAndSubscribe();
-                    } else {
-                        signInAnonymously(auth).catch(error => console.error("Anonymous sign-in failed:", error));
-                    }
-                });
+
+                // ★ 修正 (AuthObserver を呼び出す) ★
+                setupAuthObserver();
 
             } catch (error) {
                 console.error("Firebase initialization failed:", error);
             }
+        };
+
+        // ★ my_wishlist.html からコピー ★
+        const setupAuthObserver = () => {
+            const loadingOverlay = document.getElementById('loading-overlay');
+            const loadingText = document.getElementById('loading-text');
+            const loginOverlay = document.getElementById('login-overlay');
+            const appContainer = document.getElementById('app-container');
+
+            onIdTokenChanged(auth, user => {
+                if (user) {
+                    // --- ログイン済み ---
+                    loginOverlay.classList.add('hidden');
+                    loadingOverlay.classList.remove('hidden');
+                    loadingText.textContent = '認証情報を確認中...';
+
+                    if (!currentUser) {
+                        currentUser = user;
+                        // データを読み込み開始
+                        setupSyncIdAndSubscribe();
+                    }
+
+                    // ロード完了（データ読み込み）は setupSyncIdAndSubscribe -> subscribeToSelectorWorks で行う
+                    // ここでは重複チェック/サジェストに必要なデータがロードされるのを待つ
+                    // my_wishlist.html と違い、メインのデータは LocalStorage からロードするので、
+                    // Appコンテナの表示は subscribeToSelectorWorks が完了してから行う
+                } else {
+                    // --- 未ログイン ---
+                    loadingOverlay.classList.add('hidden');
+                    appContainer.classList.add('opacity-0');
+                    loginOverlay.classList.remove('hidden');
+                }
+            });
         };
 
         const setupSyncIdAndSubscribe = () => {
@@ -443,6 +511,21 @@
             const worksRef = collection(db, `/artifacts/${appId}/public/data/r18_works_sync/${syncId}/items`);
             unsubscribeSelectorWorks = onSnapshot(worksRef, (snapshot) => {
                 selectorWorks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                // ★ 追加 (ロード完了処理) ★
+                // (my_wishlist.html と異なり、isLoadComplete フラグは使わない)
+                const loadingOverlay = document.getElementById('loading-overlay');
+                if (!loadingOverlay.classList.contains('hidden')) {
+                    const appContainer = document.getElementById('app-container');
+
+                    loadingOverlay.classList.add('opacity-0');
+                    appContainer.classList.remove('opacity-0');
+                    setTimeout(() => loadingOverlay.classList.add('hidden'), 500);
+
+                    // ★ ブックマークレットからのパラメータチェックを「ここ」に移動
+                    checkUrlParams();
+                }
+
             }, error => {
                 console.error("Error fetching selector works:", error);
             });
@@ -607,8 +690,30 @@
                     history.replaceState(null, '', window.location.pathname);
                 }
             };
-            checkUrlParams();
             // ▲▲▲ ブックマークレット設定ロジック ▲▲▲
+
+            // ★ my_wishlist.html からコピー ★
+            // ログインフォームの処理
+            const loginForm = document.getElementById('login-form');
+            if (loginForm) {
+                loginForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const email = document.getElementById('login-email').value;
+                    const password = document.getElementById('login-password').value;
+                    const loginError = document.getElementById('login-error');
+                    const loadingOverlay = document.getElementById('loading-overlay');
+
+                    signInWithEmailAndPassword(auth, email, password)
+                        .then(() => {
+                            loginError.classList.add('hidden');
+                            loadingOverlay.classList.remove('hidden'); // ローディング画面を再表示
+                        })
+                        .catch(() => {
+                            loginError.textContent = 'メールアドレスまたはパスワードが違います。';
+                            loginError.classList.remove('hidden');
+                        });
+                });
+            }
 
             const toastContainer = document.getElementById('toast-container');
             const showToast = (message, type = 'success') => {
