@@ -443,6 +443,27 @@
         let ownedItems = new Set();
         let uniqueId = 0;
         
+        // ブックマークレットから渡されたパラメータをフォームに自動入力
+            const checkUrlParams = () => {
+                const params = new URLSearchParams(window.location.search);
+                const title = params.get('title');
+
+                if (title) {
+                    // 作品名フォーム (reg-work-name) に自動入力
+                    const workNameInput = document.getElementById('reg-work-name');
+                    if (workNameInput) {
+                        workNameInput.value = title;
+                        workNameInput.focus(); // フォームにフォーカス
+                    }
+                }
+
+                // 処理が終わったらURLからパラメータを消す (リロードしても再実行されないように)
+                if (title) {
+                    history.replaceState(null, '', window.location.pathname);
+                }
+            };
+        
+        
         const initializeFirebase = () => {
             try {
                 const firebaseConfig = JSON.parse(firebaseConfigStr);
@@ -646,26 +667,6 @@
 
         // --- UI Logic ---
         document.addEventListener('DOMContentLoaded', () => {
-            
-            // ブックマークレットから渡されたパラメータをフォームに自動入力
-            const checkUrlParams = () => {
-                const params = new URLSearchParams(window.location.search);
-                const title = params.get('title');
-
-                if (title) {
-                    // 作品名フォーム (reg-work-name) に自動入力
-                    const workNameInput = document.getElementById('reg-work-name');
-                    if (workNameInput) {
-                        workNameInput.value = title;
-                        workNameInput.focus(); // フォームにフォーカス
-                    }
-                }
-
-                // 処理が終わったらURLからパラメータを消す (リロードしても再実行されないように)
-                if (title) {
-                    history.replaceState(null, '', window.location.pathname);
-                }
-            };
 
             initializeFirebase();
 
