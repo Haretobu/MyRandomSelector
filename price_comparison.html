@@ -140,12 +140,23 @@
                         <br>
                         作品ページ（DLsiteなど）でブックマークをクリックすると、作品名が登録フォームに自動入力されます。
                     </p>
-                    <div class="mt-4">
-                        <a id="bookmarklet-link" href="#" class="inline-block px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg shadow-lg"
-                        title="これをブックマークバーにドラッグ">
-                            <i class="fas fa-magic"></i> 価格比較に追加
-                        </a>
-                        <span class="text-xs text-gray-500 ml-2">← これをドラッグ</span>
+                    <div class="mt-4 space-y-3">
+                        <div class="flex flex-wrap gap-2 items-center">
+                            <a id="bookmarklet-link" href="#" class="inline-flex items-center px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg shadow-lg"
+                            title="これをブックマークバーにドラッグ">
+                                <i class="fas fa-magic mr-2"></i> 価格比較に追加
+                            </a>
+                            <span class="text-xs text-gray-500">← これをドラッグ</span>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <button id="copy-bookmarklet-btn" class="inline-flex items-center px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded-lg">
+                                <i class="fas fa-clipboard mr-2"></i> クリップボードにコピー
+                            </button>
+                            <button id="show-bookmarklet-btn" class="inline-flex items-center px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded-lg">
+                                <i class="fas fa-code mr-2"></i> コードを表示
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500">※ドラッグ＆ドロップが上手くいかない場合は、コードをコピーして手動でブックマークを作成してください。</p>
                     </div>
                 </div>
                 
@@ -408,8 +419,21 @@
         </div>
     </div>
 
+    <div id="bookmarklet-code-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[80] flex items-center justify-center p-4">
+        <div id="bookmarklet-code-modal-content" class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-lg w-full relative">
+            <button id="bookmarklet-code-modal-close" class="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-times fa-lg"></i>
+            </button>
+            <h3 class="text-xl font-bold mb-6 text-gray-300"><i class="fas fa-code mr-3"></i>ブックマークレット コード</h3>
+            <p class="text-sm text-gray-400 mb-2">以下のコードをすべてコピーして、ブックマークのURL欄に貼り付けてください。</p>
+            <textarea id="bookmarklet-code-display" readonly class="w-full h-40 bg-gray-900 text-gray-300 font-mono text-xs p-2 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-cyan-500"></textarea>
+        </div>
+    </div>
+
     <!-- Toast Notification Container -->
     <div id="toast-container"></div>
+
+    
     
     <script type="module">
         // --- Firebase setup (same as original) ---
@@ -684,7 +708,69 @@
 
                 // ブックマークレットのコードを生成
                 // 'title' パラメータにページのタイトルを渡す
-                const bookmarkletCode = `javascript:void(window.open('${comparisonUrl}?title='+encodeURIComponent(document.title)));`;
+                // ★ 修正: エラーハンドリングを追加して1行に圧縮
+            const bookmarkletCode = `javascript:(() => {
+                const URL = '${comparisonUrl}';
+                let title = document.title;
+                let price = '';
+                let discount = '';
+                let errorMsg = null;
+
+                /* ▼▼▼ サイト固有のセレクタ (DLsite & FANZA 更新) ▼▼▼ */
+                const DLFITE_ORIGINAL_PRICE_SELECTOR = '.work_buy_content .strike .work_price_base';
+                const DLFITE_REGULAR_PRICE_SELECTOR = '.work_buy_content .price .work_price_base';
+                const DLFITE_DISCOUNT_SELECTOR = 'p.type_sale > span';
+                const FANZA_ORIGINAL_PRICE_SELECTOR = '.priceList__sub .priceList__sub--big';
+                const FANZA_REGULAR_PRICE_SELECTOR = '.priceList__main';
+                const FANZA_DISCOUNT_SELECTOR = '.campaignBalloon__ttl';
+                /* ▲▲▲ サイト固有のセレクタ (ここまで) ▲▲▲ */
+
+                try {
+                    if (location.hostname.includes('dlsite.com')) {
+                        discount = document.querySelector(DLFITE_DISCOUNT_SELECTOR)?.innerText || '';
+                        if (discount) {
+                            price = document.querySelector(DLFITE_ORIGINAL_PRICE_SELECTOR)?.innerText || '';
+                        } else {
+                            price = document.querySelector(DLFITE_REGULAR_PRICE_SELECTOR)?.innerText || '';
+                        }
+                    } else if (location.hostname.includes('dmm.co.jp')) {
+                        discount = document.querySelector(FANZA_DISCOUNT_SELECTOR)?.innerText || '';
+                        if (discount) {
+                            price = document.querySelector(FANZA_ORIGINAL_PRICE_SELECTOR)?.innerText || '';
+                        } else {
+                            price = document.querySelector(FANZA_REGULAR_PRICE_SELECTOR)?.innerText || '';
+                        }
+                    }
+                } catch (e) {
+                    // 予期せぬ実行時エラー
+                    errorMsg = 'ブックマークレットの実行中に予期せぬエラーが発生しました。\\n\\nエラー: ' + e.message;
+                }
+
+                // ★★★ ここからが追加したエラーチェック ★★★
+                if (!errorMsg && !price && !discount) {
+                    // セレクタは実行できたが、価格も割引も何も取得できなかった場合
+                    if (location.hostname.includes('dlsite.com') || location.hostname.includes('dmm.co.jp')) {
+                        errorMsg = '価格と割引の自動取得に失敗しました。\\n\\nサイトの構造が変更された可能性があります。\\nお手数ですが、このページのHTMLを保存して開発者にご連絡ください。';
+                    }
+                    // (DLsiteでもFANZAでもないサイトで実行された場合は、エラーにしない)
+                }
+
+                if (errorMsg) {
+                    // エラーがあればアラートを表示
+                    alert(errorMsg);
+                } else {
+                    // エラーがなければ、通常通りウィンドウを開く
+                    const cleanPrice = (p) => p ? p.replace(/[^0-9]/g, '') : '';
+                    const cleanDiscount = (d) => d ? d.replace(/[^0-9]/g, '') : '';
+
+                    let params = new URLSearchParams();
+                    params.set('title', title.replace(/\\|\\/g, ''));
+                    if (price) params.set('price', cleanPrice(price));
+                    if (discount) params.set('discount', cleanDiscount(discount));
+                    
+                    window.open(URL + '?' + params.toString());
+                }
+            })();`.replace(/\\n\\s*/g, ''); // 複数行コードから改行とインデントを削除
                 bookmarkletLink.setAttribute('href', bookmarkletCode);
 
                 bookmarkletLink.addEventListener('click', (e) => {
@@ -692,6 +778,32 @@
                     alert('このボタンをクリックするのではなく、お使いのブラウザのブックマークバーに「ドラッグ＆ドロップ」してください。');
                 });
             };
+            // ▼▼▼ ここから追加 ▼▼▼
+            const copyBtn = document.getElementById('copy-bookmarklet-btn');
+            const showBtn = document.getElementById('show-bookmarklet-btn');
+
+            // (Copy button listener)
+            if (copyBtn) {
+                copyBtn.addEventListener('click', () => {
+                    // 1行に圧縮された bookmarkletCode をクリップボードにコピー
+                    navigator.clipboard.writeText(bookmarkletCode).then(() => {
+                        showToast('ブックマークレットのコードをコピーしました。');
+                    }).catch(err => {
+                        showToast('コピーに失敗しました。手動でコピーしてください。', 'error');
+                    });
+                });
+            }
+
+            // (Show code button listener)
+            if (showBtn && bookmarkletCodeModal && bookmarkletCodeDisplay) {
+                showBtn.addEventListener('click', () => {
+                    // 圧縮されたコードを <textarea> に表示
+                    bookmarkletCodeDisplay.value = bookmarkletCode;
+                    showModal(bookmarkletCodeModal, bookmarkletCodeModalContent); // 既存のモーダル関数を使用
+                    bookmarkletCodeDisplay.select(); // 表示後すぐにテキストを選択状態にする
+                });
+            }
+            // ▲▲▲ 追加ここまで ▲▲▲
             setupBookmarklet();
 
             
@@ -761,6 +873,9 @@
             const confirmModal = document.getElementById('confirm-modal');
             const confirmModalContent = document.getElementById('confirm-modal-content');
             const adSettingsModal = document.getElementById('ad-settings-modal');
+            const bookmarkletCodeModal = document.getElementById('bookmarklet-code-modal');
+            const bookmarkletCodeModalContent = document.getElementById('bookmarklet-code-modal-content');
+            const bookmarkletCodeDisplay = document.getElementById('bookmarklet-code-display');
             const adSettingsModalContent = document.getElementById('ad-settings-modal-content');
 
             const showModal = (modal, content) => {
@@ -1043,6 +1158,11 @@
                 document.getElementById('ad-settings-modal-close').addEventListener('click', () => hideModal(adSettingsModal, adSettingsModalContent));
                 adSettingsModal.addEventListener('click', (e) => {
                     if (e.target === adSettingsModal) hideModal(adSettingsModal, adSettingsModalContent);
+                });
+                // (Bookmarklet Code Modal)
+                document.getElementById('bookmarklet-code-modal-close').addEventListener('click', () => hideModal(bookmarkletCodeModal, bookmarkletCodeModalContent));
+                bookmarkletCodeModal.addEventListener('click', (e) => {
+                    if (e.target === bookmarkletCodeModal) hideModal(bookmarkletCodeModal, bookmarkletCodeModalContent);
                 });
                 document.querySelectorAll('input[name="ad_type"]').forEach(radio => {
                     radio.addEventListener('change', (e) => {
