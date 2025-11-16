@@ -768,10 +768,10 @@
                     params.set('title', title.replace(/\\|\\/g, ''));
                     if (price) params.set('price', cleanPrice(price));
                     if (discount) params.set('discount', cleanDiscount(discount));
-                    
+
                     window.open(URL + '?' + params.toString());
                 }
-            })();`.replace(/\\n\\s*/g, ''); // 複数行コードから改行とインデントを削除
+            })();`.replace(/\n\s*/g, ''); // ★★★ ここのバックスラッシュを1本削除 ★★★
                 bookmarkletLink.setAttribute('href', bookmarkletCode);
 
                 bookmarkletLink.addEventListener('click', (e) => {
