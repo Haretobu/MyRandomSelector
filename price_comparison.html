@@ -1013,7 +1013,7 @@
                         </label>
                         <button class="remove-discount-btn px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors ml-2"><i class="fas fa-trash-alt text-xs"></i></button>
                     </div>`;
-                div.querySelector('.discount-active').addEventListener('change', updateUI);
+                div.querySelector('.discount-active').addEventListener('change', () => updateUI());
                 div.querySelector('.remove-discount-btn').addEventListener('click', () => { div.remove(); saveData(); updateUI(); });
                 return div;
             };
