@@ -324,6 +324,9 @@
     
     <!-- Floating Action Buttons -->
     <div class="fixed bottom-6 right-6 z-50 flex flex-col gap-4">
+        <button id="debug-fab" class="bg-orange-600 hover:bg-orange-500 w-16 h-16 rounded-full shadow-lg flex items-center justify-center text-2xl transition-transform hover:scale-110">
+            <i class="fas fa-bug"></i>
+        </button>
         <button id="ad-settings-fab" class="bg-blue-600 hover:bg-blue-500 w-16 h-16 rounded-full shadow-lg flex items-center justify-center text-2xl transition-transform hover:scale-110">
             <i class="fas fa-ad"></i>
         </button>
@@ -430,6 +433,18 @@
         </div>
     </div>
 
+
+    <div id="debug-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[80] flex items-center justify-center p-4">
+        <div id="debug-modal-content" class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-lg w-full relative">
+            <button id="debug-modal-close" class="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-times fa-lg"></i>
+            </button>
+            <h3 class="text-xl font-bold mb-6 text-orange-400"><i class="fas fa-bug mr-3"></i>デバッグ情報</h3>
+            <div id="debug-modal-display" class="space-y-2 text-sm text-gray-300 bg-gray-900 p-4 rounded-lg font-mono max-h-[60vh] overflow-y-auto">
+                </div>
+        </div>
+    </div>
+
     <!-- Toast Notification Container -->
     <div id="toast-container"></div>
 
@@ -472,18 +487,35 @@
             function checkUrlParams() {
                 const params = new URLSearchParams(window.location.search);
                 const title = params.get('title');
+                const price = params.get('price'); // ★追加
+                const discount = params.get('discount'); // ★追加
 
                 if (title) {
-                    // 作品名フォーム (reg-work-name) に自動入力
                     const workNameInput = document.getElementById('reg-work-name');
                     if (workNameInput) {
                         workNameInput.value = title;
-                        workNameInput.focus(); // フォームにフォーカス
+                        workNameInput.focus();
                     }
                 }
 
-                // 処理が終わったらURLからパラメータを消す (リロードしても再実行されないように)
-                if (title) {
+                // ★追加: 価格と割引を「現在アクティブなタブ」のフォームに入力
+                if (price || discount) {
+                    // 'reg-tab-dlsite' が 'reg-tab-active' クラスを持っているかチェック
+                    const dlsiteTab = document.getElementById('reg-tab-dlsite');
+                    const activeSite = (dlsiteTab && dlsiteTab.classList.contains('reg-tab-active')) ? 'dlsite' : 'fanza';
+
+                    if (price) {
+                        const priceInput = document.getElementById(`reg-price-${activeSite}`);
+                        if (priceInput) priceInput.value = price;
+                    }
+                    if (discount) {
+                        const discountInput = document.getElementById(`reg-discount-${activeSite}`);
+                        if (discountInput) discountInput.value = discount;
+                    }
+                }
+
+                // 処理が終わったらURLからパラメータを消す
+                if (title || price || discount) {
                     history.replaceState(null, '', window.location.pathname);
                 }
             }
@@ -710,7 +742,7 @@
                 // ブックマークレットのコードを生成
                 // 'title' パラメータにページのタイトルを渡す
                 // ★ 修正: エラーハンドリングを追加して1行に圧縮
-            bookmarkletCode = `javascript:(() => { const URL = '${comparisonUrl}'; let title = document.title; let price_raw = ''; let discount_raw = ''; let errorMsg = null; const cleanPrice = (p) => p ? p.replace(/[^0-9]/g, '') : ''; const cleanDiscount = (d) => d ? d.replace(/[^0-9]/g, '') : ''; const DLFITE_ORIGINAL_PRICE_SELECTOR = '.work_buy_content .strike .work_price_base'; const DLFITE_REGULAR_PRICE_SELECTOR = '.work_buy_content .price .work_price_base'; const DLFITE_DISCOUNT_SELECTOR = 'p.type_sale > span'; const FANZA_ORIGINAL_PRICE_SELECTOR = '.priceList__sub .priceList__sub--big'; const FANZA_REGULAR_PRICE_SELECTOR = '.priceList__main'; const FANZA_DISCOUNT_SELECTOR = '.campaignBalloon__ttl'; try { if (location.hostname.includes('dlsite.com')) { discount_raw = document.querySelector(DLFITE_DISCOUNT_SELECTOR)?.innerText || ''; if (discount_raw) { price_raw = document.querySelector(DLFITE_ORIGINAL_PRICE_SELECTOR)?.innerText || ''; } else { price_raw = document.querySelector(DLFITE_REGULAR_PRICE_SELECTOR)?.innerText || ''; } } else if (location.hostname.includes('dmm.co.jp')) { discount_raw = document.querySelector(FANZA_DISCOUNT_SELECTOR)?.innerText || ''; if (discount_raw) { price_raw = document.querySelector(FANZA_ORIGINAL_PRICE_SELECTOR)?.innerText || ''; } else { price_raw = document.querySelector(FANZA_REGULAR_PRICE_SELECTOR)?.innerText || ''; } } } catch (e) { errorMsg = 'ブックマークレットの実行中に予期せぬエラーが発生しました。\\n\\nエラー: ' + e.message; } const price = cleanPrice(price_raw); const discount = cleanDiscount(discount_raw); if (!errorMsg && !price && !discount) { if (location.hostname.includes('dlsite.com') || location.hostname.includes('dmm.co.jp')) { errorMsg = '価格と割引の自動取得に失敗しました。\\n\\nサイトの構造が変更された可能性があります。\\n(取得値: P=' + price_raw + ', D=' + discount_raw + ')\\n\\nお手数ですが、このページのHTMLを保存して開発者にご連絡ください。'; } } if (errorMsg) { alert(errorMsg); } else { let params = new URLSearchParams(); params.set('title', title.replace(/\\\\|\\\\/g, '')); if (price) params.set('price', price); if (discount) params.set('discount', discount); window.open(URL + '?' + params.toString()); } })();`.replace(/[\r\n\t]+/g, ' ');
+            bookmarkletCode = `javascript:(() => { const URL = '${comparisonUrl}'; let title = document.title; let price_raw = ''; let discount_raw = ''; let errorMsg = null; const cleanPrice = (p) => p ? p.replace(/[^0-9]/g, '') : ''; const cleanDiscount = (d) => d ? d.replace(/[^0-9]/g, '') : ''; const DLFITE_ORIGINAL_PRICE_SELECTOR = '.work_buy_content .strike .work_price_base'; const DLFITE_REGULAR_PRICE_SELECTOR = '.work_buy_content .price .work_price_base'; const DLFITE_DISCOUNT_SELECTOR = 'p.type_sale > span'; const FANZA_ORIGINAL_PRICE_SELECTOR = '.priceList__sub .priceList__sub--big'; const FANZA_REGULAR_PRICE_SELECTOR = '.priceList__main'; const FANZA_DISCOUNT_SELECTOR = '.campaignBalloon__ttl'; try { if (location.hostname.includes('dlsite.com')) { discount_raw = document.querySelector(DLFITE_DISCOUNT_SELECTOR)?.innerText || ''; if (discount_raw) { price_raw = document.querySelector(DLFITE_ORIGINAL_PRICE_SELECTOR)?.innerText || ''; } else { price_raw = document.querySelector(DLFITE_REGULAR_PRICE_SELECTOR)?.innerText || ''; } } else if (location.hostname.includes('dmm.co.jp')) { discount_raw = document.querySelector(FANZA_DISCOUNT_SELECTOR)?.innerText || ''; if (discount_raw) { price_raw = document.querySelector(FANZA_ORIGINAL_PRICE_SELECTOR)?.innerText || ''; } else { price_raw = document.querySelector(FANZA_REGULAR_PRICE_SELECTOR)?.innerText || ''; } } } catch (e) { errorMsg = 'ブックマークレットの実行中に予期せぬエラーが発生しました。\\n\\nエラー: ' + e.message; } const price = cleanPrice(price_raw); const discount = cleanDiscount(discount_raw); if (!errorMsg && !price && !discount) { if (location.hostname.includes('dlsite.com') || location.hostname.includes('dmm.co.jp')) { errorMsg = '価格と割引の自動取得に失敗しました。\\n\\nサイトの構造が変更された可能性があります。\\n(取得値: P=' + price_raw + ', D=' + discount_raw + ')\\n\\nお手数ですが、このページのHTMLを保存して開発者にご連絡ください。'; } } if (errorMsg) { alert(errorMsg); } else { let params = new URLSearchParams(); params.set('title', title.replace(/\\\\|\\\\/g, '')); if (price) params.set('price', price); if (discount) params.set('discount', discount); window.open(URL + '?' + params.toString()); } })();`
                 bookmarkletLink.setAttribute('href', bookmarkletCode);
 
                 bookmarkletLink.addEventListener('click', (e) => {
@@ -1006,6 +1038,28 @@
             loadData(createWorkItemElement, createDiscountItemElement);
 
             const setupEventListeners = () => {
+
+                // --- Debug FAB & Modal ---
+                const debugModal = document.getElementById('debug-modal');
+                const debugModalContent = document.getElementById('debug-modal-content');
+                const debugModalDisplay = document.getElementById('debug-modal-display');
+
+                document.getElementById('debug-fab')?.addEventListener('click', () => {
+                    // モーダルを開くたびに最新の情報を生成
+                    debugModalDisplay.innerHTML = `
+                        <p><strong>App Version:</strong> v_price_comp (N/A)</p>
+                        <p><strong>Sync ID:</strong> ${syncId || 'N/A'}</p>
+                        <p><strong>User ID (short):</strong> ${currentUser ? currentUser.uid.substring(0, 10) + '...' : 'N/A'}</p>
+                        <p><strong>Bookmarklet Code (first 50):</strong></p>
+                        <textarea readonly class="w-full h-20 bg-gray-800 text-xs">${bookmarkletCode.substring(0, 50)}...</textarea>
+                    `;
+                    showModal(debugModal, debugModalContent);
+                });
+                document.getElementById('debug-modal-close')?.addEventListener('click', () => hideModal(debugModal, debugModalContent));
+                debugModal?.addEventListener('click', (e) => {
+                    if (e.target === debugModal) hideModal(debugModal, debugModalContent);
+                });
+                // --- Debug FAB End ---
                 regTabDlsite.addEventListener('click', () => { switchRegTab('dlsite'); checkDuplicate(regWorkName.value); });
                 regTabFanza.addEventListener('click', () => { switchRegTab('fanza'); checkDuplicate(regWorkName.value); });
                 discountTypeSelect.addEventListener('change', renderDiscountFields);
