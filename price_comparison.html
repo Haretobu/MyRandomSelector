@@ -106,6 +106,22 @@
                         セレクターに戻る
                     </a>
                 </header>
+
+                <div class="bg-gray-800 p-4 rounded-xl shadow-lg">
+                    <h2 class="text-lg font-semibold mb-2 text-cyan-400">ブックマークレット</h2>
+                    <p class="text-sm text-gray-400">
+                        下の「価格比較に追加」ボタンをブラウザのブックマークバーにドラッグ＆ドロップしてください。
+                        <br>
+                        作品ページ（DLsiteなど）でブックマークをクリックすると、作品名が登録フォームに自動入力されます。
+                    </p>
+                    <div class="mt-4">
+                        <a id="bookmarklet-link" href="#" class="inline-block px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg shadow-lg"
+                        title="これをブックマークバーにドラッグ">
+                            <i class="fas fa-magic"></i> 価格比較に追加
+                        </a>
+                        <span class="text-xs text-gray-500 ml-2">← これをドラッグ</span>
+                    </div>
+                </div>
                 
                 <details class="bg-gray-800 rounded-xl shadow-lg">
                     <summary class="p-5 flex justify-between items-center">
@@ -440,9 +456,159 @@
                 .replace(/[\s!"#$%&'()’“”*+,-./:;<=>?@[\\\]^_`{|}~～〜☆★♡♥♪♪【】「」]/g, '');
         };
         
+            // --- 保存/復元ロジック (LocalStorage) ---
+
+        const STORAGE_KEY_WORKS = 'priceComparisonWorks';
+        const STORAGE_KEY_DISCOUNTS = 'priceComparisonDiscounts';
+
+        /**
+         * 現在の作品/割引リストをLocalStorageに保存する
+         */
+        function saveData() {
+            const sites = ['dlsite', 'fanza'];
+            const worksData = { dlsite: [], fanza: [] };
+            const discountsData = { dlsite: [], fanza: [] };
+
+            try {
+                sites.forEach(site => {
+                    // 作品データを収集
+                    document.querySelectorAll(`#${site}-items-container .work-item`).forEach(item => {
+                        worksData[site].push({
+                            name: item.querySelector('.work-name').value.trim(),
+                            price: item.querySelector('.work-price').value,
+                            discount: item.querySelector('.work-discount').value,
+                            bulkEligible: item.querySelector('.work-bulk-eligible').checked
+                        });
+                    });
+
+                    // 割引データを収集
+                    document.querySelectorAll(`#${site}-discounts-container .discount-item`).forEach(item => {
+                        const params = {};
+                        // data-属性からパラメータを復元
+                        for (const key in item.dataset) {
+                            if (key !== 'id' && key !== 'type' && key !== 'id') {
+                                params[key] = item.dataset[key];
+                            }
+                        }
+                        discountsData[site].push({
+                            name: item.querySelector('.font-semibold').textContent,
+                            type: item.dataset.type,
+                            params: params
+                        });
+                    });
+                });
+
+                localStorage.setItem(STORAGE_KEY_WORKS, JSON.stringify(worksData));
+                localStorage.setItem(STORAGE_KEY_DISCOUNTS, JSON.stringify(discountsData));
+
+                // console.log("Data saved to LocalStorage");
+
+            } catch (e) {
+                console.error("Failed to save data to LocalStorage:", e);
+                // (showToast はDOMReady後なのでここでは使えない可能性がある)
+            }
+        }
+
+        /**
+         * LocalStorageからデータを復元する
+         * (DOMReady内で呼び出すこと)
+         */
+        function loadData(createWorkItemElement, createDiscountItemElement) {
+            try {
+                const worksData = JSON.parse(localStorage.getItem(STORAGE_KEY_WORKS));
+                const discountsData = JSON.parse(localStorage.getItem(STORAGE_KEY_DISCOUNTS));
+
+                if (worksData) {
+                    ['dlsite', 'fanza'].forEach(site => {
+                        const container = document.getElementById(`${site}-items-container`);
+                        if (worksData[site] && worksData[site].length > 0) {
+                            const placeholder = container.querySelector('.work-placeholder');
+                            if (placeholder) placeholder.remove();
+
+                            worksData[site].forEach(work => {
+                                const itemEl = createWorkItemElement(site, work.name, work.price, work.discount);
+                                // bulkEligible の状態を復元
+                                if (itemEl.querySelector('.work-bulk-eligible')) {
+                                itemEl.querySelector('.work-bulk-eligible').checked = work.bulkEligible;
+                                }
+                                container.appendChild(itemEl);
+                            });
+                        }
+                    });
+                }
+
+                if (discountsData) {
+                    ['dlsite', 'fanza'].forEach(site => {
+                        const container = document.getElementById(`${site}-discounts-container`);
+                        if (discountsData[site] && discountsData[site].length > 0) {
+                            const placeholder = container.querySelector('.discount-placeholder');
+                            if (placeholder) placeholder.remove();
+
+                            discountsData[site].forEach(discount => {
+                                const itemEl = createDiscountItemElement(discount);
+                                // 注意: 'checked' の状態は復元していない (これはセッションごとの選択のため)
+                                container.appendChild(itemEl);
+                            });
+                        }
+                    });
+                }
+
+                console.log("Data loaded from LocalStorage");
+
+            } catch (e) {
+                console.error("Failed to load data from LocalStorage:", e);
+            }
+        }
+
         // --- UI Logic ---
         document.addEventListener('DOMContentLoaded', () => {
             initializeFirebase();
+
+                // ▼▼▼ ブックマークレット設定ロジック ▼▼▼
+            const setupBookmarklet = () => {
+                const bookmarkletLink = document.getElementById('bookmarklet-link');
+                if (!bookmarkletLink) return;
+
+                // このページ (price_comparison.html) へのフルパスを生成
+                let baseUrl = window.location.href.split('?')[0];
+                if (baseUrl.endsWith('price_comparison.html')) {
+                    baseUrl = baseUrl.substring(0, baseUrl.lastIndexOf('price_comparison.html'));
+                }
+                const comparisonUrl = new URL('price_comparison.html', baseUrl).href;
+
+                // ブックマークレットのコードを生成
+                // 'title' パラメータにページのタイトルを渡す
+                const bookmarkletCode = `javascript:void(window.open('${comparisonUrl}?title='+encodeURIComponent(document.title)));`;
+                bookmarkletLink.setAttribute('href', bookmarkletCode);
+
+                bookmarkletLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    alert('このボタンをクリックするのではなく、お使いのブラウザのブックマークバーに「ドラッグ＆ドロップ」してください。');
+                });
+            };
+            setupBookmarklet();
+
+            // ブックマークレットから渡されたパラメータをフォームに自動入力
+            const checkUrlParams = () => {
+                const params = new URLSearchParams(window.location.search);
+                const title = params.get('title');
+
+                if (title) {
+                    // 作品名フォーム (reg-work-name) に自動入力
+                    const workNameInput = document.getElementById('reg-work-name');
+                    if (workNameInput) {
+                        workNameInput.value = title;
+                        workNameInput.focus(); // フォームにフォーカス
+                    }
+                }
+
+                // 処理が終わったらURLからパラメータを消す (リロードしても再実行されないように)
+                if (title) {
+                    history.replaceState(null, '', window.location.pathname);
+                }
+            };
+            checkUrlParams();
+            // ▲▲▲ ブックマークレット設定ロジック ▲▲▲
 
             const toastContainer = document.getElementById('toast-container');
             const showToast = (message, type = 'success') => {
@@ -658,9 +824,12 @@
                 };
                 [priceInput, discountInput].forEach(input => {
                     input.addEventListener('input', (e) => { validateNumericInput(e); updateItemFinalPrice(); });
-                    input.addEventListener('blur', (e) => { clampOnBlur(e); updateItemFinalPrice(); });
+                    input.addEventListener('blur', (e) => { clampOnBlur(e); updateItemFinalPrice(); saveData(); });
                 });
-                div.querySelector('.remove-item-btn').addEventListener('click', () => { div.remove(); });
+                // ★追加: 名前とまとめ買いチェックボックスも保存
+                div.querySelector('.work-name').addEventListener('blur', saveData);
+                div.querySelector('.work-bulk-eligible').addEventListener('change', saveData);
+                div.querySelector('.remove-item-btn').addEventListener('click', () => { div.remove(); saveData(); updateUI(); });
                 updateItemFinalPrice();
                 return div;
             };
@@ -688,9 +857,13 @@
                         <button class="remove-discount-btn px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors ml-2"><i class="fas fa-trash-alt text-xs"></i></button>
                     </div>`;
                 div.querySelector('.discount-active').addEventListener('change', updateUI);
-                div.querySelector('.remove-discount-btn').addEventListener('click', () => { div.remove(); updateUI(); });
+                div.querySelector('.remove-discount-btn').addEventListener('click', () => { div.remove(); saveData(); updateUI(); });
                 return div;
             };
+
+            // ★★★ DOMReadyの最後に データをロードする ★★★
+            // (createWorkItemElement と createDiscountItemElement を渡す)
+            loadData(createWorkItemElement, createDiscountItemElement);
 
             const setupEventListeners = () => {
                 regTabDlsite.addEventListener('click', () => { switchRegTab('dlsite'); checkDuplicate(regWorkName.value); });
@@ -725,6 +898,7 @@
                     const placeholder = container.querySelector('.work-placeholder');
                     if (placeholder) placeholder.remove();
                     container.appendChild(createWorkItemElement(site, name, price, discount));
+                    saveData();
                     
                     ['reg-work-name', 'reg-price-dlsite', 'reg-discount-dlsite', 'reg-price-fanza', 'reg-discount-fanza'].forEach(id => document.getElementById(id).value = '');
                     regWorkStatus.innerHTML = '';
@@ -742,6 +916,7 @@
                     const placeholder = container.querySelector('.discount-placeholder');
                     if (placeholder) placeholder.remove();
                     container.appendChild(createDiscountItemElement({ name, type, params }));
+                    saveData();
                     document.getElementById('reg-discount-name').value = '';
                     showToast(`割引「${name}」を追加しました。`);
                 });
@@ -780,6 +955,7 @@
                     if (await showConfirm('DLsiteリストのリセット', 'DLsiteの作品リストと割引リストをすべてクリアしますか？')) {
                         document.getElementById('dlsite-items-container').innerHTML = '<p class="text-sm text-gray-500 work-placeholder">作品を登録すると表示されます。</p>';
                         document.getElementById('dlsite-discounts-container').innerHTML = '<p class="text-sm text-gray-500 discount-placeholder">割引を登録すると表示されます。</p>';
+                        saveData();
                         updateUI();
                         showToast('DLsiteのリストをリセットしました。');
                     }
@@ -794,6 +970,7 @@
                     if (await showConfirm('FANZAリストのリセット', 'FANZAの作品リストと割引リストをすべてクリアしますか？')) {
                         document.getElementById('fanza-items-container').innerHTML = '<p class="text-sm text-gray-500 work-placeholder">作品を登録すると表示されます。</p>';
                         document.getElementById('fanza-discounts-container').innerHTML = '<p class="text-sm text-gray-500 discount-placeholder">割引を登録すると表示されます。</p>';
+                        saveData();
                         updateUI();
                         showToast('FANZAのリストをリセットしました。');
                     }
@@ -810,6 +987,7 @@
                             document.getElementById(`${site}-discounts-container`).innerHTML = '<p class="text-sm text-gray-500 discount-placeholder">割引を登録すると表示されます。</p>';
                         });
                         ownedItems.clear();
+                        saveData();
                         updateUI();
                         showToast('すべてのデータをリセットしました。', 'error');
                     }
