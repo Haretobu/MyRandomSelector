@@ -484,51 +484,22 @@
         let bookmarkletCode = '';
         
         // ブックマークレットから渡されたパラメータをフォームに自動入力
-            function checkUrlParams(switchRegTabCallback) { // ★ 引数 (switchRegTabCallback) を追加
+            function checkUrlParams() {
                 const params = new URLSearchParams(window.location.search);
-                const title = params.get('title');
-                const price = params.get('price');
-                const discount = params.get('discount');
-                const site = params.get('site'); // ★ site パラメータを取得
+                const data = {
+                    title: params.get('title'),
+                    price: params.get('price'),
+                    discount: params.get('discount'),
+                    site: params.get('site')
+                };
 
-                // 1. ★ NEW: サイトタブを切り替える (フォーム入力より先に実行)
-                if (site === 'dlsite' || site === 'fanza') {
-                    if (switchRegTabCallback) {
-                        switchRegTabCallback(site);
-                    }
-                }
-
-                // 2. タイトルを入力 (これは共通)
-                if (title) {
-                    const workNameInput = document.getElementById('reg-work-name');
-                    if (workNameInput) {
-                        workNameInput.value = title;
-                        workNameInput.focus();
-                    }
-                }
-
-                // 3. ★ MODIFIED: 価格と割引を「指定されたサイト」のフォームに入力
-                if (price || discount) {
-                    // パラメータで 'site' が指定されていればそれを使う。
-                    // なければ、現在アクティブなタブ（デフォルト）を使う。
-                    const dlsiteTab = document.getElementById('reg-tab-dlsite');
-                    const activeSite = (dlsiteTab && dlsiteTab.classList.contains('reg-tab-active')) ? 'dlsite' : 'fanza';
-                    const targetSite = (site === 'dlsite' || site === 'fanza') ? site : activeSite; 
-
-                    if (price) {
-                        const priceInput = document.getElementById(`reg-price-${targetSite}`);
-                        if (priceInput) priceInput.value = price;
-                    }
-                    if (discount) {
-                        const discountInput = document.getElementById(`reg-discount-${targetSite}`);
-                        if (discountInput) discountInput.value = discount;
-                    }
-                }
-
-                // 4. ★ MODIFIED: 'site' も消去対象に
-                if (title || price || discount || site) {
+                // Clear the URL params if any exist
+                if (data.title || data.price || data.discount || data.site) {
                     history.replaceState(null, '', window.location.pathname);
                 }
+
+                // Return the extracted data
+                return data;
             }
         
         
@@ -602,8 +573,6 @@
             unsubscribeSelectorWorks = onSnapshot(worksRef, (snapshot) => {
                 selectorWorks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-                // ★ 追加 (ロード完了処理) ★
-                // (my_wishlist.html と異なり、isLoadComplete フラグは使わない)
                 const loadingOverlay = document.getElementById('loading-overlay');
                 if (!loadingOverlay.classList.contains('hidden')) {
                     const appContainer = document.getElementById('app-container');
@@ -612,8 +581,13 @@
                     appContainer.classList.remove('opacity-0');
                     setTimeout(() => loadingOverlay.classList.add('hidden'), 500);
 
-                    // ★ ブックマークレットからのパラメータチェックを「ここ」に移動
-                    checkUrlParams(switchRegTab);
+                    // ★★★ 修正 (Event Dispatch) ★★★
+                    // 1. URLからパラメータを取得
+                    const urlData = checkUrlParams(); 
+                    // 2. DOMContentLoaded側に処理を依頼するカスタムイベントを発行
+                    if (urlData.title || urlData.price || urlData.discount || urlData.site) {
+                        document.dispatchEvent(new CustomEvent('applyBookmarkletData', { detail: urlData }));
+                    }
                 }
 
             }, error => {
@@ -1071,6 +1045,41 @@
                     if (e.target === debugModal) hideModal(debugModal, debugModalContent);
                 });
                 // --- Debug FAB End ---
+
+                // ★★★ 修正 (Event Listener) ★★★
+                // ブックマークレットからのデータ適用をここでリッスンする
+                document.addEventListener('applyBookmarkletData', (e) => {
+                    const { title, price, discount, site } = e.detail;
+
+                    // 1. サイトタブを切り替える
+                    if (site === 'dlsite' || site === 'fanza') {
+                        switchRegTab(site);
+                    }
+
+                    // 2. ターゲットサイトを決定
+                    const dlsiteTab = document.getElementById('reg-tab-dlsite');
+                    const activeSite = (dlsiteTab && dlsiteTab.classList.contains('reg-tab-active')) ? 'dlsite' : 'fanza';
+                    const targetSite = (site === 'dlsite' || site === 'fanza') ? site : activeSite;
+
+                    // 3. フォームに値を設定
+                    if (title) {
+                        const workNameInput = document.getElementById('reg-work-name');
+                        if (workNameInput) {
+                            workNameInput.value = title;
+                            workNameInput.focus();
+                        }
+                    }
+                    if (price) {
+                        const priceInput = document.getElementById(`reg-price-${targetSite}`);
+                        if (priceInput) priceInput.value = price;
+                    }
+                    if (discount) {
+                        const discountInput = document.getElementById(`reg-discount-${targetSite}`);
+                        if (discountInput) discountInput.value = discount;
+                    }
+                });
+                // ★★★ 修正ここまで ★★★
+
                 regTabDlsite.addEventListener('click', () => { switchRegTab('dlsite'); checkDuplicate(regWorkName.value); });
                 regTabFanza.addEventListener('click', () => { switchRegTab('fanza'); checkDuplicate(regWorkName.value); });
                 discountTypeSelect.addEventListener('change', renderDiscountFields);
