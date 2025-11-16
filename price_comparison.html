@@ -466,6 +466,7 @@
         let currentUser = null;
         let ownedItems = new Set();
         let uniqueId = 0;
+        let bookmarkletCode = '';
         
         // ブックマークレットから渡されたパラメータをフォームに自動入力
             function checkUrlParams() {
@@ -709,7 +710,7 @@
                 // ブックマークレットのコードを生成
                 // 'title' パラメータにページのタイトルを渡す
                 // ★ 修正: エラーハンドリングを追加して1行に圧縮
-            const bookmarkletCode = `javascript:(() => {
+            bookmarkletCode = `javascript:(() => {
                 const URL = '${comparisonUrl}';
                 let title = document.title;
                 let price = '';
