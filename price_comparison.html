@@ -745,7 +745,7 @@
                 } catch (e) {
                     // 予期せぬ実行時エラー
                     errorMsg = 'ブックマークレットの実行中に予期せぬエラーが発生しました。\\n\\nエラー: ' + e.message;
-                }
+                }; /* ★★★ セミコロンを追加 ★★★ */
 
                 // ★★★ ここからが追加したエラーチェック ★★★
                 if (!errorMsg && !price && !discount) {
@@ -754,7 +754,7 @@
                         errorMsg = '価格と割引の自動取得に失敗しました。\\n\\nサイトの構造が変更された可能性があります。\\nお手数ですが、このページのHTMLを保存して開発者にご連絡ください。';
                     }
                     // (DLsiteでもFANZAでもないサイトで実行された場合は、エラーにしない)
-                }
+                }; /* ★★★ セミコロンを追加 ★★★ */
 
                 if (errorMsg) {
                     // エラーがあればアラートを表示
@@ -771,7 +771,7 @@
 
                     window.open(URL + '?' + params.toString());
                 }
-            })();`.replace(/\n\s*/g, ''); // ★★★ ここのバックスラッシュを1本削除 ★★★
+            })();`.replace(/\n\s*/g, ' '); // 圧縮方法は「空白1文字」のまま
                 bookmarkletLink.setAttribute('href', bookmarkletCode);
 
                 bookmarkletLink.addEventListener('click', (e) => {
