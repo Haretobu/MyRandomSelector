@@ -1250,8 +1250,8 @@
                 });
             };
 
-            const calculateSiteTotal = (site) => {
-                const workItems = getWorkItems(site);
+            const calculateSiteTotal = (workItems, site) => {
+
                 let comparisonDetails = [];
 
                 // ★ 修正: 選択されたクーポンを取得
