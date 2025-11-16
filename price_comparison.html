@@ -1349,19 +1349,35 @@
                     discount: parseInt(item.querySelector('.work-discount').value, 10) || 0,
                     bulkEligible: item.querySelector('.work-bulk-eligible').checked
                 })).filter(item => item.name);
-                
+
+                // --- 1. 全アイテムリストを取得 ---
+                const dlsiteAllItems = getSiteData('dlsite');
+                const fanzaAllItems = getSiteData('fanza');
+
+                // --- 2. クーポン適用後の全アイテムの価格情報を計算 ---
+                // (calculateSiteTotal は { total, comparisonDetails, bulkCouponDiscounts } を返す)
+                const dlsitePriceDetails = calculateSiteTotal(dlsiteAllItems, 'dlsite').comparisonDetails;
+                const fanzaPriceDetails = calculateSiteTotal(fanzaAllItems, 'fanza').comparisonDetails;
+
+                // --- 3. 価格情報を Map に変換（検索高速化のため） ---
+                // (key: normalizedName, value: { finalPrice, appliedDiscount })
+                const dlsitePriceMap = new Map(dlsitePriceDetails.map(item => [normalizeName(item.name), item]));
+                const fanzaPriceMap = new Map(fanzaPriceDetails.map(item => [normalizeName(item.name), item]));
+
+                // --- 4. itemMap を作成（dlsite と fanza のデータをマージ） ---
                 const itemMap = new Map();
-                getSiteData('dlsite').forEach(item => {
+                dlsiteAllItems.forEach(item => {
                     const key = normalizeName(item.name);
                     if (!itemMap.has(key)) itemMap.set(key, { name: item.name });
                     itemMap.get(key).dlsite = item;
                 });
-                getSiteData('fanza').forEach(item => {
+                fanzaAllItems.forEach(item => {
                     const key = normalizeName(item.name);
                     if (!itemMap.has(key)) itemMap.set(key, { name: item.name });
                     itemMap.get(key).fanza = item;
                 });
 
+                // --- 5. フィルターとテーブルの準備 ---
                 const allItems = Array.from(itemMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'ja'));
                 const filterText = document.getElementById('filter-input').value;
                 const filteredItems = filterText ? allItems.filter(item => normalizeName(item.name).includes(normalizeName(filterText))) : allItems;
@@ -1376,6 +1392,7 @@
                 }
                 
                 tableBody.innerHTML = '';
+                // --- 6. 「既読(owned)でない」アイテムリストを再構築 ---
                 let dlsitePurchaseList = [];
                 let fanzaPurchaseList = [];
 
@@ -1385,18 +1402,40 @@
                     item.isDuplicateInSelector = selectorWorks.some(w => normalizeName(w.name) === normalizedName);
                     item.onBothSites = item.dlsite && item.fanza;
                     
-                    const calcPrice = (data) => data ? Math.round(data.price * (1 - data.discount / 100)) : null;
-                    const dlsiteFinalPrice = calcPrice(item.dlsite);
-                    const fanzaFinalPrice = calcPrice(item.fanza);
-                    let bestChoice = 'N/A';
+                    // --- 7. Map からクーポン適用後の価格情報を取得 ---
+                    const dlsiteInfo = item.dlsite ? dlsitePriceMap.get(normalizeName(item.dlsite.name)) : null;
+                    const fanzaInfo = item.fanza ? fanzaPriceMap.get(normalizeName(item.fanza.name)) : null;
+                    
+                    const dlsiteFinalPrice = dlsiteInfo ? dlsiteInfo.finalPrice : null;
+                    const fanzaFinalPrice = fanzaInfo ? fanzaInfo.finalPrice : null;
 
+                    // (単純割引率も表示用に取得)
+                    const dlsiteSimpleDiscount = item.dlsite ? item.dlsite.discount : 0;
+                    const fanzaSimpleDiscount = item.fanza ? item.fanza.discount : 0;
+                    
+                    // --- 8. ベストチョイスを「クーポン適用後」の価格で決定 ---
+                    let bestChoice = 'N/A';
                     if (dlsiteFinalPrice !== null && (fanzaFinalPrice === null || dlsiteFinalPrice <= fanzaFinalPrice)) bestChoice = 'DLsite';
                     else if (fanzaFinalPrice !== null) bestChoice = 'FANZA';
                     
+                    // --- 9. 既読でない場合、最終購入リストに追加 ---
                     if (!item.owned) {
-                        if (bestChoice === 'DLsite') dlsitePurchaseList.push(item.dlsite);
-                        else if (bestChoice === 'FANZA') fanzaPurchaseList.push(item.fanza);
+                        if (bestChoice === 'DLsite' && item.dlsite) dlsitePurchaseList.push(item.dlsite);
+                        else if (bestChoice === 'FANZA' && item.fanza) fanzaPurchaseList.push(item.fanza);
                     }
+
+                    // --- 10. テーブル行のHTMLを生成（クーポン情報を追加） ---
+                    const dlsitePriceHtml = dlsiteFinalPrice !== null ?
+                        `<strong>¥${Math.round(dlsiteFinalPrice).toLocaleString()}</strong>
+                         <span class="text-xs text-gray-400">(${dlsiteSimpleDiscount}%)</span>
+                         ${(dlsiteInfo.appliedDiscount && dlsiteInfo.appliedDiscount !== 'なし') ? `<br><span class="text-xs text-cyan-400">${dlsiteInfo.appliedDiscount}</span>` : ''}`
+                        : '-';
+                    
+                    const fanzaPriceHtml = fanzaFinalPrice !== null ?
+                        `<strong>¥${Math.round(fanzaFinalPrice).toLocaleString()}</strong>
+                         <span class="text-xs text-gray-400">(${fanzaSimpleDiscount}%)</span>
+                         ${(fanzaInfo.appliedDiscount && fanzaInfo.appliedDiscount !== 'なし') ? `<br><span class="text-xs text-cyan-400">${fanzaInfo.appliedDiscount}</span>` : ''}`
+                        : '-';
 
                     const row = document.createElement('tr');
                     row.className = 'bg-gray-800 border-b border-gray-700 hover:bg-gray-700/50 transition-colors';
@@ -1407,22 +1446,25 @@
                             ${item.onBothSites ? '<i class="fas fa-exchange-alt text-cyan-400 ml-2" title="両サイトに登録されています"></i>' : ''}
                             ${item.isDuplicateInSelector ? '<i class="fas fa-exclamation-triangle text-yellow-400 ml-2" title="セレクターに登録済みの作品です"></i>' : ''}
                         </td>
-                        <td class="p-3 text-right ${bestChoice === 'DLsite' ? 'result-item-highlight' : ''}">${dlsiteFinalPrice !== null ? `¥${dlsiteFinalPrice.toLocaleString()} <span class="text-xs text-gray-400">(${item.dlsite.discount}%)</span>` : '-'}</td>
-                        <td class="p-3 text-right ${bestChoice === 'FANZA' ? 'result-item-highlight' : ''}">${fanzaFinalPrice !== null ? `¥${fanzaFinalPrice.toLocaleString()} <span class="text-xs text-gray-400">(${item.fanza.discount}%)</span>` : '-'}</td>
+                        <td class="p-3 text-right ${bestChoice === 'DLsite' ? 'result-item-highlight' : ''}">${dlsitePriceHtml}</td>
+                        <td class="p-3 text-right ${bestChoice === 'FANZA' ? 'result-item-highlight' : ''}">${fanzaPriceHtml}</td>
                         <td class="p-3 font-bold text-center ${bestChoice === 'DLsite' ? 'text-blue-400' : bestChoice === 'FANZA' ? 'text-red-400' : ''}">${(dlsiteFinalPrice !== null && fanzaFinalPrice !== null) ? bestChoice : '<span class="text-amber-400">専売</span>'}</td>`;
                     tableBody.appendChild(row);
                 });
 
+                // --- 11. 「既読でない」リストを元に、最終合計金額を「再計算」 ---
+                // (bulk や bulk_coupon の条件が変わるため)
                 const dlsiteResult = calculateSiteTotal(dlsitePurchaseList, 'dlsite');
                 const fanzaResult = calculateSiteTotal(fanzaPurchaseList, 'fanza');
-                document.getElementById('dlsite-total').textContent = `¥${dlsiteResult.total.toLocaleString()}`;
-                document.getElementById('fanza-total').textContent = `¥${fanzaResult.total.toLocaleString()}`;
-                document.getElementById('optimal-total').textContent = `¥${(dlsiteResult.total + fanzaResult.total).toLocaleString()}`;
+                document.getElementById('dlsite-total').textContent = `¥${Math.round(dlsiteResult.total).toLocaleString()}`;
+                document.getElementById('fanza-total').textContent = `¥${Math.round(fanzaResult.total).toLocaleString()}`;
+                document.getElementById('optimal-total').textContent = `¥${Math.round(dlsiteResult.total + fanzaResult.total).toLocaleString()}`;
                 
+                // --- 12. イベントリスナーを再設定 ---
                 tableBody.querySelectorAll('.owned-checkbox').forEach(cb => cb.addEventListener('change', (e) => {
                     if (e.target.checked) ownedItems.add(e.target.dataset.name);
                     else ownedItems.delete(e.target.dataset.name);
-                    updateUI();
+                    updateUI(); // 変更があったら再描画
                 }));
             };
 
