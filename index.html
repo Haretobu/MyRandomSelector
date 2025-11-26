@@ -635,61 +635,11 @@
                 AppState.listViewMode = localStorage.getItem('listViewMode') || 'grid';
                 if (localStorage.getItem('isLiteMode') === 'true') {
                     AppState.isLiteMode = true;
-                    // ★読み込んだらすぐに削除する
-                    // これにより、次回の通常リロードでは通常モードに戻る
                     localStorage.removeItem('isLiteMode');
                 }
-                AppState.showSiteIcon = localStorage.getItem('showSiteIcon') !== 'false'; // デフォルトtrue
+                AppState.showSiteIcon = localStorage.getItem('showSiteIcon') !== 'false'; 
                 AppState.itemsPerPage = parseInt(localStorage.getItem('itemsPerPage') || '20', 10);
 
-                // ★ 修正: localStorageの読み込みを復号に変更 (方針3) ★
-                if (savedListFilters) {
-                    // Setオブジェクトを復元
-                    savedListFilters.genres = new Set(savedListFilters.genres || []);
-                    savedListFilters.andTagIds = new Set(savedListFilters.andTagIds || []);
-                    savedListFilters.orTagIds = new Set(savedListFilters.orTagIds || []);
-                    savedListFilters.notTagIds = new Set(savedListFilters.notTagIds || []);
-                    savedListFilters.dateFilter = savedListFilters.dateFilter || AppState.defaultFilterDate();
-                    savedListFilters.sites = new Set(savedListFilters.sites || []);
-                    AppState.listFilters = savedListFilters;
-                }
-
-                if (savedSortState) {
-                    AppState.sortState = savedSortState;
-                }
-
-                if (savedLotterySettings) {
-                    // Setオブジェクトを復元
-                    savedLotterySettings.genres = new Set(savedLotterySettings.genres || []);
-                    savedLotterySettings.andTagIds = new Set(savedLotterySettings.andTagIds || []);
-                    savedLotterySettings.orTagIds = new Set(savedLotterySettings.orTagIds || []);
-                    savedLotterySettings.notTagIds = new Set(savedLotterySettings.notTagIds || []);
-                    savedLotterySettings.dateFilter = savedLotterySettings.dateFilter || AppState.defaultFilterDate();
-                    savedLotterySettings.sites = new Set(savedLotterySettings.sites || []);
-                    AppState.lotterySettings = savedLotterySettings;
-                }
-
-                const savedPresets = App.decryptData(localStorage.getItem('customPresets_encrypted'));
-                if (savedPresets && Array.isArray(savedPresets)) {
-                    // Setオブジェクトを復元
-                    AppState.customPresets = savedPresets.map(p => ({
-                        ...p,
-                        settings: {
-                            ...p.settings,
-                            genres: new Set(p.settings.genres || []),
-                            sites: new Set(p.settings.sites || []),
-                            andTagIds: new Set(p.settings.andTagIds || []),
-                            orTagIds: new Set(p.settings.orTagIds || []),
-                            notTagIds: new Set(p.settings.notTagIds || [])
-                        }
-                    }));
-                }
-
-                if (Array.isArray(savedHistory) && savedHistory.every(item => typeof item === 'string')) {
-                    AppState.searchHistory = savedHistory.slice(0, AppState.maxSearchHistory);
-                } else {
-                    AppState.searchHistory = [];
-                }
                 // UI要素の参照をキャッシュ
                 AppState.ui = {
                     loadingOverlay: $('#loading-overlay'),
