@@ -200,6 +200,17 @@
                                 <input type="text" id="newSyncIdInput" placeholder="新しい同期IDをペースト" class="w-full bg-gray-700 border border-gray-600 rounded-l-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500" autocomplete="off">
                                 <button id="loadSyncIdBtn" class="px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-700 text-white rounded-l-none flex-shrink-0">読込</button>
                             </div>
+                            
+                            <div class="pt-4 mt-2 border-t border-gray-700">
+                                <h3 class="text-xs font-bold text-gray-500 mb-2">メンテナンス</h3>
+                                <div class="space-y-2">
+                                    <button id="migrateToStorageBtn" class="w-full text-sm px-4 py-3 bg-amber-600 hover:bg-amber-700 rounded-lg font-bold transition-colors text-black">
+                                        <i class="fas fa-images mr-2"></i>画像をStorageへ移行
+                                    </button>
+                                    <div id="migration-progress" class="hidden text-xs text-center text-amber-400 font-mono"></div>
+                                </div>
+                            </div>
+                            <div class="flex space-x-2 pt-2 border-t border-gray-700 mt-2">
                             <div class="flex space-x-2 pt-2">
                                 <button id="clearHistoryBtn" class="w-full text-sm px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors">履歴クリア</button>
                                 <button id="deleteDataBtn" class="w-full text-sm px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors">全作品削除</button>
@@ -481,6 +492,15 @@
             limit
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
+        import { 
+            getStorage, 
+            ref, 
+            uploadString, 
+            getDownloadURL, 
+            deleteObject 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+
+        
         // --- 1. UI Helper Functions ---
         // (Grok/ChatGPT案: 構造化)
         // これら2つは利便性のためにグローバルに残します
@@ -657,6 +677,8 @@
                     copySyncIdBtn: $('#copySyncIdBtn'),
                     newSyncIdInput: $('#newSyncIdInput'),
                     loadSyncIdBtn: $('#loadSyncIdBtn'),
+                    migrateToStorageBtn: $('#migrateToStorageBtn'),
+                    migrationProgress: $('#migration-progress'),
                     syncIdHistoryEl: $('#syncIdHistory'),
                     clearHistoryBtn: $('#clearHistoryBtn'),
                     deleteDataBtn: $('#deleteDataBtn'),
@@ -1155,6 +1177,7 @@
                     });
                     AppState.auth = getAuth(AppState.firebaseApp);
                     AppState.db = getFirestore(AppState.firebaseApp);
+                    AppState.storage = getStorage(AppState.firebaseApp);
                     App.setupAuthObserver();
                 } catch (error) {
                     // ★ 修正: isDebugMode で分岐 ★
@@ -1404,57 +1427,123 @@
                     reader.readAsDataURL(file);
                 });
             },
+
+            // ★追加: Storageへのアップロード処理
+            uploadImageToStorage: async (dataUrl, workId) => {
+                if (!dataUrl || !dataUrl.startsWith('data:image')) return null;
+                const timestamp = Date.now();
+                // ファイル名を "works/同期ID/作品ID_タイムスタンプ.jpg" にする
+                const path = `works/${AppState.syncId}/${workId}_${timestamp}.jpg`;
+                const storageRef = ref(AppState.storage, path);
+                
+                await uploadString(storageRef, dataUrl, 'data_url');
+                return await getDownloadURL(storageRef);
+            },
+
+            // ★追加: データ移行処理 (Migration)
+            handleMigration: async () => {
+                if (!await App.showConfirm("画像の移行", "古い形式の画像をFirebase Storageへ移動します。<br>この処理には時間がかかる場合があります。<br>実行しますか？")) return;
+                
+                const btn = AppState.ui.migrateToStorageBtn;
+                const progressEl = AppState.ui.migrationProgress;
+                
+                btn.disabled = true;
+                btn.classList.add('opacity-50');
+                progressEl.classList.remove('hidden');
+                progressEl.textContent = 'データをスキャン中...';
+
+                try {
+                    let count = 0;
+                    const worksToMigrate = AppState.works.filter(w => w.imageUrl && w.imageUrl.startsWith('data:image'));
+                    const total = worksToMigrate.length;
+
+                    if (total === 0) {
+                        App.showToast("移行が必要な画像はありませんでした。");
+                    } else {
+                        for (const work of worksToMigrate) {
+                            count++;
+                            progressEl.textContent = `移行中: ${count} / ${total} 件完了...`;
+                            
+                            // 1. Storageへアップロード
+                            const newUrl = await App.uploadImageToStorage(work.imageUrl, work.id);
+                            
+                            // 2. Firestoreのデータを更新
+                            if (newUrl) {
+                                await App.updateWork(work.id, { imageUrl: newUrl });
+                            }
+                        }
+                        App.showToast("すべての画像の移行が完了しました！", "success");
+                    }
+                } catch (error) {
+                    console.error("Migration error:", error);
+                    App.showToast("移行中にエラーが発生しました。", "error");
+                } finally {
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50');
+                    progressEl.textContent = '処理完了';
+                    setTimeout(() => progressEl.classList.add('hidden'), 3000);
+                }
+            },
             
             // --- CRUD Operations ---
             handleAddWork: async (e) => {
                 e.preventDefault();
                 if (AppState.isDebugMode) { return App.showToast("デバッグモード中は作品を登録できません。"); }
+                
                 const form = e.target;
                 const name = form.elements.workName.value.trim();
-                const registeredAtStr = App.getDateInputValue('workRegisteredAt'); // 変更
+                const registeredAtStr = App.getDateInputValue('workRegisteredAt');
+                
                 if (!name || !registeredAtStr) return App.showToast("作品名と登録日は必須です。");
                 if (!App.isValidDate(registeredAtStr)) return App.showToast("登録日の形式が正しくありません (YYYY/MM/DD)。");
+                
+                // 重複チェック
                 const errorEl = $('#addWorkError');
                 if (AppState.works.some(w => w.name.toLowerCase() === name.toLowerCase())) {
                     errorEl.textContent = `「${name}」は既に登録されています。`;
                     errorEl.classList.remove('hidden');
-                    // 数秒後にエラーを消す
                     setTimeout(() => { errorEl.classList.add('hidden'); errorEl.textContent = ''; }, 4000);
-                    return; // 登録処理を中断
-                } else {
-                    errorEl.classList.add('hidden'); // エラーがなければ隠す
-                    errorEl.textContent = '';
+                    return;
                 }
-                let imageUrl = null;
-                if (form.elements.workImage.files[0]) {
-                    try {
-                        imageUrl = await App.processImage(form.elements.workImage.files[0]);
-                    } catch (error) { return App.showToast(error.message); }
-                }
-                const url = form.elements.workUrl.value.trim();
-                const newWork = {
-                    name,
-                    genre: form.elements.workGenre.value,
-                    sourceUrl: url,
-                    registeredAt: Timestamp.fromDate(new Date(registeredAtStr.replace(/\//g, '-'))),
-                    imageUrl, selectionCount: 0, rating: 0, tagIds: [], lastSelectedAt: null,
-                    selectionHistory: []
-                };
+
+                // ★変更点: まずドキュメントIDを確保してから画像をアップロード
                 try {
+                    // 1. 仮のデータを作成（ID生成のため）
                     const worksRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`);
-                    await addDoc(worksRef, newWork);
+                    const newDocRef = doc(worksRef); // 自動IDを生成
+                    
+                    let imageUrl = null;
+                    if (form.elements.workImage.files[0]) {
+                        try {
+                            // 画像をリサイズ＆Base64化
+                            const tempBase64 = await App.processImage(form.elements.workImage.files[0]);
+                            // ★StorageへアップロードしてURLを取得
+                            imageUrl = await App.uploadImageToStorage(tempBase64, newDocRef.id);
+                        } catch (error) { return App.showToast(error.message); }
+                    }
+
+                    const url = form.elements.workUrl.value.trim();
+                    const newWork = {
+                        name,
+                        genre: form.elements.workGenre.value,
+                        sourceUrl: url,
+                        registeredAt: Timestamp.fromDate(new Date(registeredAtStr.replace(/\//g, '-'))),
+                        imageUrl, // URLまたはnull
+                        selectionCount: 0, rating: 0, tagIds: [], lastSelectedAt: null,
+                        selectionHistory: []
+                    };
+
+                    // 2. データを保存 (addDocではなくsetDocを使う)
+                    await setDoc(newDocRef, newWork);
+                    
                     App.showToast(`"${name}" を登録しました。`);
                     form.reset();
                     $('#imagePreview').classList.add('hidden');
                     $('#workRegisteredAt').value = App.formatDateForInput(new Date());
+
                 } catch (error) {
-                    // ★ 修正: isDebugMode で分岐 ★
-                    if (AppState.isDebugMode) {
-                        console.error("Error adding work (Debug): ", error);
-                    } else {
-                        console.error("Error adding work."); // 本番では詳細を出力しない
-                    }
-                    App.showToast("作品の登録に失敗しました。時間をおいて再度お試しください。", "error");
+                    if (AppState.isDebugMode) console.error("Error adding work:", error);
+                    App.showToast("作品の登録に失敗しました。", "error");
                 }
             },
 
@@ -1484,18 +1573,25 @@
             },
 
             deleteWork: async (workId, workName) => {
-                //if (AppState.isDebugMode) { return App.showToast("デバッグモード中は作品を削除できません。"); }//
+                // if (AppState.isDebugMode) { return App.showToast("デバッグモード中は作品を削除できません。"); }
                 if (!await App.showConfirm("作品の削除", `「${App.escapeHTML(workName)}」を本当に削除しますか？<br>この操作は取り消せません。`)) return;
+                
                 try {
+                    // ★追加: Storageの画像も削除
+                    const work = AppState.works.find(w => w.id === workId);
+                    if (work && work.imageUrl && work.imageUrl.includes('firebasestorage')) {
+                        try {
+                            const imageRef = ref(AppState.storage, work.imageUrl);
+                            await deleteObject(imageRef);
+                        } catch (e) {
+                            console.log("画像削除スキップ (見つからない等):", e);
+                        }
+                    }
+
                     await deleteDoc(doc(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`, workId));
                     App.showToast(`「${workName}」を削除しました。`);
                 } catch (error) {
-                    // ★ 修正: isDebugMode で分岐 ★
-                    if (AppState.isDebugMode) {
-                        console.error("Error deleting work (Debug): ", error);
-                    } else {
-                        console.error("Error deleting work."); // 本番では詳細を出力しない
-                    }
+                    if (AppState.isDebugMode) console.error("Error deleting work:", error);
                     App.showToast("作品の削除に失敗しました。", "error");
                 }
             },
@@ -2211,6 +2307,9 @@
                         App.showToast("データを読み込みました。");
                     }
                 });
+                
+                // ★追加: 移行ボタンのイベント
+                ui.migrateToStorageBtn.addEventListener('click', App.handleMigration);
                 
                 ui.syncIdHistoryEl.addEventListener('change', e => e.target.value && App.loadDataSet(e.target.value));
                 
