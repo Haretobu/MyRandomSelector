@@ -336,19 +336,20 @@
                      <div id="workListMessage" class="text-center py-10">
                         <!-- Messages like loading, no data, etc. will be shown here -->
                      </div>
-                </div> <div id="pagination-controls" class="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6 bg-gray-800 p-4 rounded-xl shadow-lg">
+                </div>
+                <div id="pagination-controls" class="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6 bg-gray-800 p-4 rounded-xl shadow-lg">
                     <div class="flex items-center space-x-2 text-sm">
-                        <label for="itemsPerPageSelect" class="text-gray-400">表示件数:</label>
-                        <select id="itemsPerPageSelect" class="bg-gray-700 border border-gray-600 rounded-md p-1 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                        <label class="text-gray-400">表示件数:</label>
+                        <select class="itemsPerPageSelect bg-gray-700 border border-gray-600 rounded-md p-1 focus:outline-none focus:ring-2 focus:ring-sky-500">
                             <option value="20">20</option>
                             <option value="50">50</option>
                             <option value="100">100</option>
                         </select>
                     </div>
                     <div class="flex items-center space-x-2">
-                        <button id="prevPageBtn" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed" disabled><i class="fas fa-chevron-left"></i> 前へ</button>
-                        <span id="pageInfo" class="text-sm text-gray-400 px-2">ページ 1 / 1</span>
-                        <button id="nextPageBtn" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed" disabled>次へ <i class="fas fa-chevron-right"></i></button>
+                        <button class="prevPageBtn px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed" disabled><i class="fas fa-chevron-left"></i> 前へ</button>
+                        <span class="pageInfo text-sm text-gray-400 px-2">ページ 1 / 1</span>
+                        <button class="nextPageBtn px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed" disabled>次へ <i class="fas fa-chevron-right"></i></button>
                     </div>
                 </div>
             </main>
