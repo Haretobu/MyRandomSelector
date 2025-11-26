@@ -1168,13 +1168,11 @@
                 App.updateLoadingProgress();
                 try {
                     AppState.firebaseApp = initializeApp(AppState.firebaseConfig);
-                    // App Check を初期化
-                    // 'YOUR_RECAPTCHA_ENTERPRISE_SITE_KEY' の部分を、
-                    // あなたがコピーしたサイトキー (6L...) に置き換えてください。
+                    /*
                     initializeAppCheck(AppState.firebaseApp, {
                         provider: new ReCaptchaEnterpriseProvider('6Lem8v8rAAAAAJiur2mblUOHF28x-Vh0zRjg6B6u'),
                         isTokenAutoRefreshEnabled: true // トークンを自動更新
-                    });
+                    });*/
                     AppState.auth = getAuth(AppState.firebaseApp);
                     AppState.db = getFirestore(AppState.firebaseApp);
                     AppState.storage = getStorage(AppState.firebaseApp);
