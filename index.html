@@ -565,6 +565,7 @@
             defaultDateFilter: () => ({ mode: 'none', date: '', startDate: '', endDate: '' }),
             listFilters: {
                 genres: new Set(),
+                sites: new Set(), // ★追加: サイトフィルタ (DLsite/FANZA/Other)
                 rating: { type: 'exact', value: 0 },
                 andTagIds: new Set(),
                 orTagIds: new Set(),
@@ -586,10 +587,13 @@
             itemsPerPage: 20,
             expandedTagsWorkIds: new Set(), // (Grok/ChatGPT案: クリーンアップ) ※これは削除候補でしたが、`renderWorkCard`でまだ使われているため残します
 
+            customPresets: [],
+
             // Lottery State
             lotterySettings: {
                 mood: 'default',
                 genres: new Set(),
+                sites: new Set(), // ★追加: サイトフィルタ
                 andTagIds: new Set(),
                 orTagIds: new Set(),
                 notTagIds: new Set(),
@@ -647,6 +651,7 @@
                     savedListFilters.orTagIds = new Set(savedListFilters.orTagIds || []);
                     savedListFilters.notTagIds = new Set(savedListFilters.notTagIds || []);
                     savedListFilters.dateFilter = savedListFilters.dateFilter || AppState.defaultFilterDate();
+                    savedListFilters.sites = new Set(savedListFilters.sites || []);
                     AppState.listFilters = savedListFilters;
                 }
 
@@ -663,7 +668,24 @@
                     savedLotterySettings.orTagIds = new Set(savedLotterySettings.orTagIds || []);
                     savedLotterySettings.notTagIds = new Set(savedLotterySettings.notTagIds || []);
                     savedLotterySettings.dateFilter = savedLotterySettings.dateFilter || AppState.defaultFilterDate();
+                    savedLotterySettings.sites = new Set(savedLotterySettings.sites || []);
                     AppState.lotterySettings = savedLotterySettings;
+                }
+
+                const savedPresets = App.decryptData(localStorage.getItem('customPresets_encrypted'));
+                if (savedPresets && Array.isArray(savedPresets)) {
+                    // Setオブジェクトを復元
+                    AppState.customPresets = savedPresets.map(p => ({
+                        ...p,
+                        settings: {
+                            ...p.settings,
+                            genres: new Set(p.settings.genres || []),
+                            sites: new Set(p.settings.sites || []),
+                            andTagIds: new Set(p.settings.andTagIds || []),
+                            orTagIds: new Set(p.settings.orTagIds || []),
+                            notTagIds: new Set(p.settings.notTagIds || [])
+                        }
+                    }));
                 }
 
                 const savedHistory = App.decryptData(localStorage.getItem('searchHistory_encrypted'));
@@ -1672,6 +1694,13 @@
                 App.renderLotterySummary();
             },
 
+            getWorkSite: (url) => {
+                if (!url) return 'other';
+                if (url.includes('dlsite.com')) return 'dlsite';
+                if (url.includes('dmm.co.jp')) return 'fanza';
+                return 'other';
+            },
+
             getSiteBadgeHTML: (url) => {
                 if (!AppState.showSiteIcon || !url) return '';
                 if (url.includes('dlsite.com')) {
@@ -1836,7 +1865,6 @@
                     } else if (filters.rating.type === 'below') { 
                         tempWorks = tempWorks.filter(w => (w.rating || 0) <= filters.rating.value);
                     }
-                    // ↑↑↑ 修正ここまで ↑↑↑
                 }
 
                 // Genre filter
@@ -1844,6 +1872,13 @@
                     tempWorks = tempWorks.filter(w => filters.genres.has(w.genre));
                 }
                 
+                if (filters.sites && filters.sites.size > 0) {
+                    tempWorks = tempWorks.filter(w => {
+                        const site = App.getWorkSite(w.sourceUrl);
+                        return filters.sites.has(site);
+                    });
+                }
+
                 // Date filter
                 if (filters.dateFilter) {
                     const { mode, date, startDate, endDate } = filters.dateFilter;
@@ -2882,6 +2917,7 @@
                 const state = {
                     ...source,
                     genres: new Set(source.genres),
+                    sites: new Set(source.sites), // ★追加
                     andTagIds: new Set(source.andTagIds),
                     orTagIds: new Set(source.orTagIds),
                     notTagIds: new Set(source.notTagIds),
@@ -2889,23 +2925,25 @@
                     rating: { ...(source.rating || { type: 'exact', value: 0 }) }
                 };
                 
-                // Pre-fill date inputs
                 if (!state.dateFilter.date) state.dateFilter.date = App.formatDateForInput(new Date());
                 if (!state.dateFilter.startDate) state.dateFilter.startDate = App.formatDateForInput(new Date());
                 if (!state.dateFilter.endDate) state.dateFilter.endDate = App.formatDateForInput(new Date());
 
-                const genreValue = [...state.genres][0] || 'all';
-                
+                // 選択肢定義
+                const genreOptions = [{value:'漫画', label:'漫画'}, {value:'ゲーム', label:'ゲーム'}, {value:'動画', label:'動画'}];
+                const siteOptions = [{value:'dlsite', label:'DLsite'}, {value:'fanza', label:'FANZA'}, {value:'other', label:'その他'}];
+
                 const content = `
                 <div class="space-y-6">
-                    <div>
-                        <h4 class="font-semibold mb-2 text-sm text-gray-400">ジャンル</h4>
-                        <select id="filter-genre" class="w-full bg-gray-700 p-2 rounded-lg">
-                            <option value="all">すべて</option>
-                            <option value="漫画" ${genreValue==='漫画'?'selected':''}>漫画</option>
-                            <option value="ゲーム" ${genreValue==='ゲーム'?'selected':''}>ゲーム</option>
-                            <option value="動画" ${genreValue==='動画'?'selected':''}>動画</option>
-                        </select>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h4 class="font-semibold mb-2 text-sm text-gray-400">ジャンル (選択なし=すべて)</h4>
+                            ${App.createCheckboxGroupHTML('filter-genre', genreOptions, state.genres)}
+                        </div>
+                        <div>
+                            <h4 class="font-semibold mb-2 text-sm text-gray-400">サイト (選択なし=すべて)</h4>
+                            ${App.createCheckboxGroupHTML('filter-site', siteOptions, state.sites)}
+                        </div>
                     </div>
 
                     <div>
@@ -2923,10 +2961,8 @@
                                 <option value="above" ${state.rating.type === 'above' ? 'selected' : ''}>以上</option>
                                 <option value="below" ${state.rating.type === 'below' ? 'selected' : ''}>以下</option>
                             </select>
-                            <span class="text-gray-400 text-sm">（星をクリックして指定）</span>
+                            <div id="filter-rating-stars" class="flex items-center space-x-2 text-3xl ${state.unratedOrUntaggedOnly ? 'opacity-50 pointer-events-none' : ''}"></div>
                         </div>
-                        <div id="filter-rating-stars" class="flex items-center space-x-2 text-3xl ${state.unratedOrUntaggedOnly ? 'opacity-50 pointer-events-none' : ''}">
-                            </div>
                     </div>
 
                     <div><h4 class="text-sm text-gray-400 mb-1">登録日で絞り込む</h4>${App.createDateFilterHTML('filter', state.dateFilter, true)}</div>
@@ -2950,11 +2986,16 @@
                     let tempAndTags = new Set(state.andTagIds);
                     let tempOrTags = new Set(state.orTagIds);
                     let tempNotTags = new Set(state.notTagIds);
-
                     let currentRating = state.rating.value;
                     const ratingStars = $('#filter-rating-stars');
-                    const ratingTypeSelect = $('#filter-rating-type'); // ← 修正: select を取得
+                    const ratingTypeSelect = $('#filter-rating-type');
                     const unratedToggle = $('#filter-unrated');
+
+                    const getSelectedSet = (name) => {
+                        const checked = [];
+                        $$(`input[name="${name}"]:checked`).forEach(cb => checked.push(cb.value));
+                        return new Set(checked);
+                    };
 
                     const updatePreview = () => {
                         const countEl = $('#date-filter-preview-count-filter'), gridEl = $('#date-filter-preview-grid-filter');
@@ -2962,11 +3003,9 @@
 
                         const filters = {
                             unratedOrUntaggedOnly: unratedToggle.checked,
-                            rating: {
-                                type: ratingTypeSelect.value, // ← 修正: select から type を取得
-                                value: currentRating
-                            },
-                            genres: new Set($('#filter-genre').value === 'all' ? [] : [$('#filter-genre').value]),
+                            rating: { type: ratingTypeSelect.value, value: currentRating },
+                            genres: getSelectedSet('filter-genre'),
+                            sites: getSelectedSet('filter-site'),
                             andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
                             dateFilter: {
                                 mode: $(`input[name="date-filter-mode-filter"]:checked`).value,
@@ -2976,74 +3015,55 @@
                             }
                         };
                         const filtered = App.getFilteredWorks(filters);
-
                         countEl.textContent = `対象: ${filtered.length} 作品`;
                         gridEl.innerHTML = filtered.slice(0, 50).map(w => `<div class="text-center"><img src="${w.imageUrl||'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${App.escapeHTML(w.name)}" class="w-full h-16 object-cover rounded-md"><p class="text-xs truncate mt-1">${App.escapeHTML(w.name)}</p></div>`).join('');
                     };
 
                     App.setupDateFilterEventListeners('filter', updatePreview);
+                    
+                    // チェックボックスの変更監視
+                    $$('input[name="filter-genre"], input[name="filter-site"]').forEach(cb => {
+                        cb.addEventListener('change', updatePreview);
+                    });
 
                     unratedToggle.addEventListener('change', () => {
                         const isDisabled = unratedToggle.checked;
                         ratingStars.classList.toggle('opacity-50', isDisabled);
                         ratingStars.classList.toggle('pointer-events-none', isDisabled);
-                        ratingTypeSelect.disabled = isDisabled; // ← 修正: select も無効化
+                        ratingTypeSelect.disabled = isDisabled;
                         updatePreview();
                     });
+                    ratingTypeSelect.addEventListener('change', updatePreview);
 
-                    $('#filter-genre').addEventListener('change', updatePreview);
-                    ratingTypeSelect.addEventListener('change', updatePreview); // ← 修正: select のリスナーを追加
-
+                    // (Rating Star Logic - 同じなので省略せず記載)
                     const renderStars = r => {
                         if (!ratingStars) return;
-                        ratingStars.innerHTML = ''; // 一旦クリア
+                        ratingStars.innerHTML = '';
                         for (let i = 1; i <= 5; i++) {
-                            const starIcon = document.createElement('i');
-                            starIcon.classList.add('fa-star', 'cursor-pointer');
-                            starIcon.dataset.value = i;
-                            
-                            if (r >= i) {
-                                starIcon.classList.add('fas', 'text-yellow-400'); // Full star
-                            } else if (r === (i - 0.5)) {
-                                starIcon.classList.add('fas', 'fa-star-half-alt', 'text-yellow-400'); // Half star
-                            } else {
-                                starIcon.classList.add('far', 'text-gray-500'); // Empty star
-                            }
-                            ratingStars.appendChild(starIcon);
+                            const s = document.createElement('i');
+                            s.classList.add('fa-star', 'cursor-pointer');
+                            s.dataset.value = i;
+                            if (r >= i) s.classList.add('fas', 'text-yellow-400');
+                            else if (r === (i - 0.5)) s.classList.add('fas', 'fa-star-half-alt', 'text-yellow-400');
+                            else s.classList.add('far', 'text-gray-500');
+                            ratingStars.appendChild(s);
                         }
                     };
-                    renderStars(currentRating); 
+                    renderStars(currentRating);
+                    ratingStars.addEventListener('click', e => {
+                        const s = e.target.closest('.fa-star');
+                        if(s){
+                            const v=parseInt(s.dataset.value,10), h=(e.clientX-s.getBoundingClientRect().left)>(s.getBoundingClientRect().width/2);
+                            let n=h?v:v-0.5; if(currentRating===n)n=0; currentRating=n; renderStars(currentRating); updatePreview();
+                        }
+                    });
 
-                    if (ratingStars) {
-                        ratingStars.addEventListener('click', e => {
-                            const star = e.target.closest('.fa-star');
-                            if (star) {
-                                const value = parseInt(star.dataset.value, 10);
-                                const rect = star.getBoundingClientRect();
-                                const isRightHalf = (e.clientX - rect.left) > (rect.width / 2);
-                                
-                                let newRating = isRightHalf ? value : value - 0.5;
-                                
-                                if (currentRating === newRating) {
-                                    newRating = 0;
-                                }
-                                
-                                currentRating = newRating;
-                                renderStars(currentRating);
-                                updatePreview(); 
-                            }
-                        });
-                    }
-
+                    // (Tag Render Logic)
                     const renderCombinedTags = () => {
                         const container = $('#filter-tags-display');
                         if (!container) return;
                         let html = '';
-                        const renderSet = (ids, className, prefix) => {
-                            [...ids].map(id => AppState.tags.get(id)).filter(Boolean).forEach(tag => {
-                                html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${App.escapeHTML(tag.name)}</span>`;
-                            });
-                        };
+                        const renderSet = (ids, className, prefix) => { [...ids].map(id => AppState.tags.get(id)).filter(Boolean).forEach(tag => { html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${App.escapeHTML(tag.name)}</span>`; }); };
                         renderSet(tempAndTags, 'tag-item-and text-white', 'AND');
                         renderSet(tempOrTags, 'tag-item-or text-white', 'OR');
                         renderSet(tempNotTags, 'tag-item-not text-white', 'NOT');
@@ -3053,19 +3073,12 @@
 
                     $('#filter-select-tags').addEventListener('click', () => {
                         const capturedState = {
-                            genres: new Set($('#filter-genre').value === 'all' ? [] : [$('#filter-genre').value]),
-                            rating: {
-                                type: ratingTypeSelect.value, // ← 修正: type をキャプチャ
-                                value: currentRating
-                            },
+                            genres: getSelectedSet('filter-genre'),
+                            sites: getSelectedSet('filter-site'),
+                            rating: { type: ratingTypeSelect.value, value: currentRating },
                             andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
                             unratedOrUntaggedOnly: unratedToggle.checked,
-                            dateFilter: { 
-                                mode: $(`input[name="date-filter-mode-filter"]:checked`).value, 
-                                date: App.getDateInputValue(`date-filter-specific-date-filter`), 
-                                startDate: App.getDateInputValue(`date-filter-start-date-filter`), 
-                                endDate: App.getDateInputValue(`date-filter-end-date-filter`) 
-                            }
+                            dateFilter: { mode: $(`input[name="date-filter-mode-filter"]:checked`).value, date: App.getDateInputValue(`date-filter-specific-date-filter`), startDate: App.getDateInputValue(`date-filter-start-date-filter`), endDate: App.getDateInputValue(`date-filter-end-date-filter`) }
                         };
                         App.openTagFilterModal({
                             and: tempAndTags, or: tempOrTags, not: tempNotTags,
@@ -3082,40 +3095,32 @@
 
                     $('#filter-settings-reset').addEventListener('click', () => {
                         AppState.listFilters = {
-                            genres: new Set(),
+                            genres: new Set(), sites: new Set(),
                             rating: { type: 'exact', value: 0 },
-                            andTagIds: new Set(),
-                            orTagIds: new Set(),
-                            notTagIds: new Set(),
-                            dateFilter: AppState.defaultDateFilter(),
-                            unratedOrUntaggedOnly: false,
+                            andTagIds: new Set(), orTagIds: new Set(), notTagIds: new Set(),
+                            dateFilter: AppState.defaultDateFilter(), unratedOrUntaggedOnly: false,
                         };
-                        localStorage.removeItem('listFilters');
+                        localStorage.removeItem('listFilters'); // 削除時は暗号化キーも考慮して消すのがベストですが、とりあえず元のキー
+                        localStorage.removeItem('listFilters_encrypted');
                         App.openFilterModal();
                     });
 
                     $('#filter-settings-save').addEventListener('click', () => {
                         AppState.listFilters.unratedOrUntaggedOnly = unratedToggle.checked;
-                        AppState.listFilters.rating.type = ratingTypeSelect.value; // ← 修正: type を保存
+                        AppState.listFilters.rating.type = ratingTypeSelect.value;
                         AppState.listFilters.rating.value = currentRating;
-                        const genre = $('#filter-genre').value;
-                        AppState.listFilters.genres = genre === 'all' ? new Set() : new Set([genre]);
+                        AppState.listFilters.genres = getSelectedSet('filter-genre');
+                        AppState.listFilters.sites = getSelectedSet('filter-site');
                         AppState.listFilters.andTagIds = tempAndTags;
                         AppState.listFilters.orTagIds = tempOrTags;
                         AppState.listFilters.notTagIds = tempNotTags;
 
                         const mode = $(`input[name="date-filter-mode-filter"]:checked`).value;
                         AppState.listFilters.dateFilter.mode = mode;
-                        if (mode === 'specific') { 
-                            const val = App.getDateInputValue('date-filter-specific-date-filter'); 
-                            if (val && !App.isValidDate(val)) return App.showToast("特定日の形式が不正です。", "error"); 
-                            AppState.listFilters.dateFilter.date = val; 
-                        } else if (mode === 'range') { 
-                            const start = App.getDateInputValue('date-filter-start-date-filter');
-                            const end = App.getDateInputValue('date-filter-end-date-filter'); 
-                            if ((start && !App.isValidDate(start)) || (end && !App.isValidDate(end))) return App.showToast("期間の形式が不正です。", "error"); 
-                            AppState.listFilters.dateFilter.startDate = start; 
-                            AppState.listFilters.dateFilter.endDate = end; 
+                        if (mode === 'specific') AppState.listFilters.dateFilter.date = App.getDateInputValue('date-filter-specific-date-filter');
+                        else if (mode === 'range') { 
+                            AppState.listFilters.dateFilter.startDate = App.getDateInputValue('date-filter-start-date-filter');
+                            AppState.listFilters.dateFilter.endDate = App.getDateInputValue('date-filter-end-date-filter'); 
                         } else { 
                             AppState.listFilters.dateFilter = AppState.defaultDateFilter(); 
                         }
@@ -3123,14 +3128,13 @@
                         const filtersToSave = {
                             ...AppState.listFilters,
                             genres: [...AppState.listFilters.genres],
+                            sites: [...AppState.listFilters.sites],
                             andTagIds: [...AppState.listFilters.andTagIds],
                             orTagIds: [...AppState.listFilters.orTagIds],
                             notTagIds: [...AppState.listFilters.notTagIds]
                         };
                         const encryptedFilters = App.encryptData(filtersToSave);
-                        if (encryptedFilters) {
-                            localStorage.setItem('listFilters_encrypted', encryptedFilters);
-                        }
+                        if (encryptedFilters) localStorage.setItem('listFilters_encrypted', encryptedFilters);
 
                         AppState.currentPage = 1;
                         App.renderAll();
@@ -3138,7 +3142,6 @@
                     });
                     
                     $('#filter-settings-cancel').addEventListener('click', App.closeModal);
-
                     updatePreview();
                 });
             },
@@ -3490,6 +3493,19 @@
                 addListener(`date-filter-end-date-${context}`);
             },
             
+            // チェックボックスグループ生成ヘルパー
+            createCheckboxGroupHTML: (groupName, options, selectedSet) => {
+                return `
+                <div class="flex flex-wrap gap-3">
+                    ${options.map(opt => `
+                        <label class="inline-flex items-center cursor-pointer bg-gray-700 px-3 py-2 rounded-lg hover:bg-gray-600 transition-colors select-none">
+                            <input type="checkbox" name="${groupName}" value="${opt.value}" class="form-checkbox h-4 w-4 text-sky-500 rounded border-gray-500 bg-gray-800 focus:ring-sky-500 focus:ring-offset-gray-800" ${selectedSet.has(opt.value) ? 'checked' : ''}>
+                            <span class="ml-2 text-sm text-gray-200">${opt.label}</span>
+                        </label>
+                    `).join('')}
+                </div>`;
+            },
+            
             createDateInputHTML: (id, value) => {
                 return `<input type="text" id="${id}" value="${value}" placeholder="YYYY/MM/DD" data-role="date-input" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-sky-500">`;
             },
@@ -3567,21 +3583,23 @@
             },
 
             openLotterySettingsModal: (tempState = null) => {
-                const source = tempState || AppState.lotterySettings; // AppState.lotterySettings を使用
+                const source = tempState || AppState.lotterySettings;
                 const state = {
                     ...source,
                     genres: new Set(source.genres),
+                    sites: new Set(source.sites), // ★追加
                     andTagIds: new Set(source.andTagIds),
                     orTagIds: new Set(source.orTagIds),
                     notTagIds: new Set(source.notTagIds),
-                    dateFilter: { ...(source.dateFilter || AppState.defaultDateFilter()) } // AppState.defaultDateFilter を使用
+                    dateFilter: { ...(source.dateFilter || AppState.defaultDateFilter()) }
                 };
-                // Pre-fill date inputs with today's date if they are empty
-                if (!state.dateFilter.date) state.dateFilter.date = App.formatDateForInput(new Date()); // App.formatDateForInput を使用
-                if (!state.dateFilter.startDate) state.dateFilter.startDate = App.formatDateForInput(new Date()); // App.formatDateForInput を使用
-                if (!state.dateFilter.endDate) state.dateFilter.endDate = App.formatDateForInput(new Date()); // App.formatDateForInput を使用
+                if (!state.dateFilter.date) state.dateFilter.date = App.formatDateForInput(new Date());
+                if (!state.dateFilter.startDate) state.dateFilter.startDate = App.formatDateForInput(new Date());
+                if (!state.dateFilter.endDate) state.dateFilter.endDate = App.formatDateForInput(new Date());
 
-                const genreValue = [...state.genres][0] || 'all';
+                const genreOptions = [{value:'漫画', label:'漫画'}, {value:'ゲーム', label:'ゲーム'}, {value:'動画', label:'動画'}];
+                const siteOptions = [{value:'dlsite', label:'DLsite'}, {value:'fanza', label:'FANZA'}, {value:'other', label:'その他'}];
+
                 const content = `
                 <div class="space-y-6">
                     <div class="flex items-center justify-between">
@@ -3591,14 +3609,16 @@
                              <button id="lottery-help-btn" class="text-gray-400 hover:text-white"><i class="fas fa-question-circle fa-lg"></i></button>
                          </div>
                     </div>
-                    <div>
-                        <h4 class="font-semibold mb-2 text-sm text-gray-400">プリセット</h4>
-                        <div class="flex flex-wrap gap-2">
-                            <button data-preset="relax" class="text-xs px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-full">気分転換に</button>
-                            <button data-preset="new" class="text-xs px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-full">積みを崩す</button>
-                            <button data-preset="masterpiece" class="text-xs px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-full">傑作をもう一度</button>
+                    
+                    <div class="bg-gray-900 p-3 rounded-lg">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="font-semibold text-sm text-gray-400">プリセット</h4>
+                            <button id="save-preset-btn" class="text-xs px-2 py-1 bg-indigo-600 hover:bg-indigo-700 rounded text-white"><i class="fas fa-save mr-1"></i>現在の設定を保存</button>
                         </div>
+                        <div class="flex flex-wrap gap-2" id="preset-list-container">
+                            </div>
                     </div>
+
                     <div>
                         <div class="flex items-center mb-2">
                              <input type="checkbox" id="lottery-unrated" class="h-4 w-4 rounded bg-gray-600 text-sky-500 border-gray-500 focus:ring-sky-600" ${state.unratedOrUntaggedOnly ? 'checked' : ''}>
@@ -3606,11 +3626,22 @@
                         </div>
                     </div>
                     <div><label for="lottery-mood" class="block text-sm text-gray-400 mb-1">気分</label><select id="lottery-mood" class="w-full bg-gray-700 p-2 rounded-lg disabled:opacity-50" ${state.unratedOrUntaggedOnly ? 'disabled' : ''}><option value="default" ${state.mood==='default'?'selected':''}>問わない</option><option value="favorite" ${state.mood==='favorite'?'selected':''}>お気に入り</option><option value="best" ${state.mood==='best'?'selected':''}>最高評価</option><option value="hidden_gem" ${state.mood==='hidden_gem'?'selected':''}>隠れた名作</option></select></div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div><label class="block text-sm text-gray-400 mb-1">ジャンル</label><select id="lottery-genre" class="w-full bg-gray-700 p-2 rounded-lg"><option value="all">すべて</option><option value="漫画" ${genreValue==='漫画'?'selected':''}>漫画</option><option value="ゲーム" ${genreValue==='ゲーム'?'selected':''}>ゲーム</option><option value="動画" ${genreValue==='動画'?'selected':''}>動画</option></select></div>
-                        <div><label class="block text-sm text-gray-400 mb-1">登録日優先度</label><select id="lottery-priority" class="w-full bg-gray-700 p-2 rounded-lg"><option value="new" ${state.priority==='new'?'selected':''}>新しい順</option><option value="old" ${state.priority==='old'?'selected':''}>古い順</option><option value="random" ${state.priority==='random'?'selected':''}>ランダム</option></select></div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-1">ジャンル (選択なし=すべて)</label>
+                            ${App.createCheckboxGroupHTML('lottery-genre', genreOptions, state.genres)}
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-1">サイト (選択なし=すべて)</label>
+                            ${App.createCheckboxGroupHTML('lottery-site', siteOptions, state.sites)}
+                        </div>
                     </div>
-                     <div><label class="block text-sm text-gray-400 mb-1">抽選方法</label><select id="lottery-method" class="w-full bg-gray-700 p-2 rounded-lg"><option value="normal" ${state.method==='normal'?'selected':''}>通常</option><option value="decrease_unselected" ${state.method==='decrease_unselected'?'selected':''}>未選択優先</option></select></div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="block text-sm text-gray-400 mb-1">登録日優先度</label><select id="lottery-priority" class="w-full bg-gray-700 p-2 rounded-lg"><option value="new" ${state.priority==='new'?'selected':''}>新しい順</option><option value="old" ${state.priority==='old'?'selected':''}>古い順</option><option value="random" ${state.priority==='random'?'selected':''}>ランダム</option></select></div>
+                        <div><label class="block text-sm text-gray-400 mb-1">抽選方法</label><select id="lottery-method" class="w-full bg-gray-700 p-2 rounded-lg"><option value="normal" ${state.method==='normal'?'selected':''}>通常</option><option value="decrease_unselected" ${state.method==='decrease_unselected'?'selected':''}>未選択優先</option></select></div>
+                    </div>
                     <div><h4 class="text-sm text-gray-400 mb-1">登録日で絞り込む</h4>${App.createDateFilterHTML('lottery', state.dateFilter, true)}</div>
                     <div>
                         <h4 class="font-semibold mb-1">タグ絞り込み</h4>
@@ -3626,10 +3657,36 @@
                     </div>
                 </div>`;
 
-                App.openModal("抽選設定", content, () => { // App.openModal を使用
+                App.openModal("抽選設定", content, () => {
                     let tempAndTags = new Set(state.andTagIds);
                     let tempOrTags = new Set(state.orTagIds);
                     let tempNotTags = new Set(state.notTagIds);
+
+                    const getSelectedSet = (name) => {
+                        const checked = [];
+                        $$(`input[name="${name}"]:checked`).forEach(cb => checked.push(cb.value));
+                        return new Set(checked);
+                    };
+
+                    const renderPresets = () => {
+                        const container = $('#preset-list-container');
+                        if (!container) return;
+                        
+                        const presets = [
+                            { id: 'relax', name: '気分転換', type: 'default', settings: { priority: 'old', method: 'decrease_unselected', unratedOrUntaggedOnly: false, mood: 'default' } },
+                            { id: 'new', name: '積みを崩す', type: 'default', settings: { priority: 'new', unratedOrUntaggedOnly: true } },
+                            { id: 'masterpiece', name: '傑作', type: 'default', settings: { priority: 'random', method: 'normal', unratedOrUntaggedOnly: false, mood: 'best' } },
+                            ...AppState.customPresets
+                        ];
+
+                        container.innerHTML = presets.map(p => `
+                            <div class="inline-flex items-center bg-gray-700 rounded-full pl-3 pr-2 py-1 border border-gray-600">
+                                <button data-preset-id="${p.id}" class="text-xs hover:text-sky-400 mr-2">${App.escapeHTML(p.name)}</button>
+                                ${p.type !== 'default' ? `<button data-delete-preset="${p.id}" class="text-gray-400 hover:text-red-500 text-xs px-1"><i class="fas fa-times"></i></button>` : ''}
+                            </div>
+                        `).join('');
+                    };
+                    renderPresets();
 
                     const updatePreview = () => {
                         const countEl = $('#date-filter-preview-count-lottery'), gridEl = $('#date-filter-preview-grid-lottery');
@@ -3638,22 +3695,23 @@
                         const filters = {
                             unratedOrUntaggedOnly: $('#lottery-unrated').checked,
                             mood: $('#lottery-mood').value,
-                            genres: new Set($('#lottery-genre').value === 'all' ? [] : [$('#lottery-genre').value]),
+                            genres: getSelectedSet('lottery-genre'),
+                            sites: getSelectedSet('lottery-site'),
                             andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
                             dateFilter: {
                                 mode: $(`input[name="date-filter-mode-lottery"]:checked`).value,
-                                date: App.getDateInputValue('date-filter-specific-date-lottery'), // App.getDateInputValue を使用
-                                startDate: App.getDateInputValue('date-filter-start-date-lottery'), // App.getDateInputValue を使用
-                                endDate: App.getDateInputValue('date-filter-end-date-lottery') // App.getDateInputValue を使用
+                                date: App.getDateInputValue('date-filter-specific-date-lottery'),
+                                startDate: App.getDateInputValue('date-filter-start-date-lottery'),
+                                endDate: App.getDateInputValue('date-filter-end-date-lottery')
                             }
                         };
-                        const filtered = App.getFilteredWorks(filters); // App.getFilteredWorks を使用
-
+                        const filtered = App.getFilteredWorks(filters);
                         countEl.textContent = `対象: ${filtered.length} 作品`;
                         gridEl.innerHTML = filtered.slice(0, 50).map(w => `<div class="text-center"><img src="${w.imageUrl||'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${App.escapeHTML(w.name)}" class="w-full h-16 object-cover rounded-md"><p class="text-xs truncate mt-1">${App.escapeHTML(w.name)}</p></div>`).join('');
                     };
 
-                    App.setupDateFilterEventListeners('lottery', updatePreview); // App.setupDateFilterEventListeners を使用
+                    App.setupDateFilterEventListeners('lottery', updatePreview);
+                    $$('input[name="lottery-genre"], input[name="lottery-site"]').forEach(cb => cb.addEventListener('change', updatePreview));
 
                     const moodSelect = $('#lottery-mood');
                     const unratedToggle = $('#lottery-unrated');
@@ -3661,19 +3719,13 @@
                         moodSelect.disabled = unratedToggle.checked;
                         updatePreview();
                     });
-
-                    $('#lottery-genre').addEventListener('change', updatePreview);
                     $('#lottery-mood').addEventListener('change', updatePreview);
 
                     const renderCombinedTags = () => {
                         const container = $('#lottery-tags-display');
                         if (!container) return;
                         let html = '';
-                        const renderSet = (ids, className, prefix) => {
-                            [...ids].map(id => AppState.tags.get(id)).filter(Boolean).forEach(tag => { // AppState.tags.get を使用
-                                html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${App.escapeHTML(tag.name)}</span>`;
-                            });
-                        };
+                        const renderSet = (ids, className, prefix) => { [...ids].map(id => AppState.tags.get(id)).filter(Boolean).forEach(tag => { html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${App.escapeHTML(tag.name)}</span>`; }); };
                         renderSet(tempAndTags, 'tag-item-and text-white', 'AND');
                         renderSet(tempOrTags, 'tag-item-or text-white', 'OR');
                         renderSet(tempNotTags, 'tag-item-not text-white', 'NOT');
@@ -3681,37 +3733,82 @@
                     };
                     renderCombinedTags();
 
-                    $$('button[data-preset]').forEach(btn => {
-                        btn.addEventListener('click', () => {
-                            const preset = btn.dataset.preset;
-                            let presetState = { ...AppState.lotterySettings, andTagIds: new Set(), orTagIds: new Set(), notTagIds: new Set() }; // AppState.lotterySettings を使用
-                            if (preset === 'relax') {
-                                presetState.priority = 'old';
-                                presetState.method = 'decrease_unselected';
-                                presetState.unratedOrUntaggedOnly = false;
-                                presetState.mood = 'default';
-                            } else if (preset === 'new') {
-                                presetState.priority = 'new';
-                                presetState.unratedOrUntaggedOnly = true;
-                            } else if (preset === 'masterpiece') {
-                                presetState.priority = 'random';
-                                presetState.method = 'normal';
-                                presetState.unratedOrUntaggedOnly = false;
-                                presetState.mood = 'best';
+                    // プリセット操作: 適用
+                    $('#preset-list-container').addEventListener('click', async (e) => {
+                        const applyBtn = e.target.closest('button[data-preset-id]');
+                        const deleteBtn = e.target.closest('button[data-delete-preset]');
+
+                        if (applyBtn) {
+                            const id = applyBtn.dataset.presetId;
+                            let preset = AppState.customPresets.find(p => p.id === id);
+                            if (!preset) { // デフォルトプリセットの処理
+                                if (id === 'relax') preset = { settings: { priority: 'old', method: 'decrease_unselected', unratedOrUntaggedOnly: false, mood: 'default' } };
+                                if (id === 'new') preset = { settings: { priority: 'new', unratedOrUntaggedOnly: true } };
+                                if (id === 'masterpiece') preset = { settings: { priority: 'random', method: 'normal', unratedOrUntaggedOnly: false, mood: 'best' } };
                             }
-                            App.openLotterySettingsModal(presetState); // App.openLotterySettingsModal を使用
-                        });
+                            if (preset) {
+                                // settingsにある項目だけ上書きし、他はデフォルト(空Set)にする
+                                const s = preset.settings;
+                                const newState = {
+                                    ...AppState.lotterySettings,
+                                    genres: new Set(s.genres || []), sites: new Set(s.sites || []),
+                                    andTagIds: new Set(s.andTagIds || []), orTagIds: new Set(s.orTagIds || []), notTagIds: new Set(s.notTagIds || []),
+                                    ...s 
+                                };
+                                // モーダルを開き直して適用
+                                App.openLotterySettingsModal(newState);
+                                App.showToast(`プリセット「${preset.name || '指定'}」を適用しました。`);
+                            }
+                        } else if (deleteBtn) {
+                            const id = deleteBtn.dataset.deletePreset;
+                            const target = AppState.customPresets.find(p => p.id === id);
+                            if (target && await App.showConfirm("プリセット削除", `プリセット「${target.name}」を削除しますか？`)) {
+                                AppState.customPresets = AppState.customPresets.filter(p => p.id !== id);
+                                const encrypted = App.encryptData(AppState.customPresets);
+                                if (encrypted) localStorage.setItem('customPresets_encrypted', encrypted);
+                                renderPresets();
+                                App.showToast("プリセットを削除しました。");
+                            }
+                        }
                     });
 
+                    // プリセット保存
+                    $('#save-preset-btn').addEventListener('click', () => {
+                        const name = prompt("新しいプリセット名を入力してください:");
+                        if (name) {
+                            const newPreset = {
+                                id: 'custom_' + Date.now(),
+                                name: name,
+                                settings: {
+                                    unratedOrUntaggedOnly: $('#lottery-unrated').checked,
+                                    mood: $('#lottery-mood').value,
+                                    priority: $('#lottery-priority').value,
+                                    method: $('#lottery-method').value,
+                                    genres: [...getSelectedSet('lottery-genre')], // 配列で保存
+                                    sites: [...getSelectedSet('lottery-site')],   // 配列で保存
+                                    andTagIds: [...tempAndTags], orTagIds: [...tempOrTags], notTagIds: [...tempNotTags],
+                                    // 日付フィルタは固定値以外（相対など）が難しいので今回は簡易的に保存しないか、現在値を保存
+                                }
+                            };
+                            AppState.customPresets.push(newPreset);
+                            const encrypted = App.encryptData(AppState.customPresets);
+                            if (encrypted) localStorage.setItem('customPresets_encrypted', encrypted);
+                            renderPresets();
+                            App.showToast(`プリセット「${name}」を保存しました。`);
+                        }
+                    });
+
+                    // (タグ選択、リセット、保存などの既存処理は概ね同じですが、sitesの保存を追加)
                     $('#lottery-select-tags').addEventListener('click', () => {
                         const capturedState = {
-                            mood: $('#lottery-mood').value, genres: new Set($('#lottery-genre').value === 'all' ? [] : [$('#lottery-genre').value]),
+                            mood: $('#lottery-mood').value, 
+                            genres: getSelectedSet('lottery-genre'), sites: getSelectedSet('lottery-site'),
                             priority: $('#lottery-priority').value, method: $('#lottery-method').value,
                             andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
                             unratedOrUntaggedOnly: $('#lottery-unrated').checked,
                             dateFilter: { mode: $(`input[name="date-filter-mode-lottery"]:checked`).value, date: App.getDateInputValue(`date-filter-specific-date-lottery`), startDate: App.getDateInputValue(`date-filter-start-date-lottery`), endDate: App.getDateInputValue(`date-filter-end-date-lottery`) }
                         };
-                        App.openTagFilterModal({ // App.openTagFilterModal を使用
+                        App.openTagFilterModal({
                             and: tempAndTags, or: tempOrTags, not: tempNotTags,
                             onConfirm: (newTags) => {
                                 if(newTags) {
@@ -3719,23 +3816,20 @@
                                     capturedState.orTagIds = newTags.or;
                                     capturedState.notTagIds = newTags.not;
                                 }
-                                App.openLotterySettingsModal(capturedState); // App.openLotterySettingsModal を使用
+                                App.openLotterySettingsModal(capturedState);
                             }
                         });
                     });
 
                     $('#lottery-settings-reset').addEventListener('click', () => {
-                        AppState.lotterySettings = { mood: 'default', genres: new Set(), andTagIds: new Set(), orTagIds: new Set(), notTagIds: new Set(), dateFilter: AppState.defaultDateFilter(), priority: 'new', method: 'normal', unratedOrUntaggedOnly: false }; // AppState.lotterySettings を使用
-                        // (Grok案: 設定の保存) リセット時も保存
+                        AppState.lotterySettings = { mood: 'default', genres: new Set(), sites: new Set(), andTagIds: new Set(), orTagIds: new Set(), notTagIds: new Set(), dateFilter: AppState.defaultDateFilter(), priority: 'new', method: 'normal', unratedOrUntaggedOnly: false };
+                        
                         const settingsToSave = {
                             ...AppState.lotterySettings,
-                            genres: [], andTagIds: [], orTagIds: [], notTagIds: []
+                            genres: [], sites: [], andTagIds: [], orTagIds: [], notTagIds: []
                         };
-                        // ★ 修正: localStorageへの保存を暗号化 (方針3) ★
                         const encryptedSettings = App.encryptData(settingsToSave);
-                        if (encryptedSettings) {
-                            localStorage.setItem('lotterySettings_encrypted', encryptedSettings);
-                        }
+                        if (encryptedSettings) localStorage.setItem('lotterySettings_encrypted', encryptedSettings);
                         App.renderLotterySummary();
                         App.openLotterySettingsModal();
                     });
@@ -3743,8 +3837,8 @@
                     const saveSettings = () => {
                         AppState.lotterySettings.unratedOrUntaggedOnly = $('#lottery-unrated').checked;
                         AppState.lotterySettings.mood = $('#lottery-mood').value;
-                        const genre = $('#lottery-genre').value;
-                        AppState.lotterySettings.genres = genre === 'all' ? new Set() : new Set([genre]);
+                        AppState.lotterySettings.genres = getSelectedSet('lottery-genre');
+                        AppState.lotterySettings.sites = getSelectedSet('lottery-site');
                         AppState.lotterySettings.priority = $('#lottery-priority').value;
                         AppState.lotterySettings.method = $('#lottery-method').value;
                         AppState.lotterySettings.andTagIds = tempAndTags;
@@ -3752,34 +3846,35 @@
                         AppState.lotterySettings.notTagIds = tempNotTags;
                         const mode = $(`input[name="date-filter-mode-lottery"]:checked`).value;
                         AppState.lotterySettings.dateFilter.mode = mode;
-                        if (mode === 'specific') { const val = App.getDateInputValue('date-filter-specific-date-lottery'); if (val && !App.isValidDate(val)) return App.showToast("特定日の形式が不正です。", "error"); AppState.lotterySettings.dateFilter.date = val; }
-                        else if (mode === 'range') { const start = App.getDateInputValue('date-filter-start-date-lottery'), end = App.getDateInputValue('date-filter-end-date-lottery'); if ((start && !App.isValidDate(start)) || (end && !App.isValidDate(end))) return App.showToast("期間の形式が不正です。", "error"); AppState.lotterySettings.dateFilter.startDate = start; AppState.lotterySettings.dateFilter.endDate = end; }
+                        if (mode === 'specific') AppState.lotterySettings.dateFilter.date = App.getDateInputValue('date-filter-specific-date-lottery');
+                        else if (mode === 'range') { AppState.lotterySettings.dateFilter.startDate = App.getDateInputValue('date-filter-start-date-lottery'); AppState.lotterySettings.dateFilter.endDate = App.getDateInputValue('date-filter-end-date-lottery'); }
                         else { AppState.lotterySettings.dateFilter = AppState.defaultDateFilter(); }
                     };
 
                     $('#lottery-apply-to-list').addEventListener('click', () => {
                         saveSettings();
                         AppState.listFilters.genres = new Set(AppState.lotterySettings.genres);
+                        AppState.listFilters.sites = new Set(AppState.lotterySettings.sites);
                         AppState.listFilters.andTagIds = new Set(AppState.lotterySettings.andTagIds);
                         AppState.listFilters.orTagIds = new Set(AppState.lotterySettings.orTagIds);
                         AppState.listFilters.notTagIds = new Set(AppState.lotterySettings.notTagIds);
                         AppState.listFilters.dateFilter = { ...AppState.lotterySettings.dateFilter };
                         AppState.listFilters.unratedOrUntaggedOnly = AppState.lotterySettings.unratedOrUntaggedOnly;
 
-                        // Mood to Rating conversion
-                        AppState.listFilters.rating = { type: 'exact', value: 0 }; // Reset first
+                        AppState.listFilters.rating = { type: 'exact', value: 0 };
                         if (!AppState.lotterySettings.unratedOrUntaggedOnly) {
                              if (AppState.lotterySettings.mood === 'best') AppState.listFilters.rating = { type: 'above', value: 4 };
                         }
-                        // (Grok案: 設定の保存) localStorageにも保存 (Setは配列に変換して保存)
                         const filtersToSave = {
                             ...AppState.listFilters,
                             genres: [...AppState.listFilters.genres],
+                            sites: [...AppState.listFilters.sites],
                             andTagIds: [...AppState.listFilters.andTagIds],
                             orTagIds: [...AppState.listFilters.orTagIds],
                             notTagIds: [...AppState.listFilters.notTagIds]
                         };
-                        localStorage.setItem('listFilters', JSON.stringify(filtersToSave));
+                        const encrypted = App.encryptData(filtersToSave);
+                        if (encrypted) localStorage.setItem('listFilters_encrypted', encrypted);
 
                         App.renderAll();
                         App.closeModal();
@@ -3788,34 +3883,33 @@
 
                     $('#lottery-settings-save').addEventListener('click', () => {
                         saveSettings();
-                        App.renderLotterySummary(); // App.renderLotterySummary を使用
-                        // (Grok案: 設定の保存) localStorageにも保存 (Setは配列に変換)
+                        App.renderLotterySummary();
                         const settingsToSave = {
                             ...AppState.lotterySettings,
                             genres: [...AppState.lotterySettings.genres],
+                            sites: [...AppState.lotterySettings.sites],
                             andTagIds: [...AppState.lotterySettings.andTagIds],
                             orTagIds: [...AppState.lotterySettings.orTagIds],
                             notTagIds: [...AppState.lotterySettings.notTagIds]
                         };
-                        // ★ 修正: localStorageへの保存を暗号化 (方針3) ★
                         const encryptedSettings = App.encryptData(settingsToSave);
-                        if (encryptedSettings) {
-                            localStorage.setItem('lotterySettings_encrypted', encryptedSettings);
-                        }
-                        App.closeModal(); // App.closeModal を使用
+                        if (encryptedSettings) localStorage.setItem('lotterySettings_encrypted', encryptedSettings);
+                        App.closeModal();
                     });
-                    $('#lottery-settings-cancel').addEventListener('click', App.closeModal); // App.closeModal を使用
+                    $('#lottery-settings-cancel').addEventListener('click', App.closeModal);
 
                     $('#lottery-help-btn').addEventListener('click', () => {
+                        // ヘルプを開くときに状態を保存して開き直すロジック（省略せず記述）
                         const capturedState = {
-                            mood: $('#lottery-mood').value, genres: new Set($('#lottery-genre').value === 'all' ? [] : [$('#lottery-genre').value]),
+                            mood: $('#lottery-mood').value, 
+                            genres: getSelectedSet('lottery-genre'), sites: getSelectedSet('lottery-site'),
                             priority: $('#lottery-priority').value, method: $('#lottery-method').value,
                             andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
                             unratedOrUntaggedOnly: $('#lottery-unrated').checked,
                             dateFilter: { mode: $(`input[name="date-filter-mode-lottery"]:checked`).value, date: App.getDateInputValue(`date-filter-specific-date-lottery`), startDate: App.getDateInputValue(`date-filter-start-date-lottery`), endDate: App.getDateInputValue(`date-filter-end-date-lottery`) }
                         };
-                        AppState.modalStateStack.push(() => App.openLotterySettingsModal(capturedState)); // AppState.modalStateStack, App.openLotterySettingsModal を使用
-                        App.openHelpModal(); // App.openHelpModal を使用
+                        AppState.modalStateStack.push(() => App.openLotterySettingsModal(capturedState));
+                        App.openHelpModal();
                     });
                     updatePreview();
                 });
