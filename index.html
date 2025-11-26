@@ -1252,7 +1252,9 @@
                     AppState.searchHistory = savedHistory.slice(0, AppState.maxSearchHistory);
                 }
 
-                // 5. カスタムプリセットの復元 (これが消えていた原因)
+                // 5. カスタムプリセットの復元
+                const savedPresets = App.decryptData(localStorage.getItem('customPresets_encrypted')); // ★この行を追加
+                
                 if (savedPresets && Array.isArray(savedPresets)) {
                     AppState.customPresets = savedPresets.map(p => ({
                         ...p,
