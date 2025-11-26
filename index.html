@@ -643,7 +643,6 @@
                 AppState.itemsPerPage = parseInt(localStorage.getItem('itemsPerPage') || '20', 10);
 
                 // ★ 修正: localStorageの読み込みを復号に変更 (方針3) ★
-                const savedListFilters = App.decryptData(localStorage.getItem('listFilters_encrypted'));
                 if (savedListFilters) {
                     // Setオブジェクトを復元
                     savedListFilters.genres = new Set(savedListFilters.genres || []);
@@ -655,12 +654,10 @@
                     AppState.listFilters = savedListFilters;
                 }
 
-                const savedSortState = App.decryptData(localStorage.getItem('sortState_encrypted'));
                 if (savedSortState) {
                     AppState.sortState = savedSortState;
                 }
 
-                const savedLotterySettings = App.decryptData(localStorage.getItem('lotterySettings_encrypted'));
                 if (savedLotterySettings) {
                     // Setオブジェクトを復元
                     savedLotterySettings.genres = new Set(savedLotterySettings.genres || []);
@@ -688,7 +685,6 @@
                     }));
                 }
 
-                const savedHistory = App.decryptData(localStorage.getItem('searchHistory_encrypted'));
                 if (Array.isArray(savedHistory) && savedHistory.every(item => typeof item === 'string')) {
                     AppState.searchHistory = savedHistory.slice(0, AppState.maxSearchHistory);
                 } else {
@@ -1232,6 +1228,8 @@
                         if (!AppState.loadingStatus.auth) {
                             AppState.currentUser = user;
                             AppState.loadingStatus.auth = true;
+
+                            App.loadUserSettings();
                             
                             clearTimeout(AppState.stallTimeout);
                             AppState.stallTimeout = setTimeout(() => App.handleLoadingTimeout(true), 15000);
@@ -1260,6 +1258,68 @@
                 App.updateSyncIdHistory(currentSyncId);
             },
             
+            // ★追加: ログイン後に設定を読み込む関数
+            loadUserSettings: () => {
+                // 1. サイトフィルタなどの復元 (listFilters)
+                const savedListFilters = App.decryptData(localStorage.getItem('listFilters_encrypted'));
+                if (savedListFilters) {
+                    savedListFilters.genres = new Set(savedListFilters.genres || []);
+                    savedListFilters.sites = new Set(savedListFilters.sites || []);
+                    savedListFilters.andTagIds = new Set(savedListFilters.andTagIds || []);
+                    savedListFilters.orTagIds = new Set(savedListFilters.orTagIds || []);
+                    savedListFilters.notTagIds = new Set(savedListFilters.notTagIds || []);
+                    savedListFilters.dateFilter = savedListFilters.dateFilter || AppState.defaultDateFilter();
+                    AppState.listFilters = savedListFilters;
+                }
+
+                // 2. ソート順の復元
+                const savedSortState = App.decryptData(localStorage.getItem('sortState_encrypted'));
+                if (savedSortState) {
+                    AppState.sortState = savedSortState;
+                    // UIへの反映
+                    const sortOptions = App.getSortOptions();
+                    const currentSortOption = sortOptions.find(opt => opt.by === AppState.sortState.by && opt.order === AppState.sortState.order);
+                    if (currentSortOption && AppState.ui.sortStateLabel) { 
+                        AppState.ui.sortStateLabel.textContent = `並び替え: ${currentSortOption.label}`;
+                    }
+                }
+
+                // 3. 抽選設定の復元
+                const savedLotterySettings = App.decryptData(localStorage.getItem('lotterySettings_encrypted'));
+                if (savedLotterySettings) {
+                    savedLotterySettings.genres = new Set(savedLotterySettings.genres || []);
+                    savedLotterySettings.sites = new Set(savedLotterySettings.sites || []);
+                    savedLotterySettings.andTagIds = new Set(savedLotterySettings.andTagIds || []);
+                    savedLotterySettings.orTagIds = new Set(savedLotterySettings.orTagIds || []);
+                    savedLotterySettings.notTagIds = new Set(savedLotterySettings.notTagIds || []);
+                    savedLotterySettings.dateFilter = savedLotterySettings.dateFilter || AppState.defaultDateFilter();
+                    AppState.lotterySettings = savedLotterySettings;
+                }
+
+                // 4. 検索履歴の復元
+                const savedHistory = App.decryptData(localStorage.getItem('searchHistory_encrypted'));
+                if (Array.isArray(savedHistory) && savedHistory.every(item => typeof item === 'string')) {
+                    AppState.searchHistory = savedHistory.slice(0, AppState.maxSearchHistory);
+                }
+
+                // 5. カスタムプリセットの復元 (これが消えていた原因)
+                if (savedPresets && Array.isArray(savedPresets)) {
+                    AppState.customPresets = savedPresets.map(p => ({
+                        ...p,
+                        settings: {
+                            ...p.settings,
+                            genres: new Set(p.settings.genres || []),
+                            sites: new Set(p.settings.sites || []),
+                            andTagIds: new Set(p.settings.andTagIds || []),
+                            orTagIds: new Set(p.settings.orTagIds || []),
+                            notTagIds: new Set(p.settings.notTagIds || [])
+                        }
+                    }));
+                }
+                
+                console.log("User settings loaded.");
+            },
+
             loadDataSet: (newSyncId) => {
                 // 既に選択中のIDを再度読み込もうとした場合、リフレッシュとして処理を続行
                 if (AppState.syncId === newSyncId && AppState.isLoadComplete) {
