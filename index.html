@@ -201,15 +201,6 @@
                                 <button id="loadSyncIdBtn" class="px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-700 text-white rounded-l-none flex-shrink-0">読込</button>
                             </div>
                             
-                            <div class="pt-4 mt-2 border-t border-gray-700">
-                                <h3 class="text-xs font-bold text-gray-500 mb-2">メンテナンス</h3>
-                                <div class="space-y-2">
-                                    <button id="migrateToStorageBtn" class="w-full text-sm px-4 py-3 bg-amber-600 hover:bg-amber-700 rounded-lg font-bold transition-colors text-black">
-                                        <i class="fas fa-images mr-2"></i>画像をStorageへ移行
-                                    </button>
-                                    <div id="migration-progress" class="hidden text-xs text-center text-amber-400 font-mono"></div>
-                                </div>
-                            </div>
                             <div class="flex space-x-2 pt-2 border-t border-gray-700 mt-2">
                             <div class="flex space-x-2 pt-2">
                                 <button id="clearHistoryBtn" class="w-full text-sm px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors">履歴クリア</button>
@@ -319,6 +310,21 @@
                 <!-- Work List Panel -->
                 <div>
                     <div class="flex justify-between items-center mb-4 px-2">
+                        <div id="pagination-controls-top" class="hidden flex justify-end items-center gap-4 mb-4 px-2">
+                            <div class="flex items-center space-x-2 text-sm">
+                                <label class="text-gray-400">表示:</label>
+                                <select class="itemsPerPageSelect bg-gray-700 border border-gray-600 rounded-md p-1 focus:outline-none">
+                                    <option value="20">20</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button class="prevPageBtn px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed" disabled><i class="fas fa-chevron-left"></i></button>
+                                <span class="pageInfo text-sm text-gray-400 px-1">1 / 1</span>
+                                <button class="nextPageBtn px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed" disabled><i class="fas fa-chevron-right"></i></button>
+                            </div>
+                        </div>
                         <h2 class="text-2xl font-bold">登録作品リスト</h2>
                         <div class="flex space-x-1 bg-gray-700 p-1 rounded-lg">
                             <button id="view-grid-btn" aria-label="グリッド表示" class="view-btn p-2 leading-none"><i class="fas fa-th-large"></i></button>
@@ -1438,51 +1444,6 @@
                 return await getDownloadURL(storageRef);
             },
 
-            // ★追加: データ移行処理 (Migration)
-            handleMigration: async () => {
-                if (!await App.showConfirm("画像の移行", "古い形式の画像をFirebase Storageへ移動します。<br>この処理には時間がかかる場合があります。<br>実行しますか？")) return;
-                
-                const btn = AppState.ui.migrateToStorageBtn;
-                const progressEl = AppState.ui.migrationProgress;
-                
-                btn.disabled = true;
-                btn.classList.add('opacity-50');
-                progressEl.classList.remove('hidden');
-                progressEl.textContent = 'データをスキャン中...';
-
-                try {
-                    let count = 0;
-                    const worksToMigrate = AppState.works.filter(w => w.imageUrl && w.imageUrl.startsWith('data:image'));
-                    const total = worksToMigrate.length;
-
-                    if (total === 0) {
-                        App.showToast("移行が必要な画像はありませんでした。");
-                    } else {
-                        for (const work of worksToMigrate) {
-                            count++;
-                            progressEl.textContent = `移行中: ${count} / ${total} 件完了...`;
-                            
-                            // 1. Storageへアップロード
-                            const newUrl = await App.uploadImageToStorage(work.imageUrl, work.id);
-                            
-                            // 2. Firestoreのデータを更新
-                            if (newUrl) {
-                                await App.updateWork(work.id, { imageUrl: newUrl });
-                            }
-                        }
-                        App.showToast("すべての画像の移行が完了しました！", "success");
-                    }
-                } catch (error) {
-                    console.error("Migration error:", error);
-                    App.showToast("移行中にエラーが発生しました。", "error");
-                } finally {
-                    btn.disabled = false;
-                    btn.classList.remove('opacity-50');
-                    progressEl.textContent = '処理完了';
-                    setTimeout(() => progressEl.classList.add('hidden'), 3000);
-                }
-            },
-            
             // --- CRUD Operations ---
             handleAddWork: async (e) => {
                 e.preventDefault();
@@ -1495,7 +1456,6 @@
                 if (!name || !registeredAtStr) return App.showToast("作品名と登録日は必須です。");
                 if (!App.isValidDate(registeredAtStr)) return App.showToast("登録日の形式が正しくありません (YYYY/MM/DD)。");
                 
-                // 重複チェック
                 const errorEl = $('#addWorkError');
                 if (AppState.works.some(w => w.name.toLowerCase() === name.toLowerCase())) {
                     errorEl.textContent = `「${name}」は既に登録されています。`;
@@ -1504,18 +1464,18 @@
                     return;
                 }
 
-                // ★変更点: まずドキュメントIDを確保してから画像をアップロード
                 try {
-                    // 1. 仮のデータを作成（ID生成のため）
                     const worksRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`);
-                    const newDocRef = doc(worksRef); // 自動IDを生成
+                    const newDocRef = doc(worksRef); 
                     
                     let imageUrl = null;
+                    let imageFileName = null; // ★追加: ファイル名用変数
+
                     if (form.elements.workImage.files[0]) {
                         try {
-                            // 画像をリサイズ＆Base64化
-                            const tempBase64 = await App.processImage(form.elements.workImage.files[0]);
-                            // ★StorageへアップロードしてURLを取得
+                            const file = form.elements.workImage.files[0];
+                            imageFileName = file.name; // ★追加: ファイル名を取得
+                            const tempBase64 = await App.processImage(file);
                             imageUrl = await App.uploadImageToStorage(tempBase64, newDocRef.id);
                         } catch (error) { return App.showToast(error.message); }
                     }
@@ -1526,18 +1486,24 @@
                         genre: form.elements.workGenre.value,
                         sourceUrl: url,
                         registeredAt: Timestamp.fromDate(new Date(registeredAtStr.replace(/\//g, '-'))),
-                        imageUrl, // URLまたはnull
+                        imageUrl, 
+                        imageFileName, // ★追加: 保存対象に含める
                         selectionCount: 0, rating: 0, tagIds: [], lastSelectedAt: null,
                         selectionHistory: []
                     };
 
-                    // 2. データを保存 (addDocではなくsetDocを使う)
                     await setDoc(newDocRef, newWork);
                     
                     App.showToast(`"${name}" を登録しました。`);
-                    form.reset();
+                    
+                    // フォームのリセット処理（日付以外）
+                    form.elements.workName.value = '';
+                    form.elements.workUrl.value = '';
+                    form.elements.workImage.value = '';
                     $('#imagePreview').classList.add('hidden');
-                    $('#workRegisteredAt').value = App.formatDateForInput(new Date());
+                    $('#imagePreview').src = '';
+                    
+                    // ★変更: 日付のリセット行を削除しました (入力した日付が維持されます)
 
                 } catch (error) {
                     if (AppState.isDebugMode) console.error("Error adding work:", error);
@@ -1763,28 +1729,23 @@
 
                 ui.workListMessage.classList.add('hidden');
                 ui.workListEl.classList.remove('hidden');
-                ui.paginationControls.classList.remove('hidden'); // ページネーションを表示
+                // 上下のページネーションを表示・更新
+                const topPagination = $('#pagination-controls-top');
+                const bottomPagination = $('#pagination-controls');
+                
+                topPagination.classList.remove('hidden');
+                bottomPagination.classList.remove('hidden');
 
-                // リストの内容を描画
-                const fragment = document.createDocumentFragment();
-                worksToShow.forEach(work => {
-                    const elementHtml = listViewMode === 'grid' ? App.renderWorkCard(work) : App.renderWorkListItem(work);
-                    // 文字列からDOM要素を作成 (一時的なdivを経由)
-                    const tempDiv = document.createElement('div');
-                    tempDiv.innerHTML = elementHtml.trim(); // trim() で前後の空白を除去
-                    // 最初の要素 (work card or list item) を fragment に追加
-                    if (tempDiv.firstElementChild) {
-                        fragment.appendChild(tempDiv.firstElementChild);
-                    }
-                });
-                // 既存の内容をクリアしてから、fragment を一括で追加
-                ui.workListEl.innerHTML = '';
-                ui.workListEl.appendChild(fragment);
-                // ページネーションUIの更新
-                ui.pageInfo.textContent = `ページ ${AppState.currentPage} / ${totalPages}`;
-                ui.prevPageBtn.disabled = AppState.currentPage === 1;
-                ui.nextPageBtn.disabled = AppState.currentPage === totalPages;
-                ui.itemsPerPageSelect.value = itemsPerPage; // セレクトボックスの値を現在の設定に合わせる
+                const updatePaginationUI = (container) => {
+                    if (!container) return;
+                    container.querySelector('.pageInfo').textContent = `ページ ${AppState.currentPage} / ${totalPages}`;
+                    container.querySelector('.prevPageBtn').disabled = AppState.currentPage === 1;
+                    container.querySelector('.nextPageBtn').disabled = AppState.currentPage === totalPages;
+                    container.querySelector('.itemsPerPageSelect').value = itemsPerPage;
+                };
+
+                updatePaginationUI(topPagination);
+                updatePaginationUI(bottomPagination);
             },
 
             renderWorkCard: (work) => {
@@ -2306,9 +2267,6 @@
                     }
                 });
                 
-                // ★追加: 移行ボタンのイベント
-                ui.migrateToStorageBtn.addEventListener('click', App.handleMigration);
-                
                 ui.syncIdHistoryEl.addEventListener('change', e => e.target.value && App.loadDataSet(e.target.value));
                 
                 ui.clearHistoryBtn.addEventListener('click', async () => {
@@ -2567,30 +2525,34 @@
                     App.showToast("新しい画像が適用されます。保存ボタンで確定してください。", "success");
                 });
 
-                ui.prevPageBtn.addEventListener('click', () => {
-                    if (AppState.currentPage > 1) {
-                        AppState.currentPage--;
+                // ページネーション (上下共通)
+                const setupPaginationListeners = (container) => {
+                    if (!container) return;
+                    container.querySelector('.prevPageBtn').addEventListener('click', () => {
+                        if (AppState.currentPage > 1) {
+                            AppState.currentPage--;
+                            App.renderWorkList();
+                            $('#pagination-controls-top').scrollIntoView({ behavior: 'smooth' });
+                        }
+                    });
+                    container.querySelector('.nextPageBtn').addEventListener('click', () => {
+                        const totalPages = Math.max(1, Math.ceil(App.getFilteredAndSortedWorks().length / AppState.itemsPerPage));
+                        if (AppState.currentPage < totalPages) {
+                            AppState.currentPage++;
+                            App.renderWorkList();
+                            $('#pagination-controls-top').scrollIntoView({ behavior: 'smooth' });
+                        }
+                    });
+                    container.querySelector('.itemsPerPageSelect').addEventListener('change', (e) => {
+                        AppState.itemsPerPage = parseInt(e.target.value, 10);
+                        AppState.currentPage = 1;
                         App.renderWorkList();
-                        ui.workListEl.scrollIntoView({ behavior: 'smooth' }); // リストの先頭にスクロール
-                    }
-                });
+                        localStorage.setItem('itemsPerPage', AppState.itemsPerPage);
+                    });
+                };
 
-                ui.nextPageBtn.addEventListener('click', () => {
-                    const totalPages = Math.max(1, Math.ceil(App.getFilteredAndSortedWorks().length / AppState.itemsPerPage));
-                    if (AppState.currentPage < totalPages) {
-                        AppState.currentPage++;
-                        App.renderWorkList();
-                        ui.workListEl.scrollIntoView({ behavior: 'smooth' }); // リストの先頭にスクロール
-                    }
-                });
-
-                ui.itemsPerPageSelect.addEventListener('change', (e) => {
-                    AppState.itemsPerPage = parseInt(e.target.value, 10);
-                    AppState.currentPage = 1; // 件数を変えたら1ページ目に戻る
-                    App.renderWorkList();
-                    // (Grok案: 設定の保存) localStorageにも保存
-                    localStorage.setItem('itemsPerPage', AppState.itemsPerPage);
-                });
+                setupPaginationListeners($('#pagination-controls-top'));
+                setupPaginationListeners($('#pagination-controls'));
                 const activateLiteMode = () => {
                     AppState.isLiteMode = true;
                     localStorage.setItem('isLiteMode', 'true');
@@ -2730,39 +2692,34 @@
                 const work = AppState.works.find(w => w.id === workId);
                 if (!work) return;
                 
-                // フォームの内部状態を管理する変数をここで定義
                 let currentRating = tempState?.rating ?? (work.rating || 0);
                 let currentTagIds = tempState?.tagIds ?? new Set(work.tagIds || []);
-                let currentMemo = tempState?.memo ?? (work.memo || ''); // ← 修正: メモ用の変数を追加
+                let currentMemo = tempState?.memo ?? (work.memo || '');
 
                 const safeWorkName = App.escapeHTML(work.name);
                 const safeWorkUrl = App.escapeHTML(work.sourceUrl || '');
+                // ★追加: 保存されているファイル名を取得 (なければ空文字)
+                const storedFileName = work.imageFileName ? App.escapeHTML(work.imageFileName) : '';
+                const fileNameDisplay = storedFileName || 'ファイルが選択されていません。';
 
                 const pool = App.getLotteryPool();
                 const thisWorkInPool = pool.find(w => w.id === workId);
                 const totalWeight = pool.reduce((sum, w) => sum + w.weight, 0);
-                let probabilityText;
-                if (thisWorkInPool) {
-                    const probability = totalWeight > 0 ? (thisWorkInPool.weight / totalWeight * 100).toFixed(2) : '0.00';
-                    probabilityText = `<span class="font-bold text-sky-400 text-base">${probability}%</span>`;
-                } else {
-                     probabilityText = `<span class="font-bold text-gray-500">対象外</span>`;
-                }
+                let probabilityText = thisWorkInPool 
+                    ? `<span class="font-bold text-sky-400 text-base">${(totalWeight > 0 ? (thisWorkInPool.weight / totalWeight * 100).toFixed(2) : '0.00')}%</span>`
+                    : `<span class="font-bold text-gray-500">対象外</span>`;
 
                 const registeredAtStr = work.registeredAt ? App.formatDate(work.registeredAt, false) : App.formatDateForInput(new Date());
                 
-                // --- ▼ 修正: content HTML を PC/スマホ対応の2カラムレイアウトに大幅変更 ▼ ---
                 const content = `
                     <form id="editWorkForm">
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-
                             <div class="md:col-span-2 space-y-4">
                                 <div>
                                     <label for="editWorkName" class="block text-sm font-medium text-gray-400 mb-1">作品名</label>
                                     <div class="flex items-center gap-2">
                                         <div class="relative flex-grow">
-                                            <input type="text" id="editWorkName" value="${safeWorkName}" class="w-full bg-gray-700 p-2 rounded-lg pr-10" required> <button type="button" id="clear-editWorkName" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"> <i class="fas fa-times-circle"></i>
-                                            </button>
+                                            <input type="text" id="editWorkName" value="${safeWorkName}" class="w-full bg-gray-700 p-2 rounded-lg pr-10" required> <button type="button" id="clear-editWorkName" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"> <i class="fas fa-times-circle"></i></button>
                                         </div>
                                         <button type="button" id="copy-edit-title-btn" class="flex-shrink-0 w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" title="コピー"><i class="fas fa-copy"></i></button>
                                     </div>
@@ -2771,8 +2728,7 @@
                                     <label for="editWorkUrl" class="block text-sm font-medium text-gray-400 mb-1">作品URL</label>
                                     <div class="flex items-center gap-2">
                                         <div class="relative flex-grow">
-                                            <input type="url" id="editWorkUrl" value="${safeWorkUrl}" placeholder="https://..." class="w-full bg-gray-700 p-2 rounded-lg pr-10"> <button type="button" id="clear-editWorkUrl" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"> <i class="fas fa-times-circle"></i>
-                                            </button>
+                                            <input type="url" id="editWorkUrl" value="${safeWorkUrl}" placeholder="https://..." class="w-full bg-gray-700 p-2 rounded-lg pr-10"> <button type="button" id="clear-editWorkUrl" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"> <i class="fas fa-times-circle"></i></button>
                                         </div>
                                         <button type="button" id="openWorkUrlBtn" class="flex-shrink-0 w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" title="URLを開く" ${!safeWorkUrl ? 'disabled' : ''}><i class="fas fa-external-link-alt"></i></button>
                                     </div>
@@ -2791,57 +2747,28 @@
                                         ${App.createDateInputHTML('editWorkRegisteredAt', registeredAtStr)}
                                     </div>
                                 </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-400 mb-1">評価 (現在: ${currentRating} / 5)</label>
-                                    <div class="flex items-center space-x-2 text-2xl" id="editWorkRating"></div>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-400 mb-1">タグ</label>
-                                    <div id="editWorkTags" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] mb-2"></div>
-                                    <button type="button" id="editWorkAssignTagsBtn" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグを割り当て/編集</button>
-                                </div>
-
-                                <div class="space-y-2 md:hidden">
-                                    <label class="block text-sm font-medium text-gray-400">メモ</label>
-                                    <div id="memo-preview-display" class="w-full p-3 bg-gray-900 rounded-lg text-sm text-gray-400 min-h-[44px] italic break-words line-clamp-3">
-                                        ${currentMemo || 'メモなし'}
-                                    </div>
-                                    <button type="button" id="open-memo-modal-btn" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">メモを編集</button>
-                                </div>
+                                <div><label class="block text-sm font-medium text-gray-400 mb-1">評価 (現在: ${currentRating} / 5)</label><div class="flex items-center space-x-2 text-2xl" id="editWorkRating"></div></div>
+                                <div><label class="block text-sm font-medium text-gray-400 mb-1">タグ</label><div id="editWorkTags" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] mb-2"></div><button type="button" id="editWorkAssignTagsBtn" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグを割り当て/編集</button></div>
+                                <div class="space-y-2 md:hidden"><label class="block text-sm font-medium text-gray-400">メモ</label><div id="memo-preview-display" class="w-full p-3 bg-gray-900 rounded-lg text-sm text-gray-400 min-h-[44px] italic break-words line-clamp-3">${currentMemo || 'メモなし'}</div><button type="button" id="open-memo-modal-btn" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">メモを編集</button></div>
                             </div>
                             <div class="md:col-span-1 space-y-6">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-400 mb-2">画像</label>
                                     <div class="relative w-full h-32 bg-gray-700 rounded-lg flex items-center justify-center mb-2">
                                         <img id="edit-current-image-preview" src="${work.imageUrl || ''}" class="w-full h-full object-contain rounded-lg ${!work.imageUrl ? 'hidden' : ''}">
-                                        <div id="edit-no-image-placeholder" class="text-gray-500 ${work.imageUrl ? 'hidden' : ''}">
-                                            <i class="fas fa-image fa-3x"></i>
-                                        </div>
-                                        <button type="button" id="edit-image-delete-btn" class="absolute top-2 right-2 btn-icon bg-red-600 hover:bg-red-700 w-9 h-9 ${!work.imageUrl ? 'hidden' : ''}" title="画像を削除">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
+                                        <div id="edit-no-image-placeholder" class="text-gray-500 ${work.imageUrl ? 'hidden' : ''}"><i class="fas fa-image fa-3x"></i></div>
+                                        <button type="button" id="edit-image-delete-btn" class="absolute top-2 right-2 btn-icon bg-red-600 hover:bg-red-700 w-9 h-9 ${!work.imageUrl ? 'hidden' : ''}" title="画像を削除"><i class="fas fa-trash"></i></button>
                                     </div>
                                     <div class="flex items-center">
-                                        <label for="edit-image-upload" class="flex-shrink-0 cursor-pointer text-sm font-semibold px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
-                                            参照...
-                                        </label>
-                                        <span id="edit-image-filename" class="ml-3 text-sm text-gray-400 break-words min-w-0">ファイルが選択されていません。</span>
+                                        <label for="edit-image-upload" class="flex-shrink-0 cursor-pointer text-sm font-semibold px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">参照...</label>
+                                        <span id="edit-image-filename" class="ml-3 text-sm text-gray-400 break-words min-w-0 truncate">${fileNameDisplay}</span>
                                         <input type="file" id="edit-image-upload" accept="image/jpeg,image/png,image/webp" class="hidden">
                                     </div>
                                 </div>
-                                
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-400 mb-1">現在の抽選確率</label>
-                                    <p class="text-sm text-gray-300">${probabilityText}</p>
-                                </div>
-
-                                <div class="hidden md:block space-y-2">
-                                    <label for="editWorkMemo" class="block text-sm font-medium text-gray-400">メモ欄</label>
-                                    <textarea id="editWorkMemo" rows="10" class="w-full bg-gray-700 p-2 rounded-lg text-sm" placeholder="感想やメモ...">${currentMemo}</textarea>
-                                </div>
+                                <div><label class="block text-sm font-medium text-gray-400 mb-1">現在の抽選確率</label><p class="text-sm text-gray-300">${probabilityText}</p></div>
+                                <div class="hidden md:block space-y-2"><label for="editWorkMemo" class="block text-sm font-medium text-gray-400">メモ欄</label><textarea id="editWorkMemo" rows="10" class="w-full bg-gray-700 p-2 rounded-lg text-sm" placeholder="感想やメモ...">${currentMemo}</textarea></div>
                             </div>
-                            </div>
-                        
+                        </div>
                         <div class="pt-6 mt-6 border-t border-gray-700 flex justify-end gap-3 flex-wrap sm:flex-nowrap">
                             <div class="flex space-x-3 w-full sm:w-auto">
                                 <button type="button" id="edit-cancel-btn" class="flex-1 sm:flex-none px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
@@ -2850,254 +2777,99 @@
                         </div>
                     </form>
                 `;
-                // --- ▲ content HTML 修正ここまで ▲ ---
 
-                // App.openModal を呼び出す「前」にヘッダーボタンのHTMLを定義
-                const headerSearchBtn = `<button type="button" id="edit-external-search-header" class="text-sm py-1 rounded-lg flex items-center transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700 text-white px-2 md:px-3">
-                                            <i class="fas fa-globe-asia md:mr-2"></i>
-                                            <span class="hidden md:inline">外部サイト検索</span>
-                                        </button>`;
+                const headerSearchBtn = `<button type="button" id="edit-external-search-header" class="text-sm py-1 rounded-lg flex items-center transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700 text-white px-2 md:px-3"><i class="fas fa-globe-asia md:mr-2"></i><span class="hidden md:inline">外部サイト検索</span></button>`;
 
                 App.openModal(`「${work.name}」を編集`, content, () => {
-                    // --- 既存のUI要素の取得 ---
                     const ratingStars = $('#editWorkRating'), tagsContainer = $('#editWorkTags');
-                    const workNameInput = $('#editWorkName');
-                    const workUrlInput = $('#editWorkUrl');
+                    const workNameInput = $('#editWorkName'), workUrlInput = $('#editWorkUrl');
                     const editImageUpload = $('#edit-image-upload');
-
-                    App.setupInputClearButton(workNameInput, $('#clear-editWorkName'));
-                    App.setupInputClearButton(workUrlInput, $('#clear-editWorkUrl'));
-
                     const editCurrentImagePreview = $('#edit-current-image-preview');
                     const editImageDeleteBtn = $('#edit-image-delete-btn');
                     const editNoImagePlaceholder = $('#edit-no-image-placeholder');
                     const editImageFilename = $('#edit-image-filename');
-                    
-                    // --- 修正: メモ関連のUI要素を取得 ---
-                    const pcMemoTextarea = $('#editWorkMemo');
-                    const smMemoPreview = $('#memo-preview-display');
-                    const smMemoButton = $('#open-memo-modal-btn');
+                    const pcMemoTextarea = $('#editWorkMemo'), smMemoButton = $('#open-memo-modal-btn');
+
+                    App.setupInputClearButton(workNameInput, $('#clear-editWorkName'));
+                    App.setupInputClearButton(workUrlInput, $('#clear-editWorkUrl'));
 
                     AppState.tempNewImageUrl = null;
+                    AppState.tempNewImageFileName = null; // ★追加: 新しいファイル名の一時保存
                     AppState.deleteImageFlag = false;
 
-                    // --- 修正: PC版メモ欄の入力イベント ---
-                    if (pcMemoTextarea) {
-                        pcMemoTextarea.addEventListener('input', () => {
-                            currentMemo = pcMemoTextarea.value; // PCの入力を内部状態に反映
-                        });
-                    }
+                    if (pcMemoTextarea) pcMemoTextarea.addEventListener('input', () => { currentMemo = pcMemoTextarea.value; });
+                    if (smMemoButton) smMemoButton.addEventListener('click', () => { App.openMemoModal(workId, currentMemo, currentRating, currentTagIds, (newMemo) => { if (newMemo !== null) { currentMemo = newMemo; App.openEditModal(workId, { rating: currentRating, tagIds: currentTagIds, memo: currentMemo }); } }); });
 
-                    // --- 修正: スマホ版メモボタンのクリックイベント ---
-                    // --- 修正: スマホ版メモボタンのクリックイベント ---
-                    if (smMemoButton) {
-                        smMemoButton.addEventListener('click', () => {
-                            App.openMemoModal(workId, currentMemo, currentRating, currentTagIds, (newMemoText) => {
-                                // openMemoModal が閉じたときのコールバック
-                                if (newMemoText !== null) {
-                                    currentMemo = newMemoText; // 内部状態を更新
-                                    // プレビューの更新は openEditModal が自動で行う
-                                }
-                                
-                                // ★ 修正: App.closeModal() の代わりに、openEditModal を再呼び出しする
-                                // (openTagModal と同じ方式)
-                                App.openEditModal(workId, { rating: currentRating, tagIds: currentTagIds, memo: currentMemo });
-                            });
-                        });
-                    }
-
-
-                    // --- 画像削除ボタンのロジック (ファイル名テキスト更新を追加) ---
                     editImageDeleteBtn.addEventListener('click', () => {
                         if (confirm('本当に画像を削除しますか？')) {
-                            editCurrentImagePreview.src = '';
-                            editCurrentImagePreview.classList.add('hidden');
-                            editImageDeleteBtn.classList.add('hidden');
-                            editNoImagePlaceholder.classList.remove('hidden');
-                            AppState.deleteImageFlag = true;
-                            AppState.tempNewImageUrl = null;
-                            editImageUpload.value = '';
-                            if (editImageFilename) editImageFilename.textContent = 'ファイルが選択されていません。';
-                            App.showToast("画像を削除候補にしました。保存で確定されます。", "info");
+                            editCurrentImagePreview.src = ''; editCurrentImagePreview.classList.add('hidden'); editImageDeleteBtn.classList.add('hidden'); editNoImagePlaceholder.classList.remove('hidden');
+                            AppState.deleteImageFlag = true; AppState.tempNewImageUrl = null; AppState.tempNewImageFileName = null; editImageUpload.value = '';
+                            if (editImageFilename) editImageFilename.textContent = '削除予定';
+                            App.showToast("画像を削除候補にしました。", "info");
                         }
                     });
 
-                    // --- 画像アップロードのロジック (ファイル名テキスト更新を追加) ---
                     editImageUpload.addEventListener('change', async (e) => {
                         const file = e.target.files[0];
-                        if (!file) {
-                            AppState.tempNewImageUrl = null;
-                            if (editImageFilename) editImageFilename.textContent = 'ファイルが選択されていません。';
-                            return;
-                        }
-                        
-                        if (editImageFilename) editImageFilename.textContent = file.name;
+                        if (!file) return;
 
+                        // ★追加: 同じファイル名かどうかのチェック
+                        if (storedFileName && file.name === storedFileName) {
+                            if (!confirm(`「${file.name}」は現在保存されている画像と同じファイル名です。\n本当にこの画像で更新しますか？`)) {
+                                editImageUpload.value = '';
+                                return;
+                            }
+                        }
+
+                        if (editImageFilename) editImageFilename.textContent = file.name;
+                        
                         try {
                             const newUrl = await App.processImage(file);
                             App.openImageCompareModal(work.imageUrl || '', newUrl);
-                            AppState.tempNewImageUrl = newUrl; // 一時保存
+                            AppState.tempNewImageUrl = newUrl; 
+                            AppState.tempNewImageFileName = file.name; // ★追加: ファイル名保持
                         } catch (error) {
-                            App.showToast(error.message || "画像処理に失敗しました。", "error");
-                            editImageUpload.value = '';
-                            AppState.tempNewImageUrl = null;
-                            if (editImageFilename) editImageFilename.textContent = 'ファイルが選択されていません。';
+                            App.showToast(error.message, "error");
+                            editImageUpload.value = ''; AppState.tempNewImageUrl = null;
+                            if (editImageFilename) editImageFilename.textContent = storedFileName || 'ファイルが選択されていません。';
                         }
                     });
 
-                    // --- URL開く/コピーボタンのロジック (変更なし) ---
                     const openUrlBtn = $('#openWorkUrlBtn');
-                    workUrlInput.addEventListener('input', () => {
-                        openUrlBtn.disabled = !workUrlInput.value.trim();
-                    });
-                    openUrlBtn.addEventListener('click', () => {
-                        const url = workUrlInput.value.trim();
-                        if (url) window.open(url, '_blank', 'noopener,noreferrer');
-                    });
-                    $('#copy-edit-title-btn').addEventListener('click', () => {
-                        navigator.clipboard.writeText(workNameInput.value).then(() => {
-                            App.showToast(`「${workNameInput.value}」をコピーしました。`);
-                        });
-                    });
+                    workUrlInput.addEventListener('input', () => { openUrlBtn.disabled = !workUrlInput.value.trim(); });
+                    openUrlBtn.addEventListener('click', () => { const url = workUrlInput.value.trim(); if (url) window.open(url, '_blank', 'noopener,noreferrer'); });
+                    $('#copy-edit-title-btn').addEventListener('click', () => navigator.clipboard.writeText(workNameInput.value).then(() => App.showToast(`「${workNameInput.value}」をコピーしました。`)));
 
-                    // --- getFormState / checkModalDirtyState に 'memo' を追加 ---
-                    const getFormState = () => {
-                        const nameInput = $('#editWorkName');
-                        if (!nameInput) return null;
-                        const registeredAtInput = $('#editWorkRegisteredAt');
-                        const urlInput = $('#editWorkUrl');
-                        const genreSelect = $('#editWorkGenre');
-                        
-                        const registeredAtStr = registeredAtInput ? App.getDateInputValue('editWorkRegisteredAt') : '';
-                        const urlValue = urlInput ? urlInput.value.trim() : '';
-                        const genreValue = genreSelect ? genreSelect.value : '';
+                    const renderStars = r => { if(!ratingStars)return; ratingStars.innerHTML=''; for(let i=1;i<=5;i++){ const s=document.createElement('i'); s.classList.add('fa-star','cursor-pointer'); s.dataset.value=i; if(r>=i)s.classList.add('fas','text-yellow-400'); else if(r===i-0.5)s.classList.add('fas','fa-star-half-alt','text-yellow-400'); else s.classList.add('far','text-gray-500'); ratingStars.appendChild(s); }};
+                    const renderTags = ids => { if(tagsContainer){ const objs=App.getTagObjects(ids); tagsContainer.innerHTML=objs.length>0?objs.map(t=>`<span class="px-2 py-1 rounded font-semibold text-xs" style="background-color:${t.color}; color:${App.getContrastColor(t.color)}">${t.name}</span>`).join(''):`<span class="text-xs text-gray-500">タグなし</span>`; }};
+                    renderStars(currentRating); renderTags(currentTagIds);
 
-                        return {
-                            name: nameInput.value.trim(),
-                            url: urlValue,
-                            genre: genreValue,
-                            registeredAt: registeredAtStr,
-                            rating: currentRating,
-                            tagIds: JSON.stringify([...currentTagIds].sort()),
-                            memo: currentMemo
-                        };
-                    };
-
-                    const initialState = getFormState();
-
-                    AppState.checkModalDirtyState = () => {
-                        const currentState = getFormState(); // ← 修正: Ztate -> State
-                        if (initialState === null || currentState === null) return false;
-                        const imageChanged = AppState.tempNewImageUrl !== null || AppState.deleteImageFlag;
-                        return JSON.stringify(initialState) !== JSON.stringify(currentState) || imageChanged;
-                    };
-                    
-                    // --- 外部サイト検索 (フッターボタンを削除し、ヘッダーボタンのみに) ---
-                    $('#edit-external-search-header')?.addEventListener('click', () => {
-                         const capturedState = { rating: currentRating, tagIds: currentTagIds, memo: currentMemo };
-                        AppState.modalStateStack.push(() => App.openEditModal(workId, capturedState));
-                        App.openExternalSearchModal(workNameInput.value);
-                    });
-
-
-                    // --- 評価・タグの描画 (変更なし) ---
-                    const renderStars = r => {
-                        if (!ratingStars) return;
-                        ratingStars.innerHTML = ''; // 一旦クリア
-                        for (let i = 1; i <= 5; i++) {
-                            const starIcon = document.createElement('i');
-                            starIcon.classList.add('fa-star', 'cursor-pointer');
-                            starIcon.dataset.value = i; // データ値は 1, 2, 3, 4, 5 を保持
-                            
-                            if (r >= i) {
-                                starIcon.classList.add('fas', 'text-yellow-400'); // Full star
-                            } else if (r === (i - 0.5)) {
-                                starIcon.classList.add('fas', 'fa-star-half-alt', 'text-yellow-400'); // Half star
-                            } else {
-                                starIcon.classList.add('far', 'text-gray-500'); // Empty star
-                            }
-                            ratingStars.appendChild(starIcon);
-                        }
-                    };
-                    const renderTags = ids => {
-                        if (tagsContainer) { 
-                            const objects = App.getTagObjects(ids);
-                            tagsContainer.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded font-semibold text-xs" style="background-color:${t.color}; color:${App.getContrastColor(t.color)}">${t.name}</span>`).join('') : `<span class="text-xs text-gray-500">タグなし</span>`;
-                        }
-                    };
-                    renderStars(currentRating);
-                    renderTags(currentTagIds);
-
-                    // --- 評価・タグのイベントリスナー (変更なし) ---
-                    if (ratingStars) {
-                        ratingStars.addEventListener('click', e => {
-                            const star = e.target.closest('.fa-star');
-                            if (star) {
-                                const value = parseInt(star.dataset.value, 10);
-                                const rect = star.getBoundingClientRect();
-                                // 星の横幅の真ん中より右側をクリックしたか
-                                const isRightHalf = (e.clientX - rect.left) > (rect.width / 2);
-                                
-                                // 右半分なら X.0 (value)、左半分なら X.5 (value - 0.5)
-                                let newRating = isRightHalf ? value : value - 0.5;
-                                
-                                // クリックした場所が現在の評価と同じなら、評価を0に戻す
-                                if (currentRating === newRating) {
-                                    newRating = 0;
-                                }
-                                
-                                currentRating = newRating;
-                                renderStars(currentRating);
-                            }
-                        });
-                    }
-                    $('#editWorkAssignTagsBtn').addEventListener('click', () => {
-                        App.openTagModal({
-                            mode: 'assign', workId, currentTagIds, workName: work.name,
-                            onConfirm: (newTagIds) => {
-                                 if(newTagIds) currentTagIds = newTagIds;
-                                 App.openEditModal(workId, { rating: currentRating, tagIds: currentTagIds, memo: currentMemo })
-                            }
-                        });
-                    });
-                    
-                    // --- キャンセルボタン (変更なし) ---
+                    if (ratingStars) ratingStars.addEventListener('click', e => { const s = e.target.closest('.fa-star'); if(s){ const v=parseInt(s.dataset.value,10); const h=(e.clientX-s.getBoundingClientRect().left)>(s.getBoundingClientRect().width/2); let n=h?v:v-0.5; if(currentRating===n)n=0; currentRating=n; renderStars(currentRating); }});
+                    $('#editWorkAssignTagsBtn').addEventListener('click', () => App.openTagModal({ mode: 'assign', workId, currentTagIds, workName: work.name, onConfirm: (n) => { if(n)currentTagIds=n; App.openEditModal(workId, { rating: currentRating, tagIds: currentTagIds, memo: currentMemo }); } }));
                     $('#edit-cancel-btn').addEventListener('click', App.closeModal);
-                    
-                    // --- フォーム送信（保存）時に 'memo' を追加 ---
+                    $('#edit-external-search-header')?.addEventListener('click', () => { AppState.modalStateStack.push(() => App.openEditModal(workId, { rating: currentRating, tagIds: currentTagIds, memo: currentMemo })); App.openExternalSearchModal(workNameInput.value); });
+
                     $('#editWorkForm').addEventListener('submit', async e => {
                         e.preventDefault();
-                        if (!workNameInput || !workNameInput.value.trim()){
-                            return App.showToast("作品名は必須です。", "error");
-                        }
-                        const registeredAtStr = App.getDateInputValue('editWorkRegisteredAt');
-                        if (!App.isValidDate(registeredAtStr)) return App.showToast("登録日の形式が不正です (YYYY/MM/DD)。", "error");
+                        if (!workNameInput.value.trim()) return App.showToast("作品名は必須です。", "error");
                         
                         const updatedData = {
-                            name: workNameInput.value.trim(),
-                            sourceUrl: workUrlInput.value.trim(),
-                            genre: $('#editWorkGenre').value,
-                            registeredAt: Timestamp.fromDate(new Date(registeredAtStr.replace(/\//g, '-'))),
-                            rating: currentRating,
-                            tagIds: Array.from(currentTagIds),
-                            memo: currentMemo
+                            name: workNameInput.value.trim(), sourceUrl: workUrlInput.value.trim(), genre: $('#editWorkGenre').value,
+                            registeredAt: Timestamp.fromDate(new Date(App.getDateInputValue('editWorkRegisteredAt').replace(/\//g, '-'))),
+                            rating: currentRating, tagIds: Array.from(currentTagIds), memo: currentMemo
                         };
                         
                         if (AppState.tempNewImageUrl) {
                             updatedData.imageUrl = AppState.tempNewImageUrl;
+                            updatedData.imageFileName = AppState.tempNewImageFileName; // ★追加
                         } else if (AppState.deleteImageFlag) {
                             updatedData.imageUrl = deleteField();
+                            updatedData.imageFileName = deleteField(); // ★追加
                         }
 
                         AppState.checkModalDirtyState = () => false;
-                        if (await App.updateWork(workId, updatedData)) {
-                            App.showToast("作品情報を更新しました。");
-                            App.closeModal();
-                        }
+                        if (await App.updateWork(workId, updatedData)) { App.showToast("作品情報を更新しました。"); App.closeModal(); }
                     });
-                // ↓↓↓ ★★★ 修正箇所 ★★★ ↓↓↓
-                // 修正: onModalOpen コールバックの「外側」でオプションを渡す
-                // 修正: 'max-w-7xl' から 'max-w-5xl' に戻す (バランスのため)
                 }, { size: 'max-w-5xl', headerActions: headerSearchBtn, autoFocus: false });
             },
             
