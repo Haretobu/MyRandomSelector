@@ -1694,19 +1694,23 @@
                 App.renderLotterySummary();
             },
 
+            // ★追加: URLからサイトIDを取得
             getWorkSite: (url) => {
                 if (!url) return 'other';
                 if (url.includes('dlsite.com')) return 'dlsite';
-                if (url.includes('dmm.co.jp')) return 'fanza';
+                // dmm.co.jp または dmm.com を FANZA とみなす
+                if (url.includes('dmm.co.jp') || url.includes('dmm.com')) return 'fanza';
                 return 'other';
             },
 
+            // ★修正: バッジ表示ロジックも更新
             getSiteBadgeHTML: (url) => {
                 if (!AppState.showSiteIcon || !url) return '';
                 if (url.includes('dlsite.com')) {
                     return `<span class="site-badge bg-sky-600 text-white">DL</span>`;
                 }
-                if (url.includes('dmm.co.jp')) {
+                // dmm.co.jp または dmm.com なら FZ バッジを表示
+                if (url.includes('dmm.co.jp') || url.includes('dmm.com')) {
                     return `<span class="site-badge bg-red-600 text-white">FZ</span>`;
                 }
                 return '';
