@@ -1681,7 +1681,7 @@
             },
 
             renderWorkList: () => {
-                const { ui, isLoadComplete, isDebugMode, works, listViewMode, currentPage, itemsPerPage } = AppState; // currentPage, itemsPerPage を追加
+                const { ui, isLoadComplete, isDebugMode, works, listViewMode, currentPage, itemsPerPage } = AppState;
                 if (!ui.workListEl) return;
                 if (!isLoadComplete && !isDebugMode) return;
 
@@ -1689,13 +1689,12 @@
                 const totalItems = filteredWorks.length;
                 const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
 
-                // 現在のページが総ページ数を超えないように調整
                 if (currentPage > totalPages) {
                     AppState.currentPage = totalPages;
                 }
                 const startIndex = (AppState.currentPage - 1) * itemsPerPage;
                 const endIndex = startIndex + itemsPerPage;
-                const worksToShow = filteredWorks.slice(startIndex, endIndex); // 表示する作品を切り出す
+                const worksToShow = filteredWorks.slice(startIndex, endIndex);
 
                 ui.workCountEl.textContent = `${totalItems} / ${works.length} 作品`;
 
@@ -1709,25 +1708,29 @@
                 ui.workListEl.classList.toggle('gap-6', isGrid);
                 ui.workListEl.classList.toggle('space-y-2', !isGrid);
 
-                // メッセージ表示とリスト/ページネーションの表示切り替え
                 if (works.length === 0) {
                     ui.workListMessage.innerHTML = `<div class="text-center py-10 text-gray-500"><i class="fas fa-ghost fa-3x"></i><p class="mt-4 text-base">まだ作品が登録されていません。<br>左上の「作品登録」から追加してみましょう！</p></div>`;
                     ui.workListMessage.classList.remove('hidden');
                     ui.workListEl.classList.add('hidden');
-                    ui.paginationControls.classList.add('hidden'); // ページネーションも隠す
+                    $('#pagination-controls-top').classList.add('hidden');
+                    $('#pagination-controls').classList.add('hidden');
                     return;
                 }
                 if (filteredWorks.length === 0) {
                     ui.workListMessage.innerHTML = `<div class="text-center py-10 text-gray-500"><i class="fas fa-search-minus fa-3x"></i><p class="mt-4 text-base">条件に一致する作品がありません。<br>絞り込み条件を見直してください。</p></div>`;
                     ui.workListMessage.classList.remove('hidden');
                     ui.workListEl.classList.add('hidden');
-                    ui.paginationControls.classList.add('hidden'); // ページネーションも隠す
+                    $('#pagination-controls-top').classList.add('hidden');
+                    $('#pagination-controls').classList.add('hidden');
                     return;
                 }
 
                 ui.workListMessage.classList.add('hidden');
                 ui.workListEl.classList.remove('hidden');
-                // 上下のページネーションを表示・更新
+
+                ui.workListEl.innerHTML = worksToShow.map(work => isGrid ? App.renderWorkCard(work) : App.renderWorkListItem(work)).join('');
+
+                // ページネーションの更新処理
                 const topPagination = $('#pagination-controls-top');
                 const bottomPagination = $('#pagination-controls');
                 
