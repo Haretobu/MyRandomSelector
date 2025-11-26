@@ -194,27 +194,30 @@
                                 <input type="text" id="syncIdDisplay" class="bg-transparent w-full text-gray-300 focus:outline-none" readonly>
                                 <button id="copySyncIdBtn" class="ml-2 px-3 py-1 bg-teal-600 hover:bg-teal-700 rounded-md text-sm transition-colors"><i class="fas fa-copy"></i></button>
                             </div>
+                            
                             <select id="syncIdHistory" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500"></select>
+                            
                             <div class="flex items-center">
                                 <input type="text" id="newSyncIdInput" placeholder="新しい同期IDをペースト" class="w-full bg-gray-700 border border-gray-600 rounded-l-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500" autocomplete="off">
                                 <button id="loadSyncIdBtn" class="px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-700 text-white rounded-l-none flex-shrink-0">読込</button>
                             </div>
                             
-                            <div class="flex space-x-2 pt-2 border-t border-gray-700 mt-2">
-                            <div class="flex space-x-2 pt-2">
-                                <button id="clearHistoryBtn" class="w-full text-sm px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors">履歴クリア</button>
-                                <button id="deleteDataBtn" class="w-full text-sm px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors">全作品削除</button>
-                            </div>
-                            <div class="flex space-x-2 pt-2 border-t border-gray-700 mt-3">
-                                <button id="exportBackupBtn" class="w-full text-sm px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700 text-white">
-                                    <i class="fas fa-download mr-2"></i>バックアップ
-                                </button>
-                                <button id="importBackupBtn" class="w-full text-sm px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-amber-600 hover:bg-amber-700 text-black">
-                                    <i class="fas fa-upload mr-2"></i>インポート (未)
-                                </button>
-                            </div>
-                             <div class="pt-2">
-                                <button id="toggleDebugModeBtn" class="w-full text-sm px-4 py-2 bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors">デバッグモード開始</button>
+                            <div class="pt-2 border-t border-gray-700 mt-2 space-y-3">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button id="clearHistoryBtn" class="w-full text-sm px-2 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors">履歴クリア</button>
+                                    <button id="deleteDataBtn" class="w-full text-sm px-2 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors">全作品削除</button>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button id="exportBackupBtn" class="w-full text-sm px-2 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700 text-white">
+                                        <i class="fas fa-download mr-1"></i>保存
+                                    </button>
+                                    <button id="importBackupBtn" class="w-full text-sm px-2 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-amber-600 hover:bg-amber-700 text-black">
+                                        <i class="fas fa-upload mr-1"></i>読込(未)
+                                    </button>
+                                </div>
+                                <div>
+                                    <button id="toggleDebugModeBtn" class="w-full text-sm px-4 py-2 bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors">デバッグモード開始</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -308,7 +311,7 @@
                 
                 <!-- Work List Panel -->
                 <div>
-                    <div class="flex justify-between items-center mb-4 px-2">
+                    <div class="flex flex-wrap justify-between items-center mb-4 px-2 gap-y-2">
                         <div id="pagination-controls-top" class="hidden flex justify-end items-center gap-4 mb-4 px-2">
                             <div class="flex items-center space-x-2 text-sm">
                                 <label class="text-gray-400">表示:</label>
