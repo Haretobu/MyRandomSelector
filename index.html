@@ -774,6 +774,12 @@
             },
 
             // --- Utility Functions ---
+
+            // ★追加: モバイル判定 (画面幅またはUserAgentで簡易判定)
+            isMobile: () => {
+                return window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            },
+
             escapeHTML: (str) => {
                 if (typeof str !== 'string' || !str) return '';
                 return str.replace(/[&<>"']/g, function(match) {
@@ -1801,8 +1807,19 @@
                 const safeWorkName = App.escapeHTML(work.name);
                 const siteBadge = App.getSiteBadgeHTML(work.sourceUrl);
 
+                // ★追加: 連携状態チェック & モバイル判定
+                // (スマホの場合は強制的に非表示にするため、isLinked を false にするのと同等の扱いにし、HTML生成時に hidden クラスを付与)
+                const isMobile = App.isMobile();
                 const isLinked = work.isLocallyLinked === true;
-                const rocketColor = isLinked ? "bg-indigo-600 hover:bg-indigo-700" : "bg-gray-600 hover:bg-gray-500 opacity-50";
+                
+                const rocketClass = isLinked 
+                    ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/30" 
+                    : "bg-gray-700 text-gray-500 cursor-not-allowed opacity-50";
+                
+                // モバイルなら hidden クラスを追加
+                const rocketVisibility = isMobile ? "hidden" : "";
+                
+                const rocketLink = isLinked ? `href="nightowl://play?id=${work.id}"` : "";
                 const rocketTitle = isLinked ? "PCで起動" : "PC連携未設定";
 
                 return `
@@ -1811,7 +1828,7 @@
                         <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${safeWorkName}" class="w-full h-40 object-cover">
                         ${siteBadge}
                         <div class="absolute top-2 right-2 flex space-x-2">
-                            <a href="nightowl://play?id=${work.id}" title="${rocketTitle}" class="w-8 h-8 ${rocketColor} rounded-full flex items-center justify-center text-white transition-colors"><i class="fas fa-rocket text-sm"></i></a>
+                            <a ${rocketLink} title="${rocketTitle}" class="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${rocketClass} ${rocketVisibility}">
                             
                             <button data-action="edit" data-id="${work.id}" title="編集" class="w-8 h-8 bg-black bg-opacity-50 hover:bg-opacity-75 rounded-full flex items-center justify-center text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed" ><i class="fas fa-pencil-alt text-sm"></i></button>
                             <button data-action="delete" data-id="${work.id}" data-name="${safeWorkName}" title="削除" class="w-8 h-8 bg-black bg-opacity-50 hover:bg-opacity-75 rounded-full flex items-center justify-center text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed" ><i class="fas fa-trash-alt text-sm"></i></button>
@@ -1832,9 +1849,14 @@
                 const safeWorkName = App.escapeHTML(work.name);
                 const siteBadge = App.getSiteBadgeHTML(work.sourceUrl);
 
-                // ★追加: 連携状態チェック
+                // ★追加: 連携状態チェック & モバイル判定
+                const isMobile = App.isMobile();
                 const isLinked = work.isLocallyLinked === true;
-                const rocketColor = isLinked ? "bg-indigo-600 hover:bg-indigo-500" : "bg-gray-600 hover:bg-gray-500 opacity-50"; // リスト表示は見やすいように少し明るめ
+                
+                const rocketColor = isLinked ? "bg-indigo-600 hover:bg-indigo-500 text-white" : "bg-gray-600 hover:bg-gray-500 opacity-50";
+                const rocketVisibility = isMobile ? "hidden" : ""; // スマホなら隠す
+                
+                const rocketLink = isLinked ? `href="nightowl://play?id=${work.id}"` : "";
                 const rocketTitle = isLinked ? "PCで起動" : "PC連携未設定";
 
                 const imageUrl = AppState.isLiteMode
@@ -1858,7 +1880,7 @@
                         ${App._renderTagsHTML(work.tagIds, 4, null, 'list')} 
                     </div>
                     <div class="flex-shrink-0 flex space-x-2">
-                        <a href="nightowl://play?id=${work.id}" title="${rocketTitle}" class="w-9 h-9 text-sm rounded-lg text-white flex items-center justify-center transition-colors ${rocketColor}"><i class="fas fa-rocket"></i></a>
+                        <a ${rocketLink} title="${rocketTitle}" class="w-9 h-9 text-sm rounded-lg text-white flex items-center justify-center transition-all ${rocketColor} ${rocketVisibility}">
 
                         <button data-action="edit" data-id="${work.id}" class="w-9 h-9 text-sm rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" ><i class="fas fa-edit"></i></button>
                         <button data-action="delete" data-id="${work.id}" data-name="${safeWorkName}" class="w-9 h-9 text-sm rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-red-600 hover:bg-red-700" ><i class="fas fa-trash"></i></button>
@@ -4075,13 +4097,19 @@
                         <div><label class="block text-center text-sm text-gray-400 mb-2">評価</label><div class="flex items-center justify-center space-x-2 text-3xl" id="result-rating"></div></div>
                         <div><label class="block text-center text-sm text-gray-400 mb-1">タグ</label><div id="result-tags" class="flex flex-wrap justify-center gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] mb-2"></div><button type="button" id="result-assign-tags-btn" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグを割り当て/編集</button></div>
                     </div>
+                    
                     <div class="pt-6 mt-6 border-t border-gray-700 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
                         <div class="flex gap-2 w-full sm:w-auto">
                             <button id="lottery-reroll" class="flex-1 sm:flex-none px-6 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold">もう一度抽選</button>
-                            <a href="nightowl://play?id=${work.id}" class="flex-1 sm:flex-none px-6 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold text-white flex items-center justify-center no-underline" title="PCランチャーで起動">
-                                <i class="fas fa-rocket mr-2"></i>起動
+                            
+                            ${(work.isLocallyLinked && !App.isMobile()) ? `
+                            <a href="nightowl://play?id=${work.id}" class="flex-1 sm:flex-none px-6 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold text-white flex items-center justify-center no-underline shadow-lg shadow-indigo-500/30" title="PCランチャーで起動">
+                                <i class="fas fa-rocket mr-2"></i>PCで起動
                             </a>
+                            ` : ''}
+                            
                         </div>
+
                         <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
                             <button id="result-edit-details-btn" class="w-full sm:w-auto px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">詳細編集</button>
                             
