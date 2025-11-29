@@ -1806,6 +1806,8 @@
                         <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${safeWorkName}" class="w-full h-40 object-cover">
                         ${siteBadge}
                         <div class="absolute top-2 right-2 flex space-x-2">
+                            <a href="nightowl://play?id=${work.id}" title="PCで起動" class="w-8 h-8 bg-indigo-600 bg-opacity-80 hover:bg-opacity-100 rounded-full flex items-center justify-center text-white transition-colors"><i class="fas fa-rocket text-sm"></i></a>
+                            
                             <button data-action="edit" data-id="${work.id}" title="編集" class="w-8 h-8 bg-black bg-opacity-50 hover:bg-opacity-75 rounded-full flex items-center justify-center text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed" ><i class="fas fa-pencil-alt text-sm"></i></button>
                             <button data-action="delete" data-id="${work.id}" data-name="${safeWorkName}" title="削除" class="w-8 h-8 bg-black bg-opacity-50 hover:bg-opacity-75 rounded-full flex items-center justify-center text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed" ><i class="fas fa-trash-alt text-sm"></i></button>
                         </div>
@@ -1846,6 +1848,8 @@
                         ${App._renderTagsHTML(work.tagIds, 4, null, 'list')} 
                     </div>
                     <div class="flex-shrink-0 flex space-x-2">
+                        <a href="nightowl://play?id=${work.id}" title="PCで起動" class="w-9 h-9 text-sm rounded-lg text-white flex items-center justify-center transition-colors bg-indigo-600 hover:bg-indigo-500"><i class="fas fa-rocket"></i></a>
+
                         <button data-action="edit" data-id="${work.id}" class="w-9 h-9 text-sm rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" ><i class="fas fa-edit"></i></button>
                         <button data-action="delete" data-id="${work.id}" data-name="${safeWorkName}" class="w-9 h-9 text-sm rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-red-600 hover:bg-red-700" ><i class="fas fa-trash"></i></button>
                     </div>
@@ -4062,7 +4066,12 @@
                         <div><label class="block text-center text-sm text-gray-400 mb-1">タグ</label><div id="result-tags" class="flex flex-wrap justify-center gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] mb-2"></div><button type="button" id="result-assign-tags-btn" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグを割り当て/編集</button></div>
                     </div>
                     <div class="pt-6 mt-6 border-t border-gray-700 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
-                        <button id="lottery-reroll" class="w-full sm:w-auto px-6 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold">もう一度抽選</button>
+                        <div class="flex gap-2 w-full sm:w-auto">
+                            <button id="lottery-reroll" class="flex-1 sm:flex-none px-6 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold">もう一度抽選</button>
+                            <a href="nightowl://play?id=${work.id}" class="flex-1 sm:flex-none px-6 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold text-white flex items-center justify-center no-underline" title="PCランチャーで起動">
+                                <i class="fas fa-rocket mr-2"></i>起動
+                            </a>
+                        </div>
                         <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
                             <button id="result-edit-details-btn" class="w-full sm:w-auto px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">詳細編集</button>
                             
