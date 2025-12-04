@@ -761,11 +761,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    // ★★★ 修正: クーポンとセット割を併用可能にした計算ロジック ★★★
+    // ★★★ 修正: DLsite仕様準拠 (セット割優先・個別割引破棄 -> クーポン適用) ★★★
     const calculateSiteTotal = (workItems, site) => {
         let comparisonDetails = [];
 
-        // 選択されたクーポンを取得
+        // 1. クーポン情報の取得
         const selectedDiscounts = Array.from(document.querySelectorAll(`#${site}-discounts-container .discount-active:checked`))
             .map(cb => {
                 const item = cb.closest('.discount-item');
@@ -776,35 +776,87 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
             });
 
-        // --- 割引タイプの分類 ---
+        // 割引タイプの分類
         const perItemDiscounts = selectedDiscounts.filter(d => d.type === 'per_item');
         const simpleCoupons = selectedDiscounts.filter(d => d.type === 'simple_coupon' || d.type === 'conditional_coupon');
+        // まとめ買い: 割引率が高い順、かつ必要数が多い順にソート（より条件の厳しい/お得なセットを優先）
         const bulkDiscounts = selectedDiscounts.filter(d => d.type === 'bulk')
-            .sort((a, b) => parseFloat(b.percent || b.rate) - parseFloat(a.percent || a.rate));
+            .sort((a, b) => {
+                const rateA = parseFloat(a.percent || a.rate);
+                const rateB = parseFloat(b.percent || b.rate);
+                const countA = parseInt(a.count || 0);
+                const countB = parseInt(b.count || 0);
+                if (rateA !== rateB) return rateB - rateA; // 割引率高い順
+                return countB - countA; // 同じなら個数多い順
+            });
         const bulkCouponDiscounts = selectedDiscounts.filter(d => d.type === 'bulk_coupon');
 
-        let bulkEligibleItems = []; 
+        // --- Step 1: セット割 (まとめ買い) の適用判定 ---
+        // まず全アイテムを「計算用オブジェクト」に変換
+        let processingItems = workItems.map((work, index) => ({
+            ...work,
+            originalIndex: index,
+            basePrice: work.price, // 初期値は定価
+            tempPrice: work.price, // 計算途中価格
+            appliedBulkName: null, // 適用されたセット割名
+            isBulkApplied: false   // セット割が適用されたか
+        }));
 
-        // --- 各作品ごとの計算 ---
-        workItems.forEach((work, index) => {
-            // ベース価格: 定価 × (1 - 個別登録割引率)
-            let itemPrice = work.price * (1 - work.discount / 100);
-            let appliedDiscountName = 'なし';
-            let isEligibleForBulk = work.bulkEligible; // ★元々のチェック状態を維持
+        // まとめ買い対象のアイテムを抽出
+        let bulkEligibleList = processingItems.filter(p => p.bulkEligible);
+        // 安い順にソート（一般的に安いものからセット適用、あるいは組み合わせ自由だがここでは価格順で処理）
+        bulkEligibleList.sort((a, b) => a.basePrice - b.basePrice);
 
-            // ★ Step 1: 全作品一律割引の適用
+        // セット割を適用していく
+        bulkDiscounts.forEach(bulk => {
+            const count = parseInt(bulk.count || 3, 10);
+            const percent = parseFloat(bulk.percent || bulk.rate || 0);
+
+            // 対象リストに残っている数が、セット必要数を満たしている間繰り返す
+            while (bulkEligibleList.length >= count) {
+                // リストから必要数分を取り出す (消費する)
+                const chunk = bulkEligibleList.splice(0, count);
+                
+                chunk.forEach(item => {
+                    // ★重要: 定価(basePrice) から セット割引率を適用。元の個別割引は無視される。
+                    item.tempPrice = Math.floor(item.basePrice * (1 - percent / 100));
+                    item.appliedBulkName = bulk.name;
+                    item.isBulkApplied = true;
+                });
+            }
+        });
+
+        // セット割に漏れたアイテム（または対象外アイテム）は、通常の「個別割引」を適用する
+        processingItems.forEach(item => {
+            if (!item.isBulkApplied) {
+                // セット割が適用されていない場合のみ、元の個別割引(%)を使う
+                item.tempPrice = Math.floor(item.basePrice * (1 - item.discount / 100));
+            }
+        });
+
+        // --- Step 2: クーポン (Per Item & Simple) の適用 ---
+        // processingItems は元の順序ではないので、originalIndex順に戻す必要はないが、comparisonDetailsは元の順序で作る
+        
+        // originalIndex順に並べ直してループ（結果表示の並び順維持のため）
+        processingItems.sort((a, b) => a.originalIndex - b.originalIndex);
+
+        processingItems.forEach(item => {
+            let currentPrice = item.tempPrice; // セット割適用後 または セール適用後の価格
+            let appliedDiscountText = item.appliedBulkName || 'なし';
+
+            // 2-1. 全作品一律割引 (Per Item)
             perItemDiscounts.forEach(disc => {
                 const val = parseFloat(disc.value || 0);
                 const unitType = disc.typeParam; 
-
                 if (unitType === 'yen') {
-                    itemPrice = Math.max(0, itemPrice - val);
+                    currentPrice = Math.max(0, currentPrice - val);
                 } else {
-                    itemPrice = Math.floor(itemPrice * (1 - val / 100));
+                    currentPrice = Math.floor(currentPrice * (1 - val / 100));
                 }
             });
 
-            // ★ Step 2: 個別クーポンの適用
+            // 2-2. 個別クーポン (Simple/Conditional)
+            // ※セット割適用後でもクーポンが使える仕様と仮定
             let bestDiscountAmt = 0;
             let bestCouponName = null;
 
@@ -817,7 +869,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 let applies = false;
                 if (couponType === 'simple_coupon') {
                     applies = true;
-                } else if (couponType === 'conditional_coupon' && itemPrice <= threshold) {
+                } else if (couponType === 'conditional_coupon' && currentPrice <= threshold) {
                     applies = true;
                 }
 
@@ -826,7 +878,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (unitType === 'yen') {
                         currentDiscountAmt = rate;
                     } else {
-                        currentDiscountAmt = itemPrice * (rate / 100);
+                        currentDiscountAmt = currentPrice * (rate / 100);
                     }
 
                     if (currentDiscountAmt > bestDiscountAmt) {
@@ -837,55 +889,24 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (bestCouponName) {
-                itemPrice = Math.max(0, itemPrice - bestDiscountAmt);
-                appliedDiscountName = bestCouponName;
-                // ★修正: ここにあった「isEligibleForBulk = false;」を削除しました
-                // これにより、クーポン適用後もセット割の計算対象として残ります
+                currentPrice = Math.max(0, currentPrice - bestDiscountAmt);
+                // 表示テキストの更新
+                if (item.isBulkApplied) {
+                    appliedDiscountText = `${item.appliedBulkName} + ${bestCouponName}`;
+                } else {
+                    appliedDiscountText = bestCouponName;
+                }
             }
 
             comparisonDetails.push({
-                name: work.name,
-                finalPrice: itemPrice,
-                originalPrice: work.price,
-                appliedDiscount: appliedDiscountName
+                name: item.name,
+                finalPrice: currentPrice,
+                originalPrice: item.basePrice,
+                appliedDiscount: appliedDiscountText
             });
-
-            if (isEligibleForBulk) {
-                // セット割計算用に、現在の価格(クーポン適用後)を登録
-                bulkEligibleItems.push({ price: itemPrice, index: index });
-            }
         });
 
-        // --- Step 3: まとめ買い割引 (Bulk) ---
-        // 安い順にソート (DLsite等の仕様に合わせて、安いものからセットにする想定)
-        bulkEligibleItems.sort((a, b) => a.price - b.price);
-
-        bulkDiscounts.forEach(bulk => {
-            const count = parseInt(bulk.count || 3, 10);
-            const percent = parseFloat(bulk.percent || bulk.rate || 0);
-
-            if (bulkEligibleItems.length >= count) {
-                // 条件を満たす分だけ取り出す
-                const itemsToDiscount = bulkEligibleItems.splice(0, count);
-                
-                itemsToDiscount.forEach(itemObj => {
-                    const originalPrice = comparisonDetails[itemObj.index].finalPrice;
-                    const discounted = Math.floor(originalPrice * (1 - percent / 100)); // さらに割引
-                    
-                    comparisonDetails[itemObj.index].finalPrice = discounted;
-                    
-                    // ★修正: 割引名の表示を上書きではなく「追加」にする
-                    const oldName = comparisonDetails[itemObj.index].appliedDiscount;
-                    if (oldName && oldName !== 'なし') {
-                        comparisonDetails[itemObj.index].appliedDiscount = `${oldName} + ${bulk.name}`;
-                    } else {
-                        comparisonDetails[itemObj.index].appliedDiscount = bulk.name;
-                    }
-                });
-            }
-        });
-
-        // --- Step 4: 合計金額の計算と全体クーポン ---
+        // --- Step 3: 合計金額の計算と全体クーポン ---
         let total = comparisonDetails.reduce((sum, item) => sum + item.finalPrice, 0);
 
         bulkCouponDiscounts.forEach(coupon => {
