@@ -3483,12 +3483,6 @@
                 AppState.editingTempIndex = -1;
                 AppState.isRegFormDirty = false;
 
-                // ★追加: モーダルを閉じようとした時のチェック関数を上書き
-                // (リストに作品があるか、またはフォームに入力中なら警告を出す)
-                AppState.checkModalDirtyState = () => {
-                    return AppState.tempWorks.length > 0 || AppState.isRegFormDirty;
-                };
-
                 const content = `
                     <div class="flex flex-col h-[80vh] lg:h-[75vh]">
                         <div class="flex lg:hidden bg-gray-900 rounded-t-lg mb-2 p-1 gap-1 shrink-0">
@@ -3588,7 +3582,11 @@
                 `;
 
                 App.openModal("作品の一括登録", content, () => {
-                    // 初期化
+                    // ★修正: モーダルが開いた後 (onOpen) にチェック関数を上書きする
+                    AppState.checkModalDirtyState = () => {
+                        return AppState.tempWorks.length > 0 || AppState.isRegFormDirty;
+                    };
+
                     App.initializeDateInputs($('#batchRegForm'));
                     
                     // --- Mobile Tab Switching Logic ---
@@ -3613,7 +3611,7 @@
                             tabInput.classList.add('text-gray-400', 'hover:bg-gray-800');
                             
                             colList.classList.remove('hidden');
-                            colList.classList.add('flex'); // hiddenを消すとflexが必要
+                            colList.classList.add('flex');
                             colForm.classList.add('hidden');
                         }
                     };
@@ -3637,11 +3635,10 @@
                     App.setupInputClearButton(nameInput, $('#clear-batchWorkName'));
                     App.setupInputClearButton(urlInput, $('#clear-batchWorkUrl'));
 
-                    // URL Preview (エラー対策済み関数を使用)
+                    // URL Preview
                     const previewBox = $('#batch-url-preview-box');
                     urlInput.addEventListener('blur', () => {
                         const url = urlInput.value.trim();
-                        // 長さチェックを追加し、無駄な呼び出しを防ぐ
                         if (url && url.length > 10 && url.startsWith('http')) {
                             App.fetchLinkPreview(url, previewBox);
                         } else { 
@@ -3711,7 +3708,7 @@
                             
                             App.showToast(`「${name}」をリストに追加しました。`, 'success');
                             
-                            // スマホならリストタブのバッジを更新 (点滅)
+                            // スマホならリストタブのバッジを更新
                             const badge = $('#batch-tab-badge');
                             if(badge) {
                                 badge.classList.remove('hidden');
