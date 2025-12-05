@@ -3477,11 +3477,16 @@
 
             // --- Batch Registration Logic ---
 
-            // --- Batch Registration Logic (Mobile Optimized) ---
+            // --- Batch Registration Logic (Mobile Optimized & Duplicate Check Added) ---
             openBatchRegistrationModal: () => {
                 AppState.tempWorks = [];
                 AppState.editingTempIndex = -1;
                 AppState.isRegFormDirty = false;
+
+                // モーダルを閉じる際のチェック
+                AppState.checkModalDirtyState = () => {
+                    return AppState.tempWorks.length > 0 || AppState.isRegFormDirty;
+                };
 
                 const content = `
                     <div class="flex flex-col h-[80vh] lg:h-[75vh]">
@@ -3509,7 +3514,7 @@
                                             </div>
                                             <button type="button" id="batch-external-search-btn" class="w-12 h-12 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-white flex items-center justify-center shrink-0" title="外部検索"><i class="fas fa-globe-asia text-lg"></i></button>
                                         </div>
-                                        <div id="batch-suggest-container" class="relative"></div>
+                                        <div id="batch-suggest-container" class="relative z-50"></div>
                                     </div>
 
                                     <div>
@@ -3582,14 +3587,10 @@
                 `;
 
                 App.openModal("作品の一括登録", content, () => {
-                    // ★修正: モーダルが開いた後 (onOpen) にチェック関数を上書きする
-                    AppState.checkModalDirtyState = () => {
-                        return AppState.tempWorks.length > 0 || AppState.isRegFormDirty;
-                    };
-
+                    // Initialize
                     App.initializeDateInputs($('#batchRegForm'));
                     
-                    // --- Mobile Tab Switching Logic ---
+                    // --- Mobile Tab Logic ---
                     const tabInput = $('#batch-tab-input');
                     const tabList = $('#batch-tab-list');
                     const colForm = $('#batch-col-form');
@@ -3619,15 +3620,98 @@
                     tabInput.addEventListener('click', () => switchTab('input'));
                     tabList.addEventListener('click', () => switchTab('list'));
 
-                    App.renderTempWorkList(); // 初期描画
+                    App.renderTempWorkList(); // Initial render
 
                     const form = $('#batchRegForm');
                     const nameInput = $('#batchWorkName');
                     const urlInput = $('#batchWorkUrl');
                     const imageInput = $('#batchWorkImage');
                     
+                    // --- Suggestion Logic (Duplicate Check) ---
+                    const suggestContainer = $('#batch-suggest-container');
+                    
+                    const handleInputSuggestion = App.debounce(() => {
+                        const query = nameInput.value.trim();
+                        if (!query || query.length < 2) {
+                            suggestContainer.innerHTML = '';
+                            return;
+                        }
+                        const normalizedQuery = App.normalizeString(query);
+                        
+                        // 1. 登録済み作品から検索 (最大3件)
+                        const registeredMatches = AppState.works
+                            .filter(w => App.normalizeString(w.name).includes(normalizedQuery))
+                            .slice(0, 3);
+                            
+                        // 2. 登録予定リストから検索 (最大3件)
+                        const listMatches = AppState.tempWorks
+                            .map((w, index) => ({ ...w, originalIndex: index })) // インデックスを保持
+                            .filter(w => App.normalizeString(w.name).includes(normalizedQuery))
+                            .slice(0, 3);
+
+                        if (registeredMatches.length === 0 && listMatches.length === 0) {
+                            suggestContainer.innerHTML = '';
+                            return;
+                        }
+
+                        // HTML生成
+                        let html = `<div class="absolute z-50 w-full bg-gray-800 border border-gray-600 rounded-lg shadow-xl overflow-hidden mt-1">`;
+                        
+                        // 登録済みセクション
+                        if (registeredMatches.length > 0) {
+                            html += `<div class="bg-gray-700 px-3 py-1 text-xs text-red-300 font-bold">登録済み作品 (重複注意)</div>`;
+                            registeredMatches.forEach(w => {
+                                html += `
+                                <div class="p-2 border-b border-gray-700 hover:bg-gray-600 cursor-pointer flex items-center gap-2" data-action="alert-registered" data-name="${App.escapeHTML(w.name)}">
+                                    <img src="${w.imageUrl || 'https://placehold.co/40x40/1f2937/4b5563?text=?'}" class="w-8 h-8 object-cover rounded flex-shrink-0">
+                                    <span class="text-sm truncate text-gray-300">${App.escapeHTML(w.name)}</span>
+                                </div>`;
+                            });
+                        }
+
+                        // リスト内セクション
+                        if (listMatches.length > 0) {
+                            html += `<div class="bg-gray-700 px-3 py-1 text-xs text-amber-300 font-bold">リストに追加済み (編集しますか？)</div>`;
+                            listMatches.forEach(w => {
+                                html += `
+                                <div class="p-2 border-b border-gray-700 hover:bg-gray-600 cursor-pointer flex items-center gap-2" data-action="load-temp" data-index="${w.originalIndex}">
+                                    <img src="${(w.imageData && w.imageData.base64) || 'https://placehold.co/40x40/1f2937/4b5563?text=?'}" class="w-8 h-8 object-cover rounded flex-shrink-0">
+                                    <span class="text-sm truncate text-gray-300">${App.escapeHTML(w.name)}</span>
+                                </div>`;
+                            });
+                        }
+                        
+                        html += `</div>`;
+                        suggestContainer.innerHTML = html;
+                    }, 300);
+
+                    nameInput.addEventListener('input', () => {
+                        AppState.isRegFormDirty = true;
+                        handleInputSuggestion();
+                    });
+
+                    // 候補クリック時の処理
+                    suggestContainer.addEventListener('click', (e) => {
+                        const item = e.target.closest('div[data-action]');
+                        if (!item) return;
+                        
+                        const action = item.dataset.action;
+                        if (action === 'alert-registered') {
+                            App.showToast(`「${item.dataset.name}」は既に登録されています。`, 'error');
+                        } else if (action === 'load-temp') {
+                            const index = parseInt(item.dataset.index, 10);
+                            App.loadTempWorkToForm(index); // 編集モードで読み込む
+                            suggestContainer.innerHTML = ''; // 候補を消す
+                        }
+                    });
+
+                    // フォーカスが外れたら少し遅れて候補を消す
+                    nameInput.addEventListener('blur', () => {
+                        setTimeout(() => suggestContainer.innerHTML = '', 200);
+                    });
+
+                    // --- Other Inputs ---
                     const setDirty = () => { AppState.isRegFormDirty = true; };
-                    nameInput.addEventListener('input', setDirty);
                     urlInput.addEventListener('input', setDirty);
                     $('#batchWorkGenre').addEventListener('change', setDirty);
                     imageInput.addEventListener('change', setDirty);
@@ -3688,6 +3772,14 @@
                         if (!name) return App.showToast("作品名は必須です。", "error");
                         if (!App.isValidDate(dateStr)) return App.showToast("日付形式が不正です。", "error");
 
+                        // ★追加: 登録済みチェック (Submit時にも念のため)
+                        if (AppState.editingTempIndex === -1) { // 新規追加時のみ
+                            const isRegistered = AppState.works.some(w => w.name === name);
+                            if (isRegistered) {
+                                if (!confirm(`「${name}」は既に登録済みの作品です。\n重複して登録しますか？`)) return;
+                            }
+                        }
+
                         const newItem = {
                             name: name,
                             url: urlInput.value.trim(),
@@ -3708,7 +3800,6 @@
                             
                             App.showToast(`「${name}」をリストに追加しました。`, 'success');
                             
-                            // スマホならリストタブのバッジを更新
                             const badge = $('#batch-tab-badge');
                             if(badge) {
                                 badge.classList.remove('hidden');
@@ -3719,6 +3810,7 @@
 
                         App.resetBatchRegForm(); 
                         App.renderTempWorkList();
+                        suggestContainer.innerHTML = ''; // 候補クリア
                     });
 
                     $('#batch-clear-form-btn').addEventListener('click', () => {
