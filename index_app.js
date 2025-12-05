@@ -35,6 +35,11 @@
             deleteObject 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
+        import { 
+            getFunctions, 
+            httpsCallable 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
+
         
         // --- 1. UI Helper Functions ---
         // (Grok/ChatGPT案: 構造化)
@@ -996,6 +1001,61 @@
                 });
             },
 
+            // --- Link Preview Logic ---
+            fetchLinkPreview: async (url, containerElement) => {
+                if (!url || !url.startsWith('http')) return;
+                
+                containerElement.innerHTML = `<div class="text-xs text-gray-400 animate-pulse py-2"><i class="fas fa-spinner fa-spin mr-2"></i>リンク情報を取得中...</div>`;
+                containerElement.classList.remove('hidden');
+
+                try {
+                    const functions = getFunctions(AppState.firebaseApp, 'us-central1');
+                    const getPreview = httpsCallable(functions, 'getLinkPreview');
+                    
+                    const result = await getPreview({ url: url });
+                    const data = result.data.data;
+
+                    if (!result.data.success || !data) {
+                        containerElement.innerHTML = `<div class="text-xs text-red-400 py-1">プレビューを取得できませんでした</div>`;
+                        return;
+                    }
+
+                    const html = `
+                        <div class="mt-2 bg-gray-800 border-l-4 border-red-600 rounded-r shadow-md overflow-hidden max-w-full">
+                            <div class="p-3">
+                                <div class="text-xs text-gray-400 mb-1">${App.escapeHTML(data.siteName)}</div>
+                                <a href="${App.escapeHTML(data.url)}" target="_blank" rel="noopener" class="block font-bold text-blue-400 hover:underline text-sm mb-2 truncate">
+                                    ${App.escapeHTML(data.title)}
+                                </a>
+                                <div class="flex gap-3">
+                                    ${data.image ? `
+                                    <div class="flex-shrink-0 w-24 h-16 sm:w-32 sm:h-20 bg-black rounded overflow-hidden">
+                                        <img src="${App.escapeHTML(data.image)}" class="w-full h-full object-cover" alt="Thumb">
+                                    </div>` : ''}
+                                    <div class="flex-grow min-w-0">
+                                        <p class="text-xs text-gray-300 line-clamp-3">${App.escapeHTML(data.description)}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    containerElement.innerHTML = html;
+
+                    // もし現在開いているのが一括登録モーダルで、タイトル欄が空なら自動入力
+                    const batchNameInput = $('#batchWorkName');
+                    if (batchNameInput && !batchNameInput.value && data.title) {
+                        batchNameInput.value = data.title;
+                        batchNameInput.dispatchEvent(new Event('input')); // 変更検知のため発火
+                        App.showToast('タイトルを自動入力しました。');
+                    }
+
+                } catch (error) {
+                    console.error("Link Preview Error:", error);
+                    containerElement.innerHTML = `<div class="text-xs text-gray-500 py-1">プレビュー読み込みエラー: ${App.escapeHTML(error.message)}</div>`;
+                }
+            },
+
             // ★追加: Storageへのアップロード処理
             uploadImageToStorage: async (dataUrl, workId) => {
                 if (!dataUrl || !dataUrl.startsWith('data:image')) return null;
@@ -1311,8 +1371,9 @@
                 const topPagination = $('#pagination-controls-top');
                 const bottomPagination = $('#pagination-controls');
                 
-                topPagination.classList.remove('hidden');
-                bottomPagination.classList.remove('hidden');
+                // ★修正: nullチェックを追加
+                if (topPagination) topPagination.classList.remove('hidden');
+                if (bottomPagination) bottomPagination.classList.remove('hidden');
 
                 const updatePaginationUI = (container) => {
                     if (!container) return;
@@ -1788,7 +1849,7 @@
             },
 
             setupEventListeners: () => {
-                const { ui } = AppState; // UI要素の参照をまとめて取得
+                const { ui } = AppState;
 
                 ui.modalCloseBtn.addEventListener('click', App.closeModal);
                 ui.modalBackdrop.addEventListener('click', App.closeModal);
@@ -1797,26 +1858,21 @@
 
                 document.addEventListener('keydown', (e) => {
                     if (e.key === 'Escape') {
-                        // 開いているモーダルのうち、一番手前のものを閉じる
                         if (AppState.ui.imageCompareModal.classList.contains('active')) {
                             App.closeImageCompareModal();
                         } else if (!AppState.ui.modalWrapper.classList.contains('hidden')) {
                             App.closeModal();
                         } else if (!AppState.ui.fabBackdrop.classList.contains('hidden')) {
-                            // (おまけ) FABメニューもEscで閉じる
                             App.closeFabMenu();
                         }
                     }
                 });
 
-                // (Grok/ChatGPT案: イベント委譲)
-                // body へのクリックイベントリスナーをリファクタリング
                 document.body.addEventListener('click', e => {
                     const button = e.target.closest('button[data-action]');
                     const nameSpan = e.target.closest('[data-action="copy-name"]');
                     const filterButton = e.target.closest('button[data-action="remove-filter"]');
 
-                    // (ChatGPT案: イベントリスナーをマップ化)
                     if (button) {
                         const { action, id, name } = button.dataset;
                         const actionHandlers = {
@@ -1827,12 +1883,11 @@
                                 App.renderWorkList();
                             },
                             'external-search-reg': () => {
-                                const query = $('#workNameInput').value.trim();
-                                App.openExternalSearchModal(query);
+                                // 登録モーダル内の検索ボタンは個別に設定されるため、ここは空でも良いか、リスト内のボタン用にする
                             }
                         };
                         if (actionHandlers[action]) {
-                            actionHandlers[action](); // 対応する関数を実行
+                            actionHandlers[action]();
                         }
                     }
                     if (nameSpan) {
@@ -1842,6 +1897,7 @@
                     }
                     if (filterButton) {
                         const { type, value } = filterButton.dataset;
+                        // フィルタ削除ロジック（変更なし）
                         switch(type) {
                             case 'genre': AppState.listFilters.genres.delete(value); break;
                             case 'rating': AppState.listFilters.rating = { type: 'exact', value: 0 }; break;
@@ -1851,18 +1907,9 @@
                             case 'notTag': AppState.listFilters.notTagIds.delete(value); break;
                             case 'date': AppState.listFilters.dateFilter = AppState.defaultDateFilter(); break;
                         }
-
-                        const filtersToSave = {
-                            ...AppState.listFilters,
-                            genres: [...AppState.listFilters.genres],
-                            andTagIds: [...AppState.listFilters.andTagIds],
-                            orTagIds: [...AppState.listFilters.orTagIds],
-                            notTagIds: [...AppState.listFilters.notTagIds]
-                        };
-
+                        const filtersToSave = { ...AppState.listFilters, genres: [...AppState.listFilters.genres], andTagIds: [...AppState.listFilters.andTagIds], orTagIds: [...AppState.listFilters.orTagIds], notTagIds: [...AppState.listFilters.notTagIds] };
                         localStorage.setItem('listFilters', JSON.stringify(filtersToSave));
-
-                        AppState.currentPage = 1; // ページを1に戻す
+                        AppState.currentPage = 1;
                         App.renderAll();
                     }
                 });
@@ -1904,168 +1951,79 @@
                             await batch.commit();
                             App.showToast("全ての作品・タグデータを削除しました。");
                         } catch(error) { 
-                            // ★ 修正: isDebugMode で分岐 ★
-                            if (AppState.isDebugMode) {
-                                console.error("Error deleting all data (Debug):", error);
-                            } else {
-                                console.error("Error deleting all data."); // 本番では詳細を出力しない
-                            }
+                            if (AppState.isDebugMode) console.error("Error deleting all data:", error);
                             App.showToast("データ削除中にエラーが発生しました。"); 
                         }
                      }
                 });
-                // (エクスポート実行)
+
                 ui.exportBackupBtn.addEventListener('click', App.handleExportBackup);
-                // (インポート未実装通知)
-                ui.importBackupBtn.addEventListener('click', () => { 
-                    App.showToast("インポート機能は現在未実装です。", "error"); 
-                });
+                ui.importBackupBtn.addEventListener('click', () => { App.showToast("インポート機能は現在未実装です。", "error"); });
                 
                 App.setupInputClearButton(ui.searchInput, $('#clear-searchInput'));
-                App.setupInputClearButton($('#workNameInput'), $('#clear-workNameInput'));
-                App.setupInputClearButton($('#workUrlInput'), $('#clear-workUrlInput'));
 
-                ui.addWorkForm.addEventListener('submit', App.handleAddWork);
-                const workNameInput = $('#workNameInput'); // 登録フォームの入力欄
-                if (workNameInput) {
-                    // 1. 入力中にサジェストを表示 (メイン検索とは独立)
-                    workNameInput.addEventListener('input', App.debounce(() => {
-                        const query = workNameInput.value;
-                        const suggestBox = $('#search-suggest-box');
-                        if (query.length > 0) {
-                            // 登録欄の下にサジェストボックスを移動
-                            workNameInput.parentElement.appendChild(suggestBox);
-                            App.renderSuggestions(query); // メインのサジェスト描画関数を流用
-                        } else {
-                            App.closeSuggestBox(); // 空になったら閉じる
-                        }
-                    }, 300));
-
-                    // 2. 登録欄がフォーカスを失ったらサジェストを閉じる
-                    workNameInput.addEventListener('blur', () => {
-                        // 少し遅らせて、サジェストクリックを検知できるようにする
-                        setTimeout(() => {
-                            App.closeSuggestBox();
-                            // サジェストボックスをメイン検索の下に戻す
-                            ui.searchInput.closest('div.relative').appendChild($('#search-suggest-box'));
-                        }, 200);
-                    });
-
-                    // 3. 登録欄にフォーカスしたらサジェストを開く
-                    workNameInput.addEventListener('focus', () => {
-                        const query = workNameInput.value;
-                        if (query.length > 0) {
-                            const suggestBox = $('#search-suggest-box');
-                            workNameInput.parentElement.appendChild(suggestBox);
-                            App.renderSuggestions(query);
-                        }
-                    });
+                // ★★★ 修正箇所: ここを変更しました ★★★
+                // 古い ui.addWorkForm のリスナーを削除し、新しい一括登録ボタン用に追加
+                const openBatchBtn = $('#open-batch-reg-modal-btn');
+                if (openBatchBtn) {
+                    openBatchBtn.addEventListener('click', App.openBatchRegistrationModal);
                 }
-                $('#workRegisteredAt').value = App.formatDateForInput(new Date()); // これは動的要素なので$のまま
-                $('#toggleDebugModeBtn').addEventListener('click', App.toggleDebugMode); // 同上
+                // ★★★★★★★★★★★★★★★★★★★★★★★
 
-                $('#workImage').addEventListener('change', e => {
-                    const file = e.target.files[0];
-                    const preview = $('#imagePreview');
-                    if (file) {
-                        const reader = new FileReader();
-                        reader.onload = event => { preview.src = event.target.result; preview.classList.remove('hidden'); };
-                        reader.readAsDataURL(file);
-                    } else { preview.classList.add('hidden'); }
-                });
+                // ... (以下、検索やページネーションなどの既存リスナーはそのまま維持) ...
                 
+                $('#toggleDebugModeBtn').addEventListener('click', App.toggleDebugMode);
+
                 ui.searchInput.addEventListener('input', App.debounce(() => {
                     const query = ui.searchInput.value;
-                    if (query.length > 0) {
-                        App.renderSuggestions(query); // 入力があればサジェスト表示
-                    } else {
-                        App.renderSearchHistory(); // 入力が空なら履歴表示
-                    }
-                    // 即時検索は行わず、Enterかサジェスト選択を待つ (必要ならここでも App.performSearch を呼ぶ)
+                    if (query.length > 0) App.renderSuggestions(query);
+                    else App.renderSearchHistory();
                 }, 300));
 
-                // 検索ボックスでEnterキーが押されたら検索実行
                 ui.searchInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault(); // フォーム送信を防ぐ
-                        App.performSearch(ui.searchInput.value);
-                    }
-                    // Escキーでサジェストボックスを閉じる
-                    if (e.key === 'Escape') {
-                        App.closeSuggestBox();
-                    }
+                    if (e.key === 'Enter') { e.preventDefault(); App.performSearch(ui.searchInput.value); }
+                    if (e.key === 'Escape') App.closeSuggestBox();
                 });
 
-                // 検索ボックスがフォーカスされたら履歴表示
                 ui.searchInput.addEventListener('focus', () => {
-                    // 入力が空の場合のみ履歴を表示
-                    if (ui.searchInput.value.length === 0) {
-                    App.renderSearchHistory();
-                    } else {
-                    // 入力がある場合はサジェストを表示（debounceと重複する可能性あるが念のため）
-                    App.renderSuggestions(ui.searchInput.value);
-                    }
+                    if (ui.searchInput.value.length === 0) App.renderSearchHistory();
+                    else App.renderSuggestions(ui.searchInput.value);
                 });
 
-                // 検索ボックス外をクリックしたらサジェストボックスを閉じる
                 document.addEventListener('click', (e) => {
-                    const searchContainer = ui.searchInput.closest('div.relative'); // 検索ボックスとそのコンテナを取得
-                    if (AppState.isSuggestBoxOpen && !searchContainer.contains(e.target)) {
-                        App.closeSuggestBox();
-                    }
+                    const searchContainer = ui.searchInput.closest('div.relative');
+                    if (AppState.isSuggestBoxOpen && !searchContainer.contains(e.target)) App.closeSuggestBox();
                 });
 
-                // 履歴/サジェスト項目がクリックされたら検索実行
-                // 履歴/サジェスト項目がクリックされたら検索実行
                 const suggestBox = $('#search-suggest-box');
                 if (suggestBox) {
                     suggestBox.addEventListener('click', (e) => {
+                        // (サジェスト処理の中身は変更なし)
                         const selectButton = e.target.closest('button[data-action="select-history"]');
                         const deleteButton = e.target.closest('button[data-action="delete-history"]');
                         const clearAllButton = e.target.closest('button[data-action="clear-history"]');
-                        const suggestionButton = e.target.closest('button.search-suggestion-item'); // サジェスト
+                        const suggestionButton = e.target.closest('button.search-suggestion-item');
 
                         let query = null;
                         let action = null;
 
-                        if (selectButton) { // 履歴の「選択」
-                            query = selectButton.dataset.query;
-                            action = 'search';
-                        } else if (suggestionButton) { // サジェストの「選択」
-                            query = suggestionButton.dataset.query;
-                            action = 'search';
-                        } else if (deleteButton) { // 履歴の「個別削除」
-                            e.stopPropagation();
-                            const queryToDelete = deleteButton.dataset.query;
-                            AppState.searchHistory = AppState.searchHistory.filter(item => item !== queryToDelete);
-                            localStorage.setItem('searchHistory', JSON.stringify(AppState.searchHistory));
-                            App.renderSearchHistory(); // 履歴リストのみ再描画
-                            return;
-                        } else if (clearAllButton) { // 履歴の「全削除」
-                            e.stopPropagation();
-                            AppState.searchHistory = [];
-                            localStorage.removeItem('searchHistory');
-                            App.renderSearchHistory(); // 履歴リストのみ再描画
-                            return;
-                        }
+                        if (selectButton) { query = selectButton.dataset.query; action = 'search'; }
+                        else if (suggestionButton) { query = suggestionButton.dataset.query; action = 'search'; }
+                        else if (deleteButton) { e.stopPropagation(); const q = deleteButton.dataset.query; AppState.searchHistory = AppState.searchHistory.filter(i => i !== q); localStorage.setItem('searchHistory', JSON.stringify(AppState.searchHistory)); App.renderSearchHistory(); return; }
+                        else if (clearAllButton) { e.stopPropagation(); AppState.searchHistory = []; localStorage.removeItem('searchHistory'); App.renderSearchHistory(); return; }
 
                         if (action === 'search' && query !== null) {
                             e.stopPropagation();
-                            // サジェストボックスが「メイン検索」の子か「作品登録」の子か判定
-                            if (suggestBox.parentElement === AppState.ui.searchInput.closest('div.relative') || suggestBox.parentElement === AppState.ui.searchInput.closest('div')) {
-                                // A. メイン検索のサジェスト/履歴の場合
-                                App.performSearch(query);
-                            } else {
-                                // B. 作品登録のサジェスト/履歴の場合
-                                // 登録欄のサジェストクリック時は、メイン検索を実行する
-                                App.performSearch(query);
+                            App.performSearch(query);
+                            if (suggestBox.parentElement !== AppState.ui.searchInput.closest('div.relative')) {
                                 AppState.ui.searchInput.focus();
                                 App.showToast(`「${query}」を検索しました。`);
                             }
-                            App.closeSuggestBox(); // 検索実行後は閉じる
+                            App.closeSuggestBox();
                         }
                     });
                 }
+
                 ui.sortBtn.addEventListener('click', (e) => { e.stopPropagation(); ui.sortDropdown.classList.toggle('hidden'); });
                 document.addEventListener('click', () => ui.sortDropdown.classList.add('hidden'));
                 
@@ -2078,12 +2036,8 @@
                          if (target) {
                             AppState.sortState.by = target.dataset.by; AppState.sortState.order = target.dataset.order;
                             ui.sortStateLabel.textContent = `並び替え: ${target.textContent}`;
-                            // (Grok案: 設定の保存) localStorageにも保存
-                            // ★ 修正: localStorageへの保存を暗号化 (方針3) ★
                             const encryptedSortState = App.encryptData(AppState.sortState);
-                            if (encryptedSortState) {
-                                localStorage.setItem('sortState_encrypted', encryptedSortState);
-                            }
+                            if (encryptedSortState) localStorage.setItem('sortState_encrypted', encryptedSortState);
                             AppState.currentPage = 1;
                             ui.sortDropdown.classList.add('hidden'); App.renderWorkList();
                          }
@@ -2095,7 +2049,6 @@
                 ui.viewGridBtn.addEventListener('click', () => { AppState.listViewMode = 'grid'; localStorage.setItem('listViewMode', 'grid'); App.renderWorkList(); });
                 ui.viewListBtn.addEventListener('click', () => { AppState.listViewMode = 'list'; localStorage.setItem('listViewMode', 'list'); App.renderWorkList(); });
                 
-                // (Grok/ChatGPT案: FABメニュー選択後に自動で閉じる)
                 ui.manageTagsFab.addEventListener('click', () => { App.openTagModal({ mode: 'manage', onConfirm: ()=>{} }); App.closeFabMenu(); });
                 ui.statsFab.addEventListener('click', () => { App.openStatsDashboardModal(); App.closeFabMenu(); });
                 ui.externalSearchFab.addEventListener('click', () => { App.openExternalSearchModal(ui.searchInput.value); App.closeFabMenu(); });
@@ -2112,20 +2065,14 @@
                     });
                 }
                 
-                // 画像比較モーダル関連
                 ui.imageCompareCloseBtn.addEventListener('click', () => App.closeImageCompareModal());
                 ui.imageCompareModalBackdrop.addEventListener('click', () => App.closeImageCompareModal());
-                ui.imageCompareCancelBtn.addEventListener('click', () => {
-                    App.closeImageCompareModal();
-                    App.showToast("画像の変更をキャンセルしました。", "info");
-                });
+                ui.imageCompareCancelBtn.addEventListener('click', () => { App.closeImageCompareModal(); App.showToast("画像の変更をキャンセルしました。", "info"); });
                 ui.imageCompareConfirmBtn.addEventListener('click', () => {
                     App.closeImageCompareModal(false);
-                    
                     const editCurrentImagePreview = $('#edit-current-image-preview');
                     const editNoImagePlaceholder = $('#edit-no-image-placeholder');
                     const editImageDeleteBtn = $('#edit-image-delete-btn');
-                    
                     if (editCurrentImagePreview && AppState.tempNewImageUrl) {
                         editCurrentImagePreview.src = AppState.tempNewImageUrl;
                         editCurrentImagePreview.classList.remove('hidden');
@@ -2133,11 +2080,9 @@
                         editImageDeleteBtn.classList.remove('hidden');
                         AppState.deleteImageFlag = false;
                     }
-                    
                     App.showToast("新しい画像が適用されます。保存ボタンで確定してください。", "success");
                 });
 
-                // ページネーション (上下共通)
                 const setupPaginationListeners = (container) => {
                     if (!container) return;
                     container.querySelector('.prevPageBtn').addEventListener('click', () => {
@@ -2169,25 +2114,13 @@
                     AppState.isLiteMode = true;
                     localStorage.setItem('isLiteMode', 'true');
                     App.showToast("Liteモードで再読み込みします...", "info");
-                    
-                    // 1秒後にリロード
-                    setTimeout(() => {
-                        location.reload();
-                    }, 1000);
+                    setTimeout(() => { location.reload(); }, 1000);
                 };
 
-                // 両方のボタンに同じイベントリスナーを設定
-                // (※HTML側で ID が "lite-mode-switch-debug" と "lite-mode-switch-prod" に
-                // 変更されていることが前提です)
                 const liteModeDebugBtn = $('#lite-mode-switch-debug');
                 const liteModeProdBtn = $('#lite-mode-switch-prod');
-                
-                if (liteModeDebugBtn) {
-                    liteModeDebugBtn.addEventListener('click', activateLiteMode);
-                }
-                if (liteModeProdBtn) {
-                    liteModeProdBtn.addEventListener('click', activateLiteMode);
-                }
+                if (liteModeDebugBtn) liteModeDebugBtn.addEventListener('click', activateLiteMode);
+                if (liteModeProdBtn) liteModeProdBtn.addEventListener('click', activateLiteMode);
             },
 
             // --- Modal Implementations ---
