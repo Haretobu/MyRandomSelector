@@ -2257,7 +2257,6 @@
 
                 const safeWorkName = App.escapeHTML(work.name);
                 const safeWorkUrl = App.escapeHTML(work.sourceUrl || '');
-                // ★追加: 保存されているファイル名を取得 (なければ空文字)
                 const storedFileName = work.imageFileName ? App.escapeHTML(work.imageFileName) : '';
                 const fileNameDisplay = storedFileName || 'ファイルが選択されていません。';
 
@@ -2291,6 +2290,7 @@
                                         </div>
                                         <button type="button" id="openWorkUrlBtn" class="flex-shrink-0 w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" title="URLを開く" ${!safeWorkUrl ? 'disabled' : ''}><i class="fas fa-external-link-alt"></i></button>
                                     </div>
+                                    <div id="edit-url-preview-box" class="hidden mt-2"></div>
                                 </div>
                                 <div class="grid grid-cols-2 gap-4">
                                     <div>
@@ -2348,13 +2348,27 @@
                     const editNoImagePlaceholder = $('#edit-no-image-placeholder');
                     const editImageFilename = $('#edit-image-filename');
                     const pcMemoTextarea = $('#editWorkMemo'), smMemoButton = $('#open-memo-modal-btn');
+                    const editUrlPreviewBox = $('#edit-url-preview-box'); // ★追加
 
                     App.setupInputClearButton(workNameInput, $('#clear-editWorkName'));
                     App.setupInputClearButton(workUrlInput, $('#clear-editWorkUrl'));
 
                     AppState.tempNewImageUrl = null;
-                    AppState.tempNewImageFileName = null; // ★追加: 新しいファイル名の一時保存
+                    AppState.tempNewImageFileName = null; 
                     AppState.deleteImageFlag = false;
+
+                    // ★追加: URLプレビューロジック (編集画面用)
+                    // タイトル自動入力は「#batchWorkName」がないため機能せず、純粋なプレビューのみになる
+                    workUrlInput.addEventListener('blur', () => {
+                        const url = workUrlInput.value.trim();
+                        // httpから始まり、かつ一定の長さがある場合のみ取得
+                        if (url && url.length > 10 && url.startsWith('http')) {
+                            App.fetchLinkPreview(url, editUrlPreviewBox);
+                        } else { 
+                            editUrlPreviewBox.innerHTML = ''; 
+                            editUrlPreviewBox.classList.add('hidden'); 
+                        }
+                    });
 
                     if (pcMemoTextarea) pcMemoTextarea.addEventListener('input', () => { currentMemo = pcMemoTextarea.value; });
                     if (smMemoButton) smMemoButton.addEventListener('click', () => { App.openMemoModal(workId, currentMemo, currentRating, currentTagIds, (newMemo) => { if (newMemo !== null) { currentMemo = newMemo; App.openEditModal(workId, { rating: currentRating, tagIds: currentTagIds, memo: currentMemo }); } }); });
@@ -2372,7 +2386,6 @@
                         const file = e.target.files[0];
                         if (!file) return;
 
-                        // ★追加: 同じファイル名かどうかのチェック
                         if (storedFileName && file.name === storedFileName) {
                             if (!confirm(`「${file.name}」は現在保存されている画像と同じファイル名です。\n本当にこの画像で更新しますか？`)) {
                                 editImageUpload.value = '';
@@ -2386,7 +2399,7 @@
                             const newUrl = await App.processImage(file);
                             App.openImageCompareModal(work.imageUrl || '', newUrl);
                             AppState.tempNewImageUrl = newUrl; 
-                            AppState.tempNewImageFileName = file.name; // ★追加: ファイル名保持
+                            AppState.tempNewImageFileName = file.name;
                         } catch (error) {
                             App.showToast(error.message, "error");
                             editImageUpload.value = ''; AppState.tempNewImageUrl = null;
@@ -2420,10 +2433,10 @@
                         
                         if (AppState.tempNewImageUrl) {
                             updatedData.imageUrl = AppState.tempNewImageUrl;
-                            updatedData.imageFileName = AppState.tempNewImageFileName; // ★追加
+                            updatedData.imageFileName = AppState.tempNewImageFileName;
                         } else if (AppState.deleteImageFlag) {
                             updatedData.imageUrl = deleteField();
-                            updatedData.imageFileName = deleteField(); // ★追加
+                            updatedData.imageFileName = deleteField();
                         }
 
                         AppState.checkModalDirtyState = () => false;
