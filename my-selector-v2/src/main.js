@@ -234,6 +234,7 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
 
             showToast: UI.showToast,
             showConfirm: UI.showConfirm,
+            getSiteBadgeHTML: UI.getSiteBadgeHTML,
             formatDate: Utils.formatDate,
 
             formatDateForInput: (date) => {
