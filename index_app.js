@@ -3483,6 +3483,12 @@
                 AppState.editingTempIndex = -1;
                 AppState.isRegFormDirty = false;
 
+                // ★追加: モーダルを閉じようとした時のチェック関数を上書き
+                // (リストに作品があるか、またはフォームに入力中なら警告を出す)
+                AppState.checkModalDirtyState = () => {
+                    return AppState.tempWorks.length > 0 || AppState.isRegFormDirty;
+                };
+
                 const content = `
                     <div class="flex flex-col h-[80vh] lg:h-[75vh]">
                         <div class="flex lg:hidden bg-gray-900 rounded-t-lg mb-2 p-1 gap-1 shrink-0">
@@ -4918,3 +4924,6 @@
                 </div>`;
             }
         });
+
+        // ★追加: Appをグローバルスコープに公開 (HTML内の onclick="App.～" を動かすため)
+        window.App = App;
