@@ -1,26 +1,30 @@
-const functions = require("firebase-functions");
+// ★重要: v2 (第2世代) 用のインポートに変更
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { setGlobalOptions } = require("firebase-functions/v2");
 const axios = require("axios");
 const cheerio = require("cheerio");
-const cors = require("cors")({ origin: true });
 
-// ヘルパー関数を先に定義 (エラー防止)
-const getMeta = ($, prop) => {
-    return $(`meta[property="${prop}"]`).attr("content") || $(`meta[name="${prop}"]`).attr("content");
-};
+// 東京リージョンをデフォルトに設定
+setGlobalOptions({ region: "asia-northeast1" });
 
-// 東京リージョン (asia-northeast1) を指定
-exports.getLinkPreview = functions.region('asia-northeast1').https.onCall(async (data, context) => {
-    // データ形式の正規化 (Gen1 / Gen2 両対応)
-    const requestData = (data && data.data) ? data.data : data;
-    const targetUrl = requestData.url;
+// 関数定義 (第2世代の書き方)
+exports.getLinkPreview = onCall({
+    cors: true,          // CORSを自動処理 (npm install cors は不要になりますが、そのままでOK)
+    region: "asia-northeast1", // 念のためここでも指定
+    timeoutSeconds: 15,  // タイムアウト設定
+    maxInstances: 10     // インスタンス数を制限してコスト急増を防止
+}, async (request) => {
+    // ★第2世代では、データは request.data に入っています
+    const targetUrl = request.data.url;
 
     if (!targetUrl) {
-        throw new functions.https.HttpsError("invalid-argument", "URLが必要です。");
+        throw new HttpsError("invalid-argument", "URLが必要です。");
     }
 
     try {
         const response = await axios.get(targetUrl, {
             headers: {
+                // FANZA/DMM対策のヘッダーセット
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
                 "Cookie": "age_check_done=1; adult_checked=1; i3_opnd=1; m_age_check_done=1",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -36,26 +40,31 @@ exports.getLinkPreview = functions.region('asia-northeast1').https.onCall(async 
                 "Sec-Fetch-User": "?1",
                 "Upgrade-Insecure-Requests": "1"
             },
-            timeout: 8000, // 8秒タイムアウト
+            timeout: 8000,
             maxRedirects: 5
         });
 
         const html = response.data;
         const $ = cheerio.load(html);
 
-        // タイトル取得
-        let title = getMeta($, "og:title") || $("title").text() || "";
+        // ヘルパー関数
+        const getMeta = (prop) => {
+            return $(`meta[property="${prop}"]`).attr("content") || $(`meta[name="${prop}"]`).attr("content");
+        };
+
+        // 情報取得
+        let title = getMeta("og:title") || $("title").text() || "";
         
-        // ログイン画面判定 (ログに出すだけ)
+        // ログイン画面判定 (ログに残す)
         if (title.includes("ログイン") || title.includes("Login")) {
             console.warn("Redirected to Login page.");
         }
 
-        const description = getMeta($, "og:description") || getMeta($, "description") || "";
-        let image = getMeta($, "og:image") || "";
-        let siteName = getMeta($, "og:site_name");
+        const description = getMeta("og:description") || getMeta("description") || "";
+        let image = getMeta("og:image") || "";
+        let siteName = getMeta("og:site_name");
 
-        // タイトルのクリーニング (サークル名・サイト名除去)
+        // タイトル整形
         if (title) {
             title = title.replace(/\s*\[.+?\]\s*\|\s*DLsite.*/i, '');
             title = title.replace(/\s*\(.+?\)\s*[|｜]\s*FANZA.*/i, '');
@@ -63,7 +72,7 @@ exports.getLinkPreview = functions.region('asia-northeast1').https.onCall(async 
             title = title.trim();
         }
 
-        // 画像URLの絶対パス化
+        // 画像URL修正
         if (image && !image.startsWith("http")) {
             try {
                 const urlObj = new URL(targetUrl);
@@ -71,7 +80,7 @@ exports.getLinkPreview = functions.region('asia-northeast1').https.onCall(async 
             } catch (e) {}
         }
 
-        // サイト名の補完
+        // サイト名修正
         if (!siteName) {
             try {
                 const urlObj = new URL(targetUrl);
