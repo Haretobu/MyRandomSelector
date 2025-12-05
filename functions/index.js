@@ -4,7 +4,7 @@ const cheerio = require("cheerio");
 const cors = require("cors")({ origin: true });
 
 exports.getLinkPreview = functions.https.onCall(async (data, context) => {
-  // 第1世代・第2世代の両方のデータ形式に対応
+  // 第2世代(Gen2)と第1世代(Gen1)の両方に対応
   const requestData = (data && data.data) ? data.data : data;
   const targetUrl = requestData.url;
 
@@ -15,37 +15,46 @@ exports.getLinkPreview = functions.https.onCall(async (data, context) => {
   try {
     const response = await axios.get(targetUrl, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        // ★修正1: 年齢認証を回避するためのCookieを追加
-        "Cookie": "age_check_done=1; adult_checked=1", 
+        // ★最強の偽装ヘッダーセット
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Cookie": "age_check_done=1; adult_checked=1; i3_opnd=1; m_age_check_done=1", // i3_opndなども追加
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7", // 日本語を優先
+        "Referer": "https://www.dmm.co.jp/", // DMM内部からの遷移を装う
+        "Cache-Control": "max-age=0",
+        "Sec-Ch-Ua": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1"
       },
-      timeout: 5000,
+      timeout: 8000, // タイムアウトを少し延長
+      maxRedirects: 5
     });
 
     const html = response.data;
     const $ = cheerio.load(html);
 
-    const getMeta = (prop) =>
-      $(`meta[property="${prop}"]`).attr("content") ||
-      $(`meta[name="${prop}"]`).attr("content");
+    // タイトルが「ログイン」になってしまった場合のチェック
+    let title = getMeta($,"og:title") || $("title").text() || "";
+    if (title.includes("ログイン") || title.includes("Login")) {
+        // ログイン画面に飛ばされた場合は、URLからIDだけでも抽出を試みるなどの救済措置が可能ですが、
+        // まずはエラーとして返さず、取得できた範囲（画像など）を返すようにします。
+        console.warn("Redirected to Login page.");
+    }
 
-    let title = getMeta("og:title") || $("title").text() || "";
-    const description = getMeta("og:description") || getMeta("description") || "";
-    let image = getMeta("og:image") || "";
-    let siteName = getMeta("og:site_name");
+    const description = getMeta($,"og:description") || getMeta($,"description") || "";
+    let image = getMeta($,"og:image") || "";
+    let siteName = getMeta($,"og:site_name");
 
-    // ★修正2: タイトルの不要な部分（サークル名やサイト名）を削除
+    // タイトルの掃除 (サークル名などを除去)
     if (title) {
-        // DLsite用: [サークル名] | DLsite... を削除
-        // 例: "作品名 [サークル] | DLsite" -> "作品名"
         title = title.replace(/\s*\[.+?\]\s*\|\s*DLsite.*/i, '');
-
-        // FANZA用: (サークル名)｜FANZA... を削除 (全角・半角パイプ対応)
-        // 例: "作品名 (サークル)｜FANZA同人" -> "作品名"
         title = title.replace(/\s*\(.+?\)\s*[|｜]\s*FANZA.*/i, '');
-        
-        // 余分な空白をトリム
+        title = title.replace(/\s*-\s*FANZA.*/i, ''); // 追加パターン
         title = title.trim();
     }
 
@@ -83,3 +92,8 @@ exports.getLinkPreview = functions.https.onCall(async (data, context) => {
     };
   }
 });
+
+// ヘルパー関数
+function getMeta($, prop) {
+    return $(`meta[property="${prop}"]`).attr("content") || $(`meta[name="${prop}"]`).attr("content");
+}
