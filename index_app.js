@@ -1001,14 +1001,20 @@
                 });
             },
 
-            // --- Link Preview Logic ---
+            // --- Link Preview Logic (Fixed) ---
             fetchLinkPreview: async (url, containerElement) => {
-                // ★修正: URLの簡易バリデーションを強化
+                // 1. 厳格なバリデーション (サーバー通信前の門番)
                 if (!url || typeof url !== 'string') return;
                 const trimmedUrl = url.trim();
-                // "http"から始まり、かつ十分な長さがある場合のみリクエストする
-                if (!trimmedUrl.startsWith('http') || trimmedUrl.length < 10) return;
                 
+                // "http"で始まり、かつ "http://" (7文字) より長い場合のみ許可
+                if (!trimmedUrl.startsWith('http') || trimmedUrl.length < 8) {
+                    containerElement.innerHTML = '';
+                    containerElement.classList.add('hidden');
+                    return;
+                }
+                
+                // ローディング表示
                 containerElement.innerHTML = `<div class="text-xs text-gray-400 animate-pulse py-2"><i class="fas fa-spinner fa-spin mr-2"></i>リンク情報を取得中...</div>`;
                 containerElement.classList.remove('hidden');
 
@@ -1020,7 +1026,7 @@
                     const data = result.data.data;
 
                     if (!result.data.success || !data) {
-                        // 静かに失敗させる（エラー表示を目立たせない）
+                        // 取得失敗時は静かに隠す
                         containerElement.innerHTML = '';
                         containerElement.classList.add('hidden');
                         return;
@@ -1048,7 +1054,7 @@
                     
                     containerElement.innerHTML = html;
 
-                    // 一括登録画面でタイトルが空なら自動入力
+                    // タイトル自動入力 (一括登録画面用)
                     const batchNameInput = $('#batchWorkName');
                     if (batchNameInput && !batchNameInput.value && data.title) {
                         batchNameInput.value = data.title;
@@ -1057,8 +1063,8 @@
                     }
 
                 } catch (error) {
-                    console.error("Link Preview Error:", error);
-                    // エラー時は非表示にする（ユーザー操作を邪魔しない）
+                    // エラーが出てもコンソールに出すだけで、UIにはエラーを表示しない
+                    console.warn("Link Preview skipped:", error.message);
                     containerElement.innerHTML = '';
                     containerElement.classList.add('hidden');
                 }
@@ -3471,13 +3477,12 @@
 
             // --- Batch Registration Logic ---
 
+            // --- Batch Registration Logic (Mobile Optimized) ---
             openBatchRegistrationModal: () => {
-                // 状態のリセット
                 AppState.tempWorks = [];
                 AppState.editingTempIndex = -1;
                 AppState.isRegFormDirty = false;
 
-                // ★ UI変更: スマホ用タブ + コンテンツエリア
                 const content = `
                     <div class="flex flex-col h-[80vh] lg:h-[75vh]">
                         <div class="flex lg:hidden bg-gray-900 rounded-t-lg mb-2 p-1 gap-1 shrink-0">
@@ -3610,20 +3615,13 @@
                     tabInput.addEventListener('click', () => switchTab('input'));
                     tabList.addEventListener('click', () => switchTab('list'));
 
-                    // リスト描画関数のオーバーライド（バッジ更新用）
-                    const originalRenderList = App.renderTempWorkList; // 既存ロジックを退避するか、ここでUI更新ロジックを埋め込む
-                    // ここでは既存の App.renderTempWorkList を呼びつつ、バッジ更新を行うようにフックする
-                    
-                    // --- Initial Render ---
-                    App.renderTempWorkList();
+                    App.renderTempWorkList(); // 初期描画
 
                     const form = $('#batchRegForm');
                     const nameInput = $('#batchWorkName');
                     const urlInput = $('#batchWorkUrl');
                     const imageInput = $('#batchWorkImage');
                     
-                    // --- 1. Event Listeners ---
-
                     const setDirty = () => { AppState.isRegFormDirty = true; };
                     nameInput.addEventListener('input', setDirty);
                     urlInput.addEventListener('input', setDirty);
@@ -3633,11 +3631,11 @@
                     App.setupInputClearButton(nameInput, $('#clear-batchWorkName'));
                     App.setupInputClearButton(urlInput, $('#clear-batchWorkUrl'));
 
-                    // URL Preview Listener (Improved Error Handling)
+                    // URL Preview (エラー対策済み関数を使用)
                     const previewBox = $('#batch-url-preview-box');
                     urlInput.addEventListener('blur', () => {
                         const url = urlInput.value.trim();
-                        // ★修正: 明らかにURLでない、または短すぎる場合はサーバーへ送らない
+                        // 長さチェックを追加し、無駄な呼び出しを防ぐ
                         if (url && url.length > 10 && url.startsWith('http')) {
                             App.fetchLinkPreview(url, previewBox);
                         } else { 
@@ -3678,7 +3676,7 @@
                         App.openExternalSearchModal(nameInput.value);
                     });
 
-                    // リストに追加 (Add / Update)
+                    // リストに追加
                     form.addEventListener('submit', (e) => {
                         e.preventDefault();
                         const name = nameInput.value.trim();
@@ -3699,17 +3697,15 @@
                         if (AppState.editingTempIndex >= 0) {
                             AppState.tempWorks[AppState.editingTempIndex] = newItem;
                             App.showToast("リストの内容を更新しました。");
-                            // 編集後はリストに戻ると親切かも？一旦入力のままにする
                         } else {
                             if (AppState.tempWorks.some(w => w.name === newItem.name)) {
                                 return App.showToast("その作品名は既にリストにあります。", "error");
                             }
                             AppState.tempWorks.push(newItem);
                             
-                            // ★UX改善: 連続登録しやすいように、追加したら「追加しました」と出しつつフォームをクリア
                             App.showToast(`「${name}」をリストに追加しました。`, 'success');
                             
-                            // スマホならリストタブのバッジを更新 (点滅など)
+                            // スマホならリストタブのバッジを更新 (点滅)
                             const badge = $('#batch-tab-badge');
                             if(badge) {
                                 badge.classList.remove('hidden');
