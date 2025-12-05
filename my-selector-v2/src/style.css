@@ -1,96 +1,51 @@
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+/* --- ここから下を追加してください！ --- */
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+/* スクロールバー */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #1f2937; }
+::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #6b7280; }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
+.transition-all { transition: all 0.3s ease-in-out; }
 
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
+/* スライドメニュー（FAB） */
+#sliding-fab-drawer { max-width: 0; padding: 0; overflow: hidden; }
+#sliding-fab-container.drawer-open #sliding-fab-drawer { max-width: 100px; padding: 0.75rem; }
+#sliding-fab-container.drawer-open #sliding-fab-icon { transform: rotate(180deg); }
+#sliding-fab-container.fab-hidden { transform: translateX(100%) translateY(-50%); opacity: 0; pointer-events: none; }
+#sliding-fab-container { transition: transform 0.3s ease, opacity 0.3s ease; }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+/* ★★★ これが重要！モーダルを隠す設定 ★★★ */
+#image-compare-modal, #image-compare-modal-backdrop {
+    transition: opacity 0.3s ease-out;
+    opacity: 0;
+    pointer-events: none;
 }
+#image-compare-modal.active, #image-compare-modal-backdrop.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+#image-compare-modal.active > div { transform: translateY(0) scale(1); opacity: 1; }
+#image-compare-modal > div { transform: translateY(-20px) scale(0.95); opacity: 0; transition: transform 0.3s ease-out, opacity 0.3s ease-out; }
 
-#app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.vanilla:hover {
-  filter: drop-shadow(0 0 2em #f7df1eaa);
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
-}
+/* その他 */
+.modal-content { max-height: 85vh; }
+.view-btn-active { background-color: #0f766e; color: white; }
+.work-list-item { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background-color: #1f2937; border-radius: 0.75rem; transition: background-color 0.2s; min-height: 7.5rem; }
+.work-list-item:hover { background-color: #374151; }
+.date-filter-preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 0.5rem; }
+.btn-disabled { background-color: #4b5563; cursor: not-allowed; }
+.border-red-500 { border-color: #ef4444; }
+summary { list-style: none; cursor: pointer; }
+summary::-webkit-details-marker { display: none; }
+details[open] > summary .chevron-icon { transform: rotate(180deg); }
+.chevron-icon { transition: transform 0.2s ease-in-out; }
+.tag-item-and { background-color: #059669 !important; color: white !important; }
+.tag-item-or { background-color: #2563eb !important; color: white !important; }
+.tag-item-not { background-color: #be123c !important; color: white !important; text-decoration: line-through; }
+.stats-tab-active { background-color: #0f766e; color: white; }
+.site-badge { position: absolute; top: 6px; left: 6px; height: 16px; line-height: 16px; padding: 0 5px; font-size: 10px; font-weight: 800; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.5); pointer-events: none; }
