@@ -892,7 +892,7 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                 containerElement.classList.remove('hidden');
 
                 try {
-                    const functions = getFunctions(AppState.firebaseApp, 'asia-northeast1');
+                    // ★修正: 設定ファイルから読み込んだ 'functions' をそのまま使うだけでOK！
                     const getPreview = httpsCallable(functions, 'getLinkPreview');
                     
                     const result = await getPreview({ url: trimmedUrl });
