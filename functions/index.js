@@ -1,32 +1,69 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * const {onCall} = require("firebase-functions/v2/https");
- * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
+const functions = require("firebase-functions");
+const axios = require("axios");
+const cheerio = require("cheerio");
+const cors = require("cors")({ origin: true });
 
-const {setGlobalOptions} = require("firebase-functions");
-const {onRequest} = require("firebase-functions/https");
-const logger = require("firebase-functions/logger");
+exports.getLinkPreview = functions.https.onCall(async (data, context) => {
+  const targetUrl = data.url;
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+  if (!targetUrl) {
+    throw new functions.https.HttpsError("invalid-argument", "URLが必要です。");
+  }
 
-// Create and deploy your first functions
-// https://firebase.google.com/docs/functions/get-started
+  try {
+    // 1. URLのHTMLを取得
+    const response = await axios.get(targetUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+      },
+      timeout: 5000, // 5秒でタイムアウト
+    });
 
-// exports.helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+    const html = response.data;
+    const $ = cheerio.load(html);
+
+    // 2. OGPタグなどから情報を抽出
+    const getMeta = (prop) =>
+      $(`meta[property="${prop}"]`).attr("content") ||
+      $(`meta[name="${prop}"]`).attr("content");
+
+    const title = getMeta("og:title") || $("title").text() || "";
+    const description = getMeta("og:description") || getMeta("description") || "";
+    let image = getMeta("og:image") || "";
+    let siteName = getMeta("og:site_name");
+
+    // 画像URLが相対パスの場合は絶対パスに変換
+    if (image && !image.startsWith("http")) {
+      try {
+        const urlObj = new URL(targetUrl);
+        image = `${urlObj.protocol}//${urlObj.host}${image}`;
+      } catch (e) { /* URL解析失敗時はそのまま */ }
+    }
+
+    // サイト名がない場合はドメイン名を使用
+    if (!siteName) {
+      try {
+        const urlObj = new URL(targetUrl);
+        siteName = urlObj.hostname;
+      } catch (e) { siteName = ""; }
+    }
+
+    return {
+      success: true,
+      data: {
+        title: title.trim(),
+        description: description.trim(),
+        image: image,
+        url: targetUrl,
+        siteName: siteName,
+      },
+    };
+  } catch (error) {
+    console.error("Preview Error:", error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+});
