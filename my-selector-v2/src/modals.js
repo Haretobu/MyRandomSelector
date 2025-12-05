@@ -1,4 +1,6 @@
 // src/modals.js
+
+import { Timestamp, deleteField } from "firebase/firestore";
 import { store as AppState } from './store.js';
 import * as UI from './ui.js';
 import * as Utils from './utils.js';
