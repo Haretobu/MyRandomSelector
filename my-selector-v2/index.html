@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>作品ランダムセレクター</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' fill='%2306b6d4'><path d='M32 32C14.3 32 0 46.3 0 64V448c0 17.7 14.3 32 32 32H480c17.7 0 32-14.3 32-32V64c0-17.7-14.3-32-32-32H32zM160 128a32 32 0 1 1 0 64 32 32 0 1 1 0-64zm192 0a32 32 0 1 1 0 64 32 32 0 1 1 0-64zm-96 96a32 32 0 1 1 0 64 32 32 0 1 1 0-64zm-96 96a32 32 0 1 1 0 64 32 32 0 1 1 0-64zm192 0a32 32 0 1 1 0 64 32 32 0 1 1 0-64z'/></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="manifest" href="manifest.json">
+    <style type="text/tailwindcss">
+        /* Custom scrollbar for webkit browsers */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+        .transition-all {
+            transition: all 0.3s ease-in-out;
+        }
+
+        #sliding-fab-drawer {
+            max-width: 0;
+            padding-left: 0;
+            padding-right: 0;
+            overflow: hidden;
+        }
+
+        #sliding-fab-container.drawer-open #sliding-fab-drawer {
+            max-width: 100px; /* ドロワーが開いたときの幅 (ボタンサイズに応じて調整) */
+            padding-left: 0.75rem; /* p-3 */
+            padding-right: 0.75rem; /* p-3 */
+        }
+        /* ドロワーが開いたときにアイコンを回転 ( < → > ) */
+        #sliding-fab-container.drawer-open #sliding-fab-icon {
+            transform: rotate(180deg);
+        }
+        /* モーダル表示時にドロワーを隠す (古い .fab-hidden と同じ役割) */
+        #sliding-fab-container.fab-hidden {
+             transform: translateX(100%) translateY(-50%);
+             opacity: 0;
+             pointer-events: none;
+        }
+        /* 隠すときのアニメーション */
+        #sliding-fab-container {
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+
+        #image-compare-modal, #image-compare-modal-backdrop {
+            transition: opacity 0.3s ease-out;
+            opacity: 0;
+            pointer-events: none;
+        }
+        #image-compare-modal.active, #image-compare-modal-backdrop.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #image-compare-modal.active > div {
+            transform: translateY(0) scale(1);
+            opacity: 1;
+        }
+        #image-compare-modal > div {
+            transform: translateY(-20px) scale(0.95);
+            opacity: 0;
+            transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+        }
+        .modal-content {
+            max-height: 85vh;
+        }
+        .view-btn-active {
+             background-color: #0f766e; /* teal-700 */
+             color: white;
+        }
+        .work-list-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem;
+            background-color: #1f2937; /* gray-800 */
+            border-radius: 0.75rem;
+            transition: background-color 0.2s;
+            min-height: 7.5rem;
+        }
+        .work-list-item:hover {
+            background-color: #374151; /* gray-700 */
+        }
+        .date-filter-preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 0.5rem;
+        }
+        .btn-disabled {
+            background-color: #4b5563;
+            cursor: not-allowed;
+        }
+        .border-red-500 {
+            border-color: #ef4444;
+        }
+        summary {
+            list-style: none;
+            cursor: pointer;
+        }
+        summary::-webkit-details-marker {
+            display: none;
+        }
+        details[open] > summary .chevron-icon {
+            transform: rotate(180deg);
+        }
+        .chevron-icon {
+            transition: transform 0.2s ease-in-out;
+        }
+        .tag-item-and { background-color: #059669 !important; color: white !important; }
+        .tag-item-or { background-color: #2563eb !important; color: white !important; }
+        .tag-item-not { background-color: #be123c !important; color: white !important; text-decoration: line-through; }
+        .stats-tab-active {
+            background-color: #0f766e;
+            color: white;
+        }
+        .site-badge {
+            
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            height: 16px;
+            line-height: 16px;
+            padding: 0 5px;
+            font-size: 10px;
+            font-weight: 800;
+            border-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            pointer-events: none;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-200 font-sans antialiased">
+    
+    <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]"></div>
+
+    <div class="sticky top-0 z-[60]">
+    
+        <div id="lite-mode-banner" class="hidden bg-sky-700 text-white text-center py-1 font-bold text-sm">
+            Liteモードで実行中 (50件のみ表示 / 画像・リアルタイム更新は制限されています)
+        </div>
+        <div id="debug-banner" class="hidden bg-amber-600 text-black text-center py-1 font-bold text-sm">
+            デバッグモード実行中 - データは保存されません
+        </div>
+
+    </div>
+    
+    <div id="loading-overlay" class="fixed inset-0 bg-gray-900 z-[100] flex items-center justify-center p-4">
+        <button id="lite-mode-switch-debug" class="absolute top-4 left-4 px-3 py-1 text-xs bg-sky-800 hover:bg-sky-700 text-gray-300 rounded-lg transition-opacity duration-300">
+            Liteモード (Debug)
+        </button>
+        <div id="loading-content" class="text-center transition-opacity duration-300 opacity-0">
+            <i class="fas fa-spinner fa-spin fa-3x text-teal-400"></i>
+            <p id="loading-text" class="mt-4 text-gray-400">アプリケーションを初期化中...</p>
+            <div class="w-64 mx-auto mt-4 bg-gray-700 rounded-full h-2.5">
+                <div id="loading-progress-bar" class="bg-teal-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <button id="lite-mode-switch-prod" class="hidden mt-6 px-4 py-2 text-sm bg-sky-700 hover:bg-sky-600 text-white rounded-lg transition-opacity duration-300">
+                読み込みが遅い場合はこちら (Liteモードで再試行)
+            </button>
+        </div>
+    </div>
+
+
+    <div id="app-container" class="min-h-screen p-4 md:p-8 opacity-0 transition-opacity duration-500">
+        <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <aside class="lg:col-span-1 space-y-6">
+                <details id="sync-panel-details" class="bg-gray-800 rounded-xl shadow-lg">
+                    <summary class="p-6 flex justify-between items-center">
+                        <h2 class="text-xl font-bold text-teal-400 flex items-center"><i class="fas fa-sync-alt mr-3"></i>データ同期</h2>
+                        <i class="fas fa-chevron-down chevron-icon"></i>
+                    </summary>
+                    <div class="px-6 pb-6">
+                        <div class="space-y-3 pt-2 border-t border-gray-700">
+                            <div class="flex items-center bg-gray-700 rounded-lg p-2">
+                                <input type="text" id="syncIdDisplay" class="bg-transparent w-full text-gray-300 focus:outline-none" readonly>
+                                <button id="copySyncIdBtn" class="ml-2 px-3 py-1 bg-teal-600 hover:bg-teal-700 rounded-md text-sm transition-colors"><i class="fas fa-copy"></i></button>
+                            </div>
+                            
+                            <select id="syncIdHistory" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500"></select>
+                            
+                            <div class="flex items-center">
+                                <input type="text" id="newSyncIdInput" placeholder="新しい同期IDをペースト" class="w-full bg-gray-700 border border-gray-600 rounded-l-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500" autocomplete="off">
+                                <button id="loadSyncIdBtn" class="px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-700 text-white rounded-l-none flex-shrink-0">読込</button>
+                            </div>
+                            
+                            <div class="pt-2 border-t border-gray-700 mt-2 space-y-3">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button id="clearHistoryBtn" class="w-full text-sm px-2 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors">履歴クリア</button>
+                                    <button id="deleteDataBtn" class="w-full text-sm px-2 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors">全作品削除</button>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button id="exportBackupBtn" class="w-full text-sm px-2 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700 text-white">
+                                        <i class="fas fa-download mr-1"></i>保存
+                                    </button>
+                                    <button id="importBackupBtn" class="w-full text-sm px-2 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-amber-600 hover:bg-amber-700 text-black">
+                                        <i class="fas fa-upload mr-1"></i>読込(未)
+                                    </button>
+                                </div>
+                                <div>
+                                    <button id="toggleDebugModeBtn" class="w-full text-sm px-4 py-2 bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors">デバッグモード開始</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+
+                <details id="registration-panel-details" class="bg-gray-800 rounded-xl shadow-lg">
+                    <summary class="p-6 flex justify-between items-center">
+                        <h2 class="text-xl font-bold text-lime-400 flex items-center"><i class="fas fa-plus-circle mr-3"></i>作品登録</h2>
+                        <i class="fas fa-chevron-down chevron-icon"></i>
+                    </summary>
+                    <div class="px-6 pb-6">
+                        <div class="pt-2 border-t border-gray-700 text-center">
+                            <p class="text-gray-400 text-sm mb-4 text-left">
+                                複数の作品をリストに追加し、まとめて登録できます。<br>
+                                URLからの自動入力や画像設定も可能です。
+                            </p>
+                            <button id="open-batch-reg-modal-btn" class="w-full px-6 py-4 bg-lime-600 hover:bg-lime-700 rounded-xl font-bold text-xl shadow-lg transition-all transform hover:scale-[1.02] flex items-center justify-center">
+                                <i class="fas fa-layer-group mr-3"></i> 一括登録画面を開く
+                            </button>
+                        </div>
+                    </div>
+                </details>
+
+                <div id="lottery-panel" class="bg-gray-800 p-6 rounded-xl shadow-lg lg:sticky top-8">
+                    <h2 class="text-xl font-bold text-sky-400 mb-4 flex items-center"><i class="fas fa-dice mr-3"></i>抽選</h2>
+                    <div class="bg-gray-700 p-4 rounded-lg mb-4 min-h-[60px]">
+                        <p class="text-sm text-gray-400">現在の設定:</p>
+                        <div id="lotterySummary" class="text-sm">設定を開いて条件を選択してください。</div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button id="startLotteryBtn" class="w-full px-4 py-4 bg-sky-600 hover:bg-sky-700 rounded-lg font-bold text-xl transition-colors">抽選開始！</button>
+                        <button id="openLotterySettingsBtn" class="flex-shrink-0 px-4 py-4 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors"><i class="fas fa-cog text-xl"></i></button>
+                    </div>
+                </div>
+
+            </aside>
+
+            <main class="lg:col-span-2 space-y-6 pb-24">
+                <div class="bg-gray-800 p-4 rounded-xl shadow-lg">
+                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                        <div class="md:col-span-2 relative"> <div class="flex items-center bg-gray-700 rounded-lg px-3 relative"> <i class="fas fa-search text-gray-500"></i>
+                                <input type="search" id="searchInput" placeholder="作品名・ジャンル・タグ名で検索..." class="w-full bg-transparent p-2 focus:outline-none ml-2 pr-10" autocomplete="off"> <button type="button" id="clear-searchInput" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden">
+                                    <i class="fas fa-times-circle"></i>
+                                </button>
+                                </div>
+                            <div id="search-suggest-box" class="hidden absolute top-full z-20 mt-1 w-full bg-gray-600 rounded-lg shadow-xl py-2 max-h-60 overflow-y-auto"> </div>
+                            </div>
+                        <div class="md:col-span-2 relative">
+                            <button id="sortBtn" class="w-full h-full flex items-center justify-between bg-gray-700 p-2 rounded-lg hover:bg-gray-600 transition-colors">
+                                <span id="sortStateLabel">並び替え: 登録日 (新しい順)</span><i class="fas fa-chevron-down text-sm"></i>
+                            </button>
+                            <div id="sortDropdown" class="hidden absolute z-20 mt-1 w-full bg-gray-700 rounded-lg shadow-xl py-1">
+                                </div>
+                        </div>
+                         <button id="filterBtn" class="md:col-span-1 w-full h-full bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors flex items-center justify-center py-2"><i class="fas fa-filter mr-2"></i>絞り込み</button>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap gap-4 justify-between items-center px-2">
+                    <div id="activeFilters" class="flex flex-wrap gap-2 items-center">
+                         <span class="text-sm text-gray-400">絞り込み:</span>
+                         </div>
+                    <span id="workCount" class="flex-shrink-0 px-3 py-1 bg-gray-700 rounded-full text-sm font-semibold">0 作品</span>
+                </div>
+                
+                <div>
+                    <div class="flex flex-wrap justify-between items-center mb-4 px-2 gap-y-2">
+                        <div id="pagination-controls-top" class="hidden flex justify-end items-center gap-4 mb-4 px-2">
+                            <div class="flex items-center space-x-2 text-sm">
+                                <label class="text-gray-400">表示:</label>
+                                <select class="itemsPerPageSelect bg-gray-700 border border-gray-600 rounded-md p-1 focus:outline-none">
+                                    <option value="20">20</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button class="prevPageBtn px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed" disabled><i class="fas fa-chevron-left"></i></button>
+                                <span class="pageInfo text-sm text-gray-400 px-1">1 / 1</span>
+                                <button class="nextPageBtn px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed" disabled><i class="fas fa-chevron-right"></i></button>
+                            </div>
+                        </div>
+                        <h2 class="text-2xl font-bold">登録作品リスト</h2>
+                        <div class="flex space-x-1 bg-gray-700 p-1 rounded-lg">
+                            <button id="view-grid-btn" aria-label="グリッド表示" class="view-btn p-2 leading-none"><i class="fas fa-th-large"></i></button>
+                            <button id="view-list-btn" aria-label="リスト表示" class="view-btn p-2 leading-none"><i class="fas fa-bars"></i></button>
+                        </div>
+                    </div>
+                    <div id="workList" class="transition-all">
+                        </div>
+                        <div id="workListMessage" class="text-center py-10">
+                            </div>
+                    </div>
+                <div id="pagination-controls" class="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6 bg-gray-800 p-4 rounded-xl shadow-lg">
+                    <div class="flex items-center space-x-2 text-sm">
+                        <label class="text-gray-400">表示件数:</label>
+                        <select class="itemsPerPageSelect bg-gray-700 border border-gray-600 rounded-md p-1 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button class="prevPageBtn px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed" disabled><i class="fas fa-chevron-left"></i> 前へ</button>
+                        <span class="pageInfo text-sm text-gray-400 px-2">ページ 1 / 1</span>
+                        <button class="nextPageBtn px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed" disabled>次へ <i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <div id="fab-backdrop" class="hidden fixed inset-0 z-20"></div>
+
+    <div id="sliding-fab-container" class="fixed top-1/2 -translate-y-1/2 right-0 z-30 flex items-center">
+        
+        <div id="sliding-fab-drawer" class="bg-gray-800 rounded-l-lg shadow-lg flex flex-col space-y-3 p-3 transition-all duration-300">
+            <button id="manageTagsFab" title="タグ管理" aria-label="タグ管理" class="w-14 h-14 bg-purple-600 hover:bg-purple-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-tags text-xl"></i></button>
+            <button id="statsFab" title="統計" aria-label="統計" class="w-14 h-14 bg-amber-600 hover:bg-amber-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-chart-pie text-xl"></i></button>
+            <button id="externalSearchFab" title="外部サイト検索" aria-label="外部サイト検索" class="w-14 h-14 bg-emerald-600 hover:bg-emerald-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-globe-asia text-xl"></i></button>
+            <button id="historyFab" title="総合履歴" aria-label="総合履歴" class="w-14 h-14 bg-gray-600 hover:bg-gray-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-history text-xl"></i></button>
+            <a href="price_comparison.html" title="価格比較ツール" aria-label="価格比較ツール">
+                <button class="w-14 h-14 bg-cyan-600 hover:bg-cyan-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-balance-scale-right text-xl"></i></button>
+            </a>
+            <button id="drawerLotteryFab" title="抽選パネルへ" aria-label="抽選パネルへ移動" class="lg:hidden w-14 h-14 bg-sky-600 hover:bg-sky-700 rounded-full text-white flex items-center justify-center shadow-lg">
+                <i class="fas fa-dice text-xl"></i>
+            </button>
+        </div>
+        
+        <button id="sliding-fab-toggle" aria-label="メニューを開く" class="w-10 h-24 bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center rounded-l-lg shadow-lg -mr-1">
+            <i id="sliding-fab-icon" class="fas fa-chevron-left transition-transform duration-300"></i>
+        </button>
+    </div>
+
+    <div id="modal-backdrop" class="hidden fixed inset-0 bg-black bg-opacity-70 z-40 transition-opacity"></div>
+
+    <div id="modal-wrapper" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div id="modal-container" class="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-transform scale-95 opacity-0">
+             <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h3 id="modal-title" class="text-xl font-bold">Modal Title</h3>
+                <div class="flex items-center gap-3">
+                    <div id="modal-header-actions" class="ml-auto"></div>
+                    <button id="modal-close-btn" aria-label="閉じる" class="text-gray-400 hover:text-white"><i class="fas fa-times fa-lg"></i></button>
+                </div>
+            </div>
+            <div id="modal-content-host" class="p-6 overflow-y-auto modal-content">
+                </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-5 right-5 bg-gray-700 text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-[70]">
+        <p id="toast-message">Message</p>
+    </div>
+
+
+    <div id="login-overlay" class="hidden fixed inset-0 bg-gray-900 bg-opacity-95 z-[90] flex items-center justify-center p-4">
+        <div class="w-full max-w-sm">
+            <form id="login-form" class="bg-gray-800 p-8 rounded-2xl shadow-2xl space-y-6">
+                <h2 class="text-2xl font-bold text-center text-gray-300">ログイン</h2>
+                <div id="login-error" class="hidden text-sm text-center bg-red-900 border border-red-700 text-red-300 p-2 rounded-lg"></div>
+                <div>
+                    <label for="login-email" class="block text-sm font-medium text-gray-400 mb-1">メールアドレス</label>
+                    <input type="email" id="login-email" required class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-sky-500" autocomplete="email">
+                </div>
+                <div>
+                    <label for="login-password" class="block text-sm font-medium text-gray-400 mb-1">パスワード</label>
+                    <input type="password" id="login-password" required class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-sky-500" autocomplete="current-password">
+                </div>
+                <button type="submit" class="w-full px-4 py-3 bg-sky-600 hover:bg-sky-700 rounded-lg font-bold text-lg transition-colors">入室</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="confirm-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[80] flex items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-sm w-full">
+            <h3 id="confirm-title" class="text-lg font-bold mb-4">確認</h3>
+            <p id="confirm-message" class="text-gray-300 mb-6">この操作を続けてもよろしいですか？</p>
+            <div class="flex justify-end space-x-4">
+                <button id="confirm-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors">キャンセル</button>
+                <button id="confirm-ok" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="image-compare-modal-backdrop" class="fixed inset-0 bg-black bg-opacity-75 z-[90]"></div>
+    <div id="image-compare-modal" class="fixed inset-0 flex items-center justify-center z-[91] p-4">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg">
+            <div class="px-4 py-3 sm:px-6 flex justify-between items-center border-b border-gray-700">
+                <h3 class="text-lg font-medium text-white">画像変更の確認</h3>
+                <button type="button" id="image-compare-close-btn" class="text-gray-400 hover:text-white" aria-label="閉じる">
+                    <i class="fas fa-times fa-lg"></i>
+                </button>
+            </div>
+            <div class="p-4 sm:p-6 text-center">
+                <p class="text-sm text-gray-300 mb-4">変更後の画像を確認してください。</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-gray-400 text-xs mb-2">現在の画像</p>
+                        <img id="compare-original-image" src="" alt="現在の画像" class="w-full h-32 object-contain rounded-md border border-gray-700">
+                    </div>
+                    <div>
+                        <p class="text-gray-400 text-xs mb-2">新しい画像</p>
+                        <img id="compare-new-image" src="" alt="新しい画像" class="w-full h-32 object-contain rounded-md border border-gray-700">
+                    </div>
+                </div>
+            </div>
+            <div class="px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse sm:justify-center">
+                <button type="button" id="image-compare-confirm-btn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm">
+                    決定して変更
+                </button>
+                <button type="button" id="image-compare-cancel-btn" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-700 shadow-sm px-4 py-2 bg-gray-600 text-base font-medium text-gray-100 hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                    キャンセル
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>

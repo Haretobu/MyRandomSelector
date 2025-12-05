@@ -1,0 +1,21 @@
+{
+  "name": "作品ランダムセレクター",
+  "short_name": "セレクター",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#1f2937",
+  "theme_color": "#0d9488",
+  "description": "作品をランダムに抽選するための個人用セレクター",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
