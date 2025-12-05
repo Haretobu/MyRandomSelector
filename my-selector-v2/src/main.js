@@ -5,6 +5,7 @@ import * as Utils from './utils';
 
 // ★追加: UI生成ロジックを読み込む
 import * as UI from './ui.js';
+import * as Actions from './actions.js';
 
 // ★変更点: Chart.jsとCryptoJSのimportは削除しました
 // (index.htmlのCDNから読み込まれる window.Chart や window.CryptoJS をそのまま使います)
@@ -776,40 +777,7 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
             },
 
             // --- Image Processing ---
-            processImage: (file) => {
-                return new Promise((resolve, reject) => {
-                    // ★ 修正: MIMEタイプチェックを追加 (方針5準拠) ★
-                    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-                    if (!allowedTypes.includes(file.type)) {
-                        return reject(new Error("ファイル形式が正しくありません。(JPEG, PNG, WebP のみ可)"));
-                    }
-                    
-                    // ★ 修正: ファイルサイズチェック (既存) ★
-                    if (file.size > 900 * 1024) return reject(new Error("ファイルサイズが900KBを超えています。別の画像をお試しください。"));
-                    
-                    const reader = new FileReader();
-                    reader.onload = e => {
-                        const img = new Image();
-                        img.onload = () => {
-                            const canvas = document.createElement('canvas');
-                            const MAX_SIZE = 512;
-                            let { width, height } = img;
-                            if (width > height) {
-                                if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
-                            } else {
-                                if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
-                            }
-                            canvas.width = width;
-                            canvas.height = height;
-                            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-                            resolve(canvas.toDataURL('image/jpeg', 0.8));
-                        };
-                        img.src = e.target.result;
-                    };
-                    reader.onerror = error => reject(error);
-                    reader.readAsDataURL(file);
-                });
-            },
+            processImage: Utils.processImage,
 
             // --- Link Preview Logic (Fixed) ---
             fetchLinkPreview: async (url, containerElement) => {
@@ -881,182 +849,18 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
             },
 
             // ★追加: Storageへのアップロード処理
-            uploadImageToStorage: async (dataUrl, workId) => {
-                if (!dataUrl || !dataUrl.startsWith('data:image')) return null;
-                const timestamp = Date.now();
-                // ファイル名を "works/同期ID/作品ID_タイムスタンプ.jpg" にする
-                const path = `works/${AppState.syncId}/${workId}_${timestamp}.jpg`;
-                const storageRef = ref(AppState.storage, path);
-                
-                await uploadString(storageRef, dataUrl, 'data_url');
-                return await getDownloadURL(storageRef);
-            },
+            uploadImageToStorage: Actions.uploadImageToStorage,
 
             // --- CRUD Operations ---
-            handleAddWork: async (e) => {
-                e.preventDefault();
-                if (AppState.isDebugMode) { return App.showToast("デバッグモード中は作品を登録できません。"); }
-                
-                const form = e.target;
-                const name = form.elements.workName.value.trim();
-                const registeredAtStr = App.getDateInputValue('workRegisteredAt');
-                
-                if (!name || !registeredAtStr) return App.showToast("作品名と登録日は必須です。");
-                if (!App.isValidDate(registeredAtStr)) return App.showToast("登録日の形式が正しくありません (YYYY/MM/DD)。");
-                
-                const errorEl = $('#addWorkError');
-                if (AppState.works.some(w => w.name.toLowerCase() === name.toLowerCase())) {
-                    errorEl.textContent = `「${name}」は既に登録されています。`;
-                    errorEl.classList.remove('hidden');
-                    setTimeout(() => { errorEl.classList.add('hidden'); errorEl.textContent = ''; }, 4000);
-                    return;
-                }
+            handleAddWork: Actions.handleAddWork,
 
-                try {
-                    const worksRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`);
-                    const newDocRef = doc(worksRef); 
-                    
-                    let imageUrl = null;
-                    let imageFileName = null; // ★追加: ファイル名用変数
+            updateWork: Actions.updateWork,
 
-                    if (form.elements.workImage.files[0]) {
-                        try {
-                            const file = form.elements.workImage.files[0];
-                            imageFileName = file.name; // ★追加: ファイル名を取得
-                            const tempBase64 = await App.processImage(file);
-                            imageUrl = await App.uploadImageToStorage(tempBase64, newDocRef.id);
-                        } catch (error) { return App.showToast(error.message); }
-                    }
+            deleteWork: Actions.deleteWork,
 
-                    const url = form.elements.workUrl.value.trim();
-                    const newWork = {
-                        name,
-                        genre: form.elements.workGenre.value,
-                        sourceUrl: url,
-                        registeredAt: Timestamp.fromDate(new Date(registeredAtStr.replace(/\//g, '-'))),
-                        imageUrl, 
-                        imageFileName, // ★追加: 保存対象に含める
-                        selectionCount: 0, rating: 0, tagIds: [], lastSelectedAt: null,
-                        selectionHistory: []
-                    };
-
-                    await setDoc(newDocRef, newWork);
-                    
-                    App.showToast(`"${name}" を登録しました。`);
-                    
-                    // フォームのリセット処理（日付以外）
-                    form.elements.workName.value = '';
-                    form.elements.workUrl.value = '';
-                    form.elements.workImage.value = '';
-                    $('#imagePreview').classList.add('hidden');
-                    $('#imagePreview').src = '';
-                    
-                    // ★変更: 日付のリセット行を削除しました (入力した日付が維持されます)
-
-                } catch (error) {
-                    if (AppState.isDebugMode) console.error("Error adding work:", error);
-                    App.showToast("作品の登録に失敗しました。", "error");
-                }
-            },
-
-            updateWork: async (workId, updatedData) => {
-                if (AppState.isDebugMode) {
-                    const workIndex = AppState.works.findIndex(w => w.id === workId);
-                    if (workIndex !== -1) {
-                        AppState.works[workIndex] = { ...AppState.works[workIndex], ...updatedData };
-                        App.renderAll();
-                    }
-                    return true;
-                }
-                try {
-                    const workRef = doc(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`, workId);
-                    await updateDoc(workRef, updatedData);
-                    return true;
-                } catch (error) {
-                    // ★ 修正: isDebugMode で分岐 ★
-                    if (AppState.isDebugMode) {
-                        console.error("Error updating work (Debug):", error);
-                    } else {
-                        console.error("Error updating work."); // 本番では詳細を出力しない
-                    }
-                    App.showToast("作品の更新に失敗しました。", "error");
-                    return false;
-                }
-            },
-
-            deleteWork: async (workId, workName) => {
-                // if (AppState.isDebugMode) { return App.showToast("デバッグモード中は作品を削除できません。"); }
-                if (!await App.showConfirm("作品の削除", `「${App.escapeHTML(workName)}」を本当に削除しますか？<br>この操作は取り消せません。`)) return;
-                
-                try {
-                    // ★追加: Storageの画像も削除
-                    const work = AppState.works.find(w => w.id === workId);
-                    if (work && work.imageUrl && work.imageUrl.includes('firebasestorage')) {
-                        try {
-                            const imageRef = ref(AppState.storage, work.imageUrl);
-                            await deleteObject(imageRef);
-                        } catch (e) {
-                            console.log("画像削除スキップ (見つからない等):", e);
-                        }
-                    }
-
-                    await deleteDoc(doc(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`, workId));
-                    App.showToast(`「${workName}」を削除しました。`);
-                } catch (error) {
-                    if (AppState.isDebugMode) console.error("Error deleting work:", error);
-                    App.showToast("作品の削除に失敗しました。", "error");
-                }
-            },
-
-            addTag: async (name, color) => {
-                 if (AppState.isDebugMode) { return App.showToast("デバッグモード中はタグを作成できません。"); }
-                 const normalizedName = name.trim().toLowerCase();
-                 if ([...AppState.tags.values()].some(t => t.name.toLowerCase() === normalizedName)) {
-                    App.showToast("同じ名前のタグが既に存在します。", "error"); return null;
-                 }
-                 const newTag = {
-                    name: name.trim(), color, useCount: 0,
-                    createdAt: Timestamp.now(), lastSelectedAt: null
-                 };
-                 try {
-                    const docRef = doc(collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/tags`));
-                    await setDoc(docRef, newTag);
-                    App.showToast(`タグ「${name}」を作成しました。`);
-                    return { id: docRef.id, ...newTag };
-                 } catch (error) {
-                    // ★ 修正: isDebugMode で分岐 ★
-                    if (AppState.isDebugMode) {
-                        console.error("Error adding tag (Debug):", error);
-                    } else {
-                        console.error("Error adding tag."); // 本番では詳細を出力しない
-                    }
-                    App.showToast("タグの作成に失敗しました。", "error"); return null;
-                 }
-            },
+            addTag: Actions.addTag,
             
-            deleteTag: async (tagId) => {
-                 if (AppState.isDebugMode) { return App.showToast("デバッグモード中はタグを削除できません。"); }
-                 const tagToDelete = AppState.tags.get(tagId);
-                 if (!tagToDelete || !await App.showConfirm("タグの削除", `タグ「${App.escapeHTML(tagToDelete.name)}」を削除しますか？<br>全ての作品からこのタグが解除されます。`)) return;
-                 try {
-                    const batch = writeBatch(AppState.db);
-                    batch.delete(doc(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/tags`, tagId));
-                    AppState.works.filter(w => w.tagIds?.includes(tagId)).forEach(work => {
-                        const newTagIds = work.tagIds.filter(id => id !== tagId);
-                        batch.update(doc(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`, work.id), { tagIds: newTagIds });
-                    });
-                    await batch.commit();
-                    App.showToast(`タグ「${tagToDelete.name}」を削除しました。`);
-                 } catch(error) {
-                    // ★ 修正: isDebugMode で分岐 ★
-                    if (AppState.isDebugMode) {
-                        console.error("Error deleting tag (Debug):", error);
-                    } else {
-                        console.error("Error deleting tag."); // 本番では詳細を出力しない
-                    }
-                    App.showToast("タグの削除中にエラーが発生しました。", "error");
-                 }
-            },
+            deleteTag: Actions.deleteTag,
 
             // --- Rendering Logic ---
 

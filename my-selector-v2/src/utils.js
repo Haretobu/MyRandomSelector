@@ -79,3 +79,39 @@ export const generateRandomId = (length = 16) => {
 export const isMobile = () => {
     return window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 };
+
+// src/utils.js の一番下に追記
+
+// ★ 画像処理 (リサイズとBase64変換)
+export const processImage = (file) => {
+    return new Promise((resolve, reject) => {
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!allowedTypes.includes(file.type)) {
+            return reject(new Error("ファイル形式が正しくありません。(JPEG, PNG, WebP のみ可)"));
+        }
+        
+        if (file.size > 900 * 1024) return reject(new Error("ファイルサイズが900KBを超えています。別の画像をお試しください。"));
+        
+        const reader = new FileReader();
+        reader.onload = e => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_SIZE = 512;
+                let { width, height } = img;
+                if (width > height) {
+                    if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+                } else {
+                    if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+                }
+                canvas.width = width;
+                canvas.height = height;
+                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.src = e.target.result;
+        };
+        reader.onerror = error => reject(error);
+        reader.readAsDataURL(file);
+    });
+};
