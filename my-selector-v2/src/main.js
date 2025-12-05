@@ -1,7 +1,10 @@
 import './style.css';
 import { auth, db, storage, functions } from './firebaseConfig';
-import { store as AppState } from './store'; // StoreをAppStateとして読み込む
-import * as Utils from './utils'; // 便利ツール読み込み
+import { store as AppState } from './store';
+import * as Utils from './utils';
+
+// ★追加: UI生成ロジックを読み込む
+import * as UI from './ui.js';
 
 // ★変更点: Chart.jsとCryptoJSのimportは削除しました
 // (index.htmlのCDNから読み込まれる window.Chart や window.CryptoJS をそのまま使います)
@@ -190,22 +193,10 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
             // --- Utility Functions ---
 
             // ★追加: モバイル判定 (画面幅またはUserAgentで簡易判定)
-            isMobile: () => {
-                return window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            },
+            isMobile: UI.isMobile,
 
-            escapeHTML: (str) => {
-                if (typeof str !== 'string' || !str) return '';
-                return str.replace(/[&<>"']/g, function(match) {
-                    return {
-                        '&': '&amp;',
-                        '<': '&lt;',
-                        '>': '&gt;',
-                        '"': '&quot;',
-                        "'": '&#39;'
-                    }[match];
-                });
-            },
+            escapeHTML: Utils.escapeHTML,
+
             // ★ 修正: 暗号化ヘルパー (方針3) ★
             encryptData: (data) => {
                 if (!AppState.currentUser || !AppState.currentUser.uid || !data) return null;
@@ -240,63 +231,9 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                 return d.toISOString().slice(0, 10).replace(/-/g, '/') === dateString;
             },
 
-            showToast: (message, type = 'info', duration = 3000) => {
-                let finalDuration = duration;
-                AppState.ui.toastEl.classList.remove('bg-red-600', 'bg-gray-700');
-
-                if (type === 'error') {
-                    finalDuration = 5000; // エラー時は5秒
-                    AppState.ui.toastEl.classList.add('bg-red-600'); // 色も赤くする
-                } else {
-                    AppState.ui.toastEl.classList.add('bg-gray-700');
-                }
-                AppState.ui.toastMessageEl.textContent = message;
-                AppState.ui.toastEl.classList.remove('translate-y-20', 'opacity-0');
-                AppState.ui.toastEl.classList.add('translate-y-0', 'opacity-100');
-                setTimeout(() => {
-                    AppState.ui.toastEl.classList.remove('translate-y-0', 'opacity-100');
-                    AppState.ui.toastEl.classList.add('translate-y-20', 'opacity-0');
-                }, finalDuration); // 変更
-            },
-
-            showConfirm: (title, message) => {
-                return new Promise((resolve) => {
-                    AppState.ui.confirmTitle.textContent = title;
-                    AppState.ui.confirmMessage.innerHTML = message;
-                    AppState.ui.confirmModal.classList.remove('hidden');
-
-                    const okHandler = () => {
-                        AppState.ui.confirmModal.classList.add('hidden');
-                        AppState.ui.confirmOkBtn.removeEventListener('click', okHandler);
-                        AppState.ui.confirmCancelBtn.removeEventListener('click', cancelHandler);
-                        resolve(true);
-                    };
-                    const cancelHandler = () => {
-                        AppState.ui.confirmModal.classList.add('hidden');
-                        AppState.ui.confirmOkBtn.removeEventListener('click', okHandler);
-                        AppState.ui.confirmCancelBtn.removeEventListener('click', cancelHandler);
-                        resolve(false);
-                    };
-                    
-                    AppState.ui.confirmOkBtn.addEventListener('click', okHandler);
-                    AppState.ui.confirmCancelBtn.addEventListener('click', cancelHandler);
-                });
-            },
-
-            formatDate: (timestamp, includeTime = true) => {
-                if (!timestamp || !timestamp.toDate) return 'N/A';
-                const date = timestamp.toDate();
-                const options = {
-                    year: 'numeric', month: '2-digit', day: '2-digit',
-                    hour: '2-digit', minute: '2-digit',
-                    hour12: false
-                };
-                if (!includeTime) {
-                    delete options.hour;
-                    delete options.minute;
-                }
-                return new Intl.DateTimeFormat('ja-JP', options).format(date);
-            },
+            showToast: UI.showToast,
+            showConfirm: UI.showConfirm,
+            formatDate: Utils.formatDate,
 
             formatDateForInput: (date) => {
                 const d = date instanceof Date ? date : new Date();
@@ -1123,54 +1060,6 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
 
             // --- Rendering Logic ---
 
-            _renderRatingStars: (rating) => {
-                const stars = [];
-                const numRating = rating || 0;
-                for (let i = 1; i <= 5; i++) {
-                    if (numRating >= i) {
-                        stars.push('<i class="fas fa-star text-yellow-400"></i>'); // Full
-                    } else if (numRating === (i - 0.5)) {
-                        stars.push('<i class="fas fa-star-half-alt text-yellow-400"></i>'); // Half
-                    } else {
-                        stars.push('<i class="far fa-star text-gray-500"></i>'); // Empty
-                    }
-                }
-                return stars.join('');
-            },
-
-            _renderTagsHTML: (tagIds, maxToShow = Infinity, workId = null, viewMode = 'grid') => {
-                const tagObjects = App.getTagObjects(tagIds); // App.getTagObjects を使用
-                if (tagObjects.length === 0) return ''; // タグがなければ空文字
-
-                const isExpanded = workId && AppState.expandedTagsWorkIds.has(workId); // AppState を使用
-                const displayLimit = isExpanded ? Infinity : maxToShow;
-                const displayedTags = tagObjects.slice(0, displayLimit);
-                const hasMoreTags = tagObjects.length > maxToShow && !isExpanded;
-
-                // Custom viewMode logic
-                const gapClass = viewMode === 'list' ? 'gap-1' : 'gap-2';
-                const tagPaddingClass = viewMode === 'list' ? 'px-1 py-0' : 'px-1.5 py-0.5';
-
-                let html = displayedTags.map(tag => {
-                    const safeName = App.escapeHTML(tag.name); // (安全のためエスケープ処理)
-                    return `<span class="${tagPaddingClass} rounded font-semibold text-xs" style="background-color:${tag.color}; color:${App.getContrastColor(tag.color)}">${safeName}</span>`;
-                }).join('');
-
-                // ↓ 修正: 'else if (hasMoreTags && !workId)' のブロックを追加
-                if (hasMoreTags && workId) {
-                    // Grid view: "expand" button
-                    html += ` <button data-action="toggle-tags" data-id="${workId}" class="px-2 py-1 rounded bg-gray-600 hover:bg-gray-500 text-xs">+${tagObjects.length - maxToShow}</button>`;
-                } else if (isExpanded && tagObjects.length > maxToShow && workId) {
-                    // Grid view: "show less" button
-                    html += ` <button data-action="toggle-tags" data-id="${workId}" class="px-2 py-1 rounded bg-gray-600 hover:bg-gray-500 text-xs">一部に戻す</button>`;
-                } else if (hasMoreTags && !workId) {
-                    // List view: "+X" badge
-                    html += ` <span class="px-1.5 py-0.5 rounded bg-gray-600 font-semibold text-xs">+${tagObjects.length - maxToShow}</span>`;
-                }
-
-                return `<div class="flex flex-wrap ${gapClass} text-xs">${html}</div>`;
-            },
-
             saveShowSiteIcon: (value) => {
                 AppState.showSiteIcon = value;
                 localStorage.setItem('showSiteIcon', value);
@@ -1191,24 +1080,14 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                 return 'other';
             },
 
-            // ★修正: バッジ表示ロジックも更新
-            getSiteBadgeHTML: (url) => {
-                if (!AppState.showSiteIcon || !url) return '';
-                if (url.includes('dlsite.com')) {
-                    return `<span class="site-badge bg-sky-600 text-white">DL</span>`;
-                }
-                // dmm.co.jp または dmm.com なら FZ バッジを表示
-                if (url.includes('dmm.co.jp') || url.includes('dmm.com')) {
-                    return `<span class="site-badge bg-red-600 text-white">FZ</span>`;
-                }
-                return '';
-            },
+            // src/main.js の Appオブジェクト内 renderWorkList: ... の部分
 
             renderWorkList: () => {
                 const { ui, isLoadComplete, isDebugMode, works, listViewMode, currentPage, itemsPerPage } = AppState;
                 if (!ui.workListEl) return;
                 if (!isLoadComplete && !isDebugMode) return;
 
+                // フィルタリングとソート（変更なし）
                 const filteredWorks = App.getFilteredAndSortedWorks();
                 const totalItems = filteredWorks.length;
                 const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
@@ -1252,13 +1131,15 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                 ui.workListMessage.classList.add('hidden');
                 ui.workListEl.classList.remove('hidden');
 
-                ui.workListEl.innerHTML = worksToShow.map(work => isGrid ? App.renderWorkCard(work) : App.renderWorkListItem(work)).join('');
+                // ★ここが変更点: App.render... ではなく UI.render... を使う
+                ui.workListEl.innerHTML = worksToShow.map(work => 
+                    isGrid ? UI.renderWorkCard(work) : UI.renderWorkListItem(work)
+                ).join('');
 
-                // ページネーションの更新処理
+                // ページネーションの更新処理（変更なし）
                 const topPagination = $('#pagination-controls-top');
                 const bottomPagination = $('#pagination-controls');
                 
-                // ★修正: nullチェックを追加
                 if (topPagination) topPagination.classList.remove('hidden');
                 if (bottomPagination) bottomPagination.classList.remove('hidden');
 
@@ -1272,94 +1153,6 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
 
                 updatePaginationUI(topPagination);
                 updatePaginationUI(bottomPagination);
-            },
-
-            renderWorkCard: (work) => {
-                const { expandedTagsWorkIds } = AppState;
-                const safeWorkName = App.escapeHTML(work.name);
-                const siteBadge = App.getSiteBadgeHTML(work.sourceUrl);
-
-                // ★追加: 連携状態チェック & モバイル判定
-                // (スマホの場合は強制的に非表示にするため、isLinked を false にするのと同等の扱いにし、HTML生成時に hidden クラスを付与)
-                const isMobile = App.isMobile();
-                const isLinked = work.isLocallyLinked === true;
-                
-                const rocketClass = isLinked 
-                    ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/30" 
-                    : "bg-gray-700 text-gray-500 cursor-not-allowed opacity-50";
-                
-                // モバイルなら hidden クラスを追加
-                const rocketVisibility = isMobile ? "hidden" : "";
-                
-                const rocketLink = isLinked ? `href="nightowl://play?id=${work.id}"` : "";
-                const rocketTitle = isLinked ? "PCで起動" : "PC連携未設定";
-
-                return `
-                <div class="bg-gray-800 rounded-xl shadow-lg overflow-hidden flex flex-col transition-transform hover:scale-[1.02]">
-                    <div class="relative">
-                        <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${safeWorkName}" class="w-full h-40 object-cover">
-                        ${siteBadge}
-                        <div class="absolute top-2 right-2 flex space-x-2">
-                            <a ${rocketLink} title="${rocketTitle}" class="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${rocketClass} ${rocketVisibility}">
-                                <i class="fas fa-rocket text-xs"></i>
-                            </a>
-                            
-                            <button data-action="edit" data-id="${work.id}" title="編集" class="w-8 h-8 bg-black bg-opacity-50 hover:bg-opacity-75 rounded-full flex items-center justify-center text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed" ><i class="fas fa-pencil-alt text-sm"></i></button>
-                            <button data-action="delete" data-id="${work.id}" data-name="${safeWorkName}" title="削除" class="w-8 h-8 bg-black bg-opacity-50 hover:bg-opacity-75 rounded-full flex items-center justify-center text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed" ><i class="fas fa-trash-alt text-sm"></i></button>
-                        </div>
-                        <span class="absolute bottom-2 left-2 px-2 py-0.5 bg-black bg-opacity-60 text-xs rounded">${work.genre}</span>
-                    </div>
-                    <div class="p-4 flex flex-col flex-grow">
-                        <p class="text-sm text-gray-400">${work.registeredAt ? App.formatDate(work.registeredAt, false) : 'N/A'}</p>
-                        <h3 class="text-lg font-bold mt-1 mb-2 flex-grow cursor-pointer" data-action="copy-name" data-name="${safeWorkName}">${safeWorkName}</h3>
-                        <div class="flex items-center space-x-1 mb-3">${App._renderRatingStars(work.rating)}</div>
-                        ${App._renderTagsHTML(work.tagIds, 5, work.id, 'grid')} </div>
-                </div>`;
-            },
-
-            renderWorkListItem: (work) => {
-                const safeWorkName = App.escapeHTML(work.name);
-                const siteBadge = App.getSiteBadgeHTML(work.sourceUrl);
-
-                // ★追加: 連携状態チェック & モバイル判定
-                const isMobile = App.isMobile();
-                const isLinked = work.isLocallyLinked === true;
-                
-                const rocketColor = isLinked ? "bg-indigo-600 hover:bg-indigo-500 text-white" : "bg-gray-600 hover:bg-gray-500 opacity-50";
-                const rocketVisibility = isMobile ? "hidden" : ""; // スマホなら隠す
-                
-                const rocketLink = isLinked ? `href="nightowl://play?id=${work.id}"` : "";
-                const rocketTitle = isLinked ? "PCで起動" : "PC連携未設定";
-
-                const imageUrl = AppState.isLiteMode
-                    ? 'https://placehold.co/600x400/1f2937/4b5563?text=Lite+Mode' 
-                    : (work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image');
-                // Liteモード時は遅延読み込みを強制
-                const loadingAttr = AppState.isLiteMode ? 'loading="lazy"' : '';
-                
-                return `
-                <div class="work-list-item">
-                    <div class="relative flex-shrink-0">
-                        <img src="${work.imageUrl || 'https://placehold.co/150x100/1f2937/4b5563?text=No+Img'}" alt="${safeWorkName}" class="w-20 h-16 object-cover rounded-md">
-                        ${siteBadge}
-                    </div>
-                    <div class="flex-grow min-w-0 overflow-hidden">
-                        <p class="font-bold cursor-pointer line-clamp-2" data-action="copy-name" data-name="${safeWorkName}">${safeWorkName}</p>
-                        <div class="flex items-center flex-wrap gap-x-4 text-sm text-gray-400 truncate">
-                            <span>${work.genre}</span><span>${work.registeredAt ? App.formatDate(work.registeredAt, false) : 'N/A'}</span>
-                            <span class="flex items-center space-x-1">${App._renderRatingStars(work.rating)}</span>
-                        </div>
-                        ${App._renderTagsHTML(work.tagIds, 4, null, 'list')} 
-                    </div>
-                    <div class="flex-shrink-0 flex space-x-2">
-                        <a ${rocketLink} title="${rocketTitle}" class="w-9 h-9 text-sm rounded-lg text-white flex items-center justify-center transition-all ${rocketColor} ${rocketVisibility}">
-                            <i class="fas fa-rocket"></i>
-                        </a>
-
-                        <button data-action="edit" data-id="${work.id}" class="w-9 h-9 text-sm rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" ><i class="fas fa-edit"></i></button>
-                        <button data-action="delete" data-id="${work.id}" data-name="${safeWorkName}" class="w-9 h-9 text-sm rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-red-600 hover:bg-red-700" ><i class="fas fa-trash"></i></button>
-                    </div>
-                </div>`;
             },
             
             getContrastColor: (hex) => {
