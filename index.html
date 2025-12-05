@@ -158,7 +158,6 @@
 
     </div>
     
-    <!-- Loading Overlay -->
     <div id="loading-overlay" class="fixed inset-0 bg-gray-900 z-[100] flex items-center justify-center p-4">
         <button id="lite-mode-switch-debug" class="absolute top-4 left-4 px-3 py-1 text-xs bg-sky-800 hover:bg-sky-700 text-gray-300 rounded-lg transition-opacity duration-300">
             Liteモード (Debug)
@@ -176,13 +175,10 @@
     </div>
 
 
-    <!-- Main Container -->
     <div id="app-container" class="min-h-screen p-4 md:p-8 opacity-0 transition-opacity duration-500">
         <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
             
-            <!-- Left Column: Controls -->
             <aside class="lg:col-span-1 space-y-6">
-                <!-- Data Sync Panel (Collapsible) -->
                 <details id="sync-panel-details" class="bg-gray-800 rounded-xl shadow-lg">
                     <summary class="p-6 flex justify-between items-center">
                         <h2 class="text-xl font-bold text-teal-400 flex items-center"><i class="fas fa-sync-alt mr-3"></i>データ同期</h2>
@@ -223,45 +219,24 @@
                     </div>
                 </details>
 
-                <!-- Work Registration Panel (Collapsible) -->
                 <details id="registration-panel-details" class="bg-gray-800 rounded-xl shadow-lg">
                     <summary class="p-6 flex justify-between items-center">
                         <h2 class="text-xl font-bold text-lime-400 flex items-center"><i class="fas fa-plus-circle mr-3"></i>作品登録</h2>
                         <i class="fas fa-chevron-down chevron-icon"></i>
                     </summary>
                     <div class="px-6 pb-6">
-                         <div id="addWorkError" class="hidden text-sm text-center bg-red-900 border border-red-700 text-red-300 p-2 rounded-lg mb-4"></div>
-                         <form id="addWorkForm" class="space-y-4 pt-2 border-t border-gray-700">
-                            <div class="relative"> <label for="workNameInput" class="block text-sm font-medium text-gray-400 mb-1">作品名</label>
-                                <div class="flex items-center gap-2"> <div class="relative flex-grow">
-                                        <input type="text" name="workName" id="workNameInput" placeholder="作品名" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500 pr-10" required autocomplete="off"> <button type="button" id="clear-workNameInput" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"> <i class="fas fa-times-circle"></i>
-                                        </button>
-                                    </div>
-                                    <button type="button" data-action="external-search-reg" class="flex-shrink-0 w-10 h-10 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-white flex items-center justify-center" title="外部サイトで検索"><i class="fas fa-globe-asia"></i></button>
-                                </div>
-                            </div>
-                            <select name="workGenre" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500" required>
-                                <option value="漫画">漫画</option>
-                                <option value="ゲーム">ゲーム</option>
-                                <option value="動画">動画</option>
-                            </select>
-                            <div class="relative"> <label for="workUrlInput" class="block text-sm font-medium text-gray-400 mb-1">作品URL (任意)</label>
-                                <input type="url" name="workUrl" id="workUrlInput" placeholder="https://..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500 pr-10" autocomplete="off"> <button type="button" id="clear-workUrlInput" class="absolute inset-y-0 right-0 top-7 flex items-center pr-3 text-gray-400 hover:text-white hidden">
-                                    <i class="fas fa-times-circle"></i>
-                                </button>
-                                </div>
-                            <input type="text" id="workRegisteredAt" name="workRegisteredAt" placeholder="YYYY/MM/DD" data-role="date-input" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-lime-500" required autocomplete="off">
-                            <div>
-                                <label for="workImage" class="block text-sm font-medium text-gray-400 mb-2">画像 (任意, 900KB以下)</label>
-                                <input type="file" name="workImage" id="workImage" accept="image/jpeg,image/png,image/webp" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-lime-600 file:text-white hover:file:bg-lime-700">
-                            </div>
-                            <img id="imagePreview" src="" class="hidden max-w-full h-auto mx-auto rounded-lg mt-2">
-                            <button type="submit" class="w-full px-4 py-3 bg-lime-600 hover:bg-lime-700 rounded-lg font-bold text-lg transition-colors">登録する</button>
-                        </form>
+                        <div class="pt-2 border-t border-gray-700 text-center">
+                            <p class="text-gray-400 text-sm mb-4 text-left">
+                                複数の作品をリストに追加し、まとめて登録できます。<br>
+                                URLからの自動入力や画像設定も可能です。
+                            </p>
+                            <button id="open-batch-reg-modal-btn" class="w-full px-6 py-4 bg-lime-600 hover:bg-lime-700 rounded-xl font-bold text-xl shadow-lg transition-all transform hover:scale-[1.02] flex items-center justify-center">
+                                <i class="fas fa-layer-group mr-3"></i> 一括登録画面を開く
+                            </button>
+                        </div>
                     </div>
                 </details>
 
-                <!-- Lottery Panel -->
                 <div id="lottery-panel" class="bg-gray-800 p-6 rounded-xl shadow-lg lg:sticky top-8">
                     <h2 class="text-xl font-bold text-sky-400 mb-4 flex items-center"><i class="fas fa-dice mr-3"></i>抽選</h2>
                     <div class="bg-gray-700 p-4 rounded-lg mb-4 min-h-[60px]">
@@ -276,9 +251,7 @@
 
             </aside>
 
-            <!-- Right Column: Content -->
             <main class="lg:col-span-2 space-y-6 pb-24">
-                <!-- List Controls -->
                 <div class="bg-gray-800 p-4 rounded-xl shadow-lg">
                      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
                         <div class="md:col-span-2 relative"> <div class="flex items-center bg-gray-700 rounded-lg px-3 relative"> <i class="fas fa-search text-gray-500"></i>
@@ -293,23 +266,19 @@
                                 <span id="sortStateLabel">並び替え: 登録日 (新しい順)</span><i class="fas fa-chevron-down text-sm"></i>
                             </button>
                             <div id="sortDropdown" class="hidden absolute z-20 mt-1 w-full bg-gray-700 rounded-lg shadow-xl py-1">
-                                <!-- Sort options will be injected by JS -->
-                            </div>
+                                </div>
                         </div>
                          <button id="filterBtn" class="md:col-span-1 w-full h-full bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors flex items-center justify-center py-2"><i class="fas fa-filter mr-2"></i>絞り込み</button>
                     </div>
                 </div>
 
-                <!-- Active Filters & Count -->
-                 <div class="flex flex-wrap gap-4 justify-between items-center px-2">
+                <div class="flex flex-wrap gap-4 justify-between items-center px-2">
                     <div id="activeFilters" class="flex flex-wrap gap-2 items-center">
                          <span class="text-sm text-gray-400">絞り込み:</span>
-                         <!-- Active filter badges will be injected here -->
-                    </div>
+                         </div>
                     <span id="workCount" class="flex-shrink-0 px-3 py-1 bg-gray-700 rounded-full text-sm font-semibold">0 作品</span>
                 </div>
                 
-                <!-- Work List Panel -->
                 <div>
                     <div class="flex flex-wrap justify-between items-center mb-4 px-2 gap-y-2">
                         <div id="pagination-controls-top" class="hidden flex justify-end items-center gap-4 mb-4 px-2">
@@ -334,11 +303,9 @@
                         </div>
                     </div>
                     <div id="workList" class="transition-all">
-                        <!-- Work cards will be injected here -->
-                    </div>
-                        <div id="workListMessage" class="text-center py-10">
-                            <!-- Messages like loading, no data, etc. will be shown here -->
                         </div>
+                        <div id="workListMessage" class="text-center py-10">
+                            </div>
                     </div>
                 <div id="pagination-controls" class="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6 bg-gray-800 p-4 rounded-xl shadow-lg">
                     <div class="flex items-center space-x-2 text-sm">
@@ -359,7 +326,6 @@
         </div>
     </div>
     
-    <!-- FAB Backdrop -->
     <div id="fab-backdrop" class="hidden fixed inset-0 z-20"></div>
 
     <div id="sliding-fab-container" class="fixed top-1/2 -translate-y-1/2 right-0 z-30 flex items-center">
@@ -382,10 +348,8 @@
         </button>
     </div>
 
-    <!-- Modals -->
     <div id="modal-backdrop" class="hidden fixed inset-0 bg-black bg-opacity-70 z-40 transition-opacity"></div>
 
-    <!-- Generic Modal Wrapper -->
     <div id="modal-wrapper" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
         <div id="modal-container" class="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-transform scale-95 opacity-0">
              <div class="flex justify-between items-center p-4 border-b border-gray-700">
@@ -396,12 +360,10 @@
                 </div>
             </div>
             <div id="modal-content-host" class="p-6 overflow-y-auto modal-content">
-                <!-- Modal content will be injected here -->
-            </div>
+                </div>
         </div>
     </div>
 
-    <!-- Toast Notification -->
     <div id="toast" class="fixed bottom-5 right-5 bg-gray-700 text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-[70]">
         <p id="toast-message">Message</p>
     </div>
@@ -425,7 +387,6 @@
         </div>
     </div>
 
-    <!-- Confirmation Modal -->
     <div id="confirm-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[80] flex items-center justify-center p-4">
         <div class="bg-gray-800 rounded-xl shadow-lg p-6 max-w-sm w-full">
             <h3 id="confirm-title" class="text-lg font-bold mb-4">確認</h3>
@@ -470,7 +431,6 @@
         </div>
     </div>
 
-    <!-- Firebase SDKs -->
     <script type="module" src="index_app.js"></script>
 </body>
 </html>

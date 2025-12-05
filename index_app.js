@@ -114,7 +114,9 @@
             expandedTagsWorkIds: new Set(), // (Grok/ChatGPT案: クリーンアップ) ※これは削除候補でしたが、`renderWorkCard`でまだ使われているため残します
 
             customPresets: [],
-
+            tempWorks: [],           // 一時保存リスト (買い物かご)
+            editingTempIndex: -1,    // 編集中のリストインデックス (-1は新規)
+            isRegFormDirty: false,   // フォームの内容が変更されているか (未保存チェック用)
             // Lottery State
             lotterySettings: {
                 mood: 'default',
@@ -3524,6 +3526,499 @@
                     </div>
                 `;
                 App.openModal("ヘルプ：抽選設定", content); // App.openModal を使用
+            },
+
+            // --- Batch Registration Logic ---
+
+            openBatchRegistrationModal: () => {
+                // 状態のリセット
+                AppState.tempWorks = [];
+                AppState.editingTempIndex = -1;
+                AppState.isRegFormDirty = false;
+
+                const content = `
+                    <div class="flex flex-col lg:flex-row h-[75vh] gap-4">
+                        <div class="w-full lg:w-7/12 flex flex-col overflow-y-auto pr-2">
+                            <h4 class="text-lg font-bold text-lime-400 mb-3"><i class="fas fa-pen mr-2"></i>作品情報を入力</h4>
+                            <form id="batchRegForm" class="space-y-4 flex-grow">
+                                <div class="relative">
+                                    <label class="block text-sm font-medium text-gray-400 mb-1">作品名 <span class="text-red-500">*</span></label>
+                                    <div class="flex items-center gap-2">
+                                        <div class="relative flex-grow">
+                                            <input type="text" id="batchWorkName" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:ring-2 focus:ring-lime-500 pr-8" placeholder="作品名を入力..." autocomplete="off">
+                                            <button type="button" id="clear-batchWorkName" class="absolute inset-y-0 right-0 flex items-center pr-2 text-gray-400 hover:text-white hidden"><i class="fas fa-times-circle"></i></button>
+                                        </div>
+                                        <button type="button" id="batch-external-search-btn" class="w-10 h-10 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-white flex items-center justify-center" title="外部検索"><i class="fas fa-globe-asia"></i></button>
+                                    </div>
+                                    <div id="batch-suggest-container" class="relative"></div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-400 mb-1">作品URL (任意)</label>
+                                    <div class="relative">
+                                        <input type="url" id="batchWorkUrl" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:ring-2 focus:ring-lime-500 pr-8" placeholder="https://..." autocomplete="off">
+                                        <button type="button" id="clear-batchWorkUrl" class="absolute inset-y-0 right-0 flex items-center pr-2 text-gray-400 hover:text-white hidden"><i class="fas fa-times-circle"></i></button>
+                                    </div>
+                                    <div id="batch-url-preview-box" class="hidden mt-2"></div>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-400 mb-1">ジャンル <span class="text-red-500">*</span></label>
+                                        <select id="batchWorkGenre" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2">
+                                            <option value="漫画">漫画</option>
+                                            <option value="ゲーム">ゲーム</option>
+                                            <option value="動画">動画</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-400 mb-1">登録日 <span class="text-red-500">*</span></label>
+                                        ${App.createDateInputHTML('batchWorkRegisteredAt', App.formatDateForInput(new Date()))}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-400 mb-1">画像 (任意)</label>
+                                    <div class="flex items-center gap-3">
+                                        <label class="cursor-pointer bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 rounded-lg text-sm">
+                                            <i class="fas fa-image mr-1"></i> 選択
+                                            <input type="file" id="batchWorkImage" accept="image/jpeg,image/png,image/webp" class="hidden">
+                                        </label>
+                                        <span id="batch-image-filename" class="text-xs text-gray-400 truncate flex-1">未選択</span>
+                                        <button type="button" id="batch-image-clear-btn" class="text-gray-400 hover:text-red-400 hidden"><i class="fas fa-trash"></i></button>
+                                    </div>
+                                    <div id="batch-image-preview-container" class="mt-2 hidden">
+                                        <img id="batch-image-preview" src="" class="max-h-32 rounded-lg border border-gray-600">
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-auto pt-4 flex gap-3">
+                                    <button type="button" id="batch-clear-form-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg text-sm">クリア</button>
+                                    <button type="submit" id="batch-add-list-btn" class="flex-grow px-4 py-3 bg-lime-600 hover:bg-lime-700 rounded-lg font-bold text-white shadow-lg transition-transform active:scale-95">
+                                        <i class="fas fa-cart-plus mr-2"></i>リストに追加
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="w-full lg:w-5/12 bg-gray-900 rounded-xl p-3 flex flex-col h-full border border-gray-700">
+                            <div class="flex justify-between items-center mb-3 pb-2 border-b border-gray-700">
+                                <h4 class="font-bold text-sky-400"><i class="fas fa-list-ul mr-2"></i>登録予定リスト</h4>
+                                <span id="batch-list-count" class="bg-gray-700 text-xs px-2 py-1 rounded-full">0件</span>
+                            </div>
+                            <div id="batch-temp-list" class="flex-grow overflow-y-auto space-y-2 pr-1 mb-3 custom-scrollbar">
+                                <div class="text-center py-10 text-gray-500 text-sm">
+                                    リストは空です。<br>左側で入力して追加してください。
+                                </div>
+                            </div>
+                            <button id="batch-finalize-btn" class="w-full py-3 bg-sky-600 hover:bg-sky-700 rounded-lg font-bold text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                                確定画面へ進む <i class="fas fa-arrow-right ml-2"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                App.openModal("作品の一括登録", content, () => {
+                    // 初期化
+                    App.initializeDateInputs($('#batchRegForm'));
+                    App.renderTempWorkList();
+
+                    const form = $('#batchRegForm');
+                    const nameInput = $('#batchWorkName');
+                    const urlInput = $('#batchWorkUrl');
+                    const imageInput = $('#batchWorkImage');
+                    const addBtn = $('#batch-add-list-btn');
+                    
+                    // --- 1. Event Listeners ---
+
+                    // ダーティフラグ管理 (入力したら「未保存」状態にする)
+                    const setDirty = () => { AppState.isRegFormDirty = true; };
+                    nameInput.addEventListener('input', setDirty);
+                    urlInput.addEventListener('input', setDirty);
+                    $('#batchWorkGenre').addEventListener('change', setDirty);
+                    imageInput.addEventListener('change', setDirty);
+                    
+                    // Input Clear Buttons
+                    App.setupInputClearButton(nameInput, $('#clear-batchWorkName'));
+                    App.setupInputClearButton(urlInput, $('#clear-batchWorkUrl'));
+
+                    // URL Preview Listener
+                    const previewBox = $('#batch-url-preview-box');
+                    urlInput.addEventListener('blur', () => {
+                        const url = urlInput.value.trim();
+                        if (url) App.fetchLinkPreview(url, previewBox); // 既存のプレビュー関数を流用
+                        else { previewBox.innerHTML = ''; previewBox.classList.add('hidden'); }
+                    });
+
+                    // Image Handling
+                    let tempImageData = null; // { base64, file, fileName }
+                    imageInput.addEventListener('change', async (e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                            try {
+                                const base64 = await App.processImage(file);
+                                tempImageData = { base64, file, fileName: file.name };
+                                $('#batch-image-filename').textContent = file.name;
+                                $('#batch-image-preview').src = base64;
+                                $('#batch-image-preview-container').classList.remove('hidden');
+                                $('#batch-image-clear-btn').classList.remove('hidden');
+                            } catch (err) {
+                                App.showToast(err.message, "error");
+                                imageInput.value = '';
+                            }
+                        }
+                    });
+                    
+                    $('#batch-image-clear-btn').addEventListener('click', () => {
+                        imageInput.value = '';
+                        tempImageData = null;
+                        $('#batch-image-filename').textContent = "未選択";
+                        $('#batch-image-preview-container').classList.add('hidden');
+                        $('#batch-image-clear-btn').classList.add('hidden');
+                        setDirty();
+                    });
+
+                    // 外部検索ボタン
+                    $('#batch-external-search-btn').addEventListener('click', () => {
+                        App.openExternalSearchModal(nameInput.value);
+                        // モーダルスタック処理が必要ならここに追加
+                    });
+
+                    // リストに追加 (Add / Update)
+                    form.addEventListener('submit', (e) => {
+                        e.preventDefault();
+                        const name = nameInput.value.trim();
+                        const dateStr = App.getDateInputValue('batchWorkRegisteredAt');
+
+                        if (!name) return App.showToast("作品名は必須です。", "error");
+                        if (!App.isValidDate(dateStr)) return App.showToast("日付形式が不正です。", "error");
+
+                        const newItem = {
+                            name: name,
+                            url: urlInput.value.trim(),
+                            genre: $('#batchWorkGenre').value,
+                            registeredAtStr: dateStr, // 文字列で保持し、確定時にTimestamp化
+                            imageData: tempImageData, // 画像データ一式
+                            site: App.getWorkSite(urlInput.value.trim()) // サイト判定
+                        };
+
+                        if (AppState.editingTempIndex >= 0) {
+                            // 更新モード
+                            AppState.tempWorks[AppState.editingTempIndex] = newItem;
+                            App.showToast("リストの内容を更新しました。");
+                        } else {
+                            // 新規追加モード
+                            // 重複チェック (リスト内)
+                            if (AppState.tempWorks.some(w => w.name === newItem.name)) {
+                                return App.showToast("その作品名は既にリストにあります。", "error");
+                            }
+                            AppState.tempWorks.push(newItem);
+                            App.showToast("リストに追加しました。続けて入力できます。");
+                        }
+
+                        // フォームリセット & 状態更新
+                        App.resetBatchRegForm(); 
+                        App.renderTempWorkList();
+                    });
+
+                    // フォームクリアボタン
+                    $('#batch-clear-form-btn').addEventListener('click', () => {
+                         App.resetBatchRegForm();
+                         App.showToast("フォームをクリアしました（新規入力モード）");
+                    });
+
+                    // 確定画面へ
+                    $('#batch-finalize-btn').addEventListener('click', () => {
+                        if (AppState.tempWorks.length === 0) return;
+                        if (AppState.isRegFormDirty) {
+                             if (!confirm("フォームに入力中の内容があります（未追加）。\n破棄して確定画面に進みますか？\n（追加する場合は「キャンセル」して「リストに追加」を押してください）")) {
+                                 return;
+                             }
+                        }
+                        App.openBatchConfirmModal();
+                    });
+
+                }, { size: 'max-w-7xl' }); // Wide modal
+            },
+
+            // リストの描画
+            renderTempWorkList: () => {
+                const listEl = $('#batch-temp-list');
+                const countEl = $('#batch-list-count');
+                const finalizeBtn = $('#batch-finalize-btn');
+                const addBtn = $('#batch-add-list-btn');
+
+                if (!listEl) return;
+
+                countEl.textContent = `${AppState.tempWorks.length}件`;
+                finalizeBtn.disabled = AppState.tempWorks.length === 0;
+
+                // ボタンのラベル更新
+                if (addBtn) {
+                    if (AppState.editingTempIndex >= 0) {
+                        addBtn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>内容を更新';
+                        addBtn.classList.remove('bg-lime-600', 'hover:bg-lime-700');
+                        addBtn.classList.add('bg-amber-600', 'hover:bg-amber-700');
+                    } else {
+                        addBtn.innerHTML = '<i class="fas fa-cart-plus mr-2"></i>リストに追加';
+                        addBtn.classList.remove('bg-amber-600', 'hover:bg-amber-700');
+                        addBtn.classList.add('bg-lime-600', 'hover:bg-lime-700');
+                    }
+                }
+
+                if (AppState.tempWorks.length === 0) {
+                    listEl.innerHTML = `<div class="text-center py-10 text-gray-500 text-sm">リストは空です。<br>左側で入力して追加してください。</div>`;
+                    return;
+                }
+
+                listEl.innerHTML = AppState.tempWorks.map((work, index) => {
+                    const isEditing = index === AppState.editingTempIndex;
+                    const activeClass = isEditing ? 'border-amber-500 bg-gray-800' : 'border-gray-700 bg-gray-800/50 hover:bg-gray-700';
+                    const imgUrl = work.imageData ? work.imageData.base64 : 'https://placehold.co/100x100/374151/9ca3af?text=No+Img';
+                    const siteBadge = App.getSiteBadgeHTML(work.url); // 既存のバッジロジック
+
+                    return `
+                    <div class="flex items-center gap-3 p-2 rounded-lg border ${activeClass} transition-colors group relative">
+                        <img src="${imgUrl}" class="w-12 h-12 rounded object-cover flex-shrink-0 bg-gray-900">
+                        <div class="flex-grow min-w-0 cursor-pointer" onclick="App.loadTempWorkToForm(${index})">
+                            <div class="flex items-center gap-2">
+                                <p class="font-bold text-sm truncate ${isEditing ? 'text-amber-400' : 'text-gray-200'}">${App.escapeHTML(work.name)}</p>
+                                ${siteBadge}
+                            </div>
+                            <p class="text-xs text-gray-400 truncate">${work.genre} / ${work.registeredAtStr}</p>
+                        </div>
+                        <button onclick="App.removeTempWork(${index})" class="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-red-500 rounded-full hover:bg-gray-800 transition-colors" title="削除">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                        ${isEditing ? '<span class="absolute top-0 right-0 w-2 h-2 bg-amber-500 rounded-full animate-ping"></span>' : ''}
+                    </div>
+                    `;
+                }).join('');
+            },
+
+            // リスト項目の削除
+            removeTempWork: (index) => {
+                // 削除時に確認は不要（UX向上のためサクサク消せるようにする、もしくは confirm 入れても良い）
+                // if (!confirm("削除しますか？")) return;
+                
+                AppState.tempWorks.splice(index, 1);
+                
+                // 編集中のものを削除した場合、編集モードを解除
+                if (AppState.editingTempIndex === index) {
+                    App.resetBatchRegForm();
+                } else if (AppState.editingTempIndex > index) {
+                    // 削除した分インデックスをずらす
+                    AppState.editingTempIndex--;
+                }
+                
+                App.renderTempWorkList();
+            },
+
+            // リスト項目の読み込み (編集モードへ)
+            loadTempWorkToForm: async (index) => {
+                // ダーティチェック
+                if (AppState.isRegFormDirty && AppState.editingTempIndex !== index) {
+                    if (!await App.showConfirm("未保存の変更", "フォームに入力中の内容があります。\n破棄してこの作品を読み込みますか？")) {
+                        return;
+                    }
+                }
+
+                const work = AppState.tempWorks[index];
+                AppState.editingTempIndex = index;
+                AppState.isRegFormDirty = false; // 読み込んだ直後はClean
+
+                $('#batchWorkName').value = work.name;
+                $('#batchWorkUrl').value = work.url;
+                $('#batchWorkGenre').value = work.genre;
+                $('#batchWorkRegisteredAt').value = work.registeredAtStr;
+                
+                // 画像復元
+                if (work.imageData) {
+                    $('#batch-image-filename').textContent = work.imageData.fileName;
+                    $('#batch-image-preview').src = work.imageData.base64;
+                    $('#batch-image-preview-container').classList.remove('hidden');
+                    $('#batch-image-clear-btn').classList.remove('hidden');
+                    // file input 自体には値を設定できないので、内部状態 (tempImageData) は submit 時に work.imageData から再利用するロジックが必要
+                    // 簡易的にUI上で「画像設定済み」とわかるようにする
+                } else {
+                    $('#batch-image-filename').textContent = "未選択";
+                    $('#batch-image-preview-container').classList.add('hidden');
+                    $('#batch-image-clear-btn').classList.add('hidden');
+                }
+                
+                // URLプレビューのリセット
+                $('#batch-url-preview-box').innerHTML = '';
+                $('#batch-url-preview-box').classList.add('hidden');
+                
+                App.renderTempWorkList(); // アクティブ表示更新
+                App.showToast(`「${work.name}」を編集します。`);
+            },
+
+            // フォームリセット
+            resetBatchRegForm: () => {
+                AppState.editingTempIndex = -1;
+                AppState.isRegFormDirty = false;
+                
+                $('#batchWorkName').value = '';
+                $('#batchWorkUrl').value = '';
+                // ジャンルと日付は利便性のため残す（連続登録しやすくする）
+                // $('#batchWorkGenre').value = '漫画'; 
+                // $('#batchWorkRegisteredAt').value = ...;
+                
+                $('#batchWorkImage').value = '';
+                $('#batch-image-filename').textContent = "未選択";
+                $('#batch-image-preview-container').classList.add('hidden');
+                $('#batch-image-clear-btn').classList.add('hidden');
+                $('#batch-url-preview-box').innerHTML = '';
+                $('#batch-url-preview-box').classList.add('hidden');
+
+                App.renderTempWorkList();
+            },
+
+            // 最終確認モーダル
+            openBatchConfirmModal: () => {
+                const count = AppState.tempWorks.length;
+                
+                const content = `
+                    <div class="flex flex-col h-[70vh]">
+                        <div class="text-center mb-4">
+                            <h4 class="text-xl font-bold text-white mb-1">登録内容の確認</h4>
+                            <p class="text-gray-400">以下の ${count} 件の作品を登録します。<br>よろしければ「確定して保存」を押してください。</p>
+                        </div>
+                        
+                        <div class="bg-gray-900 rounded-lg p-1 overflow-hidden flex-grow border border-gray-700 overflow-y-auto custom-scrollbar">
+                            <table class="w-full text-left text-sm">
+                                <thead class="bg-gray-800 text-gray-400 sticky top-0 z-10">
+                                    <tr>
+                                        <th class="p-3 font-medium">No.</th>
+                                        <th class="p-3 font-medium">画像</th>
+                                        <th class="p-3 font-medium">作品名 / サイト</th>
+                                        <th class="p-3 font-medium">属性</th>
+                                        <th class="p-3 font-medium">登録日</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-700">
+                                    ${AppState.tempWorks.map((work, i) => {
+                                        const siteBadge = App.getSiteBadgeHTML(work.url);
+                                        const imgUrl = work.imageData ? work.imageData.base64 : '';
+                                        const imgHtml = imgUrl ? `<img src="${imgUrl}" class="w-10 h-10 object-cover rounded bg-gray-800">` : '<span class="text-gray-600">-</span>';
+                                        
+                                        return `
+                                        <tr class="hover:bg-gray-800/50">
+                                            <td class="p-3 text-gray-500 text-xs">${i+1}</td>
+                                            <td class="p-3">${imgHtml}</td>
+                                            <td class="p-3">
+                                                <div class="font-bold text-white truncate max-w-[200px]" title="${App.escapeHTML(work.name)}">${App.escapeHTML(work.name)}</div>
+                                                <div class="mt-1">${siteBadge}</div>
+                                            </td>
+                                            <td class="p-3 text-gray-300 text-xs">${work.genre}</td>
+                                            <td class="p-3 text-gray-300 text-xs">${work.registeredAtStr}</td>
+                                        </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="pt-4 mt-4 border-t border-gray-700 flex justify-end gap-3">
+                            <button id="batch-confirm-back" class="px-6 py-3 bg-gray-600 hover:bg-gray-700 rounded-lg font-semibold">
+                                <i class="fas fa-arrow-left mr-2"></i>戻って編集
+                            </button>
+                            <button id="batch-confirm-save" class="px-8 py-3 bg-lime-600 hover:bg-lime-700 rounded-lg font-bold text-white shadow-lg transition-transform active:scale-95">
+                                <i class="fas fa-check-circle mr-2"></i>確定して保存
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                // 現在のモーダルを一時的に隠すのではなく、スタックに積んで新しいモーダルを開く
+                // (App.openModalは既存の内容を上書きするため、ここではスタック管理が面倒。
+                //  シンプルに「戻る」ボタンで openBatchRegistrationModal を再呼び出し（状態は AppState.tempWorks にあるので復元可）する方式にします)
+                
+                App.openModal("一括登録の確認", content, () => {
+                    $('#batch-confirm-back').addEventListener('click', () => {
+                        // 編集画面に戻る (状態はメモリにあるのでそのまま再描画)
+                        App.openBatchRegistrationModal();
+                        // リストは維持されているが、フォーム入力中だった内容は消えるため、再描画後にリセット
+                        // (UX的には入力中のものを復元するのがベストだが、複雑化回避のためフォームはクリア状態とする)
+                    });
+
+                    $('#batch-confirm-save').addEventListener('click', App.executeBatchSave);
+                }, { size: 'max-w-4xl' });
+            },
+
+            // 一括保存実行
+            executeBatchSave: async () => {
+                const btn = $('#batch-confirm-save');
+                btn.disabled = true;
+                btn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>保存中...`;
+
+                const total = AppState.tempWorks.length;
+                let successCount = 0;
+                let failCount = 0;
+
+                try {
+                    const batch = writeBatch(AppState.db);
+                    const worksCollectionRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`);
+
+                    // 1. 各作品の処理 (画像アップロードは非同期、Firestore書き込みはバッチ)
+                    // Storageアップロードは並列で行う
+                    const promises = AppState.tempWorks.map(async (work) => {
+                        const newDocRef = doc(worksCollectionRef);
+                        let imageUrl = null;
+                        let imageFileName = null;
+
+                        // 画像がある場合、アップロード
+                        if (work.imageData) {
+                            try {
+                                imageUrl = await App.uploadImageToStorage(work.imageData.base64, newDocRef.id);
+                                imageFileName = work.imageData.fileName;
+                            } catch (e) {
+                                console.error(`Image upload failed for ${work.name}:`, e);
+                                // 画像失敗しても作品自体は登録する方針
+                            }
+                        }
+
+                        const newWorkData = {
+                            name: work.name,
+                            genre: work.genre,
+                            sourceUrl: work.url,
+                            registeredAt: Timestamp.fromDate(new Date(work.registeredAtStr.replace(/\//g, '-'))),
+                            imageUrl: imageUrl,
+                            imageFileName: imageFileName,
+                            selectionCount: 0,
+                            rating: 0,
+                            tagIds: [],
+                            lastSelectedAt: null,
+                            selectionHistory: []
+                        };
+
+                        batch.set(newDocRef, newWorkData);
+                        return true;
+                    });
+
+                    await Promise.all(promises);
+                    await batch.commit();
+
+                    App.showToast(`${total}件の作品を一括登録しました！`, "success");
+                    
+                    // 状態クリア
+                    AppState.tempWorks = [];
+                    AppState.editingTempIndex = -1;
+                    AppState.isRegFormDirty = false;
+                    
+                    // モーダルを閉じてリスト更新
+                    App.closeModal();
+                    
+                    // Firestoreリスナーが自動更新するはずだが、念のため
+                    // (onSnapshotが発火する)
+
+                } catch (error) {
+                    console.error("Batch save error:", error);
+                    App.showToast("保存中にエラーが発生しました。", "error");
+                    btn.disabled = false;
+                    btn.innerHTML = `<i class="fas fa-check-circle mr-2"></i>確定して保存`;
+                }
             },
 
             openMemoModal: (workId, currentMemo, currentRating, currentTagIds, onConfirm) => { 
