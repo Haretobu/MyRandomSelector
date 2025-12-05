@@ -1003,7 +1003,11 @@
 
             // --- Link Preview Logic ---
             fetchLinkPreview: async (url, containerElement) => {
-                if (!url || !url.startsWith('http')) return;
+                // ★修正: URLの簡易バリデーションを強化
+                if (!url || typeof url !== 'string') return;
+                const trimmedUrl = url.trim();
+                // "http"から始まり、かつ十分な長さがある場合のみリクエストする
+                if (!trimmedUrl.startsWith('http') || trimmedUrl.length < 10) return;
                 
                 containerElement.innerHTML = `<div class="text-xs text-gray-400 animate-pulse py-2"><i class="fas fa-spinner fa-spin mr-2"></i>リンク情報を取得中...</div>`;
                 containerElement.classList.remove('hidden');
@@ -1012,11 +1016,13 @@
                     const functions = getFunctions(AppState.firebaseApp, 'us-central1');
                     const getPreview = httpsCallable(functions, 'getLinkPreview');
                     
-                    const result = await getPreview({ url: url });
+                    const result = await getPreview({ url: trimmedUrl });
                     const data = result.data.data;
 
                     if (!result.data.success || !data) {
-                        containerElement.innerHTML = `<div class="text-xs text-red-400 py-1">プレビューを取得できませんでした</div>`;
+                        // 静かに失敗させる（エラー表示を目立たせない）
+                        containerElement.innerHTML = '';
+                        containerElement.classList.add('hidden');
                         return;
                     }
 
@@ -1042,17 +1048,19 @@
                     
                     containerElement.innerHTML = html;
 
-                    // もし現在開いているのが一括登録モーダルで、タイトル欄が空なら自動入力
+                    // 一括登録画面でタイトルが空なら自動入力
                     const batchNameInput = $('#batchWorkName');
                     if (batchNameInput && !batchNameInput.value && data.title) {
                         batchNameInput.value = data.title;
-                        batchNameInput.dispatchEvent(new Event('input')); // 変更検知のため発火
+                        batchNameInput.dispatchEvent(new Event('input'));
                         App.showToast('タイトルを自動入力しました。');
                     }
 
                 } catch (error) {
                     console.error("Link Preview Error:", error);
-                    containerElement.innerHTML = `<div class="text-xs text-gray-500 py-1">プレビュー読み込みエラー: ${App.escapeHTML(error.message)}</div>`;
+                    // エラー時は非表示にする（ユーザー操作を邪魔しない）
+                    containerElement.innerHTML = '';
+                    containerElement.classList.add('hidden');
                 }
             },
 
@@ -3469,84 +3477,101 @@
                 AppState.editingTempIndex = -1;
                 AppState.isRegFormDirty = false;
 
+                // ★ UI変更: スマホ用タブ + コンテンツエリア
                 const content = `
-                    <div class="flex flex-col lg:flex-row h-[75vh] gap-4">
-                        <div class="w-full lg:w-7/12 flex flex-col overflow-y-auto pr-2">
-                            <h4 class="text-lg font-bold text-lime-400 mb-3"><i class="fas fa-pen mr-2"></i>作品情報を入力</h4>
-                            <form id="batchRegForm" class="space-y-4 flex-grow">
-                                <div class="relative">
-                                    <label class="block text-sm font-medium text-gray-400 mb-1">作品名 <span class="text-red-500">*</span></label>
-                                    <div class="flex items-center gap-2">
-                                        <div class="relative flex-grow">
-                                            <input type="text" id="batchWorkName" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:ring-2 focus:ring-lime-500 pr-8" placeholder="作品名を入力..." autocomplete="off">
-                                            <button type="button" id="clear-batchWorkName" class="absolute inset-y-0 right-0 flex items-center pr-2 text-gray-400 hover:text-white hidden"><i class="fas fa-times-circle"></i></button>
-                                        </div>
-                                        <button type="button" id="batch-external-search-btn" class="w-10 h-10 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-white flex items-center justify-center" title="外部検索"><i class="fas fa-globe-asia"></i></button>
-                                    </div>
-                                    <div id="batch-suggest-container" class="relative"></div>
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-400 mb-1">作品URL (任意)</label>
-                                    <div class="relative">
-                                        <input type="url" id="batchWorkUrl" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:ring-2 focus:ring-lime-500 pr-8" placeholder="https://..." autocomplete="off">
-                                        <button type="button" id="clear-batchWorkUrl" class="absolute inset-y-0 right-0 flex items-center pr-2 text-gray-400 hover:text-white hidden"><i class="fas fa-times-circle"></i></button>
-                                    </div>
-                                    <div id="batch-url-preview-box" class="hidden mt-2"></div>
-                                </div>
-
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-400 mb-1">ジャンル <span class="text-red-500">*</span></label>
-                                        <select id="batchWorkGenre" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2">
-                                            <option value="漫画">漫画</option>
-                                            <option value="ゲーム">ゲーム</option>
-                                            <option value="動画">動画</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-400 mb-1">登録日 <span class="text-red-500">*</span></label>
-                                        ${App.createDateInputHTML('batchWorkRegisteredAt', App.formatDateForInput(new Date()))}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-400 mb-1">画像 (任意)</label>
-                                    <div class="flex items-center gap-3">
-                                        <label class="cursor-pointer bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 rounded-lg text-sm">
-                                            <i class="fas fa-image mr-1"></i> 選択
-                                            <input type="file" id="batchWorkImage" accept="image/jpeg,image/png,image/webp" class="hidden">
-                                        </label>
-                                        <span id="batch-image-filename" class="text-xs text-gray-400 truncate flex-1">未選択</span>
-                                        <button type="button" id="batch-image-clear-btn" class="text-gray-400 hover:text-red-400 hidden"><i class="fas fa-trash"></i></button>
-                                    </div>
-                                    <div id="batch-image-preview-container" class="mt-2 hidden">
-                                        <img id="batch-image-preview" src="" class="max-h-32 rounded-lg border border-gray-600">
-                                    </div>
-                                </div>
-                                
-                                <div class="mt-auto pt-4 flex gap-3">
-                                    <button type="button" id="batch-clear-form-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg text-sm">クリア</button>
-                                    <button type="submit" id="batch-add-list-btn" class="flex-grow px-4 py-3 bg-lime-600 hover:bg-lime-700 rounded-lg font-bold text-white shadow-lg transition-transform active:scale-95">
-                                        <i class="fas fa-cart-plus mr-2"></i>リストに追加
-                                    </button>
-                                </div>
-                            </form>
+                    <div class="flex flex-col h-[80vh] lg:h-[75vh]">
+                        <div class="flex lg:hidden bg-gray-900 rounded-t-lg mb-2 p-1 gap-1 shrink-0">
+                            <button id="batch-tab-input" class="flex-1 py-2 text-sm font-bold rounded-md bg-gray-700 text-white transition-colors text-center">
+                                <i class="fas fa-pen mr-2"></i>入力
+                            </button>
+                            <button id="batch-tab-list" class="flex-1 py-2 text-sm font-bold rounded-md text-gray-400 hover:bg-gray-800 transition-colors text-center relative">
+                                <i class="fas fa-list-ul mr-2"></i>リスト
+                                <span id="batch-tab-badge" class="hidden absolute top-1 right-2 w-2 h-2 bg-sky-500 rounded-full"></span>
+                            </button>
                         </div>
 
-                        <div class="w-full lg:w-5/12 bg-gray-900 rounded-xl p-3 flex flex-col h-full border border-gray-700">
-                            <div class="flex justify-between items-center mb-3 pb-2 border-b border-gray-700">
-                                <h4 class="font-bold text-sky-400"><i class="fas fa-list-ul mr-2"></i>登録予定リスト</h4>
-                                <span id="batch-list-count" class="bg-gray-700 text-xs px-2 py-1 rounded-full">0件</span>
+                        <div class="flex flex-col lg:flex-row gap-4 flex-grow overflow-hidden relative">
+                            
+                            <div id="batch-col-form" class="w-full lg:w-7/12 flex flex-col h-full overflow-y-auto pr-1 lg:pr-2 custom-scrollbar transition-all absolute inset-0 lg:relative z-10 bg-gray-800 lg:bg-transparent">
+                                <h4 class="text-lg font-bold text-lime-400 mb-3 hidden lg:block"><i class="fas fa-pen mr-2"></i>作品情報を入力</h4>
+                                <form id="batchRegForm" class="space-y-4 flex-grow pb-2">
+                                    <div class="relative">
+                                        <label class="block text-sm font-medium text-gray-400 mb-1">作品名 <span class="text-red-500">*</span></label>
+                                        <div class="flex items-center gap-2">
+                                            <div class="relative flex-grow">
+                                                <input type="text" id="batchWorkName" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-base focus:ring-2 focus:ring-lime-500 pr-10" placeholder="作品名を入力..." autocomplete="off">
+                                                <button type="button" id="clear-batchWorkName" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"><i class="fas fa-times-circle text-lg"></i></button>
+                                            </div>
+                                            <button type="button" id="batch-external-search-btn" class="w-12 h-12 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-white flex items-center justify-center shrink-0" title="外部検索"><i class="fas fa-globe-asia text-lg"></i></button>
+                                        </div>
+                                        <div id="batch-suggest-container" class="relative"></div>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-400 mb-1">作品URL (任意)</label>
+                                        <div class="relative">
+                                            <input type="url" id="batchWorkUrl" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-lime-500 pr-10" placeholder="https://..." autocomplete="off">
+                                            <button type="button" id="clear-batchWorkUrl" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"><i class="fas fa-times-circle text-lg"></i></button>
+                                        </div>
+                                        <div id="batch-url-preview-box" class="hidden mt-2"></div>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-400 mb-1">ジャンル <span class="text-red-500">*</span></label>
+                                            <div class="relative">
+                                                <select id="batchWorkGenre" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm appearance-none">
+                                                    <option value="漫画">漫画</option>
+                                                    <option value="ゲーム">ゲーム</option>
+                                                    <option value="動画">動画</option>
+                                                </select>
+                                                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-400"><i class="fas fa-chevron-down"></i></div>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-400 mb-1">登録日 <span class="text-red-500">*</span></label>
+                                            ${App.createDateInputHTML('batchWorkRegisteredAt', App.formatDateForInput(new Date()))}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-400 mb-1">画像 (任意)</label>
+                                        <div class="flex items-center gap-3 bg-gray-700 p-2 rounded-lg border border-gray-600">
+                                            <label class="cursor-pointer bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 rounded-lg text-sm shrink-0">
+                                                <i class="fas fa-image mr-1"></i> 選択
+                                                <input type="file" id="batchWorkImage" accept="image/jpeg,image/png,image/webp" class="hidden">
+                                            </label>
+                                            <span id="batch-image-filename" class="text-xs text-gray-400 truncate flex-1">未選択</span>
+                                            <button type="button" id="batch-image-clear-btn" class="text-gray-400 hover:text-red-400 hidden px-2"><i class="fas fa-trash"></i></button>
+                                        </div>
+                                        <div id="batch-image-preview-container" class="mt-2 hidden text-center bg-gray-900 rounded-lg p-2">
+                                            <img id="batch-image-preview" src="" class="max-h-32 mx-auto rounded border border-gray-700">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="pt-4 flex gap-3 mt-auto sticky bottom-0 bg-gray-800 pb-1">
+                                        <button type="button" id="batch-clear-form-btn" class="px-4 py-3 bg-gray-600 hover:bg-gray-700 rounded-lg text-sm shrink-0">クリア</button>
+                                        <button type="submit" id="batch-add-list-btn" class="flex-grow px-4 py-3 bg-lime-600 hover:bg-lime-700 rounded-lg font-bold text-white shadow-lg transition-transform active:scale-95 flex items-center justify-center">
+                                            <i class="fas fa-cart-plus mr-2"></i>リストに追加
+                                        </button>
+                                    </div>
+                                </form>
                             </div>
-                            <div id="batch-temp-list" class="flex-grow overflow-y-auto space-y-2 pr-1 mb-3 custom-scrollbar">
-                                <div class="text-center py-10 text-gray-500 text-sm">
-                                    リストは空です。<br>左側で入力して追加してください。
+
+                            <div id="batch-col-list" class="hidden lg:flex w-full lg:w-5/12 bg-gray-900 rounded-xl p-3 flex-col h-full border border-gray-700 absolute lg:relative inset-0 z-20 lg:z-0">
+                                <div class="flex justify-between items-center mb-3 pb-2 border-b border-gray-700 shrink-0">
+                                    <h4 class="font-bold text-sky-400"><i class="fas fa-list-ul mr-2"></i>登録予定リスト</h4>
+                                    <span id="batch-list-count" class="bg-gray-700 text-xs px-3 py-1 rounded-full">0件</span>
                                 </div>
+                                <div id="batch-temp-list" class="flex-grow overflow-y-auto space-y-2 pr-1 mb-3 custom-scrollbar">
+                                    <div class="text-center py-10 text-gray-500 text-sm">
+                                        リストは空です。<br>入力タブで追加してください。
+                                    </div>
+                                </div>
+                                <button id="batch-finalize-btn" class="w-full py-4 bg-sky-600 hover:bg-sky-700 rounded-lg font-bold text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed shrink-0">
+                                    確定画面へ進む <i class="fas fa-arrow-right ml-2"></i>
+                                </button>
                             </div>
-                            <button id="batch-finalize-btn" class="w-full py-3 bg-sky-600 hover:bg-sky-700 rounded-lg font-bold text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
-                                確定画面へ進む <i class="fas fa-arrow-right ml-2"></i>
-                            </button>
                         </div>
                     </div>
                 `;
@@ -3554,37 +3579,75 @@
                 App.openModal("作品の一括登録", content, () => {
                     // 初期化
                     App.initializeDateInputs($('#batchRegForm'));
+                    
+                    // --- Mobile Tab Switching Logic ---
+                    const tabInput = $('#batch-tab-input');
+                    const tabList = $('#batch-tab-list');
+                    const colForm = $('#batch-col-form');
+                    const colList = $('#batch-col-list');
+
+                    const switchTab = (mode) => {
+                        if (mode === 'input') {
+                            tabInput.classList.add('bg-gray-700', 'text-white');
+                            tabInput.classList.remove('text-gray-400', 'hover:bg-gray-800');
+                            tabList.classList.remove('bg-gray-700', 'text-white');
+                            tabList.classList.add('text-gray-400', 'hover:bg-gray-800');
+                            
+                            colForm.classList.remove('hidden');
+                            colList.classList.add('hidden');
+                        } else {
+                            tabList.classList.add('bg-gray-700', 'text-white');
+                            tabList.classList.remove('text-gray-400', 'hover:bg-gray-800');
+                            tabInput.classList.remove('bg-gray-700', 'text-white');
+                            tabInput.classList.add('text-gray-400', 'hover:bg-gray-800');
+                            
+                            colList.classList.remove('hidden');
+                            colList.classList.add('flex'); // hiddenを消すとflexが必要
+                            colForm.classList.add('hidden');
+                        }
+                    };
+
+                    tabInput.addEventListener('click', () => switchTab('input'));
+                    tabList.addEventListener('click', () => switchTab('list'));
+
+                    // リスト描画関数のオーバーライド（バッジ更新用）
+                    const originalRenderList = App.renderTempWorkList; // 既存ロジックを退避するか、ここでUI更新ロジックを埋め込む
+                    // ここでは既存の App.renderTempWorkList を呼びつつ、バッジ更新を行うようにフックする
+                    
+                    // --- Initial Render ---
                     App.renderTempWorkList();
 
                     const form = $('#batchRegForm');
                     const nameInput = $('#batchWorkName');
                     const urlInput = $('#batchWorkUrl');
                     const imageInput = $('#batchWorkImage');
-                    const addBtn = $('#batch-add-list-btn');
                     
                     // --- 1. Event Listeners ---
 
-                    // ダーティフラグ管理 (入力したら「未保存」状態にする)
                     const setDirty = () => { AppState.isRegFormDirty = true; };
                     nameInput.addEventListener('input', setDirty);
                     urlInput.addEventListener('input', setDirty);
                     $('#batchWorkGenre').addEventListener('change', setDirty);
                     imageInput.addEventListener('change', setDirty);
                     
-                    // Input Clear Buttons
                     App.setupInputClearButton(nameInput, $('#clear-batchWorkName'));
                     App.setupInputClearButton(urlInput, $('#clear-batchWorkUrl'));
 
-                    // URL Preview Listener
+                    // URL Preview Listener (Improved Error Handling)
                     const previewBox = $('#batch-url-preview-box');
                     urlInput.addEventListener('blur', () => {
                         const url = urlInput.value.trim();
-                        if (url) App.fetchLinkPreview(url, previewBox); // 既存のプレビュー関数を流用
-                        else { previewBox.innerHTML = ''; previewBox.classList.add('hidden'); }
+                        // ★修正: 明らかにURLでない、または短すぎる場合はサーバーへ送らない
+                        if (url && url.length > 10 && url.startsWith('http')) {
+                            App.fetchLinkPreview(url, previewBox);
+                        } else { 
+                            previewBox.innerHTML = ''; 
+                            previewBox.classList.add('hidden'); 
+                        }
                     });
 
                     // Image Handling
-                    let tempImageData = null; // { base64, file, fileName }
+                    let tempImageData = null;
                     imageInput.addEventListener('change', async (e) => {
                         const file = e.target.files[0];
                         if (file) {
@@ -3611,10 +3674,8 @@
                         setDirty();
                     });
 
-                    // 外部検索ボタン
                     $('#batch-external-search-btn').addEventListener('click', () => {
                         App.openExternalSearchModal(nameInput.value);
-                        // モーダルスタック処理が必要ならここに追加
                     });
 
                     // リストに追加 (Add / Update)
@@ -3630,37 +3691,42 @@
                             name: name,
                             url: urlInput.value.trim(),
                             genre: $('#batchWorkGenre').value,
-                            registeredAtStr: dateStr, // 文字列で保持し、確定時にTimestamp化
-                            imageData: tempImageData, // 画像データ一式
-                            site: App.getWorkSite(urlInput.value.trim()) // サイト判定
+                            registeredAtStr: dateStr,
+                            imageData: tempImageData,
+                            site: App.getWorkSite(urlInput.value.trim())
                         };
 
                         if (AppState.editingTempIndex >= 0) {
-                            // 更新モード
                             AppState.tempWorks[AppState.editingTempIndex] = newItem;
                             App.showToast("リストの内容を更新しました。");
+                            // 編集後はリストに戻ると親切かも？一旦入力のままにする
                         } else {
-                            // 新規追加モード
-                            // 重複チェック (リスト内)
                             if (AppState.tempWorks.some(w => w.name === newItem.name)) {
                                 return App.showToast("その作品名は既にリストにあります。", "error");
                             }
                             AppState.tempWorks.push(newItem);
-                            App.showToast("リストに追加しました。続けて入力できます。");
+                            
+                            // ★UX改善: 連続登録しやすいように、追加したら「追加しました」と出しつつフォームをクリア
+                            App.showToast(`「${name}」をリストに追加しました。`, 'success');
+                            
+                            // スマホならリストタブのバッジを更新 (点滅など)
+                            const badge = $('#batch-tab-badge');
+                            if(badge) {
+                                badge.classList.remove('hidden');
+                                setTimeout(() => badge.classList.add('animate-ping'), 100);
+                                setTimeout(() => badge.classList.remove('animate-ping'), 600);
+                            }
                         }
 
-                        // フォームリセット & 状態更新
                         App.resetBatchRegForm(); 
                         App.renderTempWorkList();
                     });
 
-                    // フォームクリアボタン
                     $('#batch-clear-form-btn').addEventListener('click', () => {
                          App.resetBatchRegForm();
-                         App.showToast("フォームをクリアしました（新規入力モード）");
+                         App.showToast("フォームをクリアしました");
                     });
 
-                    // 確定画面へ
                     $('#batch-finalize-btn').addEventListener('click', () => {
                         if (AppState.tempWorks.length === 0) return;
                         if (AppState.isRegFormDirty) {
@@ -3671,7 +3737,7 @@
                         App.openBatchConfirmModal();
                     });
 
-                }, { size: 'max-w-7xl' }); // Wide modal
+                }, { size: 'max-w-7xl' });
             },
 
             // リストの描画
