@@ -33,13 +33,12 @@ export const getSiteBadgeHTML = (url) => {
     return '';
 };
 
-// ★ タグのHTML生成
 export const renderTagsHTML = (tagIds, maxToShow = Infinity, workId = null, viewMode = 'grid') => {
-    const tagObjects = Utils.getTagObjects(tagIds); // utils.jsに依存させるか、Store経由にするか
+    
     // ※注意: 元コードの App.getTagObjects を使う必要がありますが、
     // ここでは循環参照を避けるため、簡易的にStoreから直接引くロジックにします
     const getTagObjects = (ids) => Array.from(ids || []).map(id => AppState.tags.get(id)).filter(Boolean);
-    const tags = getTagObjects(tagIds);
+    const tags = getTagObjects(tagIds); // ← ここで正しく取得しているので、上の行は不要でした
 
     if (tags.length === 0) return '';
 
