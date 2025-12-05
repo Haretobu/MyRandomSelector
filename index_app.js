@@ -1019,7 +1019,7 @@
                 containerElement.classList.remove('hidden');
 
                 try {
-                    const functions = getFunctions(AppState.firebaseApp, 'us-central1');
+                    const functions = getFunctions(AppState.firebaseApp, 'asia-northeast1');
                     const getPreview = httpsCallable(functions, 'getLinkPreview');
                     
                     const result = await getPreview({ url: trimmedUrl });

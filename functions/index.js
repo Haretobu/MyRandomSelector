@@ -3,7 +3,8 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const cors = require("cors")({ origin: true });
 
-exports.getLinkPreview = functions.https.onCall(async (data, context) => {
+// ★修正: 日本のサーバー(東京)を指定する
+exports.getLinkPreview = functions.region('asia-northeast1').https.onCall(async (data, context) => {
   // 第2世代(Gen2)と第1世代(Gen1)の両方に対応
   const requestData = (data && data.data) ? data.data : data;
   const targetUrl = requestData.url;
