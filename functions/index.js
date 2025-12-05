@@ -4,26 +4,27 @@ const cheerio = require("cheerio");
 const cors = require("cors")({ origin: true });
 
 exports.getLinkPreview = functions.https.onCall(async (data, context) => {
-  const targetUrl = data.url;
+  // ★修正ポイント: 第2世代(Gen2)と第1世代(Gen1)の両方に対応させる
+  // Gen2の場合、実データは data.data に入っています。Gen1なら data そのものです。
+  const requestData = (data && data.data) ? data.data : data;
+  const targetUrl = requestData.url;
 
   if (!targetUrl) {
     throw new functions.https.HttpsError("invalid-argument", "URLが必要です。");
   }
 
   try {
-    // 1. URLのHTMLを取得
     const response = await axios.get(targetUrl, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
       },
-      timeout: 5000, // 5秒でタイムアウト
+      timeout: 5000,
     });
 
     const html = response.data;
     const $ = cheerio.load(html);
 
-    // 2. OGPタグなどから情報を抽出
     const getMeta = (prop) =>
       $(`meta[property="${prop}"]`).attr("content") ||
       $(`meta[name="${prop}"]`).attr("content");
@@ -33,15 +34,13 @@ exports.getLinkPreview = functions.https.onCall(async (data, context) => {
     let image = getMeta("og:image") || "";
     let siteName = getMeta("og:site_name");
 
-    // 画像URLが相対パスの場合は絶対パスに変換
     if (image && !image.startsWith("http")) {
       try {
         const urlObj = new URL(targetUrl);
         image = `${urlObj.protocol}//${urlObj.host}${image}`;
-      } catch (e) { /* URL解析失敗時はそのまま */ }
+      } catch (e) {}
     }
 
-    // サイト名がない場合はドメイン名を使用
     if (!siteName) {
       try {
         const urlObj = new URL(targetUrl);
