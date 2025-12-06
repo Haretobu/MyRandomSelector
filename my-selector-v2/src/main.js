@@ -2421,10 +2421,8 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                 AppState.editingTempIndex = -1;
                 AppState.isRegFormDirty = false;
 
-                // モーダルを閉じる際のチェック
-                AppState.checkModalDirtyState = () => {
-                    return AppState.tempWorks.length > 0 || AppState.isRegFormDirty;
-                };
+                // 修正: checkModalDirtyState の定義はここではなく onOpen コールバック内で行う
+                // (openModal が checkModalDirtyState をリセットしてしまうため)
 
                 const content = `
                     <div class="flex flex-col h-[80vh] lg:h-[75vh]">
@@ -2525,6 +2523,11 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                 `;
 
                 App.openModal("作品の一括登録", content, () => {
+                    // 修正: ここでダーティチェック関数を定義
+                    AppState.checkModalDirtyState = () => {
+                        return AppState.tempWorks.length > 0 || AppState.isRegFormDirty;
+                    };
+
                     // Initialize
                     App.initializeDateInputs($('#batchRegForm'));
                     
@@ -2704,6 +2707,17 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                     // リストに追加
                     form.addEventListener('submit', (e) => {
                         e.preventDefault();
+                        // 修正: 画像データの決定ロジック (編集中に画像を変更しなかった場合の復元)
+                        let finalImageData = tempImageData;
+                        const previewImg = $('#batch-image-preview');
+                        if (!finalImageData && previewImg && previewImg.dataset.restoredBase64) {
+                            finalImageData = {
+                                base64: previewImg.dataset.restoredBase64,
+                                fileName: previewImg.dataset.restoredFileName,
+                                file: null
+                            };
+                        }
+
                         const name = nameInput.value.trim();
                         const dateStr = App.getDateInputValue('batchWorkRegisteredAt');
 
@@ -2723,7 +2737,7 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                             url: urlInput.value.trim(),
                             genre: $('#batchWorkGenre').value,
                             registeredAtStr: dateStr,
-                            imageData: tempImageData,
+                            imageData: finalImageData, // 修正: 復元した画像データを使用
                             site: App.getWorkSite(urlInput.value.trim())
                         };
 
@@ -2767,6 +2781,267 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                     });
 
                 }, { size: 'max-w-7xl' });
+            },
+
+            openImageGeneratorModal: () => {
+                const today = App.formatDateForInput(new Date());
+                const date = new Date();
+                const firstDay = new Date(date.getFullYear(), date.getMonth(), 1);
+                const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+                
+                const content = `
+                    <div class="space-y-6">
+                        <div class="bg-gray-900 p-4 rounded-lg border border-gray-700">
+                            <h4 class="font-bold text-sky-400 mb-3"><i class="fas fa-sliders-h mr-2"></i>生成設定</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label class="block text-sm text-gray-400 mb-1">タイトル</label>
+                                    <input type="text" id="gen-title" value="Registered Works" class="w-full bg-gray-700 border border-gray-600 rounded p-2">
+                                </div>
+                                <div>
+                                    <label class="block text-sm text-gray-400 mb-1">サブタイトル</label>
+                                    <input type="text" id="gen-subtitle" value="${date.getFullYear()}/${date.getMonth()+1} Collection" class="w-full bg-gray-700 border border-gray-600 rounded p-2">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-1">対象期間 (登録日)</label>
+                                <div class="flex items-center gap-2">
+                                    ${App.createDateInputHTML('gen-start-date', App.formatDateForInput(firstDay))}
+                                    <span>～</span>
+                                    ${App.createDateInputHTML('gen-end-date', App.formatDateForInput(lastDay))}
+                                </div>
+                                <div class="mt-2 flex gap-2">
+                                     <button type="button" id="gen-preset-this-month" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded">今月</button>
+                                     <button type="button" id="gen-preset-last-month" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded">先月</button>
+                                     <button type="button" id="gen-preset-all" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded">全期間</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col items-center justify-center bg-gray-900 p-4 rounded-lg min-h-[200px] relative">
+                            <div id="gen-loading" class="hidden absolute inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-10">
+                                <div class="text-center">
+                                    <i class="fas fa-spinner fa-spin fa-2x text-teal-400"></i>
+                                    <p class="mt-2 text-sm text-gray-300">画像を生成中...</p>
+                                </div>
+                            </div>
+                            <canvas id="gen-canvas" class="max-w-full h-auto shadow-xl border border-gray-700 hidden"></canvas>
+                            <div id="gen-placeholder" class="text-gray-500 text-center">
+                                <i class="fas fa-image fa-3x mb-3"></i>
+                                <p>「プレビュー生成」を押してください</p>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between items-center pt-2">
+                            <div class="text-xs text-gray-400" id="gen-status"></div>
+                            <div class="flex gap-3">
+                                <button id="gen-preview-btn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold text-white">
+                                    <i class="fas fa-sync-alt mr-1"></i> プレビュー生成
+                                </button>
+                                <button id="gen-download-btn" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                    <i class="fas fa-download mr-1"></i> 保存
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                App.openModal("作品一覧画像ジェネレーター", content, () => {
+                    App.initializeDateInputs($('#modal-content-host'));
+                    const canvas = $('#gen-canvas');
+                    
+                    $('#gen-preset-this-month').addEventListener('click', () => {
+                        const d = new Date();
+                        $('#gen-start-date').value = App.formatDateForInput(new Date(d.getFullYear(), d.getMonth(), 1));
+                        $('#gen-end-date').value = App.formatDateForInput(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+                        $('#gen-subtitle').value = `${d.getFullYear()}/${d.getMonth()+1} Collection`;
+                    });
+                    $('#gen-preset-last-month').addEventListener('click', () => {
+                        const d = new Date();
+                        d.setMonth(d.getMonth() - 1);
+                        $('#gen-start-date').value = App.formatDateForInput(new Date(d.getFullYear(), d.getMonth(), 1));
+                        $('#gen-end-date').value = App.formatDateForInput(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+                        $('#gen-subtitle').value = `${d.getFullYear()}/${d.getMonth()+1} Collection`;
+                    });
+                    $('#gen-preset-all').addEventListener('click', () => {
+                        $('#gen-start-date').value = '2000/01/01';
+                        $('#gen-end-date').value = App.formatDateForInput(new Date());
+                        $('#gen-subtitle').value = `All Collections`;
+                    });
+
+                    $('#gen-preview-btn').addEventListener('click', async () => {
+                        const start = $('#gen-start-date').value;
+                        const end = $('#gen-end-date').value;
+                        const title = $('#gen-title').value;
+                        const subtitle = $('#gen-subtitle').value;
+
+                        if (!App.isValidDate(start) || !App.isValidDate(end)) return App.showToast("日付が不正です", "error");
+
+                        const startDate = new Date(start); startDate.setHours(0,0,0,0);
+                        const endDate = new Date(end); endDate.setHours(23,59,59,999);
+                        
+                        const targetWorks = AppState.works.filter(w => {
+                            if (!w.registeredAt) return false;
+                            const d = w.registeredAt.toDate();
+                            return d >= startDate && d <= endDate;
+                        }).sort((a,b) => b.registeredAt.toMillis() - a.registeredAt.toMillis());
+
+                        if (targetWorks.length === 0) return App.showToast("対象期間の作品がありません。", "error");
+
+                        $('#gen-loading').classList.remove('hidden');
+                        $('#gen-placeholder').classList.add('hidden');
+                        $('#gen-download-btn').disabled = true;
+
+                        try {
+                            await App.drawSummaryCanvas(canvas, targetWorks, title, subtitle);
+                            canvas.classList.remove('hidden');
+                            $('#gen-download-btn').disabled = false;
+                            $('#gen-status').textContent = `対象: ${targetWorks.length}作品`;
+                        } catch (e) {
+                            console.error(e);
+                            App.showToast("生成に失敗しました: " + e.message, "error");
+                        } finally {
+                            $('#gen-loading').classList.add('hidden');
+                        }
+                    });
+
+                    $('#gen-download-btn').addEventListener('click', () => {
+                        const link = document.createElement('a');
+                        link.download = `works_summary_${Date.now()}.png`;
+                        link.href = canvas.toDataURL('image/png');
+                        link.click();
+                    });
+
+                }, { size: 'max-w-4xl' });
+            },
+
+            drawSummaryCanvas: async (canvas, works, title, subtitle) => {
+                const ctx = canvas.getContext('2d');
+                const W = 1920;
+                const H = 1080;
+                canvas.width = W;
+                canvas.height = H;
+
+                const grad = ctx.createLinearGradient(0, 0, 0, H);
+                grad.addColorStop(0, '#111827'); 
+                grad.addColorStop(1, '#1f2937'); 
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, W, H);
+
+                ctx.fillStyle = '#f3f4f6';
+                ctx.font = 'bold 60px sans-serif';
+                ctx.textAlign = 'left';
+                ctx.fillText(title, 50, 100);
+
+                ctx.fillStyle = '#9ca3af';
+                ctx.font = '30px sans-serif';
+                ctx.fillText(subtitle, 50, 150);
+
+                ctx.fillStyle = '#4b5563';
+                ctx.font = '20px sans-serif';
+                ctx.textAlign = 'right';
+                ctx.fillText("Generated by Random Work Selector", W - 30, H - 30);
+
+                const areaW = W - 100;
+                const areaH = H - 230;
+                const startY = 180;
+                const startX = 50;
+                const count = works.length;
+                let cols = Math.ceil(Math.sqrt(count * (W/H)));
+                let rows = Math.ceil(count / cols);
+                if (rows * cols < count) rows++;
+                
+                const cellW = (areaW - (cols - 1) * 20) / cols;
+                const cellH = (areaH - (rows - 1) * 20) / rows;
+                
+                const loadImage = (src) => new Promise((resolve) => {
+                    const img = new Image();
+                    img.crossOrigin = "Anonymous";
+                    img.onload = () => resolve(img);
+                    img.onerror = () => resolve(null);
+                    img.src = src;
+                });
+
+                for (let i = 0; i < count; i++) {
+                    const work = works[i];
+                    const r = Math.floor(i / cols);
+                    const c = i % cols;
+                    const x = startX + c * (cellW + 20);
+                    const y = startY + r * (cellH + 20);
+
+                    ctx.fillStyle = '#374151';
+                    ctx.beginPath();
+                    ctx.roundRect(x, y, cellW, cellH, 8);
+                    ctx.fill();
+                    ctx.save();
+                    ctx.clip();
+
+                    if (work.imageUrl) {
+                        const img = await loadImage(work.imageUrl);
+                        if (img) {
+                            const scale = Math.max(cellW / img.width, cellH / img.height);
+                            const imgW = img.width * scale;
+                            const imgH = img.height * scale;
+                            ctx.drawImage(img, x + (cellW - imgW) / 2, y + (cellH - imgH) / 2, imgW, imgH);
+                        } else {
+                            ctx.fillStyle = '#1f2937';
+                            ctx.fillRect(x, y, cellW, cellH);
+                            ctx.fillStyle = '#6b7280';
+                            ctx.font = '20px sans-serif';
+                            ctx.textAlign = 'center';
+                            ctx.fillText('No Image', x + cellW/2, y + cellH/2);
+                        }
+                    } else {
+                         ctx.fillStyle = '#1f2937';
+                         ctx.fillRect(x, y, cellW, cellH);
+                    }
+
+                    const site = App.getWorkSite(work.sourceUrl);
+                    let badgeText = '';
+                    let badgeColor = '';
+                    if (site === 'dlsite') { badgeColor = '#0369a1'; badgeText = 'DLsite'; }
+                    else if (site === 'fanza') { badgeColor = '#b91c1c'; badgeText = 'FANZA'; }
+                    
+                    if (badgeText) {
+                        ctx.fillStyle = badgeColor;
+                        ctx.beginPath();
+                        ctx.roundRect(x + 5, y + 5, 50, 20, 4);
+                        ctx.fill();
+                        ctx.fillStyle = '#fff';
+                        ctx.font = 'bold 12px sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(badgeText, x + 30, y + 19);
+                    }
+
+                    const textGrad = ctx.createLinearGradient(0, y + cellH - 60, 0, y + cellH);
+                    textGrad.addColorStop(0, 'transparent');
+                    textGrad.addColorStop(0.5, 'rgba(0,0,0,0.8)');
+                    textGrad.addColorStop(1, 'rgba(0,0,0,1)');
+                    ctx.fillStyle = textGrad;
+                    ctx.fillRect(x, y + cellH - 60, cellW, 60);
+
+                    ctx.fillStyle = '#fff';
+                    ctx.shadowColor = 'black';
+                    ctx.shadowBlur = 4;
+                    ctx.textAlign = 'left';
+                    
+                    let fontSize = 16;
+                    ctx.font = `bold ${fontSize}px sans-serif`;
+                    let textWidth = ctx.measureText(work.name).width;
+                    if (textWidth > cellW - 10) {
+                         fontSize = 12;
+                         ctx.font = `bold ${fontSize}px sans-serif`;
+                    }
+                    ctx.fillText(work.name, x + 8, y + cellH - 25, cellW - 16);
+
+                    ctx.font = '12px sans-serif';
+                    ctx.fillStyle = '#d1d5db';
+                    const dateStr = work.registeredAt ? App.formatDateForInput(work.registeredAt.toDate()) : '';
+                    ctx.fillText(dateStr, x + 8, y + cellH - 8);
+
+                    ctx.restore();
+                    ctx.shadowBlur = 0;
+                }
             },
 
             // リストの描画
@@ -2844,41 +3119,44 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
 
             // リスト項目の読み込み (編集モードへ)
             loadTempWorkToForm: async (index) => {
-                // ダーティチェック
                 if (AppState.isRegFormDirty && AppState.editingTempIndex !== index) {
-                    if (!await App.showConfirm("未保存の変更", "フォームに入力中の内容があります。\n破棄してこの作品を読み込みますか？")) {
-                        return;
-                    }
+                    if (!await App.showConfirm("未保存の変更", "フォームに入力中の内容があります。\n破棄してこの作品を読み込みますか？")) return;
                 }
 
                 const work = AppState.tempWorks[index];
                 AppState.editingTempIndex = index;
-                AppState.isRegFormDirty = false; // 読み込んだ直後はClean
+                AppState.isRegFormDirty = false;
 
                 $('#batchWorkName').value = work.name;
                 $('#batchWorkUrl').value = work.url;
                 $('#batchWorkGenre').value = work.genre;
                 $('#batchWorkRegisteredAt').value = work.registeredAtStr;
                 
-                // 画像復元
+                // 画像復元 (DOMのデータ属性を利用して一時保存)
+                const previewContainer = $('#batch-image-preview-container');
+                const previewImg = $('#batch-image-preview');
+                
                 if (work.imageData) {
                     $('#batch-image-filename').textContent = work.imageData.fileName;
-                    $('#batch-image-preview').src = work.imageData.base64;
-                    $('#batch-image-preview-container').classList.remove('hidden');
+                    previewImg.src = work.imageData.base64;
+                    previewContainer.classList.remove('hidden');
                     $('#batch-image-clear-btn').classList.remove('hidden');
-                    // file input 自体には値を設定できないので、内部状態 (tempImageData) は submit 時に work.imageData から再利用するロジックが必要
-                    // 簡易的にUI上で「画像設定済み」とわかるようにする
+                    
+                    // 修正: データを隠し属性として保持 (submit時にここから読み取る)
+                    previewImg.dataset.restoredBase64 = work.imageData.base64;
+                    previewImg.dataset.restoredFileName = work.imageData.fileName;
                 } else {
                     $('#batch-image-filename').textContent = "未選択";
-                    $('#batch-image-preview-container').classList.add('hidden');
+                    previewContainer.classList.add('hidden');
                     $('#batch-image-clear-btn').classList.add('hidden');
+                    delete previewImg.dataset.restoredBase64;
+                    delete previewImg.dataset.restoredFileName;
                 }
                 
-                // URLプレビューのリセット
                 $('#batch-url-preview-box').innerHTML = '';
                 $('#batch-url-preview-box').classList.add('hidden');
                 
-                App.renderTempWorkList(); // アクティブ表示更新
+                App.renderTempWorkList();
                 App.showToast(`「${work.name}」を編集します。`);
             },
 

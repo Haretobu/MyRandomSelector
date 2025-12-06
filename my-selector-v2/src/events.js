@@ -67,8 +67,18 @@ export const setupAppEventListeners = (App) => {
                 case 'notTag': AppState.listFilters.notTagIds.delete(value); break;
                 case 'date': AppState.listFilters.dateFilter = AppState.defaultDateFilter(); break;
             }
-            const filtersToSave = { ...AppState.listFilters, genres: [...AppState.listFilters.genres], andTagIds: [...AppState.listFilters.andTagIds], orTagIds: [...AppState.listFilters.orTagIds], notTagIds: [...AppState.listFilters.notTagIds] };
-            localStorage.setItem('listFilters', JSON.stringify(filtersToSave));
+            // 修正: 暗号化して保存するように変更
+            const filtersToSave = { 
+                ...AppState.listFilters, 
+                genres: [...AppState.listFilters.genres], 
+                sites: [...AppState.listFilters.sites], 
+                andTagIds: [...AppState.listFilters.andTagIds], 
+                orTagIds: [...AppState.listFilters.orTagIds], 
+                notTagIds: [...AppState.listFilters.notTagIds] 
+            };
+            const encrypted = App.encryptData(filtersToSave);
+            if (encrypted) localStorage.setItem('listFilters_encrypted', encrypted);
+            
             AppState.currentPage = 1;
             App.renderAll();
         }
@@ -133,8 +143,13 @@ export const setupAppEventListeners = (App) => {
     // --- 検索関連 ---
     ui.searchInput.addEventListener('input', App.debounce(() => {
         const query = ui.searchInput.value;
-        if (query.length > 0) App.renderSuggestions(query);
-        else App.renderSearchHistory();
+        if (query.length > 0) {
+            App.renderSuggestions(query);
+        } else {
+            // 修正: 空になったら検索を解除して全件表示に戻す
+            App.performSearch('');
+            App.renderSearchHistory();
+        }
     }, 300));
 
     ui.searchInput.addEventListener('keydown', (e) => {
@@ -284,4 +299,22 @@ export const setupAppEventListeners = (App) => {
     const liteModeProdBtn = $('#lite-mode-switch-prod');
     if (liteModeDebugBtn) liteModeDebugBtn.addEventListener('click', activateLiteMode);
     if (liteModeProdBtn) liteModeProdBtn.addEventListener('click', activateLiteMode);
+
+    // 追加: FABメニューに画像生成ボタンを動的に追加
+    const fabDrawer = $('#sliding-fab-drawer');
+    if (fabDrawer && !$('#imgGenFab')) {
+        const btn = document.createElement('button');
+        btn.id = 'imgGenFab';
+        btn.title = '画像生成';
+        btn.className = 'w-14 h-14 bg-pink-600 hover:bg-pink-700 rounded-full text-white flex items-center justify-center shadow-lg';
+        btn.innerHTML = '<i class="fas fa-camera text-xl"></i>';
+        btn.addEventListener('click', () => {
+            App.openImageGeneratorModal();
+            App.closeFabMenu();
+        });
+        // 履歴ボタンの前あたりに挿入
+        const historyBtn = $('#historyFab');
+        if (historyBtn) fabDrawer.insertBefore(btn, historyBtn);
+        else fabDrawer.appendChild(btn);
+    }
 };

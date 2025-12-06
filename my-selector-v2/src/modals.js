@@ -465,8 +465,9 @@ export const openTagModal = (options) => {
             });
         }
         $('#reset-selected-tags-btn')?.addEventListener('click', () => { tempSelectedTagIds.clear(); renderTagPreview(); renderTagList(); });
-        $('#tag-modal-confirm')?.addEventListener('click', () => { onConfirm(tempSelectedTagIds); App.closeModal(); });
-        $('#tag-modal-cancel')?.addEventListener('click', () => { onConfirm(null); App.closeModal(); });
+        // 修正: 親モーダル(編集画面)がある場合に勝手に閉じないよう App.closeModal() を削除
+        $('#tag-modal-confirm')?.addEventListener('click', () => { onConfirm(tempSelectedTagIds); });
+        $('#tag-modal-cancel')?.addEventListener('click', () => { onConfirm(null); });
     }, { autoFocus: false });
 };
 
