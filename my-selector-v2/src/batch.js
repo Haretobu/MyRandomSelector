@@ -9,8 +9,7 @@ let batchTempImageData = null;
 
 export const openBatchRegistrationModal = (App, keepData = false) => {
     
-    // 【バグ修正】
-    // keepDataが false (通常の一括登録ボタンを押した時) なら、必ずリストを空にする
+    // 1. リストデータの初期化判定
     if (!keepData) {
         AppState.tempWorks = [];
     }
@@ -37,40 +36,64 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
         // --- Tab Logic ---
         const tabInput = $('#batch-tab-input');
         const tabList = $('#batch-tab-list');
-        const tabImport = $('#batch-tab-import'); // ★新機能用のタブ
+        const tabImport = $('#batch-tab-import');
+        
         const colForm = $('#batch-col-form');
         const colList = $('#batch-col-list');
-        const colImport = $('#batch-col-import'); // ★新機能用の画面
+        const colImport = $('#batch-col-import');
 
         // タブ切り替えロジック
         const switchTab = (mode) => {
-            // スタイルリセット
+            // タブボタンのスタイルリセット
             [tabInput, tabList, tabImport].forEach(el => {
                 if(el) {
                     el.classList.remove('bg-gray-700', 'text-white');
                     el.classList.add('text-gray-400', 'hover:bg-gray-800');
                 }
             });
-            [colForm, colList, colImport].forEach(el => {
-                if(el) el.classList.add('hidden');
-                if(el) el.classList.remove('flex');
-            });
 
-            // 選択されたタブをアクティブ化
-            if (mode === 'input') {
-                tabInput.classList.add('bg-gray-700', 'text-white');
-                tabInput.classList.remove('text-gray-400', 'hover:bg-gray-800');
-                colForm.classList.remove('hidden');
-            } else if (mode === 'list') {
-                tabList.classList.add('bg-gray-700', 'text-white');
-                tabList.classList.remove('text-gray-400', 'hover:bg-gray-800');
-                colList.classList.remove('hidden');
+            // モバイル向けの表示制御
+            if (window.innerWidth < 1024) {
+                // すべて隠す
+                [colForm, colList, colImport].forEach(el => {
+                    if(el) el.classList.add('hidden');
+                    if(el) el.classList.remove('flex');
+                });
+
+                if (mode === 'input') {
+                    tabInput.classList.add('bg-gray-700', 'text-white');
+                    colForm.classList.remove('hidden');
+                } else if (mode === 'list') {
+                    tabList.classList.add('bg-gray-700', 'text-white');
+                    colList.classList.remove('hidden');
+                    colList.classList.add('flex');
+                } else if (mode === 'import') {
+                    tabImport.classList.add('bg-gray-700', 'text-white');
+                    colImport.classList.remove('hidden');
+                    colImport.classList.add('flex');
+                }
+            } else {
+                // PC向けの表示制御 (リストは常に表示、左側を入力かインポートで切り替え)
+                colList.classList.remove('hidden'); // リストは常時表示
                 colList.classList.add('flex');
-            } else if (mode === 'import') {
-                tabImport.classList.add('bg-gray-700', 'text-white');
-                tabImport.classList.remove('text-gray-400', 'hover:bg-gray-800');
-                colImport.classList.remove('hidden');
-                colImport.classList.add('flex');
+
+                if (mode === 'import') {
+                    // インポート画面を表示
+                    colImport.classList.remove('hidden'); colImport.classList.add('flex');
+                    colForm.classList.add('hidden'); // 入力フォームは隠す
+                    tabImport.classList.add('bg-gray-700', 'text-white');
+                } else {
+                    // 入力フォームを表示 (listモードが指定された場合もPCでは入力フォームを表示しておく)
+                    colForm.classList.remove('hidden');
+                    colImport.classList.add('hidden'); colImport.classList.remove('flex');
+                    
+                    // タブのアクティブ状態は「入力」にする（PCではリストタブは概念的に不要だがUI上残す）
+                    if (mode === 'list') {
+                        tabList.classList.add('bg-gray-700', 'text-white'); // 視覚的にリストタブを押したことにする
+                    } else {
+                        tabInput.classList.add('bg-gray-700', 'text-white');
+                    }
+                }
             }
         };
 
@@ -232,6 +255,17 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
 
         $('#batch-clear-form-btn').addEventListener('click', () => { App.resetBatchRegForm(); App.showToast("フォームをクリアしました"); });
 
+        // ★新機能: リストリセットボタン
+        $('#batch-reset-list-btn').addEventListener('click', async () => {
+            if (AppState.tempWorks.length === 0) return;
+            if (await App.showConfirm("リストの全削除", "リストに追加された全ての作品を削除しますか？\nこの操作は取り消せません。")) {
+                AppState.tempWorks = [];
+                App.resetBatchRegForm(); // 編集中の内容もあれば破棄
+                App.renderTempWorkList();
+                App.showToast("リストをリセットしました。");
+            }
+        });
+
         $('#batch-finalize-btn').addEventListener('click', () => {
             if (AppState.tempWorks.length === 0) return;
             if (AppState.isRegFormDirty) {
@@ -240,7 +274,7 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
             App.openBatchConfirmModal();
         });
 
-        // ★★★ 新機能: テキスト一括取り込みロジック ★★★
+        // --- テキスト一括取り込みロジック (改良版) ---
         $('#batch-import-run-btn').addEventListener('click', () => {
             const text = $('#batch-import-textarea').value;
             if (!text.trim()) return App.showToast("テキストを入力してください。", "error");
@@ -254,17 +288,46 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
                 line = line.trim();
                 if (!line) return;
 
-                // URL抽出ロジック (簡易版: httpを含む文字列を探す)
                 let url = '';
                 const urlMatch = line.match(/https?:\/\/[^\s]+/);
                 if (urlMatch) {
                     url = urlMatch[0];
-                    line = line.replace(url, '').trim(); // URLを名前から除去
+                    line = line.replace(url, '').trim(); 
                 }
 
-                // 既に登録済みかチェック
-                if (AppState.works.some(w => w.name === line)) return; // 登録済みはスキップ
-                if (AppState.tempWorks.some(w => w.name === line)) return; // リストにあるものもスキップ
+                const normalizedLine = App.normalizeString(line);
+                
+                // 重複・類似判定
+                let warningStatus = null;
+                let warningMessage = null;
+
+                // 1. 完全一致チェック (登録済み)
+                const isRegistered = AppState.works.some(w => App.normalizeString(w.name) === normalizedLine);
+                if (isRegistered) {
+                    warningStatus = 'duplicate';
+                    warningMessage = '登録済';
+                }
+
+                // 2. 類似チェック (登録済み) - 完全一致でない場合のみ
+                if (!warningStatus) {
+                    const isSimilar = AppState.works.some(w => {
+                        const n = App.normalizeString(w.name);
+                        return n.includes(normalizedLine) || normalizedLine.includes(n);
+                    });
+                    if (isSimilar) {
+                        warningStatus = 'similar';
+                        warningMessage = '類似あり';
+                    }
+                }
+
+                // 3. リスト内重複チェック
+                if (!warningStatus) {
+                    const isTempDup = AppState.tempWorks.some(w => App.normalizeString(w.name) === normalizedLine);
+                    if (isTempDup) {
+                        warningStatus = 'duplicate'; // リスト内重複も赤警告にする
+                        warningMessage = 'リスト重複';
+                    }
+                }
 
                 AppState.tempWorks.push({
                     name: line,
@@ -272,19 +335,20 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
                     genre: genre,
                     registeredAtStr: dateStr,
                     imageData: null,
-                    site: App.getWorkSite(url)
+                    site: App.getWorkSite(url),
+                    warningStatus: warningStatus, // ステータスを保持
+                    warningMessage: warningMessage
                 });
                 addedCount++;
             });
 
             if (addedCount > 0) {
-                App.showToast(`${addedCount}件をリストに追加しました！`, "success");
-                $('#batch-import-textarea').value = ''; // クリア
-                // リストタブに自動切り替え
-                switchTab('list');
+                App.showToast(`${addedCount}件を解析しました。リストを確認してください。`, "success");
+                $('#batch-import-textarea').value = '';
+                switchTab('list'); // インポート後はリストタブへ
                 App.renderTempWorkList();
             } else {
-                App.showToast("追加できる作品がありませんでした（重複または空行）。", "info");
+                App.showToast("有効な行が見つかりませんでした。", "info");
             }
         });
     };
@@ -408,8 +472,13 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
 
                 <div id="batch-col-list" class="hidden lg:flex w-full lg:w-5/12 bg-gray-900 rounded-xl p-3 flex-col h-full border border-gray-700 absolute lg:relative inset-0 z-20 lg:z-0">
                     <div class="flex justify-between items-center mb-3 pb-2 border-b border-gray-700 shrink-0">
-                        <h4 class="font-bold text-sky-400"><i class="fas fa-list-ul mr-2"></i>登録予定リスト</h4>
-                        <span id="batch-list-count" class="bg-gray-700 text-xs px-3 py-1 rounded-full">0件</span>
+                        <div class="flex items-center gap-2">
+                            <h4 class="font-bold text-sky-400"><i class="fas fa-list-ul mr-2"></i>登録予定</h4>
+                            <span id="batch-list-count" class="bg-gray-700 text-xs px-2 py-1 rounded-full">0</span>
+                        </div>
+                        <button id="batch-reset-list-btn" class="text-gray-400 hover:text-red-500 p-2 rounded hover:bg-gray-800 transition-colors" title="リストを空にする">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
                     </div>
                     <div id="batch-temp-list" class="flex-grow overflow-y-auto space-y-2 pr-1 mb-3 custom-scrollbar">
                         <div class="text-center py-10 text-gray-500 text-sm">
@@ -435,7 +504,7 @@ export const renderTempWorkList = (App) => {
 
     if (!listEl) return;
 
-    countEl.textContent = `${AppState.tempWorks.length}件`;
+    countEl.textContent = `${AppState.tempWorks.length}`;
     finalizeBtn.disabled = AppState.tempWorks.length === 0;
 
     if (addBtn) {
@@ -457,7 +526,18 @@ export const renderTempWorkList = (App) => {
 
     listEl.innerHTML = AppState.tempWorks.map((work, index) => {
         const isEditing = index === AppState.editingTempIndex;
-        const activeClass = isEditing ? 'border-amber-500 bg-gray-800' : 'border-gray-700 bg-gray-800/50 hover:bg-gray-700';
+        let activeClass = isEditing ? 'border-amber-500 bg-gray-800' : 'border-gray-700 bg-gray-800/50 hover:bg-gray-700';
+        let warningBadge = '';
+
+        // 重複・類似がある場合の表示切り替え
+        if (work.warningStatus === 'duplicate') {
+            activeClass = 'border-red-500 bg-red-900/20 hover:bg-red-900/30';
+            warningBadge = `<span class="inline-block bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded ml-2 font-bold">${work.warningMessage || '重複'}</span>`;
+        } else if (work.warningStatus === 'similar') {
+            activeClass = 'border-yellow-500 bg-yellow-900/20 hover:bg-yellow-900/30';
+            warningBadge = `<span class="inline-block bg-yellow-600 text-white text-[10px] px-1.5 py-0.5 rounded ml-2 font-bold">${work.warningMessage || '類似'}</span>`;
+        }
+
         const imgUrl = work.imageData ? work.imageData.base64 : 'https://placehold.co/100x100/374151/9ca3af?text=No+Img';
         const siteBadge = App.getSiteBadgeHTML(work.url);
 
@@ -465,9 +545,10 @@ export const renderTempWorkList = (App) => {
         <div class="flex items-center gap-3 p-2 rounded-lg border ${activeClass} transition-colors group relative">
             <img src="${imgUrl}" loading="lazy" class="w-12 h-12 rounded object-cover flex-shrink-0 bg-gray-900">
             <div class="flex-grow min-w-0 cursor-pointer" onclick="App.loadTempWorkToForm(${index})">
-                <div class="flex items-center gap-2">
-                    <p class="font-bold text-sm truncate ${isEditing ? 'text-amber-400' : 'text-gray-200'}">${App.escapeHTML(work.name)}</p>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <p class="font-bold text-sm truncate max-w-full ${isEditing ? 'text-amber-400' : 'text-gray-200'}">${App.escapeHTML(work.name)}</p>
                     ${siteBadge}
+                    ${warningBadge}
                 </div>
                 <p class="text-xs text-gray-400 truncate">${work.genre} / ${work.registeredAtStr}</p>
             </div>
@@ -584,8 +665,6 @@ export const openBatchConfirmModal = (App) => {
                     </thead>
                     <tbody class="divide-y divide-gray-700">
                         ${AppState.tempWorks.map((work, i) => {
-                            // ★修正: バッジから site-badge クラスを消して、普通のインラインスタイルにする
-                            // (これで絶対配置が解除され、テーブル内に収まります)
                             let siteBadge = App.getSiteBadgeHTML(work.url);
                             siteBadge = siteBadge.replace('site-badge', 'inline-block px-2 py-0.5 rounded font-bold text-xs');
                             
