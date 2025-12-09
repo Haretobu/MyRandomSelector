@@ -3082,7 +3082,7 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
 
                     return `
                     <div class="flex items-center gap-3 p-2 rounded-lg border ${activeClass} transition-colors group relative">
-                        <img src="${imgUrl}" class="w-12 h-12 rounded object-cover flex-shrink-0 bg-gray-900">
+                        <img src="${imgUrl}" loading="lazy" class="w-12 h-12 rounded object-cover flex-shrink-0 bg-gray-900">
                         <div class="flex-grow min-w-0 cursor-pointer" onclick="App.loadTempWorkToForm(${index})">
                             <div class="flex items-center gap-2">
                                 <p class="font-bold text-sm truncate ${isEditing ? 'text-amber-400' : 'text-gray-200'}">${App.escapeHTML(work.name)}</p>
@@ -3255,11 +3255,19 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
 
             // 一括保存実行
             executeBatchSave: async () => {
+                // ★修正: ボタンをロックする前に、まず件数をチェックします
+                const total = AppState.tempWorks.length;
+                
+                if (total > 500) {
+                    App.showToast(`一度に登録できるのは500件までです。(現在: ${total}件)`, "error");
+                    return; // ここで処理を中断すれば、ボタンはロックされません
+                }
+
                 const btn = $('#batch-confirm-save');
                 btn.disabled = true;
                 btn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>保存中...`;
 
-                const total = AppState.tempWorks.length;
+                // const total = ... (上に移動したので削除しました)
                 let successCount = 0;
                 let failCount = 0;
 
@@ -4193,39 +4201,36 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
         }; // --- End of App Object ---
         
 
-        // --- 4. App Initialization ---
-        // 起動処理を App.init() の呼び出しに変更
+        // --- 4. App Initialization (安全策を追加した修正版) ---
         document.addEventListener('DOMContentLoaded', async () => {
             try {
-                // 1. sw.js をテキストとして取得 (キャッシュを回避)
-                const response = await fetch('sw.js?t=' + Date.now());
-                if (!response.ok) {
-                    throw new Error('sw.jsの読み込みに失敗');
+                let version = 'Unknown';
+                try {
+                    // 1. sw.js を取得しようと試みる
+                    const response = await fetch('sw.js?t=' + Date.now());
+                    if (response.ok) {
+                        const swText = await response.text();
+                        const match = swText.match(/const APP_VERSION = '([^']+)';/);
+                        if (match && match[1]) {
+                            version = match[1];
+                        }
+                    }
+                } catch (e) {
+                    console.warn("バージョン情報の取得に失敗しましたが、起動を続行します:", e);
                 }
-                const swText = await response.text();
-                
-                // 2. 正規表現でバージョン番号を抽出
-                const match = swText.match(/const APP_VERSION = '([^']+)';/);
-                if (!match || !match[1]) {
-                    throw new Error('sw.jsからバージョンを抽出できません');
-                }
-                const version = match[1];
                 
                 // 3. AppStateにバージョンを設定
                 console.log('Detected App Version:', version);
                 AppState.appVersion = version;
                 
-                // 4. アプリを初期化
+                // 4. アプリを初期化 (ここが失敗すると元も子もないのでtry-catchの外には出さない)
                 App.init();
 
             } catch (error) {
                 console.error("アプリの初期化に失敗:", error);
                 document.body.innerHTML = `<div style="padding: 20px; color: red; font-family: sans-serif;">
                     <b>アプリの起動に失敗しました:</b><br>
-                    ${error.message}<br><br>
-                    sw.jsファイルが正しくアップロードされているか、またはバージョン番号が
-                    <pre style="background: #333; padding: 5px; border-radius: 4px; margin-top: 5px;">const APP_VERSION = 'vX.X.X';</pre>
-                    の形式でsw.jsの先頭に書かれているか確認してください。
+                    ${error.message}
                 </div>`;
             }
         });
