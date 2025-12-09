@@ -4,12 +4,16 @@ import { writeBatch, collection, doc, Timestamp } from "firebase/firestore";
 // ヘルパー関数
 const $ = (selector) => document.querySelector(selector);
 
-// --- 以下、main.jsから移動した一括登録ロジック ---
+// ★修正: 画像データをこのファイルのどこからでもリセットできるように、外に出しました
+let batchTempImageData = null;
 
 export const openBatchRegistrationModal = (App) => {
     AppState.tempWorks = [];
     AppState.editingTempIndex = -1;
     AppState.isRegFormDirty = false;
+    
+    // モーダルを開くたびに初期化
+    batchTempImageData = null;
 
     // モーダルを開くときのコールバックでDirtyチェックを定義
     const onOpen = () => {
@@ -156,13 +160,13 @@ export const openBatchRegistrationModal = (App) => {
             }
         });
 
-        let tempImageData = null;
         imageInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (file) {
                 try {
                     const base64 = await App.processImage(file);
-                    tempImageData = { base64, file, fileName: file.name };
+                    // ★修正: モジュール変数を更新
+                    batchTempImageData = { base64, file, fileName: file.name };
                     $('#batch-image-filename').textContent = file.name;
                     $('#batch-image-preview').src = base64;
                     $('#batch-image-preview-container').classList.remove('hidden');
@@ -176,7 +180,8 @@ export const openBatchRegistrationModal = (App) => {
         
         $('#batch-image-clear-btn').addEventListener('click', () => {
             imageInput.value = '';
-            tempImageData = null;
+            // ★修正: クリア時もリセット
+            batchTempImageData = null;
             $('#batch-image-filename').textContent = "未選択";
             $('#batch-image-preview-container').classList.add('hidden');
             $('#batch-image-clear-btn').classList.add('hidden');
@@ -189,8 +194,10 @@ export const openBatchRegistrationModal = (App) => {
 
         form.addEventListener('submit', (e) => {
             e.preventDefault();
-            let finalImageData = tempImageData;
+            // ★修正: モジュール変数を使用
+            let finalImageData = batchTempImageData;
             const previewImg = $('#batch-image-preview');
+            // 既存のリスト編集時などに復元された画像があるかチェック
             if (!finalImageData && previewImg && previewImg.dataset.restoredBase64) {
                 finalImageData = {
                     base64: previewImg.dataset.restoredBase64,
@@ -434,6 +441,9 @@ export const loadTempWorkToForm = async (index, App) => {
     AppState.editingTempIndex = index;
     AppState.isRegFormDirty = false;
 
+    // ★修正: リストから読み込んだときは、新しいファイルアップロードではないので変数はリセット
+    batchTempImageData = null;
+
     $('#batchWorkName').value = work.name;
     $('#batchWorkUrl').value = work.url;
     $('#batchWorkGenre').value = work.genre;
@@ -469,12 +479,27 @@ export const resetBatchRegForm = (App) => {
     AppState.editingTempIndex = -1;
     AppState.isRegFormDirty = false;
     
+    // ★修正: フォームクリア時に画像変数もリセット
+    batchTempImageData = null;
+
     $('#batchWorkName').value = '';
     $('#batchWorkUrl').value = '';
     $('#batchWorkImage').value = '';
     $('#batch-image-filename').textContent = "未選択";
-    $('#batch-image-preview-container').classList.add('hidden');
-    $('#batch-image-clear-btn').classList.add('hidden');
+    
+    const previewContainer = $('#batch-image-preview-container');
+    const previewImg = $('#batch-image-preview');
+    
+    if (previewContainer) previewContainer.classList.add('hidden');
+    if ($('#batch-image-clear-btn')) $('#batch-image-clear-btn').classList.add('hidden');
+    
+    // ★修正: 復元されたデータ属性も消去
+    if (previewImg) {
+        previewImg.src = '';
+        delete previewImg.dataset.restoredBase64;
+        delete previewImg.dataset.restoredFileName;
+    }
+
     $('#batch-url-preview-box').innerHTML = '';
     $('#batch-url-preview-box').classList.add('hidden');
 
