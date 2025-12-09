@@ -4,15 +4,21 @@ import { writeBatch, collection, doc, Timestamp } from "firebase/firestore";
 // ヘルパー関数
 const $ = (selector) => document.querySelector(selector);
 
-// ★修正: 画像データをこのファイルのどこからでもリセットできるように、外に出しました
+// 画像データをこのファイルのどこからでもリセットできるように、外に出しました
 let batchTempImageData = null;
 
-export const openBatchRegistrationModal = (App) => {
-    AppState.tempWorks = [];
+// ★修正1: 引数 keepData を追加
+export const openBatchRegistrationModal = (App, keepData = false) => {
+    
+    // ★修正2: keepData が false (通常の一括登録ボタンなど) の時だけリストを空にする
+    if (!keepData) {
+        AppState.tempWorks = [];
+    }
+    
     AppState.editingTempIndex = -1;
     AppState.isRegFormDirty = false;
     
-    // モーダルを開くたびに初期化
+    // モーダルを開くたびに「入力フォームの」画像変数はリセット（リストの中身は消えません）
     batchTempImageData = null;
 
     // モーダルを開くときのコールバックでDirtyチェックを定義
@@ -165,7 +171,6 @@ export const openBatchRegistrationModal = (App) => {
             if (file) {
                 try {
                     const base64 = await App.processImage(file);
-                    // ★修正: モジュール変数を更新
                     batchTempImageData = { base64, file, fileName: file.name };
                     $('#batch-image-filename').textContent = file.name;
                     $('#batch-image-preview').src = base64;
@@ -180,7 +185,6 @@ export const openBatchRegistrationModal = (App) => {
         
         $('#batch-image-clear-btn').addEventListener('click', () => {
             imageInput.value = '';
-            // ★修正: クリア時もリセット
             batchTempImageData = null;
             $('#batch-image-filename').textContent = "未選択";
             $('#batch-image-preview-container').classList.add('hidden');
@@ -194,7 +198,6 @@ export const openBatchRegistrationModal = (App) => {
 
         form.addEventListener('submit', (e) => {
             e.preventDefault();
-            // ★修正: モジュール変数を使用
             let finalImageData = batchTempImageData;
             const previewImg = $('#batch-image-preview');
             // 既存のリスト編集時などに復元された画像があるかチェック
@@ -441,7 +444,6 @@ export const loadTempWorkToForm = async (index, App) => {
     AppState.editingTempIndex = index;
     AppState.isRegFormDirty = false;
 
-    // ★修正: リストから読み込んだときは、新しいファイルアップロードではないので変数はリセット
     batchTempImageData = null;
 
     $('#batchWorkName').value = work.name;
@@ -479,7 +481,6 @@ export const resetBatchRegForm = (App) => {
     AppState.editingTempIndex = -1;
     AppState.isRegFormDirty = false;
     
-    // ★修正: フォームクリア時に画像変数もリセット
     batchTempImageData = null;
 
     $('#batchWorkName').value = '';
@@ -493,7 +494,6 @@ export const resetBatchRegForm = (App) => {
     if (previewContainer) previewContainer.classList.add('hidden');
     if ($('#batch-image-clear-btn')) $('#batch-image-clear-btn').classList.add('hidden');
     
-    // ★修正: 復元されたデータ属性も消去
     if (previewImg) {
         previewImg.src = '';
         delete previewImg.dataset.restoredBase64;
@@ -563,7 +563,8 @@ export const openBatchConfirmModal = (App) => {
     
     App.openModal("一括登録の確認", content, () => {
         $('#batch-confirm-back').addEventListener('click', () => {
-            App.openBatchRegistrationModal();
+            // ★修正3: データを保持して画面を開き直す (trueを渡す)
+            App.openBatchRegistrationModal(true);
         });
 
         $('#batch-confirm-save').addEventListener('click', App.executeBatchSave);

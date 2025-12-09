@@ -1726,7 +1726,7 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
             openFeedbackModal: (work, tempState) => Lottery.openFeedbackModal(work, App, tempState),
 
             // --- Batch Registration Logic (Moved to batch.js) ---
-            openBatchRegistrationModal: () => Batch.openBatchRegistrationModal(App),
+            openBatchRegistrationModal: (keepData) => Batch.openBatchRegistrationModal(App, keepData),
             
             renderTempWorkList: () => Batch.renderTempWorkList(App),
             
