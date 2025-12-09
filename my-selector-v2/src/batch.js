@@ -7,10 +7,9 @@ const $ = (selector) => document.querySelector(selector);
 // 画像データをこのファイルのどこからでもリセットできるように、外に出しました
 let batchTempImageData = null;
 
-// ★修正1: 引数 keepData を追加
 export const openBatchRegistrationModal = (App, keepData = false) => {
     
-    // ★修正2: keepData が false (通常の一括登録ボタンなど) の時だけリストを空にする
+    // 1. リストデータの初期化判定
     if (!keepData) {
         AppState.tempWorks = [];
     }
@@ -18,10 +17,9 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
     AppState.editingTempIndex = -1;
     AppState.isRegFormDirty = false;
     
-    // モーダルを開くたびに「入力フォームの」画像変数はリセット（リストの中身は消えません）
+    // 画像変数は常にリセット
     batchTempImageData = null;
 
-    // モーダルを開くときのコールバックでDirtyチェックを定義
     const onOpen = () => {
         AppState.checkModalDirtyState = () => {
             return AppState.tempWorks.length > 0 || AppState.isRegFormDirty;
@@ -29,6 +27,11 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
 
         // Initialize
         App.initializeDateInputs($('#batchRegForm'));
+
+        // ★修正1: 新規で開いた場合(keepData=false)は、入力フォームの中身もきれいに消す
+        if (!keepData) {
+            App.resetBatchRegForm();
+        }
         
         // --- Mobile Tab Logic ---
         const tabInput = $('#batch-tab-input');
@@ -404,6 +407,7 @@ export const renderTempWorkList = (App) => {
         const isEditing = index === AppState.editingTempIndex;
         const activeClass = isEditing ? 'border-amber-500 bg-gray-800' : 'border-gray-700 bg-gray-800/50 hover:bg-gray-700';
         const imgUrl = work.imageData ? work.imageData.base64 : 'https://placehold.co/100x100/374151/9ca3af?text=No+Img';
+        // 修正は不要（ここは一括登録画面のリストなので、元のバッジ表示でOK）
         const siteBadge = App.getSiteBadgeHTML(work.url);
 
         return `
@@ -529,7 +533,10 @@ export const openBatchConfirmModal = (App) => {
                     </thead>
                     <tbody class="divide-y divide-gray-700">
                         ${AppState.tempWorks.map((work, i) => {
-                            const siteBadge = App.getSiteBadgeHTML(work.url);
+                            // ★修正2: バッジ生成後に「site-badge」クラスを置換して、絶対配置を無効化する
+                            let siteBadge = App.getSiteBadgeHTML(work.url);
+                            siteBadge = siteBadge.replace('site-badge', 'inline-block px-2 py-0.5 rounded font-bold text-xs');
+                            
                             const imgUrl = work.imageData ? work.imageData.base64 : '';
                             const imgHtml = imgUrl ? `<img src="${imgUrl}" class="w-10 h-10 object-cover rounded bg-gray-800">` : '<span class="text-gray-600">-</span>';
                             
@@ -563,7 +570,6 @@ export const openBatchConfirmModal = (App) => {
     
     App.openModal("一括登録の確認", content, () => {
         $('#batch-confirm-back').addEventListener('click', () => {
-            // ★修正3: データを保持して画面を開き直す (trueを渡す)
             App.openBatchRegistrationModal(true);
         });
 
