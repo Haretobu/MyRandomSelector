@@ -7,7 +7,9 @@ import * as Utils from './utils';
 import * as UI from './ui.js';
 import * as Actions from './actions.js';
 import { setupAppEventListeners } from './events.js';
-import * as Modals from './modals.js'; // ★これを追加
+import * as Modals from './modals.js';
+
+import * as Batch from './batch.js';
 
 // ★変更点: Chart.jsとCryptoJSのimportは削除しました
 // (index.htmlのCDNから読み込まれる window.Chart や window.CryptoJS をそのまま使います)
