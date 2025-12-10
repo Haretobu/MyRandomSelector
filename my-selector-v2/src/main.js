@@ -11,6 +11,7 @@ import * as Modals from './modals.js';
 import * as Batch from './batch.js';
 import * as Stats from './stats.js';
 import * as Lottery from './lottery.js';
+import { render, html } from 'lit-html';
 
 // ★変更点: Chart.jsとCryptoJSのimportは削除しました
 // (index.htmlのCDNから読み込まれる window.Chart や window.CryptoJS をそのまま使います)
@@ -205,29 +206,28 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
 
             // ★ 修正: 暗号化ヘルパー (方針3) ★
             encryptData: (data) => {
-                if (!AppState.currentUser || !AppState.currentUser.uid || !data) return null;
-                // ユーザーのUIDを秘密鍵として使用
-                const secretKey = AppState.currentUser.uid;
-                const jsonString = JSON.stringify(data);
-                return CryptoJS.AES.encrypt(jsonString, secretKey).toString();
+                if (!data) return null;
+                try {
+                    return JSON.stringify(data);
+                } catch (e) {
+                    console.error("Data serialization failed:", e);
+                    return null;
+                }
             },
 
             // ★ 修正: 復号ヘルパー (方針3) ★
             decryptData: (encryptedString) => {
-                if (!AppState.currentUser || !AppState.currentUser.uid || !encryptedString) return null;
-                const secretKey = AppState.currentUser.uid;
+                if (!encryptedString) return null;
                 try {
-                    const bytes = CryptoJS.AES.decrypt(encryptedString, secretKey);
-                    const jsonString = bytes.toString(CryptoJS.enc.Utf8);
-                    if (!jsonString) return null; // 復号失敗 (キーが違うなど)
-                    return JSON.parse(jsonString);
-                } catch (e) {
-                    if (AppState.isDebugMode) {
-                        console.error("Data decryption failed (Debug):", e);
-                    } else {
-                        console.error("Data decryption failed.");
+                    // もし古い暗号化データ（[や{で始まらない文字列）なら、解読できないのでリセット扱いにする
+                    if (!encryptedString.startsWith('[') && !encryptedString.startsWith('{')) {
+                        console.warn("Legacy encrypted data detected. Resetting preference.");
+                        return null;
                     }
-                    return null; // 復号失敗
+                    return JSON.parse(encryptedString);
+                } catch (e) {
+                    console.warn("Data parsing failed:", e);
+                    return null;
                 }
             },
             isValidDate: (dateString) => {
@@ -914,16 +914,20 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
 
             // src/main.js の Appオブジェクト内 renderWorkList: ... の部分
 
+            // ★★★ lit-html を使った高速・安全なレンダリング ★★★
             renderWorkList: () => {
                 const { ui, isLoadComplete, isDebugMode, works, listViewMode, currentPage, itemsPerPage } = AppState;
                 if (!ui.workListEl) return;
+                
+                // ロード完了前はデバッグモード以外描画しない
                 if (!isLoadComplete && !isDebugMode) return;
 
-                // フィルタリングとソート（変更なし）
+                // フィルタリングとソート（既存ロジック）
                 const filteredWorks = App.getFilteredAndSortedWorks();
                 const totalItems = filteredWorks.length;
                 const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
 
+                // ページ調整
                 if (currentPage > totalPages) {
                     AppState.currentPage = totalPages;
                 }
@@ -931,8 +935,10 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                 const endIndex = startIndex + itemsPerPage;
                 const worksToShow = filteredWorks.slice(startIndex, endIndex);
 
+                // 件数表示の更新
                 ui.workCountEl.textContent = `${totalItems} / ${works.length} 作品`;
 
+                // グリッド/リストのクラス切り替え
                 ui.viewGridBtn.classList.toggle('view-btn-active', listViewMode === 'grid');
                 ui.viewListBtn.classList.toggle('view-btn-active', listViewMode === 'list');
                 const isGrid = listViewMode === 'grid';
@@ -943,6 +949,7 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                 ui.workListEl.classList.toggle('gap-6', isGrid);
                 ui.workListEl.classList.toggle('space-y-2', !isGrid);
 
+                // 0件時の表示
                 if (works.length === 0) {
                     ui.workListMessage.innerHTML = `<div class="text-center py-10 text-gray-500"><i class="fas fa-ghost fa-3x"></i><p class="mt-4 text-base">まだ作品が登録されていません。<br>左上の「作品登録」から追加してみましょう！</p></div>`;
                     ui.workListMessage.classList.remove('hidden');
@@ -963,12 +970,16 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                 ui.workListMessage.classList.add('hidden');
                 ui.workListEl.classList.remove('hidden');
 
-                // ★ここが変更点: App.render... ではなく UI.render... を使う
-                ui.workListEl.innerHTML = worksToShow.map(work => 
-                    isGrid ? UI.renderWorkCard(work) : UI.renderWorkListItem(work)
-                ).join('');
+                // ★★★ ここが変更点: lit-html の render 関数を使用 ★★★
+                // map で各作品のテンプレート(HTMLタグの部品)を配列にし、lit-html に渡す
+                const template = html`
+                    ${worksToShow.map(work => isGrid ? UI.renderWorkCard(work) : UI.renderWorkListItem(work))}
+                `;
+                
+                // render関数が、前回の表示との「差分だけ」を計算して高速に書き換えてくれる
+                render(template, ui.workListEl);
 
-                // ページネーションの更新処理（変更なし）
+                // ページネーションの表示更新（ここはDOM操作のまま）
                 const topPagination = $('#pagination-controls-top');
                 const bottomPagination = $('#pagination-controls');
                 
