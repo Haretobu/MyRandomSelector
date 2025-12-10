@@ -21,14 +21,18 @@ export const renderRatingStars = (rating) => {
     return stars.join('');
 };
 
-// ★ サイトバッジの生成
+// ★ サイトバッジの生成（Tailwind完全対応版）
 export const getSiteBadgeHTML = (url) => {
     if (!AppState.showSiteIcon || !url) return '';
+    
+    // 共通のスタイル（絶対配置、位置、サイズ、フォント、影、重なり順z-10）
+    const baseClass = "absolute top-1.5 left-1.5 h-4 flex items-center justify-center px-1 text-[10px] font-extrabold rounded shadow-md pointer-events-none z-10 text-white";
+    
     if (url.includes('dlsite.com')) {
-        return `<span class="site-badge bg-sky-600 text-white">DL</span>`;
+        return `<span class="${baseClass} bg-sky-600">DL</span>`;
     }
     if (url.includes('dmm.co.jp') || url.includes('dmm.com')) {
-        return `<span class="site-badge bg-red-600 text-white">FZ</span>`;
+        return `<span class="${baseClass} bg-red-600">FZ</span>`;
     }
     return '';
 };
