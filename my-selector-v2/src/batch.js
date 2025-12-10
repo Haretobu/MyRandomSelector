@@ -4,6 +4,19 @@ import { writeBatch, collection, doc, Timestamp } from "firebase/firestore";
 // ヘルパー関数
 const $ = (selector) => document.querySelector(selector);
 
+// ★追加: バッチ画面専用の「並べて表示する用」のバッジ生成関数
+const getInlineBadge = (url) => {
+    if (!url) return '';
+    const lower = url.toLowerCase();
+    if (lower.includes('dlsite.com')) {
+        return `<span class="inline-block px-2 py-0.5 rounded font-bold text-[10px] text-white bg-sky-600">DL</span>`;
+    }
+    if (lower.includes('dmm.co.jp') || lower.includes('dmm.com')) {
+        return `<span class="inline-block px-2 py-0.5 rounded font-bold text-[10px] text-white bg-red-600">FZ</span>`;
+    }
+    return '';
+};
+
 // 画像データをこのファイルのどこからでもリセットできるように、外に出しました
 let batchTempImageData = null;
 
@@ -539,7 +552,8 @@ export const renderTempWorkList = (App) => {
         }
 
         const imgUrl = work.imageData ? work.imageData.base64 : 'https://placehold.co/100x100/374151/9ca3af?text=No+Img';
-        const siteBadge = App.getSiteBadgeHTML(work.url);
+        // ★修正: ここで App.getSiteBadgeHTML を使うのをやめ、インライン用の getInlineBadge を使う
+        const siteBadge = getInlineBadge(work.url);
 
         return `
         <div class="flex items-center gap-3 p-2 rounded-lg border ${activeClass} transition-colors group relative">
@@ -665,8 +679,9 @@ export const openBatchConfirmModal = (App) => {
                     </thead>
                     <tbody class="divide-y divide-gray-700">
                         ${AppState.tempWorks.map((work, i) => {
-                            let siteBadge = App.getSiteBadgeHTML(work.url);
-                            siteBadge = siteBadge.replace('site-badge', 'inline-block px-2 py-0.5 rounded font-bold text-xs');
+                            // ★修正: ここも App.getSiteBadgeHTML をやめ、getInlineBadge を使う
+                            // replace 処理も不要になります
+                            const siteBadge = getInlineBadge(work.url);
                             
                             const imgUrl = work.imageData ? work.imageData.base64 : '';
                             const imgHtml = imgUrl ? `<img src="${imgUrl}" class="w-10 h-10 object-cover rounded bg-gray-800">` : '<span class="text-gray-600">-</span>';
