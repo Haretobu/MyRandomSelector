@@ -26,6 +26,9 @@ import {
 } from "firebase/firestore";
 import { ref, uploadString, getDownloadURL, deleteObject } from "firebase/storage";
 import { httpsCallable } from "firebase/functions";
+// 他のimportの下あたりに追加してください
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
+import { getApp } from "firebase/app";
 
 // ヘルパー関数（グローバルに残す）
 const $ = (selector) => document.querySelector(selector);
@@ -539,17 +542,35 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
 
             // --- Firebase & Data Sync Logic ---
             initializeFirebase: () => {
-                // ★修正: 新しい設定ファイル(firebaseConfig.js)から読み込んだものをセットするだけに短縮
                 console.log("Using initialized Firebase from config.");
                 
-                // 古いコードが AppState.db などを参照しているので、ここで中継してあげる
                 AppState.auth = auth;
                 AppState.db = db;
                 AppState.storage = storage;
-                // functionsはここで使わないかもしれませんが念のため
                 
-                // 認証監視をスタート
                 App.setupAuthObserver();
+
+                // ★★★ App Check の初期化 (DDoS対策) ★★★
+                try {
+                    const app = getApp();
+                    
+                    // 開発環境（localhost）なら、デバッグモードをONにする
+                    if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+                        // コンソールに出たデバッグトークンをFirebaseに登録すれば、ローカルでもテスト可能になります
+                        self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+                    }
+
+                    // あなたのサイトキーでApp Checkを開始
+                    initializeAppCheck(app, {
+                        provider: new ReCaptchaEnterpriseProvider('6Lem8v8rAAAAAJiur2mblUOHF28x-Vh0zRjg6B6u'),
+                        isTokenAutoRefreshEnabled: true
+                    });
+                    
+                    console.log("App Check initialized successfully.");
+
+                } catch (e) {
+                    console.warn("App Check initialization failed:", e);
+                }
             },
 
             setupAuthObserver: () => {
