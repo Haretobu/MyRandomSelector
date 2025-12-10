@@ -1221,28 +1221,29 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                     .trim();
             },
 
+            // ★この関数の中身を復活させます
             setupInputClearButton: (inputEl, buttonEl) => {
                 if (!inputEl || !buttonEl) return;
 
                 const updateButtonVisibility = () => {
-                    // 入力値が空なら 'hidden' クラスを付与
+                    // 文字が入っている時だけボタンを表示
                     buttonEl.classList.toggle('hidden', inputEl.value.length === 0);
                 };
 
-                // 入力イベントでボタンの表示/非表示を切り替え
+                // 入力するたびにボタンの表示/非表示をチェック
                 inputEl.addEventListener('input', updateButtonVisibility);
                 
-                // ボタンクリックで入力値を空にし、イベントを発火
+                // ボタンを押した時の動作
                 buttonEl.addEventListener('click', (e) => {
-                    e.stopPropagation(); // イベントの伝播を停止
-                    inputEl.value = '';
-                    // 'input'イベントを発火させ、サジェスト更新などをトリガー
+                    e.stopPropagation();
+                    inputEl.value = ''; // 文字を消す
+                    // 重要: 「入力されたこと」にする（これで検索結果がリセットされます）
                     inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-                    updateButtonVisibility(); // ボタンを隠す
-                    inputEl.focus(); // 入力欄にフォーカスを戻す
+                    updateButtonVisibility();
+                    inputEl.focus(); // 入力欄にカーソルを戻す
                 });
 
-                // 初期状態を設定
+                // 初回実行
                 updateButtonVisibility();
             },
 
