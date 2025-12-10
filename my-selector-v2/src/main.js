@@ -195,6 +195,44 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                     $('#registration-panel-details').removeAttribute('open');
                 }
                 App.setupEventListeners();
+
+                // ★追加: 自動バージョンチェック（文章作成不要版）
+                App.checkVersionUpdate();
+            },
+
+            // ★追加: 毎回同じ定型文を出すだけの楽ちん機能
+            checkVersionUpdate: () => {
+                const currentVersion = AppState.appVersion; 
+                const lastVersion = localStorage.getItem('last_known_version');
+
+                // バージョンが変わった時だけ実行
+                if (currentVersion && currentVersion !== 'Unknown' && currentVersion !== lastVersion) {
+                    
+                    // 次回のために新しいバージョンを保存
+                    localStorage.setItem('last_known_version', currentVersion);
+
+                    // ★ここに「ずっと使い回せる定型文」を書いておきます
+                    const message = `
+                        <div class="text-center space-y-4">
+                            <div class="text-6xl">🚀</div>
+                            <p class="text-lg text-white font-bold">アプリが更新されました！</p>
+                            <p class="text-gray-300">
+                                バージョン: <span class="text-teal-400 font-mono text-xl font-bold">${currentVersion}</span>
+                            </p>
+                            <div class="bg-gray-700 p-4 rounded-lg text-sm text-left text-gray-300">
+                                <p>✅ 動作パフォーマンスの向上</p>
+                                <p>✅ システムの安定性とセキュリティ強化</p>
+                                <p>✅ その他、軽微な修正</p>
+                            </div>
+                        </div>
+                    `;
+
+                    // 少し待ってからモーダルを表示
+                    setTimeout(() => {
+                        // confirmModal を流用して表示（OKボタンだけ押させる）
+                        App.showConfirm("アップデート完了", message); 
+                    }, 1500);
+                }
             },
 
             // --- Utility Functions ---
