@@ -1375,6 +1375,11 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
             setupEventListeners: () => {
                 // events.js に移動した関数を呼ぶ。this(App)を渡す。
                 setupAppEventListeners(App);
+
+                // ★追加: 検索ボックスにクリアボタンの機能を紐付ける
+                if (AppState.ui && AppState.ui.searchInput) {
+                    App.setupInputClearButton(AppState.ui.searchInput, $('#clearSearchBtn'));
+                }
             },
 
             // --- Modal Implementations ---
