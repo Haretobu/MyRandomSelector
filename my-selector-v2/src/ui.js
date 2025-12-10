@@ -21,11 +21,11 @@ export const renderRatingStars = (rating) => {
     return stars.join('');
 };
 
-// ★ サイトバッジの生成（Tailwind完全対応版）
+// ★ サイトバッジの生成（z-index追加、Web表記なし版）
 export const getSiteBadgeHTML = (url) => {
     if (!AppState.showSiteIcon || !url) return '';
     
-    // 共通のスタイル（絶対配置、位置、サイズ、フォント、影、重なり順z-10）
+    // z-10 を追加して画像より手前に表示させます
     const baseClass = "absolute top-1.5 left-1.5 h-4 flex items-center justify-center px-1 text-[10px] font-extrabold rounded shadow-md pointer-events-none z-10 text-white";
     
     if (url.includes('dlsite.com')) {
@@ -34,6 +34,8 @@ export const getSiteBadgeHTML = (url) => {
     if (url.includes('dmm.co.jp') || url.includes('dmm.com')) {
         return `<span class="${baseClass} bg-red-600">FZ</span>`;
     }
+    
+    // それ以外のURLでは何も表示しません
     return '';
 };
 
