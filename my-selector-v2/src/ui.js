@@ -67,6 +67,7 @@ export const renderTagsHTML = (tagIds, maxToShow = Infinity, workId = null, view
 };
 
 // ★ カード表示（グリッド）のHTML生成
+// ★ カード表示（グリッド）のHTML生成
 export const renderWorkCard = (work) => {
     const safeWorkName = Utils.escapeHTML(work.name);
     const siteBadge = getSiteBadgeHTML(work.sourceUrl);
@@ -83,7 +84,7 @@ export const renderWorkCard = (work) => {
     return `
     <div class="bg-gray-800 rounded-xl shadow-lg overflow-hidden flex flex-col transition-transform hover:scale-[1.02]">
         <div class="relative">
-            <<img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${safeWorkName}" loading="lazy" decoding="async" class="w-full h-40 object-cover">
+            <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${safeWorkName}" loading="lazy" decoding="async" class="w-full h-40 object-cover">
             ${siteBadge}
             <div class="absolute top-2 right-2 flex space-x-2">
                 <a ${rocketLink} title="${rocketTitle}" class="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${rocketClass} ${rocketVisibility}">
