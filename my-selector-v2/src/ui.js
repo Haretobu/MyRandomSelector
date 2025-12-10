@@ -83,7 +83,7 @@ export const renderWorkCard = (work) => {
     return `
     <div class="bg-gray-800 rounded-xl shadow-lg overflow-hidden flex flex-col transition-transform hover:scale-[1.02]">
         <div class="relative">
-            <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${safeWorkName}" class="w-full h-40 object-cover">
+            <<img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${safeWorkName}" loading="lazy" decoding="async" class="w-full h-40 object-cover">
             ${siteBadge}
             <div class="absolute top-2 right-2 flex space-x-2">
                 <a ${rocketLink} title="${rocketTitle}" class="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${rocketClass} ${rocketVisibility}">
@@ -118,7 +118,7 @@ export const renderWorkListItem = (work) => {
     return `
     <div class="work-list-item">
         <div class="relative flex-shrink-0">
-            <img src="${work.imageUrl || 'https://placehold.co/150x100/1f2937/4b5563?text=No+Img'}" alt="${safeWorkName}" class="w-20 h-16 object-cover rounded-md">
+            <img src="${work.imageUrl || 'https://placehold.co/150x100/1f2937/4b5563?text=No+Img'}" alt="${safeWorkName}" loading="lazy" decoding="async" class="w-20 h-16 object-cover rounded-md">
             ${siteBadge}
         </div>
         <div class="flex-grow min-w-0 overflow-hidden">
