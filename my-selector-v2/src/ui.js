@@ -2,7 +2,7 @@
 import { store as AppState } from './store.js';
 import * as Utils from './utils.js';
 
-// ヘルパー: $と$$はここでも使うので定義（またはutilsからインポートでも可）
+// ヘルパー
 const $ = (selector) => document.querySelector(selector);
 
 // ★ 評価スターのHTML生成
@@ -21,30 +21,32 @@ export const renderRatingStars = (rating) => {
     return stars.join('');
 };
 
-// ★ サイトバッジの生成（z-index追加、Web表記なし版）
+// ★ サイトバッジの生成（強化版）
 export const getSiteBadgeHTML = (url) => {
-    if (!AppState.showSiteIcon || !url) return '';
+    // URLがない場合は即終了
+    if (!url) return '';
+
+    // ★修正1: URLを小文字に変換してチェック（DLsite.com 対策）
+    const lowerUrl = url.toLowerCase();
     
-    // z-10 を追加して画像より手前に表示させます
-    const baseClass = "absolute top-1.5 left-1.5 h-4 flex items-center justify-center px-1 text-[10px] font-extrabold rounded shadow-md pointer-events-none z-10 text-white";
+    // ★修正2: z-indexを 50 に設定し、確実に手前に表示
+    const baseClass = "absolute top-1.5 left-1.5 h-4 flex items-center justify-center px-1 text-[10px] font-extrabold rounded shadow-md pointer-events-none z-50 text-white";
     
-    if (url.includes('dlsite.com')) {
+    if (lowerUrl.includes('dlsite.com')) {
         return `<span class="${baseClass} bg-sky-600">DL</span>`;
     }
-    if (url.includes('dmm.co.jp') || url.includes('dmm.com')) {
+    if (lowerUrl.includes('dmm.co.jp') || lowerUrl.includes('dmm.com')) {
         return `<span class="${baseClass} bg-red-600">FZ</span>`;
     }
     
-    // それ以外のURLでは何も表示しません
+    // URLはあるが、上記以外の場合は表示しない
     return '';
 };
 
 export const renderTagsHTML = (tagIds, maxToShow = Infinity, workId = null, viewMode = 'grid') => {
-    
-    // ※注意: 元コードの App.getTagObjects を使う必要がありますが、
-    // ここでは循環参照を避けるため、簡易的にStoreから直接引くロジックにします
+    // AppState.tags から直接取得
     const getTagObjects = (ids) => Array.from(ids || []).map(id => AppState.tags.get(id)).filter(Boolean);
-    const tags = getTagObjects(tagIds); // ← ここで正しく取得しているので、上の行は不要でした
+    const tags = getTagObjects(tagIds);
 
     if (tags.length === 0) return '';
 
@@ -73,10 +75,11 @@ export const renderTagsHTML = (tagIds, maxToShow = Infinity, workId = null, view
 };
 
 // ★ カード表示（グリッド）のHTML生成
-// ★ カード表示（グリッド）のHTML生成
 export const renderWorkCard = (work) => {
     const safeWorkName = Utils.escapeHTML(work.name);
+    // ここでバッジHTMLを生成
     const siteBadge = getSiteBadgeHTML(work.sourceUrl);
+    
     const isMobile = Utils.isMobile();
     const isLinked = work.isLocallyLinked === true;
     
@@ -91,7 +94,7 @@ export const renderWorkCard = (work) => {
     <div class="bg-gray-800 rounded-xl shadow-lg overflow-hidden flex flex-col transition-transform hover:scale-[1.02]">
         <div class="relative">
             <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${safeWorkName}" loading="lazy" decoding="async" class="w-full h-40 object-cover">
-            ${siteBadge}
+            ${siteBadge} 
             <div class="absolute top-2 right-2 flex space-x-2">
                 <a ${rocketLink} title="${rocketTitle}" class="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${rocketClass} ${rocketVisibility}">
                     <i class="fas fa-rocket text-xs"></i>
@@ -146,25 +149,21 @@ export const renderWorkListItem = (work) => {
     </div>`;
 };
 
-// src/ui.js の末尾に追加
-
 // ★ トースト通知の表示
 export const showToast = (message, type = 'info', duration = 3000) => {
-    // AppState.ui が初期化される前に呼ばれるのを防ぐガード
     if (!AppState.ui || !AppState.ui.toastEl) return;
 
     let finalDuration = duration;
     AppState.ui.toastEl.classList.remove('bg-red-600', 'bg-gray-700');
 
     if (type === 'error') {
-        finalDuration = 5000; // エラー時は5秒
+        finalDuration = 5000;
         AppState.ui.toastEl.classList.add('bg-red-600');
     } else {
         AppState.ui.toastEl.classList.add('bg-gray-700');
     }
     AppState.ui.toastMessageEl.textContent = message;
     
-    // アニメーション用クラスの付け替え
     AppState.ui.toastEl.classList.remove('translate-y-20', 'opacity-0');
     AppState.ui.toastEl.classList.add('translate-y-0', 'opacity-100');
     
@@ -176,7 +175,6 @@ export const showToast = (message, type = 'info', duration = 3000) => {
     }, finalDuration);
 };
 
-// ★ 確認モーダルの表示 (Promiseを返すので await showConfirm(...) で使えます)
 export const showConfirm = (title, message) => {
     return new Promise((resolve) => {
         if (!AppState.ui || !AppState.ui.confirmModal) {
@@ -208,7 +206,6 @@ export const showConfirm = (title, message) => {
     });
 };
 
-// ★ モバイル判定 (Utilsにあるものを使っても良いですが、UI制御で頻出なのでここでもexport)
 export const isMobile = () => {
     return window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 };
