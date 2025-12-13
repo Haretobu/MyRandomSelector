@@ -143,15 +143,15 @@ export default function BmsViewer() {
   const liftValRef = useRef(liftVal);
   const isMobileRef = useRef(isMobile); 
   
-  const boardOpacityRef = useRef(boardOpacity); // ★追加
-  const laneOpacityRef = useRef(laneOpacity); // ★追加
+  const boardOpacityRef = useRef(boardOpacity);
+  const laneOpacityRef = useRef(laneOpacity);
 
   useEffect(() => { 
       const handleResize = () => {
           const mobile = window.innerWidth < MOBILE_BREAKPOINT;
           setIsMobile(mobile);
           isMobileRef.current = mobile;
-          // スマホに切り替わったらデフォルト透明度を適用
+          // スマホ切り替え時のデフォルト値
           if (mobile) {
               setBoardOpacity(0.0);
               setLaneOpacity(0.3);
@@ -182,8 +182,8 @@ export default function BmsViewer() {
   useEffect(() => { suddenPlusValRef.current = suddenPlusVal; }, [suddenPlusVal]);
   useEffect(() => { hiddenPlusValRef.current = hiddenPlusVal; }, [hiddenPlusVal]);
   useEffect(() => { liftValRef.current = liftVal; }, [liftVal]);
-  useEffect(() => { boardOpacityRef.current = boardOpacity; }, [boardOpacity]); // ★追加
-  useEffect(() => { laneOpacityRef.current = laneOpacity; }, [laneOpacity]); // ★追加
+  useEffect(() => { boardOpacityRef.current = boardOpacity; }, [boardOpacity]); 
+  useEffect(() => { laneOpacityRef.current = laneOpacity; }, [laneOpacity]);
   useEffect(() => { 
       isInputDebugModeRef.current = isInputDebugMode;
       if (isInputDebugMode && !animationRef.current) {
@@ -192,6 +192,7 @@ export default function BmsViewer() {
       }
   }, [isInputDebugMode]);
 
+  // レーン操作のエフェクト
   const setLaneActive = (idx, active) => {
       const ctrlEl = controllerRefs.current[idx];
       if (ctrlEl) {
@@ -359,6 +360,7 @@ export default function BmsViewer() {
   const refreshRandom = () => { if (!parsedSong) return; stopPlayback(true); setDisplayObjects(applyOptions(parsedSong.objects, playOption)); };
   useEffect(() => { if (parsedSong) setDisplayObjects(applyOptions(parsedSong.objects, playOption)); }, [parsedSong, playOption]);
   
+  // ★ファイルが選択されたら自動ロード
   useEffect(() => { if (selectedBmsIndex >= 0 && bmsList[selectedBmsIndex]) loadBmsAndAudio(bmsList[selectedBmsIndex].file); }, [selectedBmsIndex, bmsList]);
 
   const loadBmsAndAudio = async (bmsFile) => {
@@ -824,24 +826,19 @@ export default function BmsViewer() {
     const visMode = visibilityModeRef.current;
     const isLiftEnabled = visMode === VISIBILITY_MODES.LIFT || visMode === VISIBILITY_MODES.LIFT_SUD_PLUS;
     const liftOffset = isLiftEnabled ? liftValRef.current : 0; 
-    // ★修正: スマホの判定ラインをさらに上げる (ナビゲーションバー対策)
     const BASE_JUDGE_Y = height - (isMobileRef.current ? 160 : 100); 
     const JUDGE_Y = BASE_JUDGE_Y - liftOffset;
     const is2P = playSide === '2P';
     const SCRATCH_X = is2P ? BOARD_X + (KEY_W * 7) + 10 : BOARD_X; const KEYS_X = is2P ? BOARD_X : BOARD_X + SCRATCH_W + 10;
 
-    // ★修正: ボード全体の不透明度
     const bOpacity = boardOpacityRef.current;
-    // ★修正: 各レーンの不透明度
     const lOpacity = laneOpacityRef.current;
     
-    // ボード全体の背景
     ctx.fillStyle = isMobileRef.current ? `rgba(2, 6, 23, ${bOpacity})` : `rgba(2, 6, 23, ${bOpacity})`;
     ctx.fillRect(BOARD_X, 0, BOARD_W, height); 
     
     for(let i=0; i<7; i++) { 
         const laneHeight = isLiftEnabled ? JUDGE_Y : height;
-        // 各レーンの背景
         const baseColor = [1,3,5].includes(i) ? [15, 23, 42] : [30, 41, 59];
         const color = isMobileRef.current 
             ? `rgba(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]}, ${lOpacity})` 
@@ -854,7 +851,6 @@ export default function BmsViewer() {
     ctx.lineWidth = 1; ctx.beginPath();
     for(let i=0; i<=7; i++) { const x = KEYS_X + i * KEY_W; ctx.moveTo(x, 0); ctx.lineTo(x, isLiftEnabled ? JUDGE_Y : height); }
     
-    // スクラッチレーンも
     ctx.fillStyle = isMobileRef.current ? `rgba(15, 23, 42, ${lOpacity})` : '#0f172a';
     ctx.fillRect(SCRATCH_X, 0, SCRATCH_W, isLiftEnabled ? JUDGE_Y : height);
     
@@ -1158,9 +1154,9 @@ export default function BmsViewer() {
              </button>
          )}
 
-         {/* スマホ用: 下部コントロールバー (常駐) - ★修正: 位置を bottom-20 に上げる */}
+         {/* スマホ用: 下部コントロールバー (常駐) - 位置を修正 (bottom-24) */}
          {isMobile && parsedSong && (
-             <div className="absolute bottom-20 left-4 right-4 z-50 flex flex-col gap-2 pointer-events-auto pb-safe">
+             <div className="absolute bottom-24 left-4 right-4 z-50 flex flex-col gap-2 pointer-events-auto pb-safe">
                  <input type="range" min="0" max={duration || 100} step="0.01" value={playbackTimeDisplay} onChange={handleSeek} className="w-full h-2 bg-gray-700/50 rounded-lg appearance-none cursor-pointer accent-blue-500 backdrop-blur-sm" />
                  <div className="flex items-center justify-between gap-3">
                      <div className="flex gap-2 flex-1">
