@@ -802,7 +802,7 @@ export default function BmsViewer() {
       />
 
       {/* メインエリア: レイヤー構造に変更 */}
-      <div className="flex-1 relative min-h-0 overflow-hidden bg-black flex justify-center">
+      <div className="flex-1 relative min-h-0 overflow-hidden flex justify-center">
          
          {/* Layer 1: 背景BGA (スマホのみ) */}
          {isMobile && (

@@ -30,7 +30,8 @@ const BgaLayer = ({ bgaState, zIndex, blendMode = 'normal', opacity = 1, isPlayi
           <video 
               ref={videoRef}
               src={bgaState.url || bgaState.src} 
-              className="absolute inset-0 w-full h-full object-contain" 
+              // ★修正: object-contain -> object-cover に変更 (画面いっぱいに表示)
+              className="absolute inset-0 w-full h-full object-cover" 
               style={{ zIndex, mixBlendMode: blendMode, opacity }}
               muted 
               playsInline
@@ -42,7 +43,8 @@ const BgaLayer = ({ bgaState, zIndex, blendMode = 'normal', opacity = 1, isPlayi
     return (
       <img 
           src={bgaState.src || bgaState.url} 
-          className="absolute inset-0 w-full h-full object-contain" 
+          // ★修正: object-contain -> object-cover に変更
+          className="absolute inset-0 w-full h-full object-cover" 
           style={{ zIndex, mixBlendMode: blendMode, opacity }} 
           alt="BGA" 
       />
