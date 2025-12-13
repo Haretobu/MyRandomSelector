@@ -19,7 +19,10 @@ const SettingsModal = ({
     isInputDebugMode, setIsInputDebugMode,
     // 追加: ファイル操作用
     handleFileSelect, handleZipSelect, bmsList, selectedBmsIndex, setSelectedBmsIndex,
-    hiSpeed, setHiSpeed, bgaOpacity, setBgaOpacity
+    hiSpeed, setHiSpeed, bgaOpacity, setBgaOpacity,
+    // ★追加: レーン透明度用
+    laneOpacity, setLaneOpacity,
+    parsedSong
 }) => {
     if (!showSettings) return null;
 
@@ -33,35 +36,35 @@ const SettingsModal = ({
 
                 <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-blue-900 pr-2 space-y-6">
                     
-                    {/* ▼▼▼ ファイル読み込み (PC/スマホ共通) ▼▼▼ */}
-                    <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-500/30 space-y-4">
-                        <div className="text-sm font-bold text-blue-300 border-b border-blue-500/30 pb-2 mb-2">ファイル読込</div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            {/* 通常のフォルダアップロード */}
-                            <label className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 text-sm cursor-pointer flex items-center justify-center gap-2 shadow-lg rounded-lg font-bold w-full transition active:scale-95">
-                                <FolderOpen size={18}/> フォルダを開く (BMS)
-                                <input type="file" webkitdirectory="" multiple className="hidden" onChange={handleFileSelect} />
-                            </label>
+                    {/* ▼▼▼ スマホ用: ファイル読み込み・基本設定 ▼▼▼ */}
+                    {isMobile && (
+                        <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-500/30 space-y-4">
+                            <div className="text-sm font-bold text-blue-300 border-b border-blue-500/30 pb-2 mb-2">ファイル読込</div>
                             
-                            {/* ZIPアップロード */}
-                            <label className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-3 text-sm cursor-pointer flex items-center justify-center gap-2 shadow-lg rounded-lg font-bold w-full transition active:scale-95">
-                                <FileArchive size={18}/> ZIPを開く (スマホ推奨)
-                                <input type="file" accept=".zip,application/zip" className="hidden" onChange={handleZipSelect} />
-                            </label>
-                        </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {/* 通常のフォルダアップロード */}
+                                <label className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 text-sm cursor-pointer flex items-center justify-center gap-2 shadow-lg rounded-lg font-bold w-full transition active:scale-95">
+                                    <FolderOpen size={18}/> フォルダを開く (BMS)
+                                    <input type="file" webkitdirectory="" multiple className="hidden" onChange={handleFileSelect} />
+                                </label>
+                                
+                                {/* ZIPアップロード */}
+                                <label className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-3 text-sm cursor-pointer flex items-center justify-center gap-2 shadow-lg rounded-lg font-bold w-full transition active:scale-95">
+                                    <FileArchive size={18}/> ZIPを開く (スマホ推奨)
+                                    <input type="file" accept=".zip,application/zip" className="hidden" onChange={handleZipSelect} />
+                                </label>
+                            </div>
 
-                        {/* 曲選択 (スマホまたはファイル読み込み後用) */}
-                        <div className="flex flex-col gap-1">
-                            <span className="text-xs text-blue-400">選択中の曲</span>
-                            <select className="bg-black/50 text-white p-2 rounded border border-blue-500/30 w-full text-sm" value={selectedBmsIndex} onChange={e => setSelectedBmsIndex(Number(e.target.value))}>
-                                {bmsList.length === 0 && <option>なし</option>}
-                                {bmsList.map((b, i) => <option key={i} value={i}>{b.name}</option>)}
-                            </select>
-                        </div>
+                            {/* 曲選択 */}
+                            <div className="flex flex-col gap-1">
+                                <span className="text-xs text-blue-400">選択中の曲</span>
+                                <select className="bg-black/50 text-white p-2 rounded border border-blue-500/30 w-full text-sm" value={selectedBmsIndex} onChange={e => setSelectedBmsIndex(Number(e.target.value))}>
+                                    {bmsList.length === 0 && <option>なし</option>}
+                                    {bmsList.map((b, i) => <option key={i} value={i}>{b.name}</option>)}
+                                </select>
+                            </div>
 
-                        {/* スマホのみ: 簡易設定 (PCはコントロールバーにあるので非表示) */}
-                        {isMobile && (
+                            {/* ハイスピード & 音量 */}
                             <div className="grid grid-cols-2 gap-4 pt-2">
                                 <div>
                                     <label className="text-xs text-blue-300 block mb-1">HI-SPEED: {hiSpeed}</label>
@@ -72,25 +75,36 @@ const SettingsModal = ({
                                     <input type="range" min="0" max="1.0" step="0.05" value={volume} onChange={e => setVolume(Number(e.target.value))} className="w-full accent-blue-500 h-4" />
                                 </div>
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    )}
 
                     {/* ▼▼▼ BGA設定 (共通) ▼▼▼ */}
                     <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
                         <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center gap-2">
-                            <Film size={14} /> BGA設定
+                            <Film size={14} /> 表示・BGA設定
                         </div>
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             <label className={`flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer border border-transparent ${!hasVideo ? 'opacity-50' : 'hover:border-blue-500/30'}`}>
                                 <span className="text-sm">BGA動画再生 (重い場合OFF)</span>
                                 <input type="checkbox" checked={playBgaVideo} onChange={e=>setPlayBgaVideo(e.target.checked)} disabled={!hasVideo} className="accent-blue-500 w-5 h-5"/>
                             </label>
+                            
                             <div>
                                 <div className="flex justify-between text-sm mb-1">
                                     <span className="text-blue-300">BGAの明るさ (不透明度)</span>
                                     <span>{Math.round(bgaOpacity * 100)}%</span>
                                 </div>
                                 <input type="range" min="0" max="1" step="0.05" value={bgaOpacity} onChange={e => setBgaOpacity(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"/>
+                            </div>
+
+                            {/* ★追加: レーンの不透明度設定 */}
+                            <div className="pt-2 border-t border-blue-900/30">
+                                <div className="flex justify-between text-sm mb-1">
+                                    <span className="text-blue-300">レーンの不透明度 (透け具合)</span>
+                                    <span>{Math.round(laneOpacity * 100)}%</span>
+                                </div>
+                                <input type="range" min="0" max="1" step="0.05" value={laneOpacity} onChange={e => setLaneOpacity(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"/>
+                                <p className="text-[10px] text-gray-400 mt-1">※値を下げると背景BGAが透けて見えます</p>
                             </div>
                         </div>
                     </div>

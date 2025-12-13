@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
 import { LANE_MAP, VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY } from './constants';
-import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, generateLaneMap, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
+// getBaseName (拡張子なし名取得) をインポート
+import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, generateLaneMap, guessDifficulty, extractZipFiles, getBaseName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 
 import SettingsModal from './components/SettingsModal';
@@ -16,6 +17,8 @@ import BgaLayer from './components/BgaLayer';
 export default function BmsViewer() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
   const [bgaOpacity, setBgaOpacity] = useState(DEFAULT_BGA_OPACITY);
+  // ★追加: レーン不透明度の状態 (デフォルト0.3)
+  const [laneOpacity, setLaneOpacity] = useState(0.3);
 
   const [files, setFiles] = useState([]);
   const [bmsList, setBmsList] = useState([]);
@@ -137,6 +140,7 @@ export default function BmsViewer() {
   const hiddenPlusValRef = useRef(hiddenPlusVal);
   const liftValRef = useRef(liftVal);
   const isMobileRef = useRef(isMobile); 
+  const laneOpacityRef = useRef(laneOpacity); // ★追加
 
   useEffect(() => { 
       const handleResize = () => {
@@ -166,6 +170,7 @@ export default function BmsViewer() {
   useEffect(() => { suddenPlusValRef.current = suddenPlusVal; }, [suddenPlusVal]);
   useEffect(() => { hiddenPlusValRef.current = hiddenPlusVal; }, [hiddenPlusVal]);
   useEffect(() => { liftValRef.current = liftVal; }, [liftVal]);
+  useEffect(() => { laneOpacityRef.current = laneOpacity; }, [laneOpacity]); // ★追加
   useEffect(() => { 
       isInputDebugModeRef.current = isInputDebugMode;
       if (isInputDebugMode && !animationRef.current) {
@@ -257,9 +262,13 @@ export default function BmsViewer() {
         let lane = -1;
         if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { isShiftHeldRef.current = false; lane = 0; } 
         else if (e.code === 'ControlLeft' || e.code === 'ControlRight') { isCtrlHeldRef.current = false; lane = 0; }
-        switch(e.code) { case 'KeyZ': lane = 1; break; case 'KeyS': lane = 2; break; case 'KeyX': lane = 3; break; case 'KeyD': lane = 4; break; case 'KeyC': lane = 5; break; case 'KeyF': lane = 6; break; case 'KeyV': lane = 7; break; }
-        if (lane === 0) { if (!isShiftHeldRef.current && !isCtrlHeldRef.current) { activeInputLanesRef.current.delete(0); setLaneActive(0, false); } } 
-        else if (lane !== -1) { activeInputLanesRef.current.delete(lane); setLaneActive(lane, false); }
+        switch(e.code) {
+            case 'KeyZ': lane = 1; break; case 'KeyS': lane = 2; break; case 'KeyX': lane = 3; break; case 'KeyD': lane = 4; break;
+            case 'KeyC': lane = 5; break; case 'KeyF': lane = 6; break; case 'KeyV': lane = 7; break;
+        }
+        if (lane === 0) {
+            if (!isShiftHeldRef.current && !isCtrlHeldRef.current) { activeInputLanesRef.current.delete(0); setLaneActive(0, false); }
+        } else if (lane !== -1) { activeInputLanesRef.current.delete(lane); setLaneActive(lane, false); }
     };
     window.addEventListener('keydown', handleKeyDown); window.addEventListener('keyup', handleKeyUp);
     if (!animationRef.current) { lastFrameTimeRef.current = performance.now(); animationRef.current = requestAnimationFrame(renderLoop); }
@@ -289,7 +298,7 @@ export default function BmsViewer() {
 
   const processFiles = (fileList) => {
     const validFiles = fileList.filter(f => /\.(bms|bme|bml|pms|wav|ogg|mp3|bmp|jpg|jpeg|png|gif|mp4|webm|mov)$/i.test(f.name));
-    if (validFiles.length === 0) { alert("有効なBMS関連ファイルが見つかりませんでした。"); return; }
+    if (validFiles.length === 0) { alert("BMS関連ファイルが見つかりませんでした。"); return; }
     resetAllState(); 
     setFiles(validFiles);
     const bmsFiles = validFiles.filter(f => /\.(bms|bme|bml|pms)$/i.test(f.name)).map((f, i) => ({ file: f, index: i, name: f.name }));
@@ -337,8 +346,6 @@ export default function BmsViewer() {
   const refreshRandom = () => { if (!parsedSong) return; stopPlayback(true); setDisplayObjects(applyOptions(parsedSong.objects, playOption)); };
   useEffect(() => { if (parsedSong) setDisplayObjects(applyOptions(parsedSong.objects, playOption)); }, [parsedSong, playOption]);
   
-  useEffect(() => { if (selectedBmsIndex >= 0 && bmsList[selectedBmsIndex]) loadBmsAndAudio(bmsList[selectedBmsIndex].file); }, [selectedBmsIndex]);
-  
   const loadBmsAndAudio = async (bmsFile) => {
     if (isPlayingRef.current) stopPlayback(true);
     setParsedSong(null); setDisplayObjects([]); setCurrentBackBga(null); setCurrentLayerBga(null); setCurrentPoorBga(null); setShowMissLayer(false);
@@ -372,23 +379,32 @@ export default function BmsViewer() {
 
       const imageQueue = [];
       neededImages.forEach(raw => {
-          const base = getBaseName(raw); 
-          const candidates = fileMap[base];
+          const base = getBaseName(raw).toLowerCase(); const candidates = fileMap[base];
           if (candidates?.length) {
-              imageQueue.push({ key: raw.toLowerCase(), file: candidates[0] });
+              let best = candidates[0]; const exact = candidates.find(c => c.name.toLowerCase() === raw.toLowerCase());
+              if (exact) best = exact;
+              imageQueue.push({ key: raw.toLowerCase(), file: best });
            }
       });
       for (const item of imageQueue) {
           try {
               const url = URL.createObjectURL(item.file);
               const isVideo = /\.(mp4|webm|mov)$/i.test(item.file.name);
-              if (isVideo) { imageAssetsRef.current.set(item.key, { type: 'video', url: url }); } 
-              else { const img = new Image(); img.src = url; imageAssetsRef.current.set(item.key, img); }
+              
+              if (isVideo) {
+                  imageAssetsRef.current.set(item.key, { type: 'video', url: url });
+              } else {
+                  const img = new Image();
+                  img.src = url;
+                  imageAssetsRef.current.set(item.key, img);
+              }
+              
               if (parsed.header.stagefile && item.key === parsed.header.stagefile.toLowerCase()) {
                   if (!isVideo) setCurrentBackBga(imageAssetsRef.current.get(item.key));
               }
           } catch(e) { console.warn("Asset load failed", item.key); }
       }
+      
       if (parsed.header.stagefile && !currentBackBga) { 
           const asset = imageAssetsRef.current.get(parsed.header.stagefile.toLowerCase());
           if(asset && asset.type !== 'video') setCurrentBackBga(asset); 
@@ -396,28 +412,23 @@ export default function BmsViewer() {
 
       const queue = [];
       neededAudio.forEach(raw => {
-        const base = getBaseName(raw); 
-        const candidates = fileMap[base];
+        const base = getBaseName(raw).toLowerCase(); const candidates = fileMap[base];
         if (candidates?.length) {
-          queue.push({ key: raw.toLowerCase(), file: candidates[0] });
+          let best = candidates[0]; const exact = candidates.find(c => c.name.toLowerCase() === raw.toLowerCase());
+          if (exact) best = exact;
+          queue.push({ key: raw.toLowerCase(), file: best });
         }
       });
-      queue.sort((a, b) => a.file.size - b.file.size);
+      queue.sort((a, b) => b.file.size - a.file.size);
 
       if (queue.length > 0) setLoadingMessage(`音声ファイルを読み込み中... (${queue.length}個)`);
       const CONCURRENCY = 6;
       for (let i = 0; i < queue.length; i += CONCURRENCY) {
         await Promise.all(queue.slice(i, i + CONCURRENCY).map(async (item) => {
           try {
-            const buf = await item.file.arrayBuffer(); 
-            if(audioContextRef.current.state === 'suspended') await audioContextRef.current.resume();
-            const audioBuf = await audioContextRef.current.decodeAudioData(buf);
+            const buf = await item.file.arrayBuffer(); const audioBuf = await audioContextRef.current.decodeAudioData(buf);
             audioBuffersRef.current.set(item.key, audioBuf);
-          } catch (e) {
-              console.warn("Audio decode failed", item.key, e);
-          } finally { 
-              setLoadingProgress(Math.round(((i) / queue.length) * 100)); 
-          }
+          } catch (e) {} finally { setLoadingProgress(Math.round(((i) / queue.length) * 100)); }
         }));
       }
       
@@ -469,29 +480,52 @@ export default function BmsViewer() {
                 if (isLong && !playLongAudioRef.current) shouldPlay = false;
                 
                 const isBgmMonitor = buffer.duration > 5.0 && !obj.isNote;
-                const item = { id: Math.random(), name: obj.filename, startTime: obj.time, endTime: obj.time + buffer.duration, displayDuration: buffer.duration, isLong: isBgmMonitor, isMissing: false, isSkipped: false, isMuted: !shouldPlay };
+                const item = { 
+                    id: Math.random(), 
+                    name: obj.filename, 
+                    startTime: obj.time, 
+                    endTime: obj.time + buffer.duration, 
+                    displayDuration: buffer.duration, 
+                    isLong: isBgmMonitor, 
+                    isMissing: false, 
+                    isSkipped: false,
+                    isMuted: !shouldPlay 
+                };
                 if (shouldPlay) {
                     const src = ctx.createBufferSource();
                     src.buffer = buffer; src.connect(gainNodeRef.current);
                     if (absolutePlayTime >= currentTime) src.start(absolutePlayTime);
-                    else { const offset = currentTime - absolutePlayTime; if (offset < buffer.duration) src.start(currentTime, offset); }
+                    else { const offset = currentTime - absolutePlayTime;
+                    if (offset < buffer.duration) src.start(currentTime, offset); }
+                    
                     const endTime = absolutePlayTime + buffer.duration;
                     const nodeData = { node: src, startTime: absolutePlayTime, endTime: endTime, isLong: isLong, id: item.id };
                     activeNodesRef.current.push(nodeData);
                 }
+
                 if (shouldPlay || showMutedMonitorRef.current) {
-                    if (isBgmMonitor) { activeLongSoundsRef.current.push(item); setBackingTracks(prev => [...prev, item]); }
-                    else { activeShortSoundsRef.current.push(item); }
+                    if (isBgmMonitor) { 
+                        activeLongSoundsRef.current.push(item);
+                        setBackingTracks(prev => [...prev, item]); 
+                    }
+                    else { 
+                        activeShortSoundsRef.current.push(item);
+                    }
                 }
               }
           }
           if (obj.isNote) {
                const hitTime = Math.max(currentTime, absolutePlayTime);
                const buffer = obj.laneIndex === 0 ? scratchHitSoundBufferRef.current : keyHitSoundBufferRef.current;
+               
                if (buffer) {
-                   const src = ctx.createBufferSource(); src.buffer = buffer;
-                   const gain = ctx.createGain(); gain.gain.value = 0.6 * hitSoundVolumeRef.current;
-                   src.connect(gain); gain.connect(gainNodeRef.current); src.start(hitTime);
+                   const src = ctx.createBufferSource();
+                   src.buffer = buffer;
+                   const gain = ctx.createGain(); 
+                   gain.gain.value = 0.6 * hitSoundVolumeRef.current;
+                   src.connect(gain); 
+                   gain.connect(gainNodeRef.current); 
+                   src.start(hitTime);
                }
           }
           index++;
@@ -501,15 +535,22 @@ export default function BmsViewer() {
   
   const startPlayback = () => {
     if (!parsedSong || isLoading) return;
-    if (!parsedSong.isSupportedMode) { setTimeout(() => alert("未実装：この形式（5/7鍵盤以外）のBMS再生はサポートされていません。"), 10); return; }
+    if (!parsedSong.isSupportedMode) {
+        setTimeout(() => alert("未実装：この形式（5/7鍵盤以外）のBMS再生はサポートされていません。"), 10);
+        return;
+    }
     if (audioContextRef.current.state === 'suspended') audioContextRef.current.resume();
+    
     stopAudioNodes(); activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]);
     const offset = pauseTimeRef.current; startTimeRef.current = audioContextRef.current.currentTime - offset;
     setIsPlaying(true); lastFrameTimeRef.current = performance.now();
     nextNoteIndexRef.current = findStartIndex(displayObjects, offset - (parsedSong.maxLNDuration || 20.0));
-    nextBackBgaIndexRef.current = 0; nextLayerBgaIndexRef.current = 0; nextPoorBgaIndexRef.current = 0;
+    nextBackBgaIndexRef.current = 0;
+    nextLayerBgaIndexRef.current = 0; nextPoorBgaIndexRef.current = 0;
+
     if (showReady && offset === 0) {
-        setReadyAnimState('READY'); setTimeout(() => setReadyAnimState('GO'), 1000); setTimeout(() => setReadyAnimState(null), 1800); 
+        setReadyAnimState('READY');
+        setTimeout(() => setReadyAnimState('GO'), 1000); setTimeout(() => setReadyAnimState(null), 1800); 
         if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current);
         schedulerTimerRef.current = setInterval(scheduleAudio, SCHEDULE_INTERVAL);
         if (animationRef.current) cancelAnimationFrame(animationRef.current);
@@ -521,13 +562,20 @@ export default function BmsViewer() {
         if (animationRef.current) cancelAnimationFrame(animationRef.current);
         animationRef.current = requestAnimationFrame(renderLoop);
     }
+    
     if (parsedSong.backBgaObjects) {
         for (let i=0; i < parsedSong.backBgaObjects.length; i++) {
             if (parsedSong.backBgaObjects[i].time >= offset) { nextBackBgaIndexRef.current = i; break; }
             const obj = parsedSong.backBgaObjects[i];
             if (parsedSong.header.bmps[obj.value]) { 
                 const asset = imageAssetsRef.current.get(parsedSong.header.bmps[obj.value].toLowerCase());
-                if(asset) { if (asset.type === 'video') { setCurrentBackBga({ ...asset, startTime: obj.time }); } else { setCurrentBackBga(asset); } }
+                if(asset) {
+                    if (asset.type === 'video') {
+                        setCurrentBackBga({ ...asset, startTime: obj.time });
+                    } else {
+                        setCurrentBackBga(asset);
+                    }
+                }
             }
         }
     }
@@ -537,7 +585,13 @@ export default function BmsViewer() {
              const obj = parsedSong.layerBgaObjects[i];
              if (parsedSong.header.bmps[obj.value]) { 
                  const asset = imageAssetsRef.current.get(parsedSong.header.bmps[obj.value].toLowerCase());
-                 if(asset) { if (asset.type === 'video') { setCurrentLayerBga({ ...asset, startTime: obj.time }); } else { setCurrentLayerBga(asset); } }
+                 if(asset) {
+                    if (asset.type === 'video') {
+                        setCurrentLayerBga({ ...asset, startTime: obj.time });
+                    } else {
+                        setCurrentLayerBga(asset);
+                    }
+                 }
              } 
              else if (obj.value === 0) setCurrentLayerBga(null);
         }
@@ -548,37 +602,80 @@ export default function BmsViewer() {
             const obj = parsedSong.poorBgaObjects[i];
             if (parsedSong.header.bmps[obj.value]) { 
                 const asset = imageAssetsRef.current.get(parsedSong.header.bmps[obj.value].toLowerCase());
-                if(asset) { if (asset.type === 'video') { setCurrentPoorBga({ ...asset, startTime: obj.time }); } else { setCurrentPoorBga(asset); } }
+                if(asset) {
+                    if (asset.type === 'video') {
+                        setCurrentPoorBga({ ...asset, startTime: obj.time });
+                    } else {
+                        setCurrentPoorBga(asset);
+                    }
+                }
             }
         }
     }
   };
 
-  const stopAudioNodes = () => { activeNodesRef.current.forEach(n => { try { n.node.stop(); n.node.disconnect(); } catch(e){} }); activeNodesRef.current = []; if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current); };
-  const pausePlayback = () => { setIsPlaying(false); stopAudioNodes(); pauseTimeRef.current = audioContextRef.current.currentTime - startTimeRef.current; setReadyAnimState(null); if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; } if (isInputDebugModeRef.current) requestAnimationFrame(renderLoop); };
+  const stopAudioNodes = () => {
+      activeNodesRef.current.forEach(n => { 
+          try { n.node.stop(); n.node.disconnect(); } catch(e){} 
+      });
+      activeNodesRef.current = [];
+      if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current);
+  };
+
+  const pausePlayback = () => {
+    setIsPlaying(false); stopAudioNodes();
+    pauseTimeRef.current = audioContextRef.current.currentTime - startTimeRef.current;
+    setReadyAnimState(null);
+    if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; }
+    if (isInputDebugModeRef.current) requestAnimationFrame(renderLoop);
+  };
+
   const stopPlayback = (reset = true) => {
-    const wasPlaying = isPlayingRef.current; setIsPlaying(false); stopAudioNodes();
+    const wasPlaying = isPlayingRef.current;
+    setIsPlaying(false); 
+    stopAudioNodes();
     if (reset) {
         if (wasPlaying && showAbortedMonitorRef.current) {
             const currentTime = pauseTimeRef.current > 0 ? pauseTimeRef.current : playbackTimeDisplay;
-            setBackingTracks(prev => prev.map(t => { if (t.endTime > currentTime) { return { ...t, isAborted: true }; } return t; }));
+            setBackingTracks(prev => prev.map(t => {
+                if (t.endTime > currentTime) { return { ...t, isAborted: true }; }
+                return t;
+            }));
             activeLongSoundsRef.current.forEach(t => { if (t.endTime > currentTime) t.isAborted = true; });
-        } else { setBackingTracks([]); activeLongSoundsRef.current = []; }
-        pauseTimeRef.current = 0; setPlaybackTimeDisplay(0); setCombo(0); comboRef.current = 0; lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(8).fill(0));
+        } else {
+            setBackingTracks([]); activeLongSoundsRef.current = [];
+        }
+
+        pauseTimeRef.current = 0; setPlaybackTimeDisplay(0); setCombo(0); comboRef.current = 0;
+        lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(8).fill(0));
         if (parsedSong) displayObjects.forEach(o => o.processed = false);
         setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsedSong?.avgDensity || 0 });
         currentMeasureRef.current = -1; setRealtimeBpm(parsedSong?.header.bpm || 130); setReadyAnimState(null);
         setCurrentLayerBga(null); setCurrentPoorBga(null); setShowMissLayer(false); setNextBpmInfo(null);
-        scratchAngleRef.current = 0; lastScratchTimeRef.current = 0; lastScratchTypeRef.current = 'REVERSE'; scratchDirectionRef.current = -1;
-        activeInputLanesRef.current.clear(); isShiftHeldRef.current = false; isCtrlHeldRef.current = false; if (parsedSong?.header.stagefile) { const asset = imageAssetsRef.current.get(parsedSong.header.stagefile.toLowerCase()); if (asset && asset.type !== 'video') setCurrentBackBga(asset); else setCurrentBackBga(null); } else { setCurrentBackBga(null); }
-    } else { activeShortSoundsRef.current = []; }
+        scratchAngleRef.current = 0; lastScratchTimeRef.current = 0; lastScratchTypeRef.current = 'REVERSE';
+        scratchDirectionRef.current = -1;
+        activeInputLanesRef.current.clear(); isShiftHeldRef.current = false; isCtrlHeldRef.current = false;
+        if (parsedSong?.header.stagefile) { 
+            const asset = imageAssetsRef.current.get(parsedSong.header.stagefile.toLowerCase());
+            if (asset && asset.type !== 'video') setCurrentBackBga(asset); 
+            else setCurrentBackBga(null);
+        } else { 
+            setCurrentBackBga(null);
+        }
+    } else {
+        activeShortSoundsRef.current = [];
+    }
+
     if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; }
     longAudioProgressRefs.current.forEach(el => el.style.width = '0%');
-    setTimeout(() => { if (isInputDebugModeRef.current || !animationRef.current) { lastFrameTimeRef.current = performance.now(); animationRef.current = requestAnimationFrame(renderLoop); } }, 0);
+    setTimeout(() => {
+        if (isInputDebugModeRef.current || !animationRef.current) { lastFrameTimeRef.current = performance.now(); animationRef.current = requestAnimationFrame(renderLoop); }
+    }, 0);
   };
 
   const handleSeek = (e) => {
-    const val = parseFloat(e.target.value); pauseTimeRef.current = val; setPlaybackTimeDisplay(val); setCombo(0); comboRef.current = 0;
+    const val = parseFloat(e.target.value); pauseTimeRef.current = val; setPlaybackTimeDisplay(val); setCombo(0);
+    comboRef.current = 0;
     const targetObjects = displayObjects; for(const obj of targetObjects) obj.processed = obj.time < val;
     if (parsedSong) {
         const currentBar = parsedSong.barLines.find(b => b.time > val);
@@ -589,7 +686,8 @@ export default function BmsViewer() {
         setCurrentMeasureNotes({ processed: processedInMeasure, total: totalInMeasure, average: parsedSong.avgDensity });
         setBackingTracks([]); activeLongSoundsRef.current = [];
     }
-    clearActiveLanes(); if (isPlaying) startPlayback(); else requestAnimationFrame(renderLoop);
+    clearActiveLanes(); if (isPlaying) startPlayback();
+    else requestAnimationFrame(renderLoop);
   };
 
   const renderLoop = () => {
@@ -610,7 +708,10 @@ export default function BmsViewer() {
                 const filename = parsedSong.header.bmps[bgaObj.value];
                 if (filename) { 
                     const asset = imageAssetsRef.current.get(filename.toLowerCase());
-                    if (asset) { if (asset.type === 'video') setCurrentBackBga({ ...asset, startTime: bgaObj.time }); else setCurrentBackBga(asset); }
+                    if (asset) {
+                         if (asset.type === 'video') setCurrentBackBga({ ...asset, startTime: bgaObj.time });
+                        else setCurrentBackBga(asset);
+                    }
                 }
                 nextBackBgaIndexRef.current++;
             }
@@ -621,7 +722,13 @@ export default function BmsViewer() {
                 if (bgaObj.value === 0) setCurrentLayerBga(null);
                 else { 
                     const filename = parsedSong.header.bmps[bgaObj.value];
-                    if (filename) { const asset = imageAssetsRef.current.get(filename.toLowerCase()); if (asset) { if (asset.type === 'video') setCurrentLayerBga({ ...asset, startTime: bgaObj.time }); else setCurrentLayerBga(asset); } } 
+                    if (filename) { 
+                        const asset = imageAssetsRef.current.get(filename.toLowerCase());
+                        if (asset) {
+                            if (asset.type === 'video') setCurrentLayerBga({ ...asset, startTime: bgaObj.time });
+                            else setCurrentLayerBga(asset);
+                        }
+                    } 
                 }
                 nextLayerBgaIndexRef.current++;
             }
@@ -630,7 +737,13 @@ export default function BmsViewer() {
             const bgaObj = parsedSong.poorBgaObjects[nextPoorBgaIndexRef.current];
             if (bgaObj.time <= currentTime) {
                 const filename = parsedSong.header.bmps[bgaObj.value];
-                if (filename) { const asset = imageAssetsRef.current.get(filename.toLowerCase()); if (asset) { if (asset.type === 'video') setCurrentPoorBga({ ...asset, startTime: bgaObj.time }); else setCurrentPoorBga(asset); } }
+                if (filename) { 
+                    const asset = imageAssetsRef.current.get(filename.toLowerCase());
+                    if (asset) {
+                        if (asset.type === 'video') setCurrentPoorBga({ ...asset, startTime: bgaObj.time });
+                        else setCurrentPoorBga(asset);
+                    }
+                }
                 nextPoorBgaIndexRef.current++;
             }
         }
@@ -639,24 +752,60 @@ export default function BmsViewer() {
             setPlaybackTimeDisplay(currentTime);
             const currentBar = parsedSong.barLines.find(b => b.time > currentTime);
             const newMeasure = currentBar ? currentBar.measure - 1 : parsedSong.barLines.length - 1;
-            if (newMeasure !== currentMeasureRef.current) { currentMeasureRef.current = newMeasure; setCurrentMeasure(newMeasure); if (parsedSong.rawLinesByMeasure[newMeasure]) setCurrentMeasureLines(parsedSong.rawLinesByMeasure[newMeasure].map(l => ({ text: l, isCurrent: true }))); else setCurrentMeasureLines([]); const totalInMeasure = parsedSong.notesPerMeasure[newMeasure] || 0; const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999; const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length; setCurrentMeasureNotes({ processed: processedInMeasure, total: totalInMeasure, average: parsedSong.avgDensity }); } else { const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999; const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length; setCurrentMeasureNotes(prev => ({ ...prev, processed: processedInMeasure })); }
-            const currentBpmVal = getBpmFromTime(parsedSong.timePoints, currentTime); setRealtimeBpm(currentBpmVal);
-            const futureTime = currentTime + 2.0; const nextTp = parsedSong.timePoints.find(tp => tp.time > currentTime && tp.time <= futureTime && tp.bpm !== currentBpmVal);
+            if (newMeasure !== currentMeasureRef.current) {
+                currentMeasureRef.current = newMeasure;
+                setCurrentMeasure(newMeasure);
+                if (parsedSong.rawLinesByMeasure[newMeasure]) setCurrentMeasureLines(parsedSong.rawLinesByMeasure[newMeasure].map(l => ({ text: l, isCurrent: true })));
+                else setCurrentMeasureLines([]);
+                const totalInMeasure = parsedSong.notesPerMeasure[newMeasure] || 0;
+                const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999;
+                const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
+                setCurrentMeasureNotes({ processed: processedInMeasure, total: totalInMeasure, average: parsedSong.avgDensity });
+            } else {
+                const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999;
+                const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
+                setCurrentMeasureNotes(prev => ({ ...prev, processed: processedInMeasure }));
+            }
+            
+            const currentBpmVal = getBpmFromTime(parsedSong.timePoints, currentTime);
+            setRealtimeBpm(currentBpmVal);
+            const futureTime = currentTime + 2.0; 
+            const nextTp = parsedSong.timePoints.find(tp => tp.time > currentTime && tp.time <= futureTime && tp.bpm !== currentBpmVal);
             setNextBpmInfo(nextTp ? { value: nextTp.bpm, direction: nextTp.bpm > currentBpmVal ? 'up' : 'down', old: currentBpmVal } : null);
             lastStateUpdateRef.current = now;
-            activeLongSoundsRef.current = activeLongSoundsRef.current.filter(s => { if (s.isAborted) return true; return currentTime < s.endTime; });
+            
+            activeLongSoundsRef.current = activeLongSoundsRef.current.filter(s => {
+                if (s.isAborted) return true; 
+                return currentTime < s.endTime;
+            });
             const visibleTracks = activeLongSoundsRef.current.filter(s => s.isAborted || s.startTime <= currentTime);
-            if (visibleTracks.length !== backingTracks.length || (visibleTracks.length > 0 && visibleTracks[0].id !== backingTracks[0].id) || (visibleTracks.length > 0 && visibleTracks[visibleTracks.length-1].id !== backingTracks[backingTracks.length-1]?.id)) { setBackingTracks([...visibleTracks]); }
-            activeLongSoundsRef.current.forEach(s => { const ref = longAudioProgressRefs.current.get(s.id); if (ref && !s.isAborted) { const duration = s.displayDuration || 1; const elapsed = currentTime - s.startTime; const progress = Math.min(100, Math.max(0, (elapsed / duration) * 100)); ref.style.width = `${progress}%`; } });
+            if (visibleTracks.length !== backingTracks.length || (visibleTracks.length > 0 && visibleTracks[0].id !== backingTracks[0].id) || (visibleTracks.length > 0 && visibleTracks[visibleTracks.length-1].id !== backingTracks[backingTracks.length-1]?.id)) {
+                setBackingTracks([...visibleTracks]);
+            }
+            
+            activeLongSoundsRef.current.forEach(s => {
+                const ref = longAudioProgressRefs.current.get(s.id);
+                if (ref && !s.isAborted) {
+                    const duration = s.displayDuration || 1; const elapsed = currentTime - s.startTime;
+                    const progress = Math.min(100, Math.max(0, (elapsed / duration) * 100));
+                    ref.style.width = `${progress}%`;
+                }
+            });
         }
+
         const isFinished = currentTime > duration + 0.5 && activeNodesRef.current.length === 0;
         if (isFinished && isPlayingRef.current) { stopPlayback(true); return; }
     }
 
-    const width = rect.width; const height = rect.height;
+    const width = rect.width;
+    const height = rect.height;
     ctx.clearRect(0, 0, width, height);
 
-    const KEY_W = Math.min(40, width / 12); const SCRATCH_W = KEY_W * 1.5; const BOARD_W = SCRATCH_W + (KEY_W * 7) + 10; const BOARD_X = (width - BOARD_W) / 2;
+    const KEY_W = Math.min(40, width / 12);
+    const SCRATCH_W = KEY_W * 1.5;
+    const BOARD_W = SCRATCH_W + (KEY_W * 7) + 10;
+    const BOARD_X = (width - BOARD_W) / 2;
+    
     const visMode = visibilityModeRef.current;
     const isLiftEnabled = visMode === VISIBILITY_MODES.LIFT || visMode === VISIBILITY_MODES.LIFT_SUD_PLUS;
     const liftOffset = isLiftEnabled ? liftValRef.current : 0; 
@@ -666,81 +815,156 @@ export default function BmsViewer() {
     const is2P = playSide === '2P';
     const SCRATCH_X = is2P ? BOARD_X + (KEY_W * 7) + 10 : BOARD_X; const KEYS_X = is2P ? BOARD_X : BOARD_X + SCRATCH_W + 10;
 
-    // ★修正: スマホの場合は背景をより透明に(0.3)
-    ctx.fillStyle = isMobileRef.current ? 'rgba(2, 6, 23, 0.3)' : 'rgba(2, 6, 23, 0.85)';
+    // ★修正: 透明度(opacity)をstateで調整できるように変更 (デフォルト0.3)
+    const opacity = laneOpacityRef.current;
+    
+    // 背景: 黒の半透明 (BGAを見せるため)
+    ctx.fillStyle = isMobileRef.current ? `rgba(2, 6, 23, ${opacity})` : 'rgba(2, 6, 23, 0.85)';
     ctx.fillRect(BOARD_X, 0, BOARD_W, height); 
     
     for(let i=0; i<7; i++) { 
         const laneHeight = isLiftEnabled ? JUDGE_Y : height;
-        const color = [1,3,5].includes(i) ? (isMobileRef.current ? 'rgba(15, 23, 42, 0.3)' : '#0f172a') : (isMobileRef.current ? 'rgba(30, 41, 59, 0.3)' : '#1e293b');
+        // レーン色も半透明に
+        const baseColor = [1,3,5].includes(i) ? [15, 23, 42] : [30, 41, 59];
+        const color = isMobileRef.current 
+            ? `rgba(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]}, ${opacity})` 
+            : [1,3,5].includes(i) ? '#0f172a' : '#1e293b';
         ctx.fillStyle = color;
         ctx.fillRect(KEYS_X + i * KEY_W, 0, KEY_W, laneHeight);
     }
     
-    ctx.strokeStyle = isMobileRef.current ? 'rgba(51, 65, 85, 0.3)' : '#334155';
+    ctx.strokeStyle = isMobileRef.current ? `rgba(51, 65, 85, ${opacity})` : '#334155';
     ctx.lineWidth = 1; ctx.beginPath();
     for(let i=0; i<=7; i++) { const x = KEYS_X + i * KEY_W; ctx.moveTo(x, 0); ctx.lineTo(x, isLiftEnabled ? JUDGE_Y : height); }
-    ctx.fillStyle = isMobileRef.current ? 'rgba(15, 23, 42, 0.3)' : '#0f172a';
+    
+    // スクラッチレーンも半透明に
+    ctx.fillStyle = isMobileRef.current ? `rgba(15, 23, 42, ${opacity})` : '#0f172a';
     ctx.fillRect(SCRATCH_X, 0, SCRATCH_W, isLiftEnabled ? JUDGE_Y : height);
-    ctx.moveTo(SCRATCH_X, 0); ctx.lineTo(SCRATCH_X, isLiftEnabled ? JUDGE_Y : height); ctx.moveTo(SCRATCH_X + SCRATCH_W, 0); ctx.lineTo(SCRATCH_X + SCRATCH_W, isLiftEnabled ? JUDGE_Y : height); ctx.stroke();
-    if (!showSettings && parsedSong) { ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(BOARD_X, JUDGE_Y); ctx.lineTo(BOARD_X + BOARD_W, JUDGE_Y); ctx.stroke(); }
+    
+    ctx.moveTo(SCRATCH_X, 0);
+    ctx.lineTo(SCRATCH_X, isLiftEnabled ? JUDGE_Y : height); 
+    ctx.moveTo(SCRATCH_X + SCRATCH_W, 0); ctx.lineTo(SCRATCH_X + SCRATCH_W, isLiftEnabled ? JUDGE_Y : height);
+    ctx.stroke();
+    if (!showSettings && parsedSong) {
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(BOARD_X, JUDGE_Y); ctx.lineTo(BOARD_X + BOARD_W, JUDGE_Y); ctx.stroke();
+    }
 
-    const currentActiveLanes = new Array(8).fill(false); let hitsThisFrame = new Array(8).fill(0);
+    const currentActiveLanes = new Array(8).fill(false);
+    let hitsThisFrame = new Array(8).fill(0);
 
     if (parsedSong) {
         const currentBeat = getBeatFromTime(parsedSong.timePoints, currentTime);
         const visibleDuration = 4.0 / hiSpeedRef.current; const visibleEndBeat = currentBeat + visibleDuration;
 
-        ctx.strokeStyle = '#64748b'; ctx.textAlign = 'left'; ctx.font = '10px Arial';
+        ctx.strokeStyle = '#64748b'; ctx.textAlign = 'left';
+        ctx.font = '10px Arial';
         for(const bar of parsedSong.barLines) {
-            if (bar.beat < currentBeat - 0.5) continue; if (bar.beat > visibleEndBeat) break;
-            const y = JUDGE_Y - ((bar.beat - currentBeat) / visibleDuration * BASE_JUDGE_Y); if (y < -10) continue;
-            ctx.beginPath(); ctx.moveTo(BOARD_X, y); ctx.lineTo(BOARD_X + BOARD_W, y); ctx.stroke(); ctx.fillStyle = '#94a3b8'; ctx.fillText(`#${bar.measure}`, BOARD_X + BOARD_W + 5, y + 3);
+            if (bar.beat < currentBeat - 0.5) continue;
+            if (bar.beat > visibleEndBeat) break;
+            const y = JUDGE_Y - ((bar.beat - currentBeat) / visibleDuration * BASE_JUDGE_Y);
+            if (y < -10) continue;
+            ctx.beginPath(); ctx.moveTo(BOARD_X, y); ctx.lineTo(BOARD_X + BOARD_W, y);
+            ctx.stroke();
+            ctx.fillStyle = '#94a3b8'; ctx.fillText(`#${bar.measure}`, BOARD_X + BOARD_W + 5, y + 3);
         }
         
         let startIndex = findStartIndex(displayObjects, currentTime - (parsedSong.maxLNDuration || 10.0));
         for (let i = startIndex; i < displayObjects.length; i++) {
             const obj = displayObjects[i];
             if (obj.beat > visibleEndBeat) break; if (!obj.isNote) continue;
-            let x, w; if (obj.laneIndex === 0) { x = SCRATCH_X; w = SCRATCH_W; } else { x = KEYS_X + (obj.laneIndex - 1) * KEY_W; w = KEY_W; }
-            const beatDelta = obj.beat - currentBeat; const timeDelta = obj.time - currentTime;
+            let x, w; if (obj.laneIndex === 0) { x = SCRATCH_X;
+            w = SCRATCH_W; } else { x = KEYS_X + (obj.laneIndex - 1) * KEY_W; w = KEY_W;
+            }
+            const beatDelta = obj.beat - currentBeat;
+            const timeDelta = obj.time - currentTime;
             
             if (!obj.processed) {
                 if (timeDelta <= 0 && timeDelta > -0.03) {
-                    obj.processed = true; comboRef.current++; noteCountsRef.current[obj.laneIndex]++; hitsThisFrame[obj.laneIndex] = 1; lastPlayedSoundPerLaneRef.current[obj.laneIndex] = obj.filename;
+                    obj.processed = true;
+                    comboRef.current++; noteCountsRef.current[obj.laneIndex]++; hitsThisFrame[obj.laneIndex] = 1; lastPlayedSoundPerLaneRef.current[obj.laneIndex] = obj.filename;
                     if (obj.laneIndex === 0) {
-                        let dist = 999; for(let k = i + 1; k < displayObjects.length; k++) { const nextObj = displayObjects[k]; if (nextObj.laneIndex === 0) { dist = nextObj.time - obj.time; break; } if (nextObj.time - obj.time > 5.0) break; }
-                        if (dist < 0.6) { lastScratchTypeRef.current = 'ACCEL'; scratchDirectionRef.current = scratchDirectionRef.current * -1; } else { lastScratchTypeRef.current = 'REVERSE'; scratchDirectionRef.current = -1; }
+                        let dist = 999;
+                        for(let k = i + 1; k < displayObjects.length; k++) {
+                            const nextObj = displayObjects[k];
+                            if (nextObj.laneIndex === 0) { dist = nextObj.time - obj.time; break; }
+                            if (nextObj.time - obj.time > 5.0) break;
+                        }
+                        if (dist < 0.6) { lastScratchTypeRef.current = 'ACCEL';
+                        scratchDirectionRef.current = scratchDirectionRef.current * -1; } 
+                        else { lastScratchTypeRef.current = 'REVERSE';
+                        scratchDirectionRef.current = -1; }
                         if (isPlayingRef.current) lastScratchTimeRef.current = now;
                     }
-                } else if (timeDelta <= -0.2) { obj.processed = true; triggerMiss(); }
+                }
+                else if (timeDelta <= -0.2) {
+                     obj.processed = true;
+                     triggerMiss();
+                }
             }
 
             const yBase = JUDGE_Y - (beatDelta / visibleDuration * BASE_JUDGE_Y);
             if (obj.type === 'long') {
-                const endBeatDelta = obj.endBeat - currentBeat; const yEnd = JUDGE_Y - (endBeatDelta / visibleDuration * BASE_JUDGE_Y);
+                const endBeatDelta = obj.endBeat - currentBeat;
+                const yEnd = JUDGE_Y - (endBeatDelta / visibleDuration * BASE_JUDGE_Y);
                 if (beatDelta <= 0 && endBeatDelta > 0) {
-                    currentActiveLanes[obj.laneIndex] = true; const grad = ctx.createLinearGradient(x, JUDGE_Y, x, 0); grad.addColorStop(0, `rgba(100, 200, 255, 0.3)`); grad.addColorStop(1, `rgba(0,0,0,0)`); ctx.fillStyle = grad; ctx.fillRect(x, 0, w, JUDGE_Y);
+                    currentActiveLanes[obj.laneIndex] = true;
+                    const grad = ctx.createLinearGradient(x, JUDGE_Y, x, 0); grad.addColorStop(0, `rgba(100, 200, 255, 0.3)`); grad.addColorStop(1, `rgba(0,0,0,0)`);
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(x, 0, w, JUDGE_Y);
                 }
-                const drawBottom = Math.min(JUDGE_Y, yBase); const drawTop = yEnd;
-                if (drawTop <= height) { const h = drawBottom - drawTop; if (h > 0 && drawBottom > -50) { ctx.fillStyle = obj.laneIndex === 0 ? '#ef4444' : '#f59e0b'; ctx.fillRect(x + 1, drawTop, w - 2, h); } }
+                const drawBottom = Math.min(JUDGE_Y, yBase);
+                const drawTop = yEnd;
+                if (drawTop <= height) {
+                    const h = drawBottom - drawTop;
+                    if (h > 0 && drawBottom > -50) { ctx.fillStyle = obj.laneIndex === 0 ? '#ef4444' : '#f59e0b';
+                    ctx.fillRect(x + 1, drawTop, w - 2, h); }
+                }
             } else {
                 if (obj.processed) {
                     if (timeDelta > -0.05 && timeDelta > -0.2) { 
-                        currentActiveLanes[obj.laneIndex] = true; const alpha = 1.0 - (timeDelta / -0.05); ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`; ctx.fillRect(x, JUDGE_Y - 5, w, 10);
-                        const grad = ctx.createLinearGradient(x, JUDGE_Y, x, JUDGE_Y - 200); const color = obj.laneIndex === 0 ? '239, 68, 68' : '59, 130, 246'; grad.addColorStop(0, `rgba(${color}, ${alpha * 0.6})`); grad.addColorStop(1, `rgba(0,0,0,0)`); ctx.fillStyle = grad; ctx.fillRect(x, JUDGE_Y - 200, w, 200);
+                        currentActiveLanes[obj.laneIndex] = true;
+                        const alpha = 1.0 - (timeDelta / -0.05);
+                        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`; ctx.fillRect(x, JUDGE_Y - 5, w, 10);
+                        const grad = ctx.createLinearGradient(x, JUDGE_Y, x, JUDGE_Y - 200);
+                        const color = obj.laneIndex === 0 ? '239, 68, 68' : '59, 130, 246'; 
+                        grad.addColorStop(0, `rgba(${color}, ${alpha * 0.6})`); grad.addColorStop(1, `rgba(0,0,0,0)`);
+                        ctx.fillStyle = grad;
+                        ctx.fillRect(x, JUDGE_Y - 200, w, 200);
                     }
                     continue;
                 }
-                const y = yBase; const isScratch = obj.laneIndex === 0; const isBlue = [2,4,6].includes(obj.laneIndex); ctx.fillStyle = isScratch ? '#ef4444' : (isBlue ? '#3b82f6' : '#f1f5f9'); ctx.fillRect(x + 1, y - 6, w - 2, 12);
+                const y = yBase;
+                const isScratch = obj.laneIndex === 0; const isBlue = [2,4,6].includes(obj.laneIndex);
+                ctx.fillStyle = isScratch ? '#ef4444' : (isBlue ? '#3b82f6' : '#f1f5f9'); ctx.fillRect(x + 1, y - 6, w - 2, 12);
             }
         }
     }
 
     const isSudden = visMode === VISIBILITY_MODES.SUDDEN_PLUS || visMode === VISIBILITY_MODES.SUD_HID_PLUS || visMode === VISIBILITY_MODES.LIFT_SUD_PLUS;
     const isHidden = visMode === VISIBILITY_MODES.HIDDEN_PLUS || visMode === VISIBILITY_MODES.SUD_HID_PLUS;
-    if (isSudden) { const h = suddenPlusValRef.current; ctx.fillStyle = '#000000'; ctx.fillRect(BOARD_X, 0, BOARD_W, h); ctx.fillStyle = '#22c55e'; ctx.fillRect(BOARD_X, h - 2, BOARD_W, 2); ctx.fillStyle = '#ffffff'; ctx.font = 'bold 10px Arial'; ctx.textAlign = 'center'; ctx.fillText(`SUDDEN+ (${h})`, BOARD_X + BOARD_W/2, h - 10); }
-    if (isHidden) { const h = hiddenPlusValRef.current; const yPos = JUDGE_Y - h; ctx.fillStyle = '#000000'; ctx.fillRect(BOARD_X, yPos, BOARD_W, h); ctx.fillStyle = '#22c55e'; ctx.fillRect(BOARD_X, yPos, BOARD_W, 2); ctx.fillStyle = '#ffffff'; ctx.font = 'bold 10px Arial'; ctx.textAlign = 'center'; ctx.fillText(`HIDDEN+ (${h})`, BOARD_X + BOARD_W/2, yPos + 15); }
+    if (isSudden) {
+        const h = suddenPlusValRef.current;
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(BOARD_X, 0, BOARD_W, h);
+        ctx.fillStyle = '#22c55e';
+        ctx.fillRect(BOARD_X, h - 2, BOARD_W, 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px Arial'; ctx.textAlign = 'center';
+        ctx.fillText(`SUDDEN+ (${h})`, BOARD_X + BOARD_W/2, h - 10);
+    }
+
+    if (isHidden) {
+        const h = hiddenPlusValRef.current;
+        const yPos = JUDGE_Y - h;
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(BOARD_X, yPos, BOARD_W, h);
+        ctx.fillStyle = '#22c55e';
+        ctx.fillRect(BOARD_X, yPos, BOARD_W, 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px Arial'; ctx.textAlign = 'center';
+        ctx.fillText(`HIDDEN+ (${h})`, BOARD_X + BOARD_W/2, yPos + 15);
+    }
 
     const safeDt = Math.min(dt, 0.1); 
     const baseSpeed = ((realtimeBpm || 130) / 60) * 135;
@@ -749,32 +973,67 @@ export default function BmsViewer() {
     let speedMultiplier = 0;
     const sideFactor = playSideRef.current === '2P' ? -1 : 1;
 
-    if (isInputDebugModeRef.current && (isShiftHeldRef.current || isCtrlHeldRef.current)) { if (isShiftHeldRef.current) speedMultiplier = -1.0; else if (isCtrlHeldRef.current) speedMultiplier = 2.5; } 
-    else if (isPlayingRef.current) { if (currentActiveLanes[0]) speedMultiplier = -1.0; else if (timeSinceLast < effectDuration) { if (lastScratchTypeRef.current === 'ACCEL') speedMultiplier = 1.5 * scratchDirectionRef.current; else speedMultiplier = -1.0; } else speedMultiplier = 1.0; }
-    else speedMultiplier = 1.0;
+    if (isInputDebugModeRef.current && (isShiftHeldRef.current || isCtrlHeldRef.current)) {
+        if (isShiftHeldRef.current) {
+            speedMultiplier = -1.0;
+        } else if (isCtrlHeldRef.current) {
+            speedMultiplier = 2.5;
+        }
+    } 
+    else if (isPlayingRef.current) {
+        if (currentActiveLanes[0]) {
+             speedMultiplier = -1.0;
+        } else if (timeSinceLast < effectDuration) {
+             if (lastScratchTypeRef.current === 'ACCEL') {
+                 speedMultiplier = 1.5 * scratchDirectionRef.current;
+             } else {
+                 speedMultiplier = -1.0;
+             }
+        } else {
+             speedMultiplier = 1.0;
+        }
+    }
+    else {
+        speedMultiplier = 1.0;
+    }
     
-    if (!scratchRotationEnabledRef.current && Math.abs(speedMultiplier) === 1.0) { if (!currentActiveLanes[0] && timeSinceLast >= effectDuration && !isShiftHeldRef.current) speedMultiplier = 0; }
+    if (!scratchRotationEnabledRef.current && Math.abs(speedMultiplier) === 1.0) {
+        if (!currentActiveLanes[0] && timeSinceLast >= effectDuration && !isShiftHeldRef.current) {
+             speedMultiplier = 0;
+        }
+    }
 
     scratchAngleRef.current += baseSpeed * speedMultiplier * sideFactor * safeDt;
     const scratchCtrl = controllerRefs.current[0];
     if (scratchCtrl) scratchCtrl.style.transform = `rotate(${scratchAngleRef.current}deg)`;
 
-    for(let lane=0; lane<8; lane++) { setLaneActive(lane, currentActiveLanes[lane] || activeInputLanesRef.current.has(lane)); }
-    if (hitsThisFrame.some(v => v > 0)) { setCombo(comboRef.current); setNoteCounts([...noteCountsRef.current]); }
+    for(let lane=0; lane<8; lane++) { setLaneActive(lane, currentActiveLanes[lane] || activeInputLanesRef.current.has(lane));
+    }
+    if (hitsThisFrame.some(v => v > 0)) { setCombo(comboRef.current); setNoteCounts([...noteCountsRef.current]);
+    }
 
     if (showReady && readyAnimStateRef.current) {
         ctx.save(); ctx.translate(width/2, height/2);
-        if (readyAnimStateRef.current === 'GO') { ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 30; ctx.fillStyle = '#ff3333'; ctx.font = 'bold italic 80px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText("GO!!", 0, 0); } 
-        else { ctx.shadowColor = '#00ccff'; ctx.shadowBlur = 20; ctx.fillStyle = '#ffffff'; ctx.font = 'bold italic 60px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText("READY...", 0, 0); }
+        if (readyAnimStateRef.current === 'GO') {
+             ctx.shadowColor = '#ff0000';
+             ctx.shadowBlur = 30; ctx.fillStyle = '#ff3333'; ctx.font = 'bold italic 80px sans-serif';
+             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+             ctx.fillText("GO!!", 0, 0);
+        } else {
+             ctx.shadowColor = '#00ccff';
+             ctx.shadowBlur = 20; ctx.fillStyle = '#ffffff'; ctx.font = 'bold italic 60px sans-serif';
+             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+             ctx.fillText("READY...", 0, 0);
+        }
         ctx.restore();
     }
 
-    if (isPlayingRef.current || showReady || isInputDebugModeRef.current) { animationRef.current = requestAnimationFrame(renderLoop); } 
+    if (isPlayingRef.current || showReady || isInputDebugModeRef.current) { animationRef.current = requestAnimationFrame(renderLoop);
+    } 
     else { animationRef.current = null; }
   };
 
   const is2P = playSide === '2P';
-
   return (
     <div className={`flex flex-col h-screen bg-neutral-950 text-white font-sans overflow-hidden ${isDragOver ? 'ring-4 ring-blue-500' : ''}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
       
@@ -796,10 +1055,11 @@ export default function BmsViewer() {
         handleFileSelect={handleFileSelect} handleZipSelect={handleZipSelect} bmsList={bmsList} selectedBmsIndex={selectedBmsIndex} setSelectedBmsIndex={setSelectedBmsIndex}
         isPlaying={isPlaying} startPlayback={startPlayback} pausePlayback={pausePlayback} stopPlayback={stopPlayback}
         hiSpeed={hiSpeed} setHiSpeed={setHiSpeed} bgaOpacity={bgaOpacity} setBgaOpacity={setBgaOpacity}
+        laneOpacity={laneOpacity} setLaneOpacity={setLaneOpacity}
         parsedSong={parsedSong}
       />
 
-      {/* メインエリア: レイヤー構造に変更 */}
+      {/* メインエリア: PCとスマホで構造を分ける */}
       <div className="flex-1 relative min-h-0 overflow-hidden flex justify-center">
          
          {/* スマホ用: 背景BGA */}
