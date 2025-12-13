@@ -4,7 +4,7 @@ import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
 import { LANE_MAP, VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY } from './constants';
 // getBaseName (拡張子なし名取得) をインポート
-import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, generateLaneMap, guessDifficulty, extractZipFiles, getBaseName } from './logic/utils';
+import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, generateLaneMap, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 
 import SettingsModal from './components/SettingsModal';
@@ -17,7 +17,7 @@ import BgaLayer from './components/BgaLayer';
 export default function BmsViewer() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
   const [bgaOpacity, setBgaOpacity] = useState(DEFAULT_BGA_OPACITY);
-  // ★追加: レーン不透明度の状態 (デフォルト0.3)
+  // ★追加: レーン不透明度の状態 (デフォルト0.3 = かなり透ける)
   const [laneOpacity, setLaneOpacity] = useState(0.3);
 
   const [files, setFiles] = useState([]);
@@ -345,9 +345,10 @@ export default function BmsViewer() {
 
   const refreshRandom = () => { if (!parsedSong) return; stopPlayback(true); setDisplayObjects(applyOptions(parsedSong.objects, playOption)); };
   useEffect(() => { if (parsedSong) setDisplayObjects(applyOptions(parsedSong.objects, playOption)); }, [parsedSong, playOption]);
-
-  useEffect(() => { if (selectedBmsIndex >= 0 && bmsList[selectedBmsIndex]) loadBmsAndAudio(bmsList[selectedBmsIndex].file); }, [selectedBmsIndex, bmsList]);
   
+  // ★修正: bmsListを監視対象に追加して即時ロードに対応
+  useEffect(() => { if (selectedBmsIndex >= 0 && bmsList[selectedBmsIndex]) loadBmsAndAudio(bmsList[selectedBmsIndex].file); }, [selectedBmsIndex, bmsList]);
+
   const loadBmsAndAudio = async (bmsFile) => {
     if (isPlayingRef.current) stopPlayback(true);
     setParsedSong(null); setDisplayObjects([]); setCurrentBackBga(null); setCurrentLayerBga(null); setCurrentPoorBga(null); setShowMissLayer(false);
@@ -381,11 +382,10 @@ export default function BmsViewer() {
 
       const imageQueue = [];
       neededImages.forEach(raw => {
-          const base = getBaseName(raw).toLowerCase(); const candidates = fileMap[base];
+          const base = getBaseName(raw); 
+          const candidates = fileMap[base];
           if (candidates?.length) {
-              let best = candidates[0]; const exact = candidates.find(c => c.name.toLowerCase() === raw.toLowerCase());
-              if (exact) best = exact;
-              imageQueue.push({ key: raw.toLowerCase(), file: best });
+              imageQueue.push({ key: raw.toLowerCase(), file: candidates[0] });
            }
       });
       for (const item of imageQueue) {
@@ -414,11 +414,10 @@ export default function BmsViewer() {
 
       const queue = [];
       neededAudio.forEach(raw => {
-        const base = getBaseName(raw).toLowerCase(); const candidates = fileMap[base];
+        const base = getBaseName(raw); 
+        const candidates = fileMap[base];
         if (candidates?.length) {
-          let best = candidates[0]; const exact = candidates.find(c => c.name.toLowerCase() === raw.toLowerCase());
-          if (exact) best = exact;
-          queue.push({ key: raw.toLowerCase(), file: best });
+          queue.push({ key: raw.toLowerCase(), file: candidates[0] });
         }
       });
       queue.sort((a, b) => b.file.size - a.file.size);
@@ -1097,7 +1096,7 @@ export default function BmsViewer() {
                  />
 
                  {/* 中央右: レーン (Canvas) */}
-                 <div className="flex-1 relative min-h-0 overflow-hidden flex justify-center">
+                 <div className="flex-1 bg-black relative flex justify-center border-r border-blue-900/30 overflow-hidden">
                     <canvas ref={canvasRef} className="h-full w-full max-w-[600px] shadow-[0_0_50px_rgba(0,0,0,0.5)]" />
                     {!parsedSong && <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-blue-900/20"><div className="text-center animate-pulse"><FolderOpen size={64} className="mx-auto mb-4 opacity-50"/><p className="text-xl font-bold tracking-widest">DROP FILE HERE</p></div></div>}
                     {!showSettings && parsedSong && <div className="absolute bottom-[100px] w-full h-[2px] bg-red-500/60 pointer-events-none z-20 shadow-[0_0_10px_rgba(239,68,68,0.8)]" style={{maxWidth:'600px'}}/>}

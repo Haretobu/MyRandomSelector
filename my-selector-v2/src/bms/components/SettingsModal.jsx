@@ -42,20 +42,16 @@ const SettingsModal = ({
                             <div className="text-sm font-bold text-blue-300 border-b border-blue-500/30 pb-2 mb-2">ファイル読込</div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                {/* 通常のフォルダアップロード */}
                                 <label className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 text-sm cursor-pointer flex items-center justify-center gap-2 shadow-lg rounded-lg font-bold w-full transition active:scale-95">
                                     <FolderOpen size={18}/> フォルダを開く (BMS)
                                     <input type="file" webkitdirectory="" multiple className="hidden" onChange={handleFileSelect} />
                                 </label>
-                                
-                                {/* ZIPアップロード */}
                                 <label className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-3 text-sm cursor-pointer flex items-center justify-center gap-2 shadow-lg rounded-lg font-bold w-full transition active:scale-95">
                                     <FileArchive size={18}/> ZIPを開く (スマホ推奨)
                                     <input type="file" accept=".zip,application/zip" className="hidden" onChange={handleZipSelect} />
                                 </label>
                             </div>
 
-                            {/* 曲選択 */}
                             <div className="flex flex-col gap-1">
                                 <span className="text-xs text-blue-400">選択中の曲</span>
                                 <select className="bg-black/50 text-white p-2 rounded border border-blue-500/30 w-full text-sm" value={selectedBmsIndex} onChange={e => setSelectedBmsIndex(Number(e.target.value))}>
@@ -64,7 +60,6 @@ const SettingsModal = ({
                                 </select>
                             </div>
 
-                            {/* ハイスピード & 音量 */}
                             <div className="grid grid-cols-2 gap-4 pt-2">
                                 <div>
                                     <label className="text-xs text-blue-300 block mb-1">HI-SPEED: {hiSpeed}</label>
@@ -78,7 +73,7 @@ const SettingsModal = ({
                         </div>
                     )}
 
-                    {/* ▼▼▼ BGA設定 (共通) ▼▼▼ */}
+                    {/* ▼▼▼ BGA・透明度設定 (共通) ▼▼▼ */}
                     <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
                         <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center gap-2">
                             <Film size={14} /> 表示・BGA設定
@@ -91,7 +86,7 @@ const SettingsModal = ({
                             
                             <div>
                                 <div className="flex justify-between text-sm mb-1">
-                                    <span className="text-blue-300">BGAの明るさ (不透明度)</span>
+                                    <span className="text-blue-300">BGAの明るさ</span>
                                     <span>{Math.round(bgaOpacity * 100)}%</span>
                                 </div>
                                 <input type="range" min="0" max="1" step="0.05" value={bgaOpacity} onChange={e => setBgaOpacity(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"/>
@@ -104,7 +99,7 @@ const SettingsModal = ({
                                     <span>{Math.round(laneOpacity * 100)}%</span>
                                 </div>
                                 <input type="range" min="0" max="1" step="0.05" value={laneOpacity} onChange={e => setLaneOpacity(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"/>
-                                <p className="text-[10px] text-gray-400 mt-1">※値を下げると背景BGAが透けて見えます</p>
+                                <p className="text-[10px] text-gray-400 mt-1">※値を下げると、黒い帯が消えて背景BGAが透けて見えます</p>
                             </div>
                         </div>
                     </div>
@@ -162,7 +157,7 @@ const SettingsModal = ({
                         </div>
                     </div>
 
-                    {/* PC用設定 (レーンオプションなど) - モバイルでも表示 */}
+                    {/* PC用設定 - モバイルでも表示 */}
                     <div className="flex flex-col md:flex-row gap-4 items-start">
                          <div className="w-full md:flex-1 border border-blue-900/50 p-3 bg-[#0f172a] rounded-lg flex justify-between items-center">
                              <span className="font-bold text-sm text-blue-300">プレイサイド</span>
@@ -186,7 +181,7 @@ const SettingsModal = ({
                          </div>
                     </div>
 
-                    {/* 詳細設定 (サウンド・デバッグ) - デバッグはPCのみ */}
+                    {/* 詳細設定 (サウンド・デバッグ) */}
                     <details className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50 mt-2 group" open={!isMobile}>
                         <summary className="text-xs text-blue-400 mb-2 font-bold uppercase tracking-wider flex items-center justify-between cursor-pointer list-none">
                             <span>詳細設定 (サウンド・デバッグ)</span>
@@ -223,7 +218,6 @@ const SettingsModal = ({
                                  <input type="checkbox" checked={showAbortedMonitor} onChange={e=>setShowAbortedMonitor(e.target.checked)} className="accent-blue-500"/>
                             </label>
                             
-                            {/* デバッグキー入力: スマホでは非表示 */}
                             {!isMobile && (
                                 <>
                                     <div className="border-t border-blue-900/30 my-2"></div>
