@@ -4,20 +4,16 @@ import JSZip from 'jszip';
 
 export const parseInt36 = (str) => parseInt(str, 36);
 
-// ★修正: 古いコードのロジックに戻す (拡張子を削除して小文字化)
-// これにより "beat.wav" と "beat.ogg" が同一視され、音が鳴るようになります
-export const getBaseName = (n) => { 
-    // まずパス区切りを統一してファイル名だけにする
-    const name = n.replace(/\\/g, '/').split('/').pop();
-    const p = name.split('.'); 
-    if(p.length > 1) p.pop(); // 拡張子を削除
-    return p.join('.').toLowerCase(); 
-};
-
-// 拡張子ありのファイル名取得用（ZIP展開時などに使用）
 export const getFileName = (path) => {
     if (!path) return '';
     return path.replace(/\\/g, '/').split('/').pop().toLowerCase();
+};
+
+export const getBaseName = (n) => { 
+    const name = getFileName(n);
+    const p = name.split('.'); 
+    if(p.length > 1) p.pop(); 
+    return p.join('.'); 
 };
 
 export const guessDifficulty = (header, fileName) => {
@@ -89,6 +85,18 @@ export const generateLaneMap = (option) => {
     return [0, ...lanes];
 };
 
+// 拡張子からMIMEタイプを推測する
+const getMimeType = (filename) => {
+    const ext = filename.split('.').pop().toLowerCase();
+    const map = {
+        'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'bmp': 'image/bmp', 'gif': 'image/gif',
+        'mp4': 'video/mp4', 'webm': 'video/webm', 'mov': 'video/quicktime', 'avi': 'video/x-msvideo',
+        'wav': 'audio/wav', 'mp3': 'audio/mpeg', 'ogg': 'audio/ogg'
+    };
+    return map[ext] || 'application/octet-stream';
+};
+
+// ZIP解凍: MIMEタイプを付与して展開
 export const extractZipFiles = async (file) => {
     const zip = new JSZip();
     const loadedZip = await zip.loadAsync(file);
@@ -100,9 +108,11 @@ export const extractZipFiles = async (file) => {
         if (relativePath.startsWith('__MACOSX')) continue; 
 
         const blob = await zipEntry.async('blob');
-        // 階層を無視してフラットにする（BMSは通常同一階層を参照するため）
-        const fileName = relativePath.split('/').pop();
-        const extractedFile = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
+        const fileName = relativePath.replace(/\\/g, '/').split('/').pop();
+        
+        // ★修正: MIMEタイプを明示的に指定してFileを作成
+        const mimeType = getMimeType(fileName);
+        const extractedFile = new File([blob], fileName, { type: mimeType });
         files.push(extractedFile);
     }
     return files;

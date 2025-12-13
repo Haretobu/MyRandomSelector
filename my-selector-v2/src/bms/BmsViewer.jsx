@@ -3,8 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
 import { LANE_MAP, VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY } from './constants';
-// getBaseName (拡張子なし名取得) をインポート
-import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, generateLaneMap, guessDifficulty, extractZipFiles, getBaseName } from './logic/utils';
+import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, generateLaneMap, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 
 import SettingsModal from './components/SettingsModal';
@@ -211,7 +210,9 @@ export default function BmsViewer() {
       setCombo(0);
       setShowMissLayer(true);
       if (missLayerTimerRef.current) clearTimeout(missLayerTimerRef.current);
-      missLayerTimerRef.current = setTimeout(() => { setShowMissLayer(false); }, 500);
+      missLayerTimerRef.current = setTimeout(() => {
+          setShowMissLayer(false);
+      }, 500);
   };
 
   const applyOptions = (objects, option) => {
@@ -361,7 +362,6 @@ export default function BmsViewer() {
       parsed.poorBgaObjects.forEach(o => { if (parsed.header.bmps[o.value]) neededImages.add(parsed.header.bmps[o.value]); });
       if (parsed.header.stagefile) neededImages.add(parsed.header.stagefile);
       
-      // ★修正: getBaseName (拡張子なし) をキーにしてマッピングする
       const fileMap = {};
       files.forEach(f => {
         if (f === bmsFile) return;
@@ -659,17 +659,19 @@ export default function BmsViewer() {
     const KEY_W = Math.min(40, width / 12); const SCRATCH_W = KEY_W * 1.5; const BOARD_W = SCRATCH_W + (KEY_W * 7) + 10; const BOARD_X = (width - BOARD_W) / 2;
     const visMode = visibilityModeRef.current;
     const isLiftEnabled = visMode === VISIBILITY_MODES.LIFT || visMode === VISIBILITY_MODES.LIFT_SUD_PLUS;
-    const liftOffset = isLiftEnabled ? liftValRef.current : 0; const BASE_JUDGE_Y = height - 100; const JUDGE_Y = BASE_JUDGE_Y - liftOffset;
+    const liftOffset = isLiftEnabled ? liftValRef.current : 0; 
+    // ★修正: スマホの判定ラインをさらに上げる (ナビゲーションバー対策)
+    const BASE_JUDGE_Y = height - (isMobileRef.current ? 160 : 100); 
+    const JUDGE_Y = BASE_JUDGE_Y - liftOffset;
     const is2P = playSide === '2P';
     const SCRATCH_X = is2P ? BOARD_X + (KEY_W * 7) + 10 : BOARD_X; const KEYS_X = is2P ? BOARD_X : BOARD_X + SCRATCH_W + 10;
 
-    // ★修正: スマホの場合は背景を半透明(0.4)にしてBGAを見せる。PCは0.85
-    ctx.fillStyle = isMobileRef.current ? 'rgba(2, 6, 23, 0.4)' : 'rgba(2, 6, 23, 0.85)';
+    // ★修正: スマホの場合は背景をより透明に(0.3)
+    ctx.fillStyle = isMobileRef.current ? 'rgba(2, 6, 23, 0.3)' : 'rgba(2, 6, 23, 0.85)';
     ctx.fillRect(BOARD_X, 0, BOARD_W, height); 
     
     for(let i=0; i<7; i++) { 
         const laneHeight = isLiftEnabled ? JUDGE_Y : height;
-        // ★修正: レーン色もスマホなら薄く
         const color = [1,3,5].includes(i) ? (isMobileRef.current ? 'rgba(15, 23, 42, 0.3)' : '#0f172a') : (isMobileRef.current ? 'rgba(30, 41, 59, 0.3)' : '#1e293b');
         ctx.fillStyle = color;
         ctx.fillRect(KEYS_X + i * KEY_W, 0, KEY_W, laneHeight);
@@ -678,7 +680,6 @@ export default function BmsViewer() {
     ctx.strokeStyle = isMobileRef.current ? 'rgba(51, 65, 85, 0.3)' : '#334155';
     ctx.lineWidth = 1; ctx.beginPath();
     for(let i=0; i<=7; i++) { const x = KEYS_X + i * KEY_W; ctx.moveTo(x, 0); ctx.lineTo(x, isLiftEnabled ? JUDGE_Y : height); }
-    // スクラッチレーンも薄く
     ctx.fillStyle = isMobileRef.current ? 'rgba(15, 23, 42, 0.3)' : '#0f172a';
     ctx.fillRect(SCRATCH_X, 0, SCRATCH_W, isLiftEnabled ? JUDGE_Y : height);
     ctx.moveTo(SCRATCH_X, 0); ctx.lineTo(SCRATCH_X, isLiftEnabled ? JUDGE_Y : height); ctx.moveTo(SCRATCH_X + SCRATCH_W, 0); ctx.lineTo(SCRATCH_X + SCRATCH_W, isLiftEnabled ? JUDGE_Y : height); ctx.stroke();
@@ -791,13 +792,14 @@ export default function BmsViewer() {
         playBgSounds={playBgSounds} setPlayBgSounds={setPlayBgSounds} showMutedMonitor={showMutedMonitor} setShowMutedMonitor={setShowMutedMonitor}
         showAbortedMonitor={showAbortedMonitor} setShowAbortedMonitor={setShowAbortedMonitor} scratchRotationEnabled={scratchRotationEnabled} setScratchRotationEnabled={setScratchRotationEnabled}
         isInputDebugMode={isInputDebugMode} setIsInputDebugMode={setIsInputDebugMode}
+        // Mobile Controls
         handleFileSelect={handleFileSelect} handleZipSelect={handleZipSelect} bmsList={bmsList} selectedBmsIndex={selectedBmsIndex} setSelectedBmsIndex={setSelectedBmsIndex}
         isPlaying={isPlaying} startPlayback={startPlayback} pausePlayback={pausePlayback} stopPlayback={stopPlayback}
         hiSpeed={hiSpeed} setHiSpeed={setHiSpeed} bgaOpacity={bgaOpacity} setBgaOpacity={setBgaOpacity}
         parsedSong={parsedSong}
       />
 
-      {/* メインエリア: PCとスマホで構造を分ける */}
+      {/* メインエリア: レイヤー構造に変更 */}
       <div className="flex-1 relative min-h-0 overflow-hidden flex justify-center">
          
          {/* スマホ用: 背景BGA */}
@@ -878,9 +880,9 @@ export default function BmsViewer() {
              </button>
          )}
 
-         {/* スマホ用: 下部コントロールバー (常駐) - 位置を bottom-12 に上げてAndroidナビゲーションバーを回避 */}
+         {/* スマホ用: 下部コントロールバー (常駐) - ★修正: 位置を bottom-20 に上げる */}
          {isMobile && parsedSong && (
-             <div className="absolute bottom-12 left-4 right-4 z-50 flex flex-col gap-2 pointer-events-auto pb-safe">
+             <div className="absolute bottom-20 left-4 right-4 z-50 flex flex-col gap-2 pointer-events-auto pb-safe">
                  <input type="range" min="0" max={duration || 100} step="0.01" value={playbackTimeDisplay} onChange={handleSeek} className="w-full h-2 bg-gray-700/50 rounded-lg appearance-none cursor-pointer accent-blue-500 backdrop-blur-sm" />
                  <div className="flex items-center justify-between gap-3">
                      <div className="flex gap-2 flex-1">
