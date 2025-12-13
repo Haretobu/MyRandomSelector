@@ -98,8 +98,6 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                     lotterySummaryEl: $('#lotterySummary'),
                     startLotteryBtn: $('#startLotteryBtn'),
                     openLotterySettingsBtn: $('#openLotterySettingsBtn'),
-                    slidingFabContainer: $('#sliding-fab-container'),
-                    slidingFabToggle: $('#sliding-fab-toggle'),
                     fabBackdrop: $('#fab-backdrop'),
                     historyFab: $('#historyFab'),
                     externalSearchFab: $('#externalSearchFab'),
@@ -320,9 +318,10 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
 
             // --- Modal Management ---
             openModal: (title, contentHtml, onOpen = null, options = {}) => {
+                // 新しいメニューを閉じる
                 App.closeFabMenu();
+                
                 AppState.checkModalDirtyState = () => false;
-                // ★ 修正: autoFocus オプションを追加 (デフォルトは true) ★
                 const { size = 'max-w-2xl', headerActions = '', autoFocus = true } = options;
                 
                 Object.values(AppState.activeCharts).forEach(chart => chart.destroy());
@@ -331,13 +330,17 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                 AppState.ui.modalContainer.classList.remove('max-w-2xl', 'max-w-4xl', 'max-w-5xl', 'max-w-7xl');
                 AppState.ui.modalContainer.classList.add(size);
                 
-                $('#modal-header-actions').innerHTML = headerActions; // ← 修正: ヘッダーにボタンを挿入
+                $('#modal-header-actions').innerHTML = headerActions;
                 AppState.ui.modalTitle.textContent = title;
                 AppState.ui.modalContentHost.innerHTML = contentHtml;
                 App.initializeDateInputs(AppState.ui.modalContentHost); 
                 AppState.ui.modalBackdrop.classList.remove('hidden');
                 AppState.ui.modalWrapper.classList.remove('hidden');
-                AppState.ui.slidingFabContainer.classList.add('fab-hidden');
+                
+                // ★修正: 新しいFABボタンを隠す
+                if (AppState.ui.fabMainToggle) {
+                    AppState.ui.fabMainToggle.classList.add('hidden');
+                }
                 
                 setTimeout(() => {
                     AppState.ui.modalBackdrop.classList.add('opacity-100');
@@ -368,7 +371,11 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
 
                 AppState.ui.modalContainer.classList.add('scale-95', 'opacity-0');
                 AppState.ui.modalBackdrop.classList.remove('opacity-100');
-                AppState.ui.slidingFabContainer.classList.remove('fab-hidden');
+                
+                // ★修正: 新しいFABボタンを再表示
+                if (AppState.ui.fabMainToggle) {
+                    AppState.ui.fabMainToggle.classList.remove('hidden');
+                }
                 
                 setTimeout(() => {
                     AppState.ui.modalBackdrop.classList.add('hidden');
