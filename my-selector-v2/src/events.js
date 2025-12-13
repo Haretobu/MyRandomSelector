@@ -13,8 +13,29 @@ export const setupAppEventListeners = (App) => {
     // --- モーダル・FAB関連 ---
     ui.modalCloseBtn.addEventListener('click', App.closeModal);
     ui.modalBackdrop.addEventListener('click', App.closeModal);
-    ui.slidingFabToggle.addEventListener('click', App.toggleFabMenu);
     ui.fabBackdrop.addEventListener('click', App.closeFabMenu);
+
+
+    const fabToggle = $('#fab-main-toggle');
+    const fabBackdrop = $('#fab-backdrop');
+    if (fabToggle) {
+        fabToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            App.toggleFabMenu();
+        });
+    }
+    if (fabBackdrop) {
+        fabBackdrop.addEventListener('click', App.closeFabMenu);
+    }
+
+    // ★画像生成ボタンのイベント (HTMLに最初から書いたのでIDで取得するだけ)
+    const imgGenBtn = $('#imgGenFab');
+    if (imgGenBtn) {
+        imgGenBtn.addEventListener('click', () => {
+            App.openImageGeneratorModal();
+            App.closeFabMenu();
+        });
+    }
 
     // キーボードショートカット (Escキー)
     document.addEventListener('keydown', (e) => {
@@ -300,21 +321,4 @@ export const setupAppEventListeners = (App) => {
     if (liteModeDebugBtn) liteModeDebugBtn.addEventListener('click', activateLiteMode);
     if (liteModeProdBtn) liteModeProdBtn.addEventListener('click', activateLiteMode);
 
-    // 追加: FABメニューに画像生成ボタンを動的に追加
-    const fabDrawer = $('#sliding-fab-drawer');
-    if (fabDrawer && !$('#imgGenFab')) {
-        const btn = document.createElement('button');
-        btn.id = 'imgGenFab';
-        btn.title = '画像生成';
-        btn.className = 'w-14 h-14 bg-pink-600 hover:bg-pink-700 rounded-full text-white flex items-center justify-center shadow-lg';
-        btn.innerHTML = '<i class="fas fa-camera text-xl"></i>';
-        btn.addEventListener('click', () => {
-            App.openImageGeneratorModal();
-            App.closeFabMenu();
-        });
-        // 履歴ボタンの前あたりに挿入
-        const historyBtn = $('#historyFab');
-        if (historyBtn) fabDrawer.insertBefore(btn, historyBtn);
-        else fabDrawer.appendChild(btn);
-    }
 };

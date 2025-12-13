@@ -200,29 +200,6 @@
     
     <div id="fab-backdrop" class="hidden fixed inset-0 z-20"></div>
 
-    <div id="sliding-fab-container" class="fixed top-1/2 -translate-y-1/2 right-0 z-30 flex items-center">
-        
-        <div id="sliding-fab-drawer" class="bg-gray-800 rounded-l-lg shadow-lg grid grid-cols-2 gap-4 p-4 transition-all duration-300 max-h-[80vh] overflow-y-auto w-max">
-            <button id="manageTagsFab" title="タグ管理" aria-label="タグ管理" class="w-14 h-14 bg-purple-600 hover:bg-purple-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-tags text-xl"></i></button>
-            <button id="statsFab" title="統計" aria-label="統計" class="w-14 h-14 bg-amber-600 hover:bg-amber-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-chart-pie text-xl"></i></button>
-            <button id="externalSearchFab" title="外部サイト検索" aria-label="外部サイト検索" class="w-14 h-14 bg-emerald-600 hover:bg-emerald-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-globe-asia text-xl"></i></button>
-            <button id="historyFab" title="総合履歴" aria-label="総合履歴" class="w-14 h-14 bg-gray-600 hover:bg-gray-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-history text-xl"></i></button>
-            <a href="price_comparison.html" title="価格比較ツール" aria-label="価格比較ツール">
-                <button class="w-14 h-14 bg-cyan-600 hover:bg-cyan-700 rounded-full text-white flex items-center justify-center shadow-lg"><i class="fas fa-balance-scale-right text-xl"></i></button>
-            </a>
-            <button id="drawerLotteryFab" title="抽選パネルへ" aria-label="抽選パネルへ移動" class="lg:hidden w-14 h-14 bg-sky-600 hover:bg-sky-700 rounded-full text-white flex items-center justify-center shadow-lg">
-                <i class="fas fa-dice text-xl"></i>
-            </button>
-            <a href="bms.html" target="_blank" class="w-14 h-14 bg-blue-600 hover:bg-blue-700 rounded-full text-white flex items-center justify-center shadow-lg transition-transform active:scale-95" title="BMSプレイヤー">
-                <i class="fas fa-music text-xl"></i>
-            </a>
-        </div>
-        
-        <button id="sliding-fab-toggle" aria-label="メニューを開く" class="w-10 h-24 bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center rounded-l-lg shadow-lg -mr-1">
-            <i id="sliding-fab-icon" class="fas fa-chevron-left transition-transform duration-300"></i>
-        </button>
-    </div>
-
     <div id="modal-backdrop" class="hidden fixed inset-0 bg-black bg-opacity-70 z-40 transition-opacity"></div>
 
     <div id="modal-wrapper" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -304,6 +281,61 @@
                 </button>
             </div>
         </div>
+    </div>
+
+    <div class="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+        
+        <div id="fab-menu-content" class="hidden mb-4 bg-gray-800 p-4 rounded-2xl shadow-2xl border border-gray-700 origin-bottom-right transition-all duration-200 transform scale-95 opacity-0">
+            <div class="grid grid-cols-2 gap-4">
+                
+                <button id="manageTagsFab" title="タグ管理" class="flex flex-col items-center justify-center w-16 h-16 bg-purple-600 hover:bg-purple-700 rounded-xl text-white shadow-lg transition-transform active:scale-95">
+                    <i class="fas fa-tags text-xl mb-1"></i>
+                    <span class="text-[10px] font-bold">タグ</span>
+                </button>
+
+                <button id="statsFab" title="統計" class="flex flex-col items-center justify-center w-16 h-16 bg-amber-600 hover:bg-amber-700 rounded-xl text-white shadow-lg transition-transform active:scale-95">
+                    <i class="fas fa-chart-pie text-xl mb-1"></i>
+                    <span class="text-[10px] font-bold">統計</span>
+                </button>
+
+                <button id="externalSearchFab" title="外部検索" class="flex flex-col items-center justify-center w-16 h-16 bg-emerald-600 hover:bg-emerald-700 rounded-xl text-white shadow-lg transition-transform active:scale-95">
+                    <i class="fas fa-globe-asia text-xl mb-1"></i>
+                    <span class="text-[10px] font-bold">検索</span>
+                </button>
+
+                <button id="historyFab" title="履歴" class="flex flex-col items-center justify-center w-16 h-16 bg-gray-600 hover:bg-gray-700 rounded-xl text-white shadow-lg transition-transform active:scale-95">
+                    <i class="fas fa-history text-xl mb-1"></i>
+                    <span class="text-[10px] font-bold">履歴</span>
+                </button>
+
+                <a href="price_comparison.html" title="価格比較" class="flex flex-col items-center justify-center w-16 h-16 bg-cyan-600 hover:bg-cyan-700 rounded-xl text-white shadow-lg transition-transform active:scale-95 no-underline">
+                    <i class="fas fa-balance-scale-right text-xl mb-1"></i>
+                    <span class="text-[10px] font-bold">比較</span>
+                </a>
+
+                <button id="drawerLotteryFab" title="抽選" class="flex flex-col items-center justify-center w-16 h-16 bg-sky-600 hover:bg-sky-700 rounded-xl text-white shadow-lg transition-transform active:scale-95">
+                    <i class="fas fa-dice text-xl mb-1"></i>
+                    <span class="text-[10px] font-bold">抽選</span>
+                </button>
+
+                <button id="imgGenFab" title="画像生成" class="flex flex-col items-center justify-center w-16 h-16 bg-pink-600 hover:bg-pink-700 rounded-xl text-white shadow-lg transition-transform active:scale-95">
+                    <i class="fas fa-camera text-xl mb-1"></i>
+                    <span class="text-[10px] font-bold">生成</span>
+                </button>
+
+                <a href="bms.html" target="_blank" title="BMS" class="flex flex-col items-center justify-center w-16 h-16 bg-blue-600 hover:bg-blue-700 rounded-xl text-white shadow-lg transition-transform active:scale-95 no-underline">
+                    <i class="fas fa-music text-xl mb-1"></i>
+                    <span class="text-[10px] font-bold">BMS</span>
+                </a>
+
+            </div>
+        </div>
+
+        <button id="fab-main-toggle" aria-label="メニューを開く" class="w-16 h-16 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-[0_0_15px_rgba(79,70,229,0.5)] flex items-center justify-center transition-all duration-300 z-50">
+            <i id="fab-icon" class="fas fa-bars text-2xl transition-transform duration-300"></i>
+        </button>
+
+        <div id="fab-backdrop" class="hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity opacity-0"></div>
     </div>
 
     <script type="module" src="/src/main.js"></script>

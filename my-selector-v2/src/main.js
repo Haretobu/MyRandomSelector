@@ -1995,6 +1995,57 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                     }
                     App.showToast("バックアップファイルの生成に失敗しました。", "error");
                 }
+            },
+
+            // --- 新しいFABメニュー制御 (main.jsのAppオブジェクト内) ---
+            
+            toggleFabMenu: () => {
+                const menuContent = document.getElementById('fab-menu-content');
+                const backdrop = document.getElementById('fab-backdrop');
+                const icon = document.getElementById('fab-icon');
+                
+                if (!menuContent) return;
+
+                const isClosed = menuContent.classList.contains('hidden');
+
+                if (isClosed) {
+                    // 開く
+                    menuContent.classList.remove('hidden');
+                    backdrop.classList.remove('hidden');
+                    
+                    // アニメーション
+                    requestAnimationFrame(() => {
+                        menuContent.classList.remove('scale-95', 'opacity-0');
+                        menuContent.classList.add('scale-100', 'opacity-100');
+                        backdrop.classList.remove('opacity-0');
+                        backdrop.classList.add('opacity-100');
+                        icon.classList.remove('fa-bars');
+                        icon.classList.add('fa-times', 'rotate-90'); // ×印にして回転
+                    });
+                } else {
+                    App.closeFabMenu();
+                }
+            },
+            
+            closeFabMenu: () => {
+                const menuContent = document.getElementById('fab-menu-content');
+                const backdrop = document.getElementById('fab-backdrop');
+                const icon = document.getElementById('fab-icon');
+                
+                if (!menuContent) return;
+
+                // 閉じるアニメーション
+                menuContent.classList.remove('scale-100', 'opacity-100');
+                menuContent.classList.add('scale-95', 'opacity-0');
+                backdrop.classList.remove('opacity-100');
+                backdrop.classList.add('opacity-0');
+                icon.classList.remove('fa-times', 'rotate-90');
+                icon.classList.add('fa-bars');
+
+                setTimeout(() => {
+                    menuContent.classList.add('hidden');
+                    backdrop.classList.add('hidden');
+                }, 200);
             }
         }; // --- End of App Object ---
         
