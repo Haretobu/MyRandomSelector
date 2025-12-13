@@ -456,7 +456,16 @@ export const openLotteryResultModal = (work, App, tempState = null) => {
     let currentRating = tempState?.rating ?? (work.rating || 0);
     let currentTagIds = tempState?.tagIds ?? new Set(work.tagIds || []);
 
-    const siteBadge = App.getSiteBadgeHTML(work.sourceUrl);
+    // ★修正: ここで文字列としてバッジを作成するように変更
+    const getBadgeStr = (url) => {
+        if (!url) return '';
+        const lower = url.toLowerCase();
+        const cls = "absolute top-1.5 left-1.5 h-4 flex items-center justify-center px-1 text-[10px] font-extrabold rounded shadow-md pointer-events-none z-50 text-white";
+        if (lower.includes('dlsite.com')) return `<span class="${cls} bg-sky-600">DL</span>`;
+        if (lower.includes('dmm.co.jp') || lower.includes('dmm.com')) return `<span class="${cls} bg-red-600">FZ</span>`;
+        return '';
+    };
+    const siteBadge = getBadgeStr(work.sourceUrl);
 
     const getFormState = () => ({
         rating: currentRating,
