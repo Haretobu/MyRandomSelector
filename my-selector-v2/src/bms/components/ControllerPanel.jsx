@@ -6,6 +6,7 @@ import { KEY_CONFIG_ROWS } from '../constants';
 const ControllerPanel = ({ controllerRefs, keyboardRefs, noteCounts, is2P, parsedSong, difficultyInfo }) => {
     return (
         <div className="w-64 flex flex-col border-r border-blue-900/30 bg-[#080808] p-2 gap-2 shrink-0 overflow-y-auto scrollbar-hide text-blue-100">
+            {/* コントローラー (変更なし) */}
             <div className="bg-[#112233]/50 rounded p-2 border border-blue-900/30">
                 <div className="text-[10px] text-blue-400 font-bold mb-2 flex items-center gap-1"><Gamepad2 size={10}/> CONTROLLER</div>
                 <div className={`relative h-48 bg-black rounded border border-blue-900/30 shadow-inner transform transition-transform`}>
@@ -23,6 +24,8 @@ const ControllerPanel = ({ controllerRefs, keyboardRefs, noteCounts, is2P, parse
                     <div className={`absolute top-24 ${is2P ? 'right-4' : 'left-4'} text-center w-16`}><div className="text-[9px] text-blue-400/70 mt-1 font-mono">{noteCounts[0]}</div></div>
                 </div>
             </div>
+
+            {/* キーマッピング (★修正: box-shadowを強化) */}
             <div className="bg-[#112233]/50 rounded p-2 border border-blue-900/30">
                 <div className="text-[10px] text-blue-400 font-bold mb-2 flex items-center gap-1"><Keyboard size={10}/> KEY MAPPING</div>
                 <div className="flex flex-col gap-1 items-center">
@@ -36,6 +39,8 @@ const ControllerPanel = ({ controllerRefs, keyboardRefs, noteCounts, is2P, parse
                     </div>
                 </div>
             </div>
+
+            {/* 曲情報パネル */}
             <div className="bg-[#0f172a] p-4 rounded mt-auto border border-blue-900/30 min-h-[120px] flex flex-col justify-center items-center text-center shadow-lg relative overflow-hidden group">
                  <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"/>
                  {parsedSong ? (

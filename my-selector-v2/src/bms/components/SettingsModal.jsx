@@ -1,6 +1,6 @@
 // src/bms/components/SettingsModal.jsx
 import React from 'react';
-import { Settings, X, ChevronsUp, RotateCw, Disc, ChevronDown, Film, Flag, Music, Layers, Speaker, EyeOff, FileX, Keyboard, FolderOpen, Play, Pause, ChevronFirst, Volume2 } from 'lucide-react';
+import { Settings, X, ChevronsUp, RotateCw, Film, Flag, Music, Layers, Speaker, EyeOff, FileX, Keyboard, FolderOpen, FileArchive } from 'lucide-react';
 import { VISIBILITY_MODES } from '../constants';
 
 const SettingsModal = ({
@@ -17,11 +17,9 @@ const SettingsModal = ({
     playBgSounds, setPlayBgSounds, showMutedMonitor, setShowMutedMonitor,
     showAbortedMonitor, setShowAbortedMonitor, scratchRotationEnabled, setScratchRotationEnabled,
     isInputDebugMode, setIsInputDebugMode,
-    // 追加: ファイル・再生操作用
-    handleFileSelect, bmsList, selectedBmsIndex, setSelectedBmsIndex,
-    isPlaying, startPlayback, pausePlayback, stopPlayback,
-    hiSpeed, setHiSpeed, bgaOpacity, setBgaOpacity,
-    parsedSong
+    // 追加: ファイル操作用
+    handleFileSelect, handleZipSelect, bmsList, selectedBmsIndex, setSelectedBmsIndex,
+    hiSpeed, setHiSpeed, bgaOpacity, setBgaOpacity
 }) => {
     if (!showSettings) return null;
 
@@ -35,16 +33,24 @@ const SettingsModal = ({
 
                 <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-blue-900 pr-2 space-y-6">
                     
-                    {/* ▼▼▼ スマホ用: ファイル・再生コントロール ▼▼▼ */}
+                    {/* ▼▼▼ スマホ用: ファイル読み込み・基本設定 ▼▼▼ */}
                     {isMobile && (
                         <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-500/30 space-y-4">
-                            <div className="text-sm font-bold text-blue-300 border-b border-blue-500/30 pb-2 mb-2">ファイル & 再生</div>
+                            <div className="text-sm font-bold text-blue-300 border-b border-blue-500/30 pb-2 mb-2">ファイル読込</div>
                             
-                            {/* ファイル読み込み */}
-                            <label className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 text-sm cursor-pointer flex items-center justify-center gap-2 shadow-lg rounded-lg font-bold w-full transition active:scale-95">
-                                <FolderOpen size={18}/> フォルダを開く (BMS)
-                                <input type="file" webkitdirectory="" multiple className="hidden" onChange={handleFileSelect} />
-                            </label>
+                            <div className="grid grid-cols-1 gap-2">
+                                {/* 通常のフォルダアップロード (Androidの一部など対応) */}
+                                <label className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 text-sm cursor-pointer flex items-center justify-center gap-2 shadow-lg rounded-lg font-bold w-full transition active:scale-95">
+                                    <FolderOpen size={18}/> フォルダを開く (BMS)
+                                    <input type="file" webkitdirectory="" multiple className="hidden" onChange={handleFileSelect} />
+                                </label>
+                                
+                                {/* ZIPアップロード (スマホ推奨) */}
+                                <label className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-3 text-sm cursor-pointer flex items-center justify-center gap-2 shadow-lg rounded-lg font-bold w-full transition active:scale-95">
+                                    <FileArchive size={18}/> ZIPを開く (スマホ推奨)
+                                    <input type="file" accept=".zip" className="hidden" onChange={handleZipSelect} />
+                                </label>
+                            </div>
 
                             {/* 曲選択 */}
                             <div className="flex flex-col gap-1">
@@ -53,26 +59,6 @@ const SettingsModal = ({
                                     {bmsList.length === 0 && <option>なし</option>}
                                     {bmsList.map((b, i) => <option key={i} value={i}>{b.name}</option>)}
                                 </select>
-                            </div>
-
-                            {/* 曲情報詳細 */}
-                            {parsedSong && (
-                                <div className="bg-black/40 p-2 rounded text-xs space-y-1 font-mono border border-blue-900/30">
-                                    <div className="text-white font-bold">{parsedSong.header.title}</div>
-                                    <div className="text-blue-300">{parsedSong.header.artist}</div>
-                                    <div className="flex gap-2 mt-1">
-                                        <span className="bg-blue-900 px-1 rounded">BPM: {parsedSong.header.bpm}</span>
-                                        <span className="bg-blue-900 px-1 rounded">LV: {parsedSong.header.playlevel}</span>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* 再生コントロール */}
-                            <div className="grid grid-cols-2 gap-2">
-                                <button onClick={() => stopPlayback(true)} className="bg-gray-700 p-3 rounded flex items-center justify-center gap-2 hover:bg-gray-600"><ChevronFirst /> 最初へ</button>
-                                <button onClick={isPlaying ? pausePlayback : startPlayback} className={`p-3 rounded flex items-center justify-center gap-2 font-bold ${isPlaying ? 'bg-yellow-600 hover:bg-yellow-500' : 'bg-green-600 hover:bg-green-500'}`}>
-                                    {isPlaying ? <><Pause /> 一時停止</> : <><Play /> 再生</>}
-                                </button>
                             </div>
 
                             {/* ハイスピード & 音量 */}
@@ -186,7 +172,7 @@ const SettingsModal = ({
                          </div>
                     </div>
 
-                    {/* その他サウンド設定などは details にまとめる */}
+                    {/* 詳細設定 (サウンド・デバッグ) - デバッグはPCのみ */}
                     <details className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50 mt-2 group" open={!isMobile}>
                         <summary className="text-xs text-blue-400 mb-2 font-bold uppercase tracking-wider flex items-center justify-between cursor-pointer list-none">
                             <span>詳細設定 (サウンド・デバッグ)</span>
@@ -201,11 +187,38 @@ const SettingsModal = ({
                                 <div className="flex items-center gap-3"><Flag className="text-blue-400" size={18}/><span className="text-sm">開始時のREADY演出</span></div>
                                 <input type="checkbox" checked={showReady} onChange={e=>setShowReady(e.target.checked)} className="accent-blue-500"/>
                              </label>
-                            {/* ... 他の細かい設定は必要に応じてここに追加 ... */}
+                             <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
+                                <div className="flex items-center gap-3"><Music className="text-blue-400" size={18}/><span className="text-sm">キー音を再生</span></div>
+                                 <input type="checkbox" checked={playKeySounds} onChange={e=>setPlayKeySounds(e.target.checked)} className="accent-blue-500"/>
+                            </label>
                             <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
-                                <div className="flex items-center gap-3"><Keyboard className="text-red-400" size={18}/><span className="text-sm font-bold text-red-200">デバッグ用キー入力</span></div>
-                                <input type="checkbox" checked={isInputDebugMode} onChange={e=>setIsInputDebugMode(e.target.checked)} className="accent-red-500"/>
+                                <div className="flex items-center gap-3"><Layers className="text-blue-400" size={18}/><span className="text-sm">BGMを再生</span></div>
+                                <input type="checkbox" checked={playLongAudio} onChange={e=>setPlayLongAudio(e.target.checked)} className="accent-blue-500"/>
                              </label>
+                            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
+                                <div className="flex items-center gap-3"><Speaker className="text-blue-400" size={18}/><span className="text-sm">バックサウンドを再生</span></div>
+                                 <input type="checkbox" checked={playBgSounds} onChange={e=>setPlayBgSounds(e.target.checked)} className="accent-blue-500"/>
+                            </label>
+                            <div className="border-t border-blue-900/30 my-2"></div>
+                             <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
+                                <div className="flex items-center gap-3"><EyeOff className="text-blue-400" size={18}/><span className="text-sm">ミュート音源をモニターに表示</span></div>
+                                <input type="checkbox" checked={showMutedMonitor} onChange={e=>setShowMutedMonitor(e.target.checked)} className="accent-blue-500"/>
+                               </label>
+                            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
+                                <div className="flex items-center gap-3"><FileX className="text-blue-400" size={18}/><span className="text-sm">停止時に音源情報を残す</span></div>
+                                 <input type="checkbox" checked={showAbortedMonitor} onChange={e=>setShowAbortedMonitor(e.target.checked)} className="accent-blue-500"/>
+                            </label>
+                            
+                            {/* デバッグキー入力: スマホでは非表示 */}
+                            {!isMobile && (
+                                <>
+                                    <div className="border-t border-blue-900/30 my-2"></div>
+                                    <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
+                                        <div className="flex items-center gap-3"><Keyboard className="text-red-400" size={18}/><span className="text-sm font-bold text-red-200">デバッグ用キー入力</span></div>
+                                        <input type="checkbox" checked={isInputDebugMode} onChange={e=>setIsInputDebugMode(e.target.checked)} className="accent-red-500"/>
+                                    </label>
+                                </>
+                            )}
                         </div>
                     </details>
                 </div>

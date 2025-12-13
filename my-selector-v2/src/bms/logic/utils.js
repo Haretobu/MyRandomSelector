@@ -77,3 +77,26 @@ export const generateLaneMap = (option) => {
     for(let i=0; i<shift; i++) lanes.unshift(lanes.pop()); }
     return [0, ...lanes];
 };
+
+import JSZip from 'jszip';
+
+export const extractZipFiles = async (file) => {
+    const zip = new JSZip();
+    const loadedZip = await zip.loadAsync(file);
+    const files = [];
+    
+    // ZIP内の全ファイルを走査
+    for (const relativePath of Object.keys(loadedZip.files)) {
+        const zipEntry = loadedZip.files[relativePath];
+        if (zipEntry.dir) continue; // ディレクトリは無視
+
+        // ファイルデータをBlobとして取得
+        const blob = await zipEntry.async('blob');
+        
+        // Fileオブジェクトに変換 (nameプロパティを持たせるため)
+        // relativePath (フォルダ構造) を name に含めることで、getBaseName等が正しく動くようにする
+        const extractedFile = new File([blob], relativePath, { type: blob.type });
+        files.push(extractedFile);
+    }
+    return files;
+};
