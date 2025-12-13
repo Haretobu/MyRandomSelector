@@ -17,10 +17,11 @@ const SettingsModal = ({
     playBgSounds, setPlayBgSounds, showMutedMonitor, setShowMutedMonitor,
     showAbortedMonitor, setShowAbortedMonitor, scratchRotationEnabled, setScratchRotationEnabled,
     isInputDebugMode, setIsInputDebugMode,
-    // 追加: ファイル操作用
+    // ファイル操作
     handleFileSelect, handleZipSelect, bmsList, selectedBmsIndex, setSelectedBmsIndex,
     hiSpeed, setHiSpeed, bgaOpacity, setBgaOpacity,
-    // ★追加: レーン透明度用
+    // ★追加: 透明度設定 (ボード全体 / 各レーン)
+    boardOpacity, setBoardOpacity,
     laneOpacity, setLaneOpacity,
     parsedSong
 }) => {
@@ -40,7 +41,6 @@ const SettingsModal = ({
                     {isMobile && (
                         <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-500/30 space-y-4">
                             <div className="text-sm font-bold text-blue-300 border-b border-blue-500/30 pb-2 mb-2">ファイル読込</div>
-                            
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                 <label className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 text-sm cursor-pointer flex items-center justify-center gap-2 shadow-lg rounded-lg font-bold w-full transition active:scale-95">
                                     <FolderOpen size={18}/> フォルダを開く (BMS)
@@ -51,7 +51,6 @@ const SettingsModal = ({
                                     <input type="file" accept=".zip,application/zip" className="hidden" onChange={handleZipSelect} />
                                 </label>
                             </div>
-
                             <div className="flex flex-col gap-1">
                                 <span className="text-xs text-blue-400">選択中の曲</span>
                                 <select className="bg-black/50 text-white p-2 rounded border border-blue-500/30 w-full text-sm" value={selectedBmsIndex} onChange={e => setSelectedBmsIndex(Number(e.target.value))}>
@@ -59,7 +58,6 @@ const SettingsModal = ({
                                     {bmsList.map((b, i) => <option key={i} value={i}>{b.name}</option>)}
                                 </select>
                             </div>
-
                             <div className="grid grid-cols-2 gap-4 pt-2">
                                 <div>
                                     <label className="text-xs text-blue-300 block mb-1">HI-SPEED: {hiSpeed}</label>
@@ -73,7 +71,7 @@ const SettingsModal = ({
                         </div>
                     )}
 
-                    {/* ▼▼▼ BGA・透明度設定 (共通) ▼▼▼ */}
+                    {/* ▼▼▼ 表示・BGA設定 ▼▼▼ */}
                     <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
                         <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center gap-2">
                             <Film size={14} /> 表示・BGA設定
@@ -92,20 +90,31 @@ const SettingsModal = ({
                                 <input type="range" min="0" max="1" step="0.05" value={bgaOpacity} onChange={e => setBgaOpacity(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"/>
                             </div>
 
-                            {/* ★追加: レーンの不透明度設定 */}
-                            <div className="pt-2 border-t border-blue-900/30">
-                                <div className="flex justify-between text-sm mb-1">
-                                    <span className="text-blue-300">レーンの不透明度 (透け具合)</span>
-                                    <span>{Math.round(laneOpacity * 100)}%</span>
+                            {/* ★修正: ボード全体とレーン個別の設定を分離 */}
+                            <div className="pt-2 border-t border-blue-900/30 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="text-orange-300">ボード全体の背景 (黒)</span>
+                                        <span>{Math.round(boardOpacity * 100)}%</span>
+                                    </div>
+                                    <input type="range" min="0" max="1" step="0.05" value={boardOpacity} onChange={e => setBoardOpacity(parseFloat(e.target.value))} className="w-full accent-orange-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"/>
+                                    <p className="text-[10px] text-gray-400 mt-1">※0%にすると背景が完全に見えます</p>
                                 </div>
-                                <input type="range" min="0" max="1" step="0.05" value={laneOpacity} onChange={e => setLaneOpacity(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"/>
-                                <p className="text-[10px] text-gray-400 mt-1">※値を下げると、黒い帯が消えて背景BGAが透けて見えます</p>
+                                <div>
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="text-blue-300">各レーンの背景 (縞)</span>
+                                        <span>{Math.round(laneOpacity * 100)}%</span>
+                                    </div>
+                                    <input type="range" min="0" max="1" step="0.05" value={laneOpacity} onChange={e => setLaneOpacity(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"/>
+                                    <p className="text-[10px] text-gray-400 mt-1">※レーンの色の濃さ</p>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                      {/* ▼▼▼ レーンカバー設定 (共通) ▼▼▼ */}
                     <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50 relative">
+                        {/* ... (以下変更なし) ... */}
                         <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center gap-2">
                             <ChevronsUp size={14} /> 譜面の表示エリア (LANE COVER)
                         </div>
@@ -157,7 +166,7 @@ const SettingsModal = ({
                         </div>
                     </div>
 
-                    {/* PC用設定 - モバイルでも表示 */}
+                    {/* PC用設定 */}
                     <div className="flex flex-col md:flex-row gap-4 items-start">
                          <div className="w-full md:flex-1 border border-blue-900/50 p-3 bg-[#0f172a] rounded-lg flex justify-between items-center">
                              <span className="font-bold text-sm text-blue-300">プレイサイド</span>
@@ -181,7 +190,7 @@ const SettingsModal = ({
                          </div>
                     </div>
 
-                    {/* 詳細設定 (サウンド・デバッグ) */}
+                    {/* 詳細設定 */}
                     <details className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50 mt-2 group" open={!isMobile}>
                         <summary className="text-xs text-blue-400 mb-2 font-bold uppercase tracking-wider flex items-center justify-between cursor-pointer list-none">
                             <span>詳細設定 (サウンド・デバッグ)</span>
