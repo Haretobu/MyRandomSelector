@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
 import { LANE_MAP, VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY } from './constants';
-// getBaseName (拡張子なし名取得) をインポート
 import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, generateLaneMap, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 
@@ -17,8 +16,11 @@ import BgaLayer from './components/BgaLayer';
 export default function BmsViewer() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
   const [bgaOpacity, setBgaOpacity] = useState(DEFAULT_BGA_OPACITY);
-  // ★追加: レーン不透明度の状態 (デフォルト0.3 = かなり透ける)
-  const [laneOpacity, setLaneOpacity] = useState(0.3);
+  
+  // ★追加: ボード全体の不透明度 (スマホデフォルト0 = BGA丸見え)
+  const [boardOpacity, setBoardOpacity] = useState(window.innerWidth < MOBILE_BREAKPOINT ? 0.0 : 0.85);
+  // ★追加: 各レーンの不透明度 (スマホデフォルト0.3 = 薄い)
+  const [laneOpacity, setLaneOpacity] = useState(window.innerWidth < MOBILE_BREAKPOINT ? 0.3 : 1.0);
 
   const [files, setFiles] = useState([]);
   const [bmsList, setBmsList] = useState([]);
@@ -140,6 +142,8 @@ export default function BmsViewer() {
   const hiddenPlusValRef = useRef(hiddenPlusVal);
   const liftValRef = useRef(liftVal);
   const isMobileRef = useRef(isMobile); 
+  
+  const boardOpacityRef = useRef(boardOpacity); // ★追加
   const laneOpacityRef = useRef(laneOpacity); // ★追加
 
   useEffect(() => { 
@@ -147,6 +151,14 @@ export default function BmsViewer() {
           const mobile = window.innerWidth < MOBILE_BREAKPOINT;
           setIsMobile(mobile);
           isMobileRef.current = mobile;
+          // スマホに切り替わったらデフォルト透明度を適用
+          if (mobile) {
+              setBoardOpacity(0.0);
+              setLaneOpacity(0.3);
+          } else {
+              setBoardOpacity(0.85);
+              setLaneOpacity(1.0);
+          }
       };
       window.addEventListener('resize', handleResize);
       return () => window.removeEventListener('resize', handleResize);
@@ -170,6 +182,7 @@ export default function BmsViewer() {
   useEffect(() => { suddenPlusValRef.current = suddenPlusVal; }, [suddenPlusVal]);
   useEffect(() => { hiddenPlusValRef.current = hiddenPlusVal; }, [hiddenPlusVal]);
   useEffect(() => { liftValRef.current = liftVal; }, [liftVal]);
+  useEffect(() => { boardOpacityRef.current = boardOpacity; }, [boardOpacity]); // ★追加
   useEffect(() => { laneOpacityRef.current = laneOpacity; }, [laneOpacity]); // ★追加
   useEffect(() => { 
       isInputDebugModeRef.current = isInputDebugMode;
@@ -346,7 +359,6 @@ export default function BmsViewer() {
   const refreshRandom = () => { if (!parsedSong) return; stopPlayback(true); setDisplayObjects(applyOptions(parsedSong.objects, playOption)); };
   useEffect(() => { if (parsedSong) setDisplayObjects(applyOptions(parsedSong.objects, playOption)); }, [parsedSong, playOption]);
   
-  // ★修正: bmsListを監視対象に追加して即時ロードに対応
   useEffect(() => { if (selectedBmsIndex >= 0 && bmsList[selectedBmsIndex]) loadBmsAndAudio(bmsList[selectedBmsIndex].file); }, [selectedBmsIndex, bmsList]);
 
   const loadBmsAndAudio = async (bmsFile) => {
@@ -382,10 +394,11 @@ export default function BmsViewer() {
 
       const imageQueue = [];
       neededImages.forEach(raw => {
-          const base = getBaseName(raw); 
-          const candidates = fileMap[base];
+          const base = getBaseName(raw).toLowerCase(); const candidates = fileMap[base];
           if (candidates?.length) {
-              imageQueue.push({ key: raw.toLowerCase(), file: candidates[0] });
+              let best = candidates[0]; const exact = candidates.find(c => c.name.toLowerCase() === raw.toLowerCase());
+              if (exact) best = exact;
+              imageQueue.push({ key: raw.toLowerCase(), file: best });
            }
       });
       for (const item of imageQueue) {
@@ -414,10 +427,11 @@ export default function BmsViewer() {
 
       const queue = [];
       neededAudio.forEach(raw => {
-        const base = getBaseName(raw); 
-        const candidates = fileMap[base];
+        const base = getBaseName(raw).toLowerCase(); const candidates = fileMap[base];
         if (candidates?.length) {
-          queue.push({ key: raw.toLowerCase(), file: candidates[0] });
+          let best = candidates[0]; const exact = candidates.find(c => c.name.toLowerCase() === raw.toLowerCase());
+          if (exact) best = exact;
+          queue.push({ key: raw.toLowerCase(), file: best });
         }
       });
       queue.sort((a, b) => b.file.size - a.file.size);
@@ -816,30 +830,32 @@ export default function BmsViewer() {
     const is2P = playSide === '2P';
     const SCRATCH_X = is2P ? BOARD_X + (KEY_W * 7) + 10 : BOARD_X; const KEYS_X = is2P ? BOARD_X : BOARD_X + SCRATCH_W + 10;
 
-    // ★修正: 透明度(opacity)をstateで調整できるように変更 (デフォルト0.3)
-    const opacity = laneOpacityRef.current;
+    // ★修正: ボード全体の不透明度
+    const bOpacity = boardOpacityRef.current;
+    // ★修正: 各レーンの不透明度
+    const lOpacity = laneOpacityRef.current;
     
-    // 背景: 黒の半透明 (BGAを見せるため)
-    ctx.fillStyle = isMobileRef.current ? `rgba(2, 6, 23, ${opacity})` : 'rgba(2, 6, 23, 0.85)';
+    // ボード全体の背景
+    ctx.fillStyle = isMobileRef.current ? `rgba(2, 6, 23, ${bOpacity})` : `rgba(2, 6, 23, ${bOpacity})`;
     ctx.fillRect(BOARD_X, 0, BOARD_W, height); 
     
     for(let i=0; i<7; i++) { 
         const laneHeight = isLiftEnabled ? JUDGE_Y : height;
-        // レーン色も半透明に
+        // 各レーンの背景
         const baseColor = [1,3,5].includes(i) ? [15, 23, 42] : [30, 41, 59];
         const color = isMobileRef.current 
-            ? `rgba(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]}, ${opacity})` 
-            : [1,3,5].includes(i) ? '#0f172a' : '#1e293b';
+            ? `rgba(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]}, ${lOpacity})` 
+            : `rgba(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]}, ${lOpacity})`;
         ctx.fillStyle = color;
         ctx.fillRect(KEYS_X + i * KEY_W, 0, KEY_W, laneHeight);
     }
     
-    ctx.strokeStyle = isMobileRef.current ? `rgba(51, 65, 85, ${opacity})` : '#334155';
+    ctx.strokeStyle = isMobileRef.current ? `rgba(51, 65, 85, ${lOpacity})` : '#334155';
     ctx.lineWidth = 1; ctx.beginPath();
     for(let i=0; i<=7; i++) { const x = KEYS_X + i * KEY_W; ctx.moveTo(x, 0); ctx.lineTo(x, isLiftEnabled ? JUDGE_Y : height); }
     
-    // スクラッチレーンも半透明に
-    ctx.fillStyle = isMobileRef.current ? `rgba(15, 23, 42, ${opacity})` : '#0f172a';
+    // スクラッチレーンも
+    ctx.fillStyle = isMobileRef.current ? `rgba(15, 23, 42, ${lOpacity})` : '#0f172a';
     ctx.fillRect(SCRATCH_X, 0, SCRATCH_W, isLiftEnabled ? JUDGE_Y : height);
     
     ctx.moveTo(SCRATCH_X, 0);
@@ -1057,6 +1073,7 @@ export default function BmsViewer() {
         isPlaying={isPlaying} startPlayback={startPlayback} pausePlayback={pausePlayback} stopPlayback={stopPlayback}
         hiSpeed={hiSpeed} setHiSpeed={setHiSpeed} bgaOpacity={bgaOpacity} setBgaOpacity={setBgaOpacity}
         laneOpacity={laneOpacity} setLaneOpacity={setLaneOpacity}
+        boardOpacity={boardOpacity} setBoardOpacity={setBoardOpacity}
         parsedSong={parsedSong}
       />
 
