@@ -30,3 +30,9 @@ export const VISIBILITY_MODES = {
 export const LOOKAHEAD = 0.1; 
 export const SCHEDULE_INTERVAL = 25; 
 export const MAX_SHORT_POLYPHONY = 256;
+
+// モバイル判定の境界線 (px)
+export const MOBILE_BREAKPOINT = 768;
+
+// BGAのデフォルト不透明度
+export const DEFAULT_BGA_OPACITY = 0.5;

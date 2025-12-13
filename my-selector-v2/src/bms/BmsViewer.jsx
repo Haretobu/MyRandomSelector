@@ -1,20 +1,22 @@
 // src/bms/BmsViewer.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { FolderOpen } from 'lucide-react';
+import { FolderOpen, Settings, Play, Pause } from 'lucide-react';
 
-// 切り出したファイルをインポート
-import { LANE_MAP, VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY } from './constants';
+import { LANE_MAP, VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY } from './constants';
 import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, generateLaneMap, guessDifficulty } from './logic/utils';
 import { parseBMS } from './logic/parser';
 
-// UIコンポーネントをインポート
 import SettingsModal from './components/SettingsModal';
 import ControllerPanel from './components/ControllerPanel';
 import InfoPanel from './components/InfoPanel';
 import ControlBar from './components/ControlBar';
+import BgaLayer from './components/BgaLayer';
 
 export default function BmsViewer() {
   // --- State ---
+  const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
+  const [bgaOpacity, setBgaOpacity] = useState(DEFAULT_BGA_OPACITY);
+
   const [files, setFiles] = useState([]);
   const [bmsList, setBmsList] = useState([]);
   const [selectedBmsIndex, setSelectedBmsIndex] = useState(-1);
@@ -116,7 +118,7 @@ export default function BmsViewer() {
   const isShiftHeldRef = useRef(false);
   const isCtrlHeldRef = useRef(false);
 
-  // Sync Refs
+  // Sync Refs (renderLoop内で参照する値)
   const hiSpeedRef = useRef(hiSpeed);
   const isPlayingRef = useRef(isPlaying);
   const playKeySoundsRef = useRef(playKeySounds);
@@ -136,6 +138,17 @@ export default function BmsViewer() {
   const suddenPlusValRef = useRef(suddenPlusVal);
   const hiddenPlusValRef = useRef(hiddenPlusVal);
   const liftValRef = useRef(liftVal);
+  const isMobileRef = useRef(isMobile); // renderLoop用
+
+  useEffect(() => { 
+      const handleResize = () => {
+          const mobile = window.innerWidth < MOBILE_BREAKPOINT;
+          setIsMobile(mobile);
+          isMobileRef.current = mobile;
+      };
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => { hiSpeedRef.current = hiSpeed; }, [hiSpeed]);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
@@ -163,7 +176,7 @@ export default function BmsViewer() {
       }
   }, [isInputDebugMode]);
 
-  // Methods
+  // Methods (from original code, unchanged logic)
   const setLaneActive = (idx, active) => {
       const ctrlEl = controllerRefs.current[idx];
       if (ctrlEl) {
@@ -177,6 +190,7 @@ export default function BmsViewer() {
              ctrlEl.style.boxShadow = active ? `0 0 20px ${activeColor}` : 'none';
           }
       }
+      // Keyboard refs are mostly for desktop visualizer
       const kbEl = keyboardRefs.current[idx];
       if (kbEl) {
           const isScratch = idx === 0;
@@ -727,6 +741,7 @@ export default function BmsViewer() {
     const currentTime = isPlayingRef.current && audioContextRef.current ? audioContextRef.current.currentTime - startTimeRef.current : pauseTimeRef.current;
     if (parsedSong) {
         activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime);
+        // ... BGA Update logic (unchanged) ...
         if (parsedSong.backBgaObjects && nextBackBgaIndexRef.current < parsedSong.backBgaObjects.length) {
             const bgaObj = parsedSong.backBgaObjects[nextBackBgaIndexRef.current];
             if (bgaObj.time <= currentTime) {
@@ -824,7 +839,10 @@ export default function BmsViewer() {
 
     const width = rect.width;
     const height = rect.height;
-    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, width, height);
+    
+    // ★ 描画ロジック変更: 透明度対応
+    ctx.clearRect(0, 0, width, height); // 全クリア (背景BGAを見せるため)
+
     const KEY_W = Math.min(40, width / 12);
     const SCRATCH_W = KEY_W * 1.5;
     const BOARD_W = SCRATCH_W + (KEY_W * 7) + 10;
@@ -839,23 +857,26 @@ export default function BmsViewer() {
     const is2P = playSide === '2P';
     const SCRATCH_X = is2P ? BOARD_X + (KEY_W * 7) + 10 : BOARD_X; const KEYS_X = is2P ? BOARD_X : BOARD_X + SCRATCH_W + 10;
 
-    ctx.fillStyle = '#020617';
+    // Board Background: 透明度ありに変更
+    ctx.fillStyle = 'rgba(2, 6, 23, 0.85)';
     ctx.fillRect(BOARD_X, 0, BOARD_W, height); 
     
+    // Lanes
     for(let i=0; i<7; i++) { 
         const laneHeight = isLiftEnabled ? JUDGE_Y : height;
-        ctx.fillStyle = [1,3,5].includes(i) ? '#0f172a' : '#1e293b'; 
+        ctx.fillStyle = [1,3,5].includes(i) ? 'rgba(15, 23, 42, 0.5)' : 'rgba(30, 41, 59, 0.5)'; 
         ctx.fillRect(KEYS_X + i * KEY_W, 0, KEY_W, laneHeight);
     }
     
-    ctx.strokeStyle = '#334155';
+    ctx.strokeStyle = 'rgba(51, 65, 85, 0.5)';
     ctx.lineWidth = 1; ctx.beginPath();
     for(let i=0; i<=7; i++) { 
         const x = KEYS_X + i * KEY_W;
         ctx.moveTo(x, 0); ctx.lineTo(x, isLiftEnabled ? JUDGE_Y : height); 
     }
     
-    ctx.fillStyle = '#0f172a';
+    // Scratch Lane
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.5)';
     ctx.fillRect(SCRATCH_X, 0, SCRATCH_W, isLiftEnabled ? JUDGE_Y : height);
     
     ctx.moveTo(SCRATCH_X, 0);
@@ -870,6 +891,7 @@ export default function BmsViewer() {
     const currentActiveLanes = new Array(8).fill(false);
     let hitsThisFrame = new Array(8).fill(0);
 
+    // ... Note drawing logic (unchanged) ...
     if (parsedSong) {
         const currentBeat = getBeatFromTime(parsedSong.timePoints, currentTime);
         const visibleDuration = 4.0 / hiSpeedRef.current; const visibleEndBeat = currentBeat + visibleDuration;
@@ -990,34 +1012,23 @@ export default function BmsViewer() {
     let speedMultiplier = 0;
     const sideFactor = playSideRef.current === '2P' ? -1 : 1;
 
+    // Mobile: Auto-play rotation (simulate simple rotation) or idle
+    // On Mobile we don't show the controller disc, so this logic is just for state consistency
     if (isInputDebugModeRef.current && (isShiftHeldRef.current || isCtrlHeldRef.current)) {
-        if (isShiftHeldRef.current) {
-            speedMultiplier = -1.0;
-        } else if (isCtrlHeldRef.current) {
-            speedMultiplier = 2.5;
-        }
+        if (isShiftHeldRef.current) speedMultiplier = -1.0;
+        else if (isCtrlHeldRef.current) speedMultiplier = 2.5;
     } 
     else if (isPlayingRef.current) {
-        if (currentActiveLanes[0]) {
-             speedMultiplier = -1.0;
-        } else if (timeSinceLast < effectDuration) {
-             if (lastScratchTypeRef.current === 'ACCEL') {
-                 speedMultiplier = 1.5 * scratchDirectionRef.current;
-             } else {
-                 speedMultiplier = -1.0;
-             }
-        } else {
-             speedMultiplier = 1.0;
-        }
+        if (currentActiveLanes[0]) speedMultiplier = -1.0;
+        else if (timeSinceLast < effectDuration) {
+             if (lastScratchTypeRef.current === 'ACCEL') speedMultiplier = 1.5 * scratchDirectionRef.current;
+             else speedMultiplier = -1.0;
+        } else speedMultiplier = 1.0;
     }
-    else {
-        speedMultiplier = 1.0;
-    }
+    else speedMultiplier = 1.0;
     
     if (!scratchRotationEnabledRef.current && Math.abs(speedMultiplier) === 1.0) {
-        if (!currentActiveLanes[0] && timeSinceLast >= effectDuration && !isShiftHeldRef.current) {
-             speedMultiplier = 0;
-        }
+        if (!currentActiveLanes[0] && timeSinceLast >= effectDuration && !isShiftHeldRef.current) speedMultiplier = 0;
     }
 
     scratchAngleRef.current += baseSpeed * speedMultiplier * sideFactor * safeDt;
@@ -1051,12 +1062,13 @@ export default function BmsViewer() {
   };
 
   const is2P = playSide === '2P';
+
   return (
     <div className={`flex flex-col h-screen bg-neutral-950 text-white font-sans overflow-hidden ${isDragOver ? 'ring-4 ring-blue-500' : ''}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
       
-      {/* --- コンポーネントに置き換え --- */}
       <SettingsModal
-        showSettings={showSettings} setShowSettings={setShowSettings} visibilityMode={visibilityMode} setVisibilityMode={setVisibilityMode}
+        showSettings={showSettings} setShowSettings={setShowSettings} isMobile={isMobile}
+        visibilityMode={visibilityMode} setVisibilityMode={setVisibilityMode}
         suddenPlusVal={suddenPlusVal} setSuddenPlusVal={setSuddenPlusVal} hiddenPlusVal={hiddenPlusVal} setHiddenPlusVal={setHiddenPlusVal} liftVal={liftVal} setLiftVal={setLiftVal}
         playSide={playSide} setPlaySide={setPlaySide} playOption={playOption} setPlayOption={setPlayOption} currentLaneOrder={currentLaneOrder} refreshRandom={refreshRandom}
         comboPos={comboPos} setComboPos={setComboPos} 
@@ -1068,76 +1080,102 @@ export default function BmsViewer() {
         playBgSounds={playBgSounds} setPlayBgSounds={setPlayBgSounds} showMutedMonitor={showMutedMonitor} setShowMutedMonitor={setShowMutedMonitor}
         showAbortedMonitor={showAbortedMonitor} setShowAbortedMonitor={setShowAbortedMonitor} scratchRotationEnabled={scratchRotationEnabled} setScratchRotationEnabled={setScratchRotationEnabled}
         isInputDebugMode={isInputDebugMode} setIsInputDebugMode={setIsInputDebugMode}
+        // Mobile Controls
+        handleFileSelect={handleFileSelect} bmsList={bmsList} selectedBmsIndex={selectedBmsIndex} setSelectedBmsIndex={setSelectedBmsIndex}
+        isPlaying={isPlaying} startPlayback={startPlayback} pausePlayback={pausePlayback} stopPlayback={stopPlayback}
+        hiSpeed={hiSpeed} setHiSpeed={setHiSpeed} bgaOpacity={bgaOpacity} setBgaOpacity={setBgaOpacity}
+        parsedSong={parsedSong}
       />
 
-      <div className="flex-1 flex min-h-0 overflow-hidden bg-neutral-950">
-         <ControllerPanel
-            controllerRefs={controllerRefs} keyboardRefs={keyboardRefs} noteCounts={noteCounts}
-            is2P={is2P} parsedSong={parsedSong} difficultyInfo={difficultyInfo}
-         />
-
-         <InfoPanel
-            setShowSettings={setShowSettings} playOption={playOption}
-            currentBackBga={currentBackBga} currentLayerBga={currentLayerBga} currentPoorBga={currentPoorBga}
-            showMissLayer={showMissLayer} isPlaying={isPlaying} playbackTimeDisplay={playbackTimeDisplay}
-            playBgaVideo={playBgaVideo} readyAnimState={readyAnimState}
-            currentMeasureLines={currentMeasureLines} combo={combo} totalNotes={totalNotes}
-            currentMeasureNotes={currentMeasureNotes} realtimeBpm={realtimeBpm} nextBpmInfo={nextBpmInfo} hiSpeed={hiSpeed}
-         />
-
-         {/* Canvasエリアはメインに残す */}
-         <div className="flex-1 bg-black relative flex justify-center border-r border-blue-900/30 overflow-hidden">
-            <canvas ref={canvasRef} className="h-full w-full max-w-[600px] shadow-[0_0_50px_rgba(0,0,0,0.5)]" />
-            {!parsedSong && <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-blue-900/20"><div className="text-center animate-pulse"><FolderOpen size={64} className="mx-auto mb-4 opacity-50"/><p className="text-xl font-bold tracking-widest">DROP FILE HERE</p></div></div>}
-            {!showSettings && parsedSong && <div className="absolute bottom-[100px] w-full h-[2px] bg-red-500/60 pointer-events-none z-20 shadow-[0_0_10px_rgba(239,68,68,0.8)]" style={{maxWidth:'600px'}}/>}
+      {/* メインエリア: レイヤー構造に変更 (BGA -> Canvas -> UI) */}
+      <div className="flex-1 relative min-h-0 overflow-hidden bg-black flex justify-center">
+         
+         {/* Layer 1: 背景BGA (全画面) */}
+         <div className="absolute inset-0 z-0 flex items-center justify-center opacity-transition" style={{ opacity: bgaOpacity }}>
+            <BgaLayer bgaState={currentBackBga} zIndex={0} isPlaying={isPlaying} currentTime={playbackTimeDisplay} isVideoEnabled={playBgaVideo} />
+            <BgaLayer bgaState={currentLayerBga} zIndex={10} blendMode="screen" isPlaying={isPlaying} currentTime={playbackTimeDisplay} isVideoEnabled={playBgaVideo} />
+            {showMissLayer && currentPoorBga && (
+                <div className="absolute inset-0 w-full h-full z-50 bg-black/50 flex items-center justify-center">
+                    <BgaLayer bgaState={currentPoorBga} zIndex={50} isPlaying={isPlaying} currentTime={playbackTimeDisplay} isVideoEnabled={playBgaVideo} />
+                </div>
+            )}
          </div>
 
-         {/* SoundMonitorはInfoPanelに入れたかったが、独立したRef(longAudioProgressRefs)を使うため、一旦ここに直書きのままにするか、さらに別コンポーネント化できるが今回はここまで */}
-         <div className="w-60 flex flex-col bg-[#080808] p-2 gap-2 shrink-0 overflow-y-auto scrollbar-hide">
-             <div className="bg-[#112233]/20 border border-blue-900/30 h-auto max-h-[25%] min-h-[60px] p-1 relative overflow-hidden flex flex-col shrink-0 rounded-sm">
-                 <div className="text-[9px] font-bold mb-0.5 border-b border-blue-900/30 flex justify-between text-blue-300 px-1 shrink-0"><span>BACKING TRACK</span></div>
-                 <div className="text-[8px] space-y-1 overflow-y-auto scrollbar-hide flex-1 font-mono px-1">
-                     {backingTracks.map(s => (
-                        <div key={s.id} className="flex flex-col mb-1">
-                            <div className={`truncate flex items-center gap-1 leading-none py-[1px] ${s.isAborted ? 'text-red-500' : (s.isMuted ? 'text-gray-500' : 'text-blue-200')}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${s.isAborted ? 'bg-red-500' : (s.isSkipped ? 'bg-cyan-500' : (s.isMuted ? 'bg-gray-600' : 'bg-green-500'))} shrink-0 shadow-[0_0_5px_currentColor]`}/>{s.name}
-                            </div>
-                            <div className="h-[4px] bg-[#1e293b] w-full mt-[1px] overflow-hidden rounded-full relative">
-                                <div className={`h-full absolute left-0 top-0 ${s.isAborted ? 'bg-red-500' : (s.isSkipped ? 'bg-cyan-400' : (s.isMuted ? 'bg-gray-500' : 'bg-green-400'))}`} ref={el => { if(el) longAudioProgressRefs.current.set(s.id, el); }} style={{width: '0%'}} />
-                            </div>
-                        </div>
-                    ))}
-                 </div>
-              </div>
-             <div className="bg-[#112233]/20 border border-blue-900/30 flex-1 p-2 relative overflow-hidden flex flex-col rounded-sm min-h-0">
-                 <div className="text-[10px] font-bold mb-1 border-b border-blue-900/30 flex justify-between items-center text-blue-300 shrink-0">
-                    <span>SOUND MONITOR</span>
-                    <div className="flex gap-2">
-                         <span className="text-blue-500/70 text-[8px]">M POLY: <span className="text-white">{maxPolyphonyCount}</span></span>
-                        <span className="text-blue-500/70">POLY: <span className={`${polyphonyCount > averagePolyphony + 10 ? 'text-red-500' : 'text-white'}`}>{polyphonyCount}</span></span>
+         {/* Layer 2: 判定レーン (Canvas) */}
+         <div className="relative z-10 w-full max-w-[600px] h-full">
+            <canvas ref={canvasRef} className="w-full h-full" />
+            
+            {/* 未ロード時のメッセージ */}
+            {!parsedSong && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-white/50">
+                    <div className="text-center animate-pulse">
+                        <FolderOpen size={64} className="mx-auto mb-4 opacity-50"/>
+                        <p className="text-xl font-bold tracking-widest">{isMobile ? 'OPEN SETTINGS' : 'DROP FILE HERE'}</p>
                     </div>
-                 </div>
-                 <div className="flex-1 overflow-hidden flex flex-col justify-end text-[9px] space-y-0.5 font-mono">
-                    {activeShortSoundsRef.current.slice(-25).map(s => (
-                         <div key={s.id} className={`truncate flex items-center gap-1 leading-none py-[1px] opacity-80 ${s.isMuted ? 'text-gray-600' : 'text-blue-100'}`}>
-                            <span className={`w-1 h-1 rounded-full ${s.isSkipped ? 'bg-cyan-400' : (s.isMuted ? 'bg-gray-600' : 'bg-green-400')} shrink-0 shadow-[0_0_4px_currentColor]`}/>{s.name}
-                        </div>
-                     ))}
-                 </div>
-             </div>
-             <div className="bg-[#0f172a] text-blue-100 p-2 h-48 shrink-0 text-[10px] font-mono border border-blue-900/50 flex flex-col justify-center rounded-sm shadow-lg">
-                 <div className="border-b border-blue-900/30 mb-2 pb-1 text-center text-blue-400 font-bold text-[9px] tracking-widest">LANE LOG</div>
-                 <div className="grid grid-cols-[20px_1fr] gap-x-2 gap-y-1">{[0,1,2,3,4,5,6,7].map(i => (<React.Fragment key={i}><div className="text-blue-500 text-right font-bold opacity-70">{i===0?'SC':`K${i}`}</div><div className="truncate text-yellow-100 leading-tight opacity-90">{lastPlayedSoundPerLaneRef.current[i] || '-'}</div></React.Fragment>))}</div>
-             </div>
+                </div>
+            )}
+            {!showSettings && parsedSong && (
+                <div className="absolute bottom-[100px] w-full h-[2px] bg-red-500/60 pointer-events-none z-20 shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
+            )}
          </div>
+
+         {/* PC用サイドバー (スマホでは非表示) */}
+         {!isMobile && (
+             <div className="absolute left-0 top-0 bottom-0 z-20 flex">
+                 <ControllerPanel
+                    controllerRefs={controllerRefs} keyboardRefs={keyboardRefs} noteCounts={noteCounts}
+                    is2P={is2P} parsedSong={parsedSong} difficultyInfo={difficultyInfo}
+                 />
+             </div>
+         )}
+         {!isMobile && (
+             <div className="absolute right-0 top-0 bottom-0 z-20 flex">
+                 <InfoPanel
+                    setShowSettings={setShowSettings} playOption={playOption}
+                    currentBackBga={null} currentLayerBga={null} currentPoorBga={null} // BGAは背景に移動したのでパネル内は無効化
+                    showMissLayer={false} isPlaying={isPlaying} playbackTimeDisplay={playbackTimeDisplay}
+                    playBgaVideo={false} readyAnimState={readyAnimState}
+                    currentMeasureLines={currentMeasureLines} combo={combo} totalNotes={totalNotes}
+                    currentMeasureNotes={currentMeasureNotes} realtimeBpm={realtimeBpm} nextBpmInfo={nextBpmInfo} hiSpeed={hiSpeed}
+                 />
+             </div>
+         )}
+
+         {/* スマホ用: フローティング設定ボタン */}
+         {isMobile && (
+             <button 
+                onClick={() => setShowSettings(true)}
+                className="absolute top-4 right-4 z-50 p-3 bg-blue-600/80 rounded-full text-white shadow-lg backdrop-blur-sm"
+             >
+                 <Settings size={24} />
+             </button>
+         )}
+
+         {/* スマホ用: 下部簡易情報バー */}
+         {isMobile && parsedSong && (
+             <div className="absolute bottom-4 left-4 right-4 z-40">
+                 <div className="bg-black/60 backdrop-blur-md rounded-lg p-2 border border-white/10 text-white flex flex-col gap-1 shadow-xl">
+                     <div className="flex justify-between items-center text-xs">
+                         <span className="font-bold truncate max-w-[70%]">{parsedSong.header.title}</span>
+                         <span className="font-mono text-blue-300">BPM: {Math.round(realtimeBpm)}</span>
+                     </div>
+                     <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+                         <div className="h-full bg-blue-500 transition-all duration-200" style={{ width: `${(playbackTimeDisplay / duration) * 100}%` }} />
+                     </div>
+                 </div>
+             </div>
+         )}
       </div>
 
-      <ControlBar
-        handleFileSelect={handleFileSelect} selectedBmsIndex={selectedBmsIndex} setSelectedBmsIndex={setSelectedBmsIndex} bmsList={bmsList}
-        stopPlayback={stopPlayback} isPlaying={isPlaying} pausePlayback={pausePlayback} startPlayback={startPlayback}
-        duration={duration} playbackTimeDisplay={playbackTimeDisplay} handleSeek={handleSeek}
-        hiSpeed={hiSpeed} setHiSpeed={setHiSpeed} volume={volume} setVolume={setVolume} toggleMute={toggleMute}
-      />
+      {/* PC用コントロールバー (スマホでは非表示) */}
+      {!isMobile && (
+          <ControlBar
+            handleFileSelect={handleFileSelect} selectedBmsIndex={selectedBmsIndex} setSelectedBmsIndex={setSelectedBmsIndex} bmsList={bmsList}
+            stopPlayback={stopPlayback} isPlaying={isPlaying} pausePlayback={pausePlayback} startPlayback={startPlayback}
+            duration={duration} playbackTimeDisplay={playbackTimeDisplay} handleSeek={handleSeek}
+            hiSpeed={hiSpeed} setHiSpeed={setHiSpeed} volume={volume} setVolume={setVolume} toggleMute={toggleMute}
+          />
+      )}
     </div>
   );
 }
