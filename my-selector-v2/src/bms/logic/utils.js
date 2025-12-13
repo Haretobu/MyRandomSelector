@@ -1,20 +1,21 @@
 // src/bms/logic/utils.js
 import { DIFFICULTY_MAP } from '../constants';
-import JSZip from 'jszip'; // ZIP解凍用
+import JSZip from 'jszip';
 
 export const parseInt36 = (str) => parseInt(str, 36);
 
-export const getBaseName = (n) => { 
-    // パス区切り文字を統一してファイル名だけを取り出す
-    const name = n.replace(/\\/g, '/').split('/').pop();
-    const p = name.split('.'); 
-    if(p.length > 1) p.pop(); 
-    return p.join('.').toLowerCase(); 
+// ★重要: パスを無視してファイル名のみを抽出・小文字化する関数
+// これにより "folder/beat.wav" と "beat.wav" や "BEAT.WAV" を同一視させる
+export const getFileName = (path) => {
+    if (!path) return '';
+    return path.replace(/\\/g, '/').split('/').pop().toLowerCase();
 };
 
-// ファイル名（拡張子あり）を取得するヘルパー
-export const getFileName = (n) => {
-    return n.replace(/\\/g, '/').split('/').pop().toLowerCase();
+export const getBaseName = (n) => { 
+    const name = getFileName(n);
+    const p = name.split('.'); 
+    if(p.length > 1) p.pop(); 
+    return p.join('.'); 
 };
 
 export const guessDifficulty = (header, fileName) => {
@@ -86,7 +87,7 @@ export const generateLaneMap = (option) => {
     return [0, ...lanes];
 };
 
-// ★追加: ZIP解凍処理
+// ZIP解凍: 階層を無視してファイル名だけでリスト化
 export const extractZipFiles = async (file) => {
     const zip = new JSZip();
     const loadedZip = await zip.loadAsync(file);
@@ -95,10 +96,14 @@ export const extractZipFiles = async (file) => {
     for (const relativePath of Object.keys(loadedZip.files)) {
         const zipEntry = loadedZip.files[relativePath];
         if (zipEntry.dir) continue;
+        if (relativePath.startsWith('__MACOSX')) continue; 
 
         const blob = await zipEntry.async('blob');
-        // Fileオブジェクトとして再構築（パスを含んだ名前を保持）
-        const extractedFile = new File([blob], relativePath, { type: blob.type || 'application/octet-stream' });
+        // ファイル名をパスの最後尾だけにする（フォルダ構造を無視してフラットにする）
+        const fileName = relativePath.split('/').pop();
+        
+        // Fileオブジェクトとして再構築
+        const extractedFile = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
         files.push(extractedFile);
     }
     return files;

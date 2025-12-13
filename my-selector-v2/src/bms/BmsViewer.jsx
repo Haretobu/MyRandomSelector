@@ -3,12 +3,13 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
 import { LANE_MAP, VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY } from './constants';
-import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, generateLaneMap, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
+import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, generateLaneMap, guessDifficulty, extractZipFiles, getFileName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 
 import SettingsModal from './components/SettingsModal';
 import ControllerPanel from './components/ControllerPanel';
 import InfoPanel from './components/InfoPanel';
+import LogPanel from './components/LogPanel'; // ★追加
 import ControlBar from './components/ControlBar';
 import BgaLayer from './components/BgaLayer';
 
@@ -193,7 +194,7 @@ export default function BmsViewer() {
               kbEl.style.backgroundColor = isScratch ? '#ef4444' : '#3b82f6';
               kbEl.style.color = '#ffffff';
               kbEl.style.borderColor = isScratch ? '#f87171' : '#60a5fa';
-              kbEl.style.boxShadow = isScratch ? '0 0 10px #ef4444' : '0 0 10px #3b82f6'; // ★光り方を強化
+              kbEl.style.boxShadow = isScratch ? '0 0 10px #ef4444' : '0 0 10px #3b82f6';
           } else {
               kbEl.style.backgroundColor = '#0f172a';
               kbEl.style.color = isScratch ? '#fca5a5' : '#475569';
@@ -359,7 +360,7 @@ export default function BmsViewer() {
       parsed.poorBgaObjects.forEach(o => { if (parsed.header.bmps[o.value]) neededImages.add(parsed.header.bmps[o.value]); });
       if (parsed.header.stagefile) neededImages.add(parsed.header.stagefile);
       
-      // ★修正: パス区切り文字を統一してファイル名のみでマッピング
+      // ★修正: ファイル名マッチングロジック (getFileName使用)
       const fileMap = {};
       files.forEach(f => {
         if (f === bmsFile) return;
@@ -400,7 +401,6 @@ export default function BmsViewer() {
           queue.push({ key: raw.toLowerCase(), file: candidates[0] });
         }
       });
-      // 小さいファイルから順にロード
       queue.sort((a, b) => a.file.size - b.file.size);
 
       if (queue.length > 0) setLoadingMessage(`音声ファイルを読み込み中... (${queue.length}個)`);
@@ -409,9 +409,7 @@ export default function BmsViewer() {
         await Promise.all(queue.slice(i, i + CONCURRENCY).map(async (item) => {
           try {
             const buf = await item.file.arrayBuffer(); 
-            // AudioContextがサスペンドされているとデコードできない場合があるため再開を試みる
             if(audioContextRef.current.state === 'suspended') await audioContextRef.current.resume();
-            
             const audioBuf = await audioContextRef.current.decodeAudioData(buf);
             audioBuffersRef.current.set(item.key, audioBuf);
           } catch (e) {
@@ -438,161 +436,13 @@ export default function BmsViewer() {
     } catch (e) { console.error(e); setIsLoading(false); }
   };
 
-  const scheduleAudio = () => {
-      if (!parsedSong || !isPlayingRef.current || !audioContextRef.current) return;
-      const ctx = audioContextRef.current; const currentTime = ctx.currentTime; const scheduleUntil = currentTime + LOOKAHEAD; 
-      let index = nextNoteIndexRef.current;
-      const objects = displayObjects;
-      
-      activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime);
-      const shortNodes = activeNodesRef.current.filter(n => !n.isLong);
-      if (shortNodes.length > MAX_SHORT_POLYPHONY) {
-          const sortedShorts = shortNodes.sort((a, b) => a.startTime - b.startTime);
-          const toKill = sortedShorts.slice(0, shortNodes.length - MAX_SHORT_POLYPHONY);
-          toKill.forEach(n => { try { n.node.stop(); } catch(e){} });
-          const killedIds = new Set(toKill.map(n => n.id));
-          activeNodesRef.current = activeNodesRef.current.filter(n => !killedIds.has(n.id));
-      }
-      setPolyphonyCount(activeNodesRef.current.length);
-      while (index < objects.length) {
-          const obj = objects[index];
-          const absolutePlayTime = startTimeRef.current + obj.time;
-          if (absolutePlayTime > scheduleUntil) break;
-          if (absolutePlayTime < currentTime - 0.1) { index++; continue; }
-
-          if (parsedSong.header.wavs[obj.value]) {
-              const buffer = audioBuffersRef.current.get(parsedSong.header.wavs[obj.value].toLowerCase());
-              if (buffer) {
-                const isLong = buffer.duration > 10.0;
-                let shouldPlay = true;
-                if (obj.isNote && !playKeySoundsRef.current) shouldPlay = false;
-                else if (!obj.isNote && !playBgSoundsRef.current) shouldPlay = false;
-                if (isLong && !playLongAudioRef.current) shouldPlay = false;
-                
-                const isBgmMonitor = buffer.duration > 5.0 && !obj.isNote;
-                const item = { id: Math.random(), name: obj.filename, startTime: obj.time, endTime: obj.time + buffer.duration, displayDuration: buffer.duration, isLong: isBgmMonitor, isMissing: false, isSkipped: false, isMuted: !shouldPlay };
-                if (shouldPlay) {
-                    const src = ctx.createBufferSource();
-                    src.buffer = buffer; src.connect(gainNodeRef.current);
-                    if (absolutePlayTime >= currentTime) src.start(absolutePlayTime);
-                    else { const offset = currentTime - absolutePlayTime; if (offset < buffer.duration) src.start(currentTime, offset); }
-                    const endTime = absolutePlayTime + buffer.duration;
-                    const nodeData = { node: src, startTime: absolutePlayTime, endTime: endTime, isLong: isLong, id: item.id };
-                    activeNodesRef.current.push(nodeData);
-                }
-                if (shouldPlay || showMutedMonitorRef.current) {
-                    if (isBgmMonitor) { activeLongSoundsRef.current.push(item); setBackingTracks(prev => [...prev, item]); }
-                    else { activeShortSoundsRef.current.push(item); }
-                }
-              }
-          }
-          if (obj.isNote) {
-               const hitTime = Math.max(currentTime, absolutePlayTime);
-               const buffer = obj.laneIndex === 0 ? scratchHitSoundBufferRef.current : keyHitSoundBufferRef.current;
-               if (buffer) {
-                   const src = ctx.createBufferSource(); src.buffer = buffer;
-                   const gain = ctx.createGain(); gain.gain.value = 0.6 * hitSoundVolumeRef.current;
-                   src.connect(gain); gain.connect(gainNodeRef.current); src.start(hitTime);
-               }
-          }
-          index++;
-      }
-      nextNoteIndexRef.current = index;
-  };
-  
-  const startPlayback = () => {
-    if (!parsedSong || isLoading) return;
-    if (!parsedSong.isSupportedMode) { setTimeout(() => alert("未実装：この形式（5/7鍵盤以外）のBMS再生はサポートされていません。"), 10); return; }
-    if (audioContextRef.current.state === 'suspended') audioContextRef.current.resume();
-    stopAudioNodes(); activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]);
-    const offset = pauseTimeRef.current; startTimeRef.current = audioContextRef.current.currentTime - offset;
-    setIsPlaying(true); lastFrameTimeRef.current = performance.now();
-    nextNoteIndexRef.current = findStartIndex(displayObjects, offset - (parsedSong.maxLNDuration || 20.0));
-    nextBackBgaIndexRef.current = 0; nextLayerBgaIndexRef.current = 0; nextPoorBgaIndexRef.current = 0;
-    if (showReady && offset === 0) {
-        setReadyAnimState('READY'); setTimeout(() => setReadyAnimState('GO'), 1000); setTimeout(() => setReadyAnimState(null), 1800); 
-        if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current);
-        schedulerTimerRef.current = setInterval(scheduleAudio, SCHEDULE_INTERVAL);
-        if (animationRef.current) cancelAnimationFrame(animationRef.current);
-        animationRef.current = requestAnimationFrame(renderLoop);
-    } else {
-        setReadyAnimState(null);
-        if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current);
-        schedulerTimerRef.current = setInterval(scheduleAudio, SCHEDULE_INTERVAL);
-        if (animationRef.current) cancelAnimationFrame(animationRef.current);
-        animationRef.current = requestAnimationFrame(renderLoop);
-    }
-    if (parsedSong.backBgaObjects) {
-        for (let i=0; i < parsedSong.backBgaObjects.length; i++) {
-            if (parsedSong.backBgaObjects[i].time >= offset) { nextBackBgaIndexRef.current = i; break; }
-            const obj = parsedSong.backBgaObjects[i];
-            if (parsedSong.header.bmps[obj.value]) { 
-                const asset = imageAssetsRef.current.get(parsedSong.header.bmps[obj.value].toLowerCase());
-                if(asset) { if (asset.type === 'video') { setCurrentBackBga({ ...asset, startTime: obj.time }); } else { setCurrentBackBga(asset); } }
-            }
-        }
-    }
-    if (parsedSong.layerBgaObjects) {
-        for (let i=0; i < parsedSong.layerBgaObjects.length; i++) {
-             if (parsedSong.layerBgaObjects[i].time >= offset) { nextLayerBgaIndexRef.current = i; break; }
-             const obj = parsedSong.layerBgaObjects[i];
-             if (parsedSong.header.bmps[obj.value]) { 
-                 const asset = imageAssetsRef.current.get(parsedSong.header.bmps[obj.value].toLowerCase());
-                 if(asset) { if (asset.type === 'video') { setCurrentLayerBga({ ...asset, startTime: obj.time }); } else { setCurrentLayerBga(asset); } }
-             } 
-             else if (obj.value === 0) setCurrentLayerBga(null);
-        }
-    }
-    if (parsedSong.poorBgaObjects) {
-        for (let i=0; i < parsedSong.poorBgaObjects.length; i++) {
-            if (parsedSong.poorBgaObjects[i].time >= offset) { nextPoorBgaIndexRef.current = i; break; }
-            const obj = parsedSong.poorBgaObjects[i];
-            if (parsedSong.header.bmps[obj.value]) { 
-                const asset = imageAssetsRef.current.get(parsedSong.header.bmps[obj.value].toLowerCase());
-                if(asset) { if (asset.type === 'video') { setCurrentPoorBga({ ...asset, startTime: obj.time }); } else { setCurrentPoorBga(asset); } }
-            }
-        }
-    }
-  };
-
+  // ... (scheduleAudio, startPlayback, stopAudioNodes, pausePlayback, stopPlayback, handleSeek は変更なし) ...
+  const scheduleAudio = () => { if (!parsedSong || !isPlayingRef.current || !audioContextRef.current) return; const ctx = audioContextRef.current; const currentTime = ctx.currentTime; const scheduleUntil = currentTime + LOOKAHEAD; let index = nextNoteIndexRef.current; const objects = displayObjects; activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime); const shortNodes = activeNodesRef.current.filter(n => !n.isLong); if (shortNodes.length > MAX_SHORT_POLYPHONY) { const sortedShorts = shortNodes.sort((a, b) => a.startTime - b.startTime); const toKill = sortedShorts.slice(0, shortNodes.length - MAX_SHORT_POLYPHONY); toKill.forEach(n => { try { n.node.stop(); } catch(e){} }); const killedIds = new Set(toKill.map(n => n.id)); activeNodesRef.current = activeNodesRef.current.filter(n => !killedIds.has(n.id)); } setPolyphonyCount(activeNodesRef.current.length); while (index < objects.length) { const obj = objects[index]; const absolutePlayTime = startTimeRef.current + obj.time; if (absolutePlayTime > scheduleUntil) break; if (absolutePlayTime < currentTime - 0.1) { index++; continue; } if (parsedSong.header.wavs[obj.value]) { const buffer = audioBuffersRef.current.get(parsedSong.header.wavs[obj.value].toLowerCase()); if (buffer) { const isLong = buffer.duration > 10.0; let shouldPlay = true; if (obj.isNote && !playKeySoundsRef.current) shouldPlay = false; else if (!obj.isNote && !playBgSoundsRef.current) shouldPlay = false; if (isLong && !playLongAudioRef.current) shouldPlay = false; const isBgmMonitor = buffer.duration > 5.0 && !obj.isNote; const item = { id: Math.random(), name: obj.filename, startTime: obj.time, endTime: obj.time + buffer.duration, displayDuration: buffer.duration, isLong: isBgmMonitor, isMissing: false, isSkipped: false, isMuted: !shouldPlay }; if (shouldPlay) { const src = ctx.createBufferSource(); src.buffer = buffer; src.connect(gainNodeRef.current); if (absolutePlayTime >= currentTime) src.start(absolutePlayTime); else { const offset = currentTime - absolutePlayTime; if (offset < buffer.duration) src.start(currentTime, offset); } const endTime = absolutePlayTime + buffer.duration; const nodeData = { node: src, startTime: absolutePlayTime, endTime: endTime, isLong: isLong, id: item.id }; activeNodesRef.current.push(nodeData); } if (shouldPlay || showMutedMonitorRef.current) { if (isBgmMonitor) { activeLongSoundsRef.current.push(item); setBackingTracks(prev => [...prev, item]); } else { activeShortSoundsRef.current.push(item); } } } } if (obj.isNote) { const hitTime = Math.max(currentTime, absolutePlayTime); const buffer = obj.laneIndex === 0 ? scratchHitSoundBufferRef.current : keyHitSoundBufferRef.current; if (buffer) { const src = ctx.createBufferSource(); src.buffer = buffer; const gain = ctx.createGain(); gain.gain.value = 0.6 * hitSoundVolumeRef.current; src.connect(gain); gain.connect(gainNodeRef.current); src.start(hitTime); } } index++; } nextNoteIndexRef.current = index; };
+  const startPlayback = () => { if (!parsedSong || isLoading) return; if (!parsedSong.isSupportedMode) { setTimeout(() => alert("未実装：この形式（5/7鍵盤以外）のBMS再生はサポートされていません。"), 10); return; } if (audioContextRef.current.state === 'suspended') audioContextRef.current.resume(); stopAudioNodes(); activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]); const offset = pauseTimeRef.current; startTimeRef.current = audioContextRef.current.currentTime - offset; setIsPlaying(true); lastFrameTimeRef.current = performance.now(); nextNoteIndexRef.current = findStartIndex(displayObjects, offset - (parsedSong.maxLNDuration || 20.0)); nextBackBgaIndexRef.current = 0; nextLayerBgaIndexRef.current = 0; nextPoorBgaIndexRef.current = 0; if (showReady && offset === 0) { setReadyAnimState('READY'); setTimeout(() => setReadyAnimState('GO'), 1000); setTimeout(() => setReadyAnimState(null), 1800); if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current); schedulerTimerRef.current = setInterval(scheduleAudio, SCHEDULE_INTERVAL); if (animationRef.current) cancelAnimationFrame(animationRef.current); animationRef.current = requestAnimationFrame(renderLoop); } else { setReadyAnimState(null); if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current); schedulerTimerRef.current = setInterval(scheduleAudio, SCHEDULE_INTERVAL); if (animationRef.current) cancelAnimationFrame(animationRef.current); animationRef.current = requestAnimationFrame(renderLoop); } if (parsedSong.backBgaObjects) { for (let i=0; i < parsedSong.backBgaObjects.length; i++) { if (parsedSong.backBgaObjects[i].time >= offset) { nextBackBgaIndexRef.current = i; break; } const obj = parsedSong.backBgaObjects[i]; if (parsedSong.header.bmps[obj.value]) { const asset = imageAssetsRef.current.get(parsedSong.header.bmps[obj.value].toLowerCase()); if(asset) { if (asset.type === 'video') { setCurrentBackBga({ ...asset, startTime: obj.time }); } else { setCurrentBackBga(asset); } } } } } if (parsedSong.layerBgaObjects) { for (let i=0; i < parsedSong.layerBgaObjects.length; i++) { if (parsedSong.layerBgaObjects[i].time >= offset) { nextLayerBgaIndexRef.current = i; break; } const obj = parsedSong.layerBgaObjects[i]; if (parsedSong.header.bmps[obj.value]) { const asset = imageAssetsRef.current.get(parsedSong.header.bmps[obj.value].toLowerCase()); if(asset) { if (asset.type === 'video') { setCurrentLayerBga({ ...asset, startTime: obj.time }); } else { setCurrentLayerBga(asset); } } } else if (obj.value === 0) setCurrentLayerBga(null); } } if (parsedSong.poorBgaObjects) { for (let i=0; i < parsedSong.poorBgaObjects.length; i++) { if (parsedSong.poorBgaObjects[i].time >= offset) { nextPoorBgaIndexRef.current = i; break; } const obj = parsedSong.poorBgaObjects[i]; if (parsedSong.header.bmps[obj.value]) { const asset = imageAssetsRef.current.get(parsedSong.header.bmps[obj.value].toLowerCase()); if(asset) { if (asset.type === 'video') { setCurrentPoorBga({ ...asset, startTime: obj.time }); } else { setCurrentPoorBga(asset); } } } } } };
   const stopAudioNodes = () => { activeNodesRef.current.forEach(n => { try { n.node.stop(); n.node.disconnect(); } catch(e){} }); activeNodesRef.current = []; if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current); };
   const pausePlayback = () => { setIsPlaying(false); stopAudioNodes(); pauseTimeRef.current = audioContextRef.current.currentTime - startTimeRef.current; setReadyAnimState(null); if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; } if (isInputDebugModeRef.current) requestAnimationFrame(renderLoop); };
-  const stopPlayback = (reset = true) => {
-    const wasPlaying = isPlayingRef.current; setIsPlaying(false); stopAudioNodes();
-    if (reset) {
-        if (wasPlaying && showAbortedMonitorRef.current) {
-            const currentTime = pauseTimeRef.current > 0 ? pauseTimeRef.current : playbackTimeDisplay;
-            setBackingTracks(prev => prev.map(t => { if (t.endTime > currentTime) { return { ...t, isAborted: true }; } return t; }));
-            activeLongSoundsRef.current.forEach(t => { if (t.endTime > currentTime) t.isAborted = true; });
-        } else { setBackingTracks([]); activeLongSoundsRef.current = []; }
-        pauseTimeRef.current = 0; setPlaybackTimeDisplay(0); setCombo(0); comboRef.current = 0; lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(8).fill(0));
-        if (parsedSong) displayObjects.forEach(o => o.processed = false);
-        setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsedSong?.avgDensity || 0 });
-        currentMeasureRef.current = -1; setRealtimeBpm(parsedSong?.header.bpm || 130); setReadyAnimState(null);
-        setCurrentLayerBga(null); setCurrentPoorBga(null); setShowMissLayer(false); setNextBpmInfo(null);
-        scratchAngleRef.current = 0; lastScratchTimeRef.current = 0; lastScratchTypeRef.current = 'REVERSE'; scratchDirectionRef.current = -1;
-        activeInputLanesRef.current.clear(); isShiftHeldRef.current = false; isCtrlHeldRef.current = false;
-        if (parsedSong?.header.stagefile) { const asset = imageAssetsRef.current.get(parsedSong.header.stagefile.toLowerCase()); if (asset && asset.type !== 'video') setCurrentBackBga(asset); else setCurrentBackBga(null); } else { setCurrentBackBga(null); }
-    } else { activeShortSoundsRef.current = []; }
-    if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; }
-    longAudioProgressRefs.current.forEach(el => el.style.width = '0%');
-    setTimeout(() => { if (isInputDebugModeRef.current || !animationRef.current) { lastFrameTimeRef.current = performance.now(); animationRef.current = requestAnimationFrame(renderLoop); } }, 0);
-  };
-
-  const handleSeek = (e) => {
-    const val = parseFloat(e.target.value); pauseTimeRef.current = val; setPlaybackTimeDisplay(val); setCombo(0); comboRef.current = 0;
-    const targetObjects = displayObjects; for(const obj of targetObjects) obj.processed = obj.time < val;
-    if (parsedSong) {
-        const currentBar = parsedSong.barLines.find(b => b.time > val);
-        const newMeasure = currentBar ? currentBar.measure - 1 : parsedSong.barLines.length - 1;
-        const totalInMeasure = parsedSong.notesPerMeasure[newMeasure] || 0;
-        const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999;
-        const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
-        setCurrentMeasureNotes({ processed: processedInMeasure, total: totalInMeasure, average: parsedSong.avgDensity });
-        setBackingTracks([]); activeLongSoundsRef.current = [];
-    }
-    clearActiveLanes(); if (isPlaying) startPlayback(); else requestAnimationFrame(renderLoop);
-  };
+  const stopPlayback = (reset = true) => { const wasPlaying = isPlayingRef.current; setIsPlaying(false); stopAudioNodes(); if (reset) { if (wasPlaying && showAbortedMonitorRef.current) { const currentTime = pauseTimeRef.current > 0 ? pauseTimeRef.current : playbackTimeDisplay; setBackingTracks(prev => prev.map(t => { if (t.endTime > currentTime) { return { ...t, isAborted: true }; } return t; })); activeLongSoundsRef.current.forEach(t => { if (t.endTime > currentTime) t.isAborted = true; }); } else { setBackingTracks([]); activeLongSoundsRef.current = []; } pauseTimeRef.current = 0; setPlaybackTimeDisplay(0); setCombo(0); comboRef.current = 0; lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(8).fill(0)); if (parsedSong) displayObjects.forEach(o => o.processed = false); setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsedSong?.avgDensity || 0 }); currentMeasureRef.current = -1; setRealtimeBpm(parsedSong?.header.bpm || 130); setReadyAnimState(null); setCurrentLayerBga(null); setCurrentPoorBga(null); setShowMissLayer(false); setNextBpmInfo(null); scratchAngleRef.current = 0; lastScratchTimeRef.current = 0; lastScratchTypeRef.current = 'REVERSE'; scratchDirectionRef.current = -1; activeInputLanesRef.current.clear(); isShiftHeldRef.current = false; isCtrlHeldRef.current = false; if (parsedSong?.header.stagefile) { const asset = imageAssetsRef.current.get(parsedSong.header.stagefile.toLowerCase()); if (asset && asset.type !== 'video') setCurrentBackBga(asset); else setCurrentBackBga(null); } else { setCurrentBackBga(null); } } else { activeShortSoundsRef.current = []; } if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; } longAudioProgressRefs.current.forEach(el => el.style.width = '0%'); setTimeout(() => { if (isInputDebugModeRef.current || !animationRef.current) { lastFrameTimeRef.current = performance.now(); animationRef.current = requestAnimationFrame(renderLoop); } }, 0); };
+  const handleSeek = (e) => { const val = parseFloat(e.target.value); pauseTimeRef.current = val; setPlaybackTimeDisplay(val); setCombo(0); comboRef.current = 0; const targetObjects = displayObjects; for(const obj of targetObjects) obj.processed = obj.time < val; if (parsedSong) { const currentBar = parsedSong.barLines.find(b => b.time > val); const newMeasure = currentBar ? currentBar.measure - 1 : parsedSong.barLines.length - 1; const totalInMeasure = parsedSong.notesPerMeasure[newMeasure] || 0; const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999; const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length; setCurrentMeasureNotes({ processed: processedInMeasure, total: totalInMeasure, average: parsedSong.avgDensity }); setBackingTracks([]); activeLongSoundsRef.current = []; } clearActiveLanes(); if (isPlaying) startPlayback(); else requestAnimationFrame(renderLoop); };
 
   const renderLoop = () => {
     if (!canvasRef.current) return;
@@ -606,54 +456,16 @@ export default function BmsViewer() {
     const currentTime = isPlayingRef.current && audioContextRef.current ? audioContextRef.current.currentTime - startTimeRef.current : pauseTimeRef.current;
     if (parsedSong) {
         activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime);
-        // ... BGA Update logic (unchanged) ...
-        if (parsedSong.backBgaObjects && nextBackBgaIndexRef.current < parsedSong.backBgaObjects.length) {
-            const bgaObj = parsedSong.backBgaObjects[nextBackBgaIndexRef.current];
-            if (bgaObj.time <= currentTime) {
-                const filename = parsedSong.header.bmps[bgaObj.value];
-                if (filename) { 
-                    const asset = imageAssetsRef.current.get(filename.toLowerCase());
-                    if (asset) { if (asset.type === 'video') setCurrentBackBga({ ...asset, startTime: bgaObj.time }); else setCurrentBackBga(asset); }
-                }
-                nextBackBgaIndexRef.current++;
-            }
-        }
-        if (parsedSong.layerBgaObjects && nextLayerBgaIndexRef.current < parsedSong.layerBgaObjects.length) {
-            const bgaObj = parsedSong.layerBgaObjects[nextLayerBgaIndexRef.current];
-            if (bgaObj.time <= currentTime) {
-                if (bgaObj.value === 0) setCurrentLayerBga(null);
-                else { 
-                    const filename = parsedSong.header.bmps[bgaObj.value];
-                    if (filename) { const asset = imageAssetsRef.current.get(filename.toLowerCase()); if (asset) { if (asset.type === 'video') setCurrentLayerBga({ ...asset, startTime: bgaObj.time }); else setCurrentLayerBga(asset); } } 
-                }
-                nextLayerBgaIndexRef.current++;
-            }
-        }
-        if (parsedSong.poorBgaObjects && nextPoorBgaIndexRef.current < parsedSong.poorBgaObjects.length) {
-            const bgaObj = parsedSong.poorBgaObjects[nextPoorBgaIndexRef.current];
-            if (bgaObj.time <= currentTime) {
-                const filename = parsedSong.header.bmps[bgaObj.value];
-                if (filename) { const asset = imageAssetsRef.current.get(filename.toLowerCase()); if (asset) { if (asset.type === 'video') setCurrentPoorBga({ ...asset, startTime: bgaObj.time }); else setCurrentPoorBga(asset); } }
-                nextPoorBgaIndexRef.current++;
-            }
-        }
+        // ... (BGA Logic: same as before) ...
+        if (parsedSong.backBgaObjects && nextBackBgaIndexRef.current < parsedSong.backBgaObjects.length) { const bgaObj = parsedSong.backBgaObjects[nextBackBgaIndexRef.current]; if (bgaObj.time <= currentTime) { const filename = parsedSong.header.bmps[bgaObj.value]; if (filename) { const asset = imageAssetsRef.current.get(filename.toLowerCase()); if (asset) { if (asset.type === 'video') setCurrentBackBga({ ...asset, startTime: bgaObj.time }); else setCurrentBackBga(asset); } } nextBackBgaIndexRef.current++; } }
+        if (parsedSong.layerBgaObjects && nextLayerBgaIndexRef.current < parsedSong.layerBgaObjects.length) { const bgaObj = parsedSong.layerBgaObjects[nextLayerBgaIndexRef.current]; if (bgaObj.time <= currentTime) { if (bgaObj.value === 0) setCurrentLayerBga(null); else { const filename = parsedSong.header.bmps[bgaObj.value]; if (filename) { const asset = imageAssetsRef.current.get(filename.toLowerCase()); if (asset) { if (asset.type === 'video') setCurrentLayerBga({ ...asset, startTime: bgaObj.time }); else setCurrentLayerBga(asset); } } } nextLayerBgaIndexRef.current++; } }
+        if (parsedSong.poorBgaObjects && nextPoorBgaIndexRef.current < parsedSong.poorBgaObjects.length) { const bgaObj = parsedSong.poorBgaObjects[nextPoorBgaIndexRef.current]; if (bgaObj.time <= currentTime) { const filename = parsedSong.header.bmps[bgaObj.value]; if (filename) { const asset = imageAssetsRef.current.get(filename.toLowerCase()); if (asset) { if (asset.type === 'video') setCurrentPoorBga({ ...asset, startTime: bgaObj.time }); else setCurrentPoorBga(asset); } } nextPoorBgaIndexRef.current++; } }
 
         if (now - lastStateUpdateRef.current > 50) { 
             setPlaybackTimeDisplay(currentTime);
             const currentBar = parsedSong.barLines.find(b => b.time > currentTime);
             const newMeasure = currentBar ? currentBar.measure - 1 : parsedSong.barLines.length - 1;
-            if (newMeasure !== currentMeasureRef.current) {
-                currentMeasureRef.current = newMeasure; setCurrentMeasure(newMeasure);
-                if (parsedSong.rawLinesByMeasure[newMeasure]) setCurrentMeasureLines(parsedSong.rawLinesByMeasure[newMeasure].map(l => ({ text: l, isCurrent: true }))); else setCurrentMeasureLines([]);
-                const totalInMeasure = parsedSong.notesPerMeasure[newMeasure] || 0;
-                const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999;
-                const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
-                setCurrentMeasureNotes({ processed: processedInMeasure, total: totalInMeasure, average: parsedSong.avgDensity });
-            } else {
-                const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999;
-                const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
-                setCurrentMeasureNotes(prev => ({ ...prev, processed: processedInMeasure }));
-            }
+            if (newMeasure !== currentMeasureRef.current) { currentMeasureRef.current = newMeasure; setCurrentMeasure(newMeasure); if (parsedSong.rawLinesByMeasure[newMeasure]) setCurrentMeasureLines(parsedSong.rawLinesByMeasure[newMeasure].map(l => ({ text: l, isCurrent: true }))); else setCurrentMeasureLines([]); const totalInMeasure = parsedSong.notesPerMeasure[newMeasure] || 0; const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999; const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length; setCurrentMeasureNotes({ processed: processedInMeasure, total: totalInMeasure, average: parsedSong.avgDensity }); } else { const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999; const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length; setCurrentMeasureNotes(prev => ({ ...prev, processed: processedInMeasure })); }
             const currentBpmVal = getBpmFromTime(parsedSong.timePoints, currentTime); setRealtimeBpm(currentBpmVal);
             const futureTime = currentTime + 2.0; const nextTp = parsedSong.timePoints.find(tp => tp.time > currentTime && tp.time <= futureTime && tp.bpm !== currentBpmVal);
             setNextBpmInfo(nextTp ? { value: nextTp.bpm, direction: nextTp.bpm > currentBpmVal ? 'up' : 'down', old: currentBpmVal } : null);
@@ -661,10 +473,7 @@ export default function BmsViewer() {
             activeLongSoundsRef.current = activeLongSoundsRef.current.filter(s => { if (s.isAborted) return true; return currentTime < s.endTime; });
             const visibleTracks = activeLongSoundsRef.current.filter(s => s.isAborted || s.startTime <= currentTime);
             if (visibleTracks.length !== backingTracks.length || (visibleTracks.length > 0 && visibleTracks[0].id !== backingTracks[0].id) || (visibleTracks.length > 0 && visibleTracks[visibleTracks.length-1].id !== backingTracks[backingTracks.length-1]?.id)) { setBackingTracks([...visibleTracks]); }
-            activeLongSoundsRef.current.forEach(s => {
-                const ref = longAudioProgressRefs.current.get(s.id);
-                if (ref && !s.isAborted) { const duration = s.displayDuration || 1; const elapsed = currentTime - s.startTime; const progress = Math.min(100, Math.max(0, (elapsed / duration) * 100)); ref.style.width = `${progress}%`; }
-            });
+            activeLongSoundsRef.current.forEach(s => { const ref = longAudioProgressRefs.current.get(s.id); if (ref && !s.isAborted) { const duration = s.displayDuration || 1; const elapsed = currentTime - s.startTime; const progress = Math.min(100, Math.max(0, (elapsed / duration) * 100)); ref.style.width = `${progress}%`; } });
         }
         const isFinished = currentTime > duration + 0.5 && activeNodesRef.current.length === 0;
         if (isFinished && isPlayingRef.current) { stopPlayback(true); return; }
@@ -680,7 +489,6 @@ export default function BmsViewer() {
     const is2P = playSide === '2P';
     const SCRATCH_X = is2P ? BOARD_X + (KEY_W * 7) + 10 : BOARD_X; const KEYS_X = is2P ? BOARD_X : BOARD_X + SCRATCH_W + 10;
 
-    // Board Background: 透明度あり (スマホ用、PCでも悪くない)
     ctx.fillStyle = 'rgba(2, 6, 23, 0.85)'; ctx.fillRect(BOARD_X, 0, BOARD_W, height); 
     
     for(let i=0; i<7; i++) { 
@@ -802,17 +610,16 @@ export default function BmsViewer() {
         playBgSounds={playBgSounds} setPlayBgSounds={setPlayBgSounds} showMutedMonitor={showMutedMonitor} setShowMutedMonitor={setShowMutedMonitor}
         showAbortedMonitor={showAbortedMonitor} setShowAbortedMonitor={setShowAbortedMonitor} scratchRotationEnabled={scratchRotationEnabled} setScratchRotationEnabled={setScratchRotationEnabled}
         isInputDebugMode={isInputDebugMode} setIsInputDebugMode={setIsInputDebugMode}
-        // Mobile Controls
         handleFileSelect={handleFileSelect} handleZipSelect={handleZipSelect} bmsList={bmsList} selectedBmsIndex={selectedBmsIndex} setSelectedBmsIndex={setSelectedBmsIndex}
         isPlaying={isPlaying} startPlayback={startPlayback} pausePlayback={pausePlayback} stopPlayback={stopPlayback}
         hiSpeed={hiSpeed} setHiSpeed={setHiSpeed} bgaOpacity={bgaOpacity} setBgaOpacity={setBgaOpacity}
         parsedSong={parsedSong}
       />
 
-      {/* メインエリア: レイヤー構造に変更 */}
-      <div className="flex-1 relative min-h-0 overflow-hidden bg-black flex justify-center">
+      {/* メインエリア: PCとスマホで構造を分ける */}
+      <div className="flex-1 relative min-h-0 overflow-hidden flex justify-center">
          
-         {/* Layer 1: 背景BGA (スマホのみ) */}
+         {/* スマホ用: 背景BGA */}
          {isMobile && (
              <div className="absolute inset-0 z-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none" style={{ opacity: bgaOpacity }}>
                 <BgaLayer bgaState={currentBackBga} zIndex={0} isPlaying={isPlaying} currentTime={playbackTimeDisplay} isVideoEnabled={playBgaVideo} />
@@ -825,43 +632,58 @@ export default function BmsViewer() {
              </div>
          )}
 
-         {/* Layer 2: 判定レーン (Canvas) */}
-         <div className="relative z-10 w-full max-w-[600px] h-full">
-            <canvas ref={canvasRef} className="w-full h-full" />
-            
-            {!parsedSong && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-white/50">
-                    <div className="text-center animate-pulse">
-                        <FolderOpen size={64} className="mx-auto mb-4 opacity-50"/>
-                        <p className="text-xl font-bold tracking-widest">{isMobile ? 'OPEN SETTINGS' : 'DROP FILE HERE'}</p>
-                    </div>
-                </div>
-            )}
-            {!showSettings && parsedSong && (
-                <div className="absolute bottom-[100px] w-full h-[2px] bg-red-500/60 pointer-events-none z-20 shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
-            )}
-         </div>
-
-         {/* PC用サイドバー (スマホでは非表示) - 元のレイアウトに戻す */}
+         {/* PCレイアウト: 4カラム構成 */}
          {!isMobile && (
-             <div className="absolute left-0 top-0 bottom-0 z-20 flex pointer-events-auto h-full">
+             <div className="flex w-full h-full">
+                 {/* 左: コントローラー */}
                  <ControllerPanel
                     controllerRefs={controllerRefs} keyboardRefs={keyboardRefs} noteCounts={noteCounts}
                     is2P={is2P} parsedSong={parsedSong} difficultyInfo={difficultyInfo}
                  />
-             </div>
-         )}
-         {!isMobile && (
-             <div className="absolute right-0 top-0 bottom-0 z-20 flex pointer-events-auto h-full">
+                 
+                 {/* 中央左: 情報・BGA */}
                  <InfoPanel
                     setShowSettings={setShowSettings} playOption={playOption}
-                    // PC版はInfoPanel内でBGAを表示する
                     currentBackBga={currentBackBga} currentLayerBga={currentLayerBga} currentPoorBga={currentPoorBga}
                     showMissLayer={showMissLayer} isPlaying={isPlaying} playbackTimeDisplay={playbackTimeDisplay}
                     playBgaVideo={playBgaVideo} readyAnimState={readyAnimState}
                     currentMeasureLines={currentMeasureLines} combo={combo} totalNotes={totalNotes}
                     currentMeasureNotes={currentMeasureNotes} realtimeBpm={realtimeBpm} nextBpmInfo={nextBpmInfo} hiSpeed={hiSpeed}
                  />
+
+                 {/* 中央右: レーン (Canvas) */}
+                 <div className="flex-1 bg-black relative flex justify-center border-r border-blue-900/30 overflow-hidden">
+                    <canvas ref={canvasRef} className="h-full w-full max-w-[600px] shadow-[0_0_50px_rgba(0,0,0,0.5)]" />
+                    {!parsedSong && <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-blue-900/20"><div className="text-center animate-pulse"><FolderOpen size={64} className="mx-auto mb-4 opacity-50"/><p className="text-xl font-bold tracking-widest">DROP FILE HERE</p></div></div>}
+                    {!showSettings && parsedSong && <div className="absolute bottom-[100px] w-full h-[2px] bg-red-500/60 pointer-events-none z-20 shadow-[0_0_10px_rgba(239,68,68,0.8)]" style={{maxWidth:'600px'}}/>}
+                 </div>
+
+                 {/* 右: ログパネル (新設) */}
+                 <LogPanel 
+                    backingTracks={backingTracks} 
+                    activeShortSounds={activeShortSoundsRef.current} 
+                    lastPlayedSoundPerLane={lastPlayedSoundPerLaneRef.current}
+                    longAudioProgressRefs={longAudioProgressRefs}
+                    maxPolyphonyCount={maxPolyphonyCount}
+                    polyphonyCount={polyphonyCount}
+                    averagePolyphony={averagePolyphony}
+                 />
+             </div>
+         )}
+
+         {/* スマホのみ: Canvas (全画面) */}
+         {isMobile && (
+             <div className="relative z-10 w-full h-full">
+                <canvas ref={canvasRef} className="w-full h-full" />
+                {!parsedSong && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-white/50">
+                        <div className="text-center animate-pulse">
+                            <FolderOpen size={64} className="mx-auto mb-4 opacity-50"/>
+                            <p className="text-xl font-bold tracking-widest">OPEN SETTINGS</p>
+                        </div>
+                    </div>
+                )}
+                {!showSettings && parsedSong && <div className="absolute bottom-[100px] w-full h-[2px] bg-red-500/60 pointer-events-none z-20 shadow-[0_0_10px_rgba(239,68,68,0.8)]" />}
              </div>
          )}
 
@@ -878,19 +700,8 @@ export default function BmsViewer() {
          {/* スマホ用: 下部コントロールバー (常駐) */}
          {isMobile && parsedSong && (
              <div className="absolute bottom-6 left-4 right-4 z-50 flex flex-col gap-2 pointer-events-auto">
-                 {/* シークバー */}
-                 <input 
-                    type="range" 
-                    min="0" 
-                    max={duration || 100} 
-                    step="0.01" 
-                    value={playbackTimeDisplay} 
-                    onChange={handleSeek}
-                    className="w-full h-2 bg-gray-700/50 rounded-lg appearance-none cursor-pointer accent-blue-500 backdrop-blur-sm"
-                 />
-                 
+                 <input type="range" min="0" max={duration || 100} step="0.01" value={playbackTimeDisplay} onChange={handleSeek} className="w-full h-2 bg-gray-700/50 rounded-lg appearance-none cursor-pointer accent-blue-500 backdrop-blur-sm" />
                  <div className="flex items-center justify-between gap-3">
-                     {/* 再生/停止 */}
                      <div className="flex gap-2 flex-1">
                         <button onClick={() => stopPlayback(true)} className="bg-gray-800/80 backdrop-blur-sm text-white p-3 rounded-full shadow-lg border border-white/10 active:scale-95"><ChevronFirst size={24}/></button>
                         <button onClick={isPlaying ? pausePlayback : startPlayback} className={`flex-1 p-3 rounded-full shadow-lg border border-white/10 font-bold flex items-center justify-center gap-2 backdrop-blur-sm active:scale-95 ${isPlaying ? 'bg-yellow-600/90' : 'bg-green-600/90'}`}>

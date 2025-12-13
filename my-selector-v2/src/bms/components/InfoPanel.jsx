@@ -4,16 +4,21 @@ import { Settings, Image as ImageIcon } from 'lucide-react';
 import BgaLayer from './BgaLayer';
 
 const InfoPanel = ({
-    setShowSettings, playOption, currentBackBga, currentLayerBga, currentPoorBga,
+    setShowSettings, playOption, 
+    // BGA関連のPropsを受け取る
+    currentBackBga, currentLayerBga, currentPoorBga,
     showMissLayer, isPlaying, playbackTimeDisplay, playBgaVideo, readyAnimState,
     currentMeasureLines, combo, totalNotes, currentMeasureNotes, realtimeBpm, nextBpmInfo, hiSpeed
 }) => {
     return (
         <div className="w-64 flex flex-col border-r border-blue-900/30 bg-[#0a0a0a] p-2 gap-2 shrink-0">
+            {/* 設定ボタンエリア */}
             <div className="bg-[#112233] border border-blue-500/30 text-blue-100 p-2 rounded flex items-center gap-2 text-xs font-bold shrink-0 cursor-pointer hover:bg-[#1e3a5f] transition shadow-sm group" onClick={() => setShowSettings(true)}>
                  <Settings size={14} className="text-blue-400 group-hover:rotate-90 transition-transform duration-500"/>
                   <div className="flex-1 flex flex-col"><span className="text-blue-200 group-hover:text-white transition-colors">{playOption}</span><span className="text-[8px] text-blue-500/70 font-mono tracking-tighter mt-0.5">設定を開く</span></div>
             </div>
+
+            {/* BGA表示エリア (PC用) */}
             <div className="aspect-video w-full bg-black border border-blue-900/30 flex items-center justify-center text-blue-900/50 text-xs shrink-0 overflow-hidden relative shadow-inner rounded-sm">
                 <BgaLayer bgaState={currentBackBga} zIndex={0} isPlaying={isPlaying} currentTime={playbackTimeDisplay} isVideoEnabled={playBgaVideo} />
                 <BgaLayer bgaState={currentLayerBga} zIndex={10} blendMode="screen" isPlaying={isPlaying} currentTime={playbackTimeDisplay} isVideoEnabled={playBgaVideo} />
@@ -26,12 +31,16 @@ const InfoPanel = ({
                  {!currentBackBga && !currentLayerBga && !showMissLayer && <div className="flex flex-col items-center gap-1 z-0"><ImageIcon size={20} /><span className="text-[9px] font-bold tracking-wider">NO SIGNAL</span></div>}
                 {readyAnimState === 'GO' && <div className="absolute inset-0 bg-white animate-ping opacity-20 pointer-events-none"></div>}
             </div>
+
+            {/* BMS Monitor (譜面テキスト) */}
             <div className="bg-[#050505] border border-blue-900/30 p-1 flex-1 min-h-0 overflow-hidden font-mono text-[9px] leading-tight text-blue-300/80 relative shadow-inner rounded-sm flex flex-col">
                  <div className="absolute top-0 right-0 bg-blue-900/20 text-blue-400 px-1 text-[8px] z-10">BMS MONITOR</div>
                 <div className="mt-4 flex-1 overflow-hidden flex flex-col justify-center pb-1">
                     {currentMeasureLines.length > 0 ? <div className="flex flex-col gap-0.5">{currentMeasureLines.map((item, i) => (<div key={i} className={`truncate transition-all ${item.isCurrent ? 'text-yellow-300 bg-blue-900/20 font-bold scale-105 pl-1' : 'text-blue-500/50 blur-[0.5px]'}`}>{item.text}</div>))}</div> : <div className="text-center text-blue-900/50 italic">No Data</div>}
                 </div>
             </div>
+
+            {/* コンボ・BPM情報 */}
             <div className="bg-[#112233]/30 border border-blue-900/30 p-2 text-xs space-y-2 shrink-0 text-blue-200 font-mono rounded-sm">
                 <div className="flex justify-between items-baseline border-b border-blue-900/30 pb-1"><span className="text-[10px] text-blue-400">COMBO</span><span className="text-xl font-bold text-white drop-shadow-[0_0_5px_rgba(59,130,246,0.5)]">{combo}</span></div>
                 <div className="flex justify-between items-baseline"><span className="text-[10px] text-blue-400">NOTES</span><span><span className="text-white">{combo}</span> <span className="text-blue-500">/</span> {totalNotes}</span></div>
