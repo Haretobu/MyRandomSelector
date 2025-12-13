@@ -1,5 +1,6 @@
 // src/bms/components/SettingsModal.jsx
 import React from 'react';
+// ★ここに ChevronDown を追加しています
 import { Settings, X, ChevronsUp, RotateCw, Film, Flag, Music, Layers, Speaker, EyeOff, FileX, Keyboard, FolderOpen, FileArchive, ChevronDown } from 'lucide-react';
 import { VISIBILITY_MODES } from '../constants';
 
@@ -207,6 +208,11 @@ const SettingsModal = ({
                             <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
                                 <div className="flex items-center gap-3"><FileX className="text-blue-400" size={18}/><span className="text-sm">停止時に音源情報を残す</span></div>
                                  <input type="checkbox" checked={showAbortedMonitor} onChange={e=>setShowAbortedMonitor(e.target.checked)} className="accent-blue-500"/>
+                            </label>
+                            <div className="border-t border-blue-900/30 my-2"></div>
+                             <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
+                                <div className="flex items-center gap-3"><RotateCw className="text-blue-400" size={18}/><span className="text-sm">スクラッチの定常回転</span></div>
+                                 <input type="checkbox" checked={scratchRotationEnabled} onChange={e=>setScratchRotationEnabled(e.target.checked)} className="accent-blue-500"/>
                             </label>
                             
                             {/* デバッグキー入力: スマホでは非表示 */}
