@@ -3,13 +3,14 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
 import { LANE_MAP, VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY } from './constants';
-import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, generateLaneMap, guessDifficulty, extractZipFiles, getFileName } from './logic/utils';
+// getBaseName をインポート
+import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, generateLaneMap, guessDifficulty, extractZipFiles, getBaseName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 
 import SettingsModal from './components/SettingsModal';
 import ControllerPanel from './components/ControllerPanel';
 import InfoPanel from './components/InfoPanel';
-import LogPanel from './components/LogPanel'; // ★追加
+import LogPanel from './components/LogPanel';
 import ControlBar from './components/ControlBar';
 import BgaLayer from './components/BgaLayer';
 
@@ -360,19 +361,19 @@ export default function BmsViewer() {
       parsed.poorBgaObjects.forEach(o => { if (parsed.header.bmps[o.value]) neededImages.add(parsed.header.bmps[o.value]); });
       if (parsed.header.stagefile) neededImages.add(parsed.header.stagefile);
       
-      // ★修正: ファイル名マッチングロジック (getFileName使用)
+      // ★修正: getBaseName を使用して拡張子を無視したマッピングを作成
       const fileMap = {};
       files.forEach(f => {
         if (f === bmsFile) return;
-        const simpleName = getFileName(f.name);
-        if (!fileMap[simpleName]) fileMap[simpleName] = [];
-        fileMap[simpleName].push(f);
+        const base = getBaseName(f.name);
+        if (!fileMap[base]) fileMap[base] = [];
+        fileMap[base].push(f);
       });
 
       const imageQueue = [];
       neededImages.forEach(raw => {
-          const simpleName = getFileName(raw); 
-          const candidates = fileMap[simpleName];
+          const base = getBaseName(raw); 
+          const candidates = fileMap[base];
           if (candidates?.length) {
               imageQueue.push({ key: raw.toLowerCase(), file: candidates[0] });
            }
@@ -395,13 +396,13 @@ export default function BmsViewer() {
 
       const queue = [];
       neededAudio.forEach(raw => {
-        const simpleName = getFileName(raw); 
-        const candidates = fileMap[simpleName];
+        const base = getBaseName(raw); 
+        const candidates = fileMap[base];
         if (candidates?.length) {
           queue.push({ key: raw.toLowerCase(), file: candidates[0] });
         }
       });
-      queue.sort((a, b) => a.file.size - b.file.size);
+      queue.sort((a, b) => b.file.size - a.file.size);
 
       if (queue.length > 0) setLoadingMessage(`音声ファイルを読み込み中... (${queue.length}個)`);
       const CONCURRENCY = 6;
@@ -436,13 +437,160 @@ export default function BmsViewer() {
     } catch (e) { console.error(e); setIsLoading(false); }
   };
 
-  // ... (scheduleAudio, startPlayback, stopAudioNodes, pausePlayback, stopPlayback, handleSeek は変更なし) ...
-  const scheduleAudio = () => { if (!parsedSong || !isPlayingRef.current || !audioContextRef.current) return; const ctx = audioContextRef.current; const currentTime = ctx.currentTime; const scheduleUntil = currentTime + LOOKAHEAD; let index = nextNoteIndexRef.current; const objects = displayObjects; activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime); const shortNodes = activeNodesRef.current.filter(n => !n.isLong); if (shortNodes.length > MAX_SHORT_POLYPHONY) { const sortedShorts = shortNodes.sort((a, b) => a.startTime - b.startTime); const toKill = sortedShorts.slice(0, shortNodes.length - MAX_SHORT_POLYPHONY); toKill.forEach(n => { try { n.node.stop(); } catch(e){} }); const killedIds = new Set(toKill.map(n => n.id)); activeNodesRef.current = activeNodesRef.current.filter(n => !killedIds.has(n.id)); } setPolyphonyCount(activeNodesRef.current.length); while (index < objects.length) { const obj = objects[index]; const absolutePlayTime = startTimeRef.current + obj.time; if (absolutePlayTime > scheduleUntil) break; if (absolutePlayTime < currentTime - 0.1) { index++; continue; } if (parsedSong.header.wavs[obj.value]) { const buffer = audioBuffersRef.current.get(parsedSong.header.wavs[obj.value].toLowerCase()); if (buffer) { const isLong = buffer.duration > 10.0; let shouldPlay = true; if (obj.isNote && !playKeySoundsRef.current) shouldPlay = false; else if (!obj.isNote && !playBgSoundsRef.current) shouldPlay = false; if (isLong && !playLongAudioRef.current) shouldPlay = false; const isBgmMonitor = buffer.duration > 5.0 && !obj.isNote; const item = { id: Math.random(), name: obj.filename, startTime: obj.time, endTime: obj.time + buffer.duration, displayDuration: buffer.duration, isLong: isBgmMonitor, isMissing: false, isSkipped: false, isMuted: !shouldPlay }; if (shouldPlay) { const src = ctx.createBufferSource(); src.buffer = buffer; src.connect(gainNodeRef.current); if (absolutePlayTime >= currentTime) src.start(absolutePlayTime); else { const offset = currentTime - absolutePlayTime; if (offset < buffer.duration) src.start(currentTime, offset); } const endTime = absolutePlayTime + buffer.duration; const nodeData = { node: src, startTime: absolutePlayTime, endTime: endTime, isLong: isLong, id: item.id }; activeNodesRef.current.push(nodeData); } if (shouldPlay || showMutedMonitorRef.current) { if (isBgmMonitor) { activeLongSoundsRef.current.push(item); setBackingTracks(prev => [...prev, item]); } else { activeShortSoundsRef.current.push(item); } } } } if (obj.isNote) { const hitTime = Math.max(currentTime, absolutePlayTime); const buffer = obj.laneIndex === 0 ? scratchHitSoundBufferRef.current : keyHitSoundBufferRef.current; if (buffer) { const src = ctx.createBufferSource(); src.buffer = buffer; const gain = ctx.createGain(); gain.gain.value = 0.6 * hitSoundVolumeRef.current; src.connect(gain); gain.connect(gainNodeRef.current); src.start(hitTime); } } index++; } nextNoteIndexRef.current = index; };
-  const startPlayback = () => { if (!parsedSong || isLoading) return; if (!parsedSong.isSupportedMode) { setTimeout(() => alert("未実装：この形式（5/7鍵盤以外）のBMS再生はサポートされていません。"), 10); return; } if (audioContextRef.current.state === 'suspended') audioContextRef.current.resume(); stopAudioNodes(); activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]); const offset = pauseTimeRef.current; startTimeRef.current = audioContextRef.current.currentTime - offset; setIsPlaying(true); lastFrameTimeRef.current = performance.now(); nextNoteIndexRef.current = findStartIndex(displayObjects, offset - (parsedSong.maxLNDuration || 20.0)); nextBackBgaIndexRef.current = 0; nextLayerBgaIndexRef.current = 0; nextPoorBgaIndexRef.current = 0; if (showReady && offset === 0) { setReadyAnimState('READY'); setTimeout(() => setReadyAnimState('GO'), 1000); setTimeout(() => setReadyAnimState(null), 1800); if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current); schedulerTimerRef.current = setInterval(scheduleAudio, SCHEDULE_INTERVAL); if (animationRef.current) cancelAnimationFrame(animationRef.current); animationRef.current = requestAnimationFrame(renderLoop); } else { setReadyAnimState(null); if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current); schedulerTimerRef.current = setInterval(scheduleAudio, SCHEDULE_INTERVAL); if (animationRef.current) cancelAnimationFrame(animationRef.current); animationRef.current = requestAnimationFrame(renderLoop); } if (parsedSong.backBgaObjects) { for (let i=0; i < parsedSong.backBgaObjects.length; i++) { if (parsedSong.backBgaObjects[i].time >= offset) { nextBackBgaIndexRef.current = i; break; } const obj = parsedSong.backBgaObjects[i]; if (parsedSong.header.bmps[obj.value]) { const asset = imageAssetsRef.current.get(parsedSong.header.bmps[obj.value].toLowerCase()); if(asset) { if (asset.type === 'video') { setCurrentBackBga({ ...asset, startTime: obj.time }); } else { setCurrentBackBga(asset); } } } } } if (parsedSong.layerBgaObjects) { for (let i=0; i < parsedSong.layerBgaObjects.length; i++) { if (parsedSong.layerBgaObjects[i].time >= offset) { nextLayerBgaIndexRef.current = i; break; } const obj = parsedSong.layerBgaObjects[i]; if (parsedSong.header.bmps[obj.value]) { const asset = imageAssetsRef.current.get(parsedSong.header.bmps[obj.value].toLowerCase()); if(asset) { if (asset.type === 'video') { setCurrentLayerBga({ ...asset, startTime: obj.time }); } else { setCurrentLayerBga(asset); } } } else if (obj.value === 0) setCurrentLayerBga(null); } } if (parsedSong.poorBgaObjects) { for (let i=0; i < parsedSong.poorBgaObjects.length; i++) { if (parsedSong.poorBgaObjects[i].time >= offset) { nextPoorBgaIndexRef.current = i; break; } const obj = parsedSong.poorBgaObjects[i]; if (parsedSong.header.bmps[obj.value]) { const asset = imageAssetsRef.current.get(parsedSong.header.bmps[obj.value].toLowerCase()); if(asset) { if (asset.type === 'video') { setCurrentPoorBga({ ...asset, startTime: obj.time }); } else { setCurrentPoorBga(asset); } } } } } };
+  const scheduleAudio = () => {
+      if (!parsedSong || !isPlayingRef.current || !audioContextRef.current) return;
+      const ctx = audioContextRef.current; const currentTime = ctx.currentTime; const scheduleUntil = currentTime + LOOKAHEAD; 
+      let index = nextNoteIndexRef.current;
+      const objects = displayObjects;
+      
+      activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime);
+      const shortNodes = activeNodesRef.current.filter(n => !n.isLong);
+      if (shortNodes.length > MAX_SHORT_POLYPHONY) {
+          const sortedShorts = shortNodes.sort((a, b) => a.startTime - b.startTime);
+          const toKill = sortedShorts.slice(0, shortNodes.length - MAX_SHORT_POLYPHONY);
+          toKill.forEach(n => { try { n.node.stop(); } catch(e){} });
+          const killedIds = new Set(toKill.map(n => n.id));
+          activeNodesRef.current = activeNodesRef.current.filter(n => !killedIds.has(n.id));
+      }
+      setPolyphonyCount(activeNodesRef.current.length);
+      while (index < objects.length) {
+          const obj = objects[index];
+          const absolutePlayTime = startTimeRef.current + obj.time;
+          if (absolutePlayTime > scheduleUntil) break;
+          if (absolutePlayTime < currentTime - 0.1) { index++; continue; }
+
+          if (parsedSong.header.wavs[obj.value]) {
+              const buffer = audioBuffersRef.current.get(parsedSong.header.wavs[obj.value].toLowerCase());
+              if (buffer) {
+                const isLong = buffer.duration > 10.0;
+                let shouldPlay = true;
+                if (obj.isNote && !playKeySoundsRef.current) shouldPlay = false;
+                else if (!obj.isNote && !playBgSoundsRef.current) shouldPlay = false;
+                if (isLong && !playLongAudioRef.current) shouldPlay = false;
+                
+                const isBgmMonitor = buffer.duration > 5.0 && !obj.isNote;
+                const item = { id: Math.random(), name: obj.filename, startTime: obj.time, endTime: obj.time + buffer.duration, displayDuration: buffer.duration, isLong: isBgmMonitor, isMissing: false, isSkipped: false, isMuted: !shouldPlay };
+                if (shouldPlay) {
+                    const src = ctx.createBufferSource();
+                    src.buffer = buffer; src.connect(gainNodeRef.current);
+                    if (absolutePlayTime >= currentTime) src.start(absolutePlayTime);
+                    else { const offset = currentTime - absolutePlayTime; if (offset < buffer.duration) src.start(currentTime, offset); }
+                    const endTime = absolutePlayTime + buffer.duration;
+                    const nodeData = { node: src, startTime: absolutePlayTime, endTime: endTime, isLong: isLong, id: item.id };
+                    activeNodesRef.current.push(nodeData);
+                }
+                if (shouldPlay || showMutedMonitorRef.current) {
+                    if (isBgmMonitor) { activeLongSoundsRef.current.push(item); setBackingTracks(prev => [...prev, item]); }
+                    else { activeShortSoundsRef.current.push(item); }
+                }
+              }
+          }
+          if (obj.isNote) {
+               const hitTime = Math.max(currentTime, absolutePlayTime);
+               const buffer = obj.laneIndex === 0 ? scratchHitSoundBufferRef.current : keyHitSoundBufferRef.current;
+               if (buffer) {
+                   const src = ctx.createBufferSource(); src.buffer = buffer;
+                   const gain = ctx.createGain(); gain.gain.value = 0.6 * hitSoundVolumeRef.current;
+                   src.connect(gain); gain.connect(gainNodeRef.current); src.start(hitTime);
+               }
+          }
+          index++;
+      }
+      nextNoteIndexRef.current = index;
+  };
+  
+  const startPlayback = () => {
+    if (!parsedSong || isLoading) return;
+    if (!parsedSong.isSupportedMode) { setTimeout(() => alert("未実装：この形式（5/7鍵盤以外）のBMS再生はサポートされていません。"), 10); return; }
+    if (audioContextRef.current.state === 'suspended') audioContextRef.current.resume();
+    stopAudioNodes(); activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]);
+    const offset = pauseTimeRef.current; startTimeRef.current = audioContextRef.current.currentTime - offset;
+    setIsPlaying(true); lastFrameTimeRef.current = performance.now();
+    nextNoteIndexRef.current = findStartIndex(displayObjects, offset - (parsedSong.maxLNDuration || 20.0));
+    nextBackBgaIndexRef.current = 0; nextLayerBgaIndexRef.current = 0; nextPoorBgaIndexRef.current = 0;
+    if (showReady && offset === 0) {
+        setReadyAnimState('READY'); setTimeout(() => setReadyAnimState('GO'), 1000); setTimeout(() => setReadyAnimState(null), 1800); 
+        if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current);
+        schedulerTimerRef.current = setInterval(scheduleAudio, SCHEDULE_INTERVAL);
+        if (animationRef.current) cancelAnimationFrame(animationRef.current);
+        animationRef.current = requestAnimationFrame(renderLoop);
+    } else {
+        setReadyAnimState(null);
+        if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current);
+        schedulerTimerRef.current = setInterval(scheduleAudio, SCHEDULE_INTERVAL);
+        if (animationRef.current) cancelAnimationFrame(animationRef.current);
+        animationRef.current = requestAnimationFrame(renderLoop);
+    }
+    if (parsedSong.backBgaObjects) {
+        for (let i=0; i < parsedSong.backBgaObjects.length; i++) {
+            if (parsedSong.backBgaObjects[i].time >= offset) { nextBackBgaIndexRef.current = i; break; }
+            const obj = parsedSong.backBgaObjects[i];
+            if (parsedSong.header.bmps[obj.value]) { 
+                const asset = imageAssetsRef.current.get(parsedSong.header.bmps[obj.value].toLowerCase());
+                if(asset) { if (asset.type === 'video') { setCurrentBackBga({ ...asset, startTime: obj.time }); } else { setCurrentBackBga(asset); } }
+            }
+        }
+    }
+    if (parsedSong.layerBgaObjects) {
+        for (let i=0; i < parsedSong.layerBgaObjects.length; i++) {
+             if (parsedSong.layerBgaObjects[i].time >= offset) { nextLayerBgaIndexRef.current = i; break; }
+             const obj = parsedSong.layerBgaObjects[i];
+             if (parsedSong.header.bmps[obj.value]) { 
+                 const asset = imageAssetsRef.current.get(parsedSong.header.bmps[obj.value].toLowerCase());
+                 if(asset) { if (asset.type === 'video') { setCurrentLayerBga({ ...asset, startTime: obj.time }); } else { setCurrentLayerBga(asset); } }
+             } 
+             else if (obj.value === 0) setCurrentLayerBga(null);
+        }
+    }
+    if (parsedSong.poorBgaObjects) {
+        for (let i=0; i < parsedSong.poorBgaObjects.length; i++) {
+            if (parsedSong.poorBgaObjects[i].time >= offset) { nextPoorBgaIndexRef.current = i; break; }
+            const obj = parsedSong.poorBgaObjects[i];
+            if (parsedSong.header.bmps[obj.value]) { 
+                const asset = imageAssetsRef.current.get(parsedSong.header.bmps[obj.value].toLowerCase());
+                if(asset) { if (asset.type === 'video') { setCurrentPoorBga({ ...asset, startTime: obj.time }); } else { setCurrentPoorBga(asset); } }
+            }
+        }
+    }
+  };
+
   const stopAudioNodes = () => { activeNodesRef.current.forEach(n => { try { n.node.stop(); n.node.disconnect(); } catch(e){} }); activeNodesRef.current = []; if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current); };
   const pausePlayback = () => { setIsPlaying(false); stopAudioNodes(); pauseTimeRef.current = audioContextRef.current.currentTime - startTimeRef.current; setReadyAnimState(null); if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; } if (isInputDebugModeRef.current) requestAnimationFrame(renderLoop); };
-  const stopPlayback = (reset = true) => { const wasPlaying = isPlayingRef.current; setIsPlaying(false); stopAudioNodes(); if (reset) { if (wasPlaying && showAbortedMonitorRef.current) { const currentTime = pauseTimeRef.current > 0 ? pauseTimeRef.current : playbackTimeDisplay; setBackingTracks(prev => prev.map(t => { if (t.endTime > currentTime) { return { ...t, isAborted: true }; } return t; })); activeLongSoundsRef.current.forEach(t => { if (t.endTime > currentTime) t.isAborted = true; }); } else { setBackingTracks([]); activeLongSoundsRef.current = []; } pauseTimeRef.current = 0; setPlaybackTimeDisplay(0); setCombo(0); comboRef.current = 0; lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(8).fill(0)); if (parsedSong) displayObjects.forEach(o => o.processed = false); setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsedSong?.avgDensity || 0 }); currentMeasureRef.current = -1; setRealtimeBpm(parsedSong?.header.bpm || 130); setReadyAnimState(null); setCurrentLayerBga(null); setCurrentPoorBga(null); setShowMissLayer(false); setNextBpmInfo(null); scratchAngleRef.current = 0; lastScratchTimeRef.current = 0; lastScratchTypeRef.current = 'REVERSE'; scratchDirectionRef.current = -1; activeInputLanesRef.current.clear(); isShiftHeldRef.current = false; isCtrlHeldRef.current = false; if (parsedSong?.header.stagefile) { const asset = imageAssetsRef.current.get(parsedSong.header.stagefile.toLowerCase()); if (asset && asset.type !== 'video') setCurrentBackBga(asset); else setCurrentBackBga(null); } else { setCurrentBackBga(null); } } else { activeShortSoundsRef.current = []; } if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; } longAudioProgressRefs.current.forEach(el => el.style.width = '0%'); setTimeout(() => { if (isInputDebugModeRef.current || !animationRef.current) { lastFrameTimeRef.current = performance.now(); animationRef.current = requestAnimationFrame(renderLoop); } }, 0); };
-  const handleSeek = (e) => { const val = parseFloat(e.target.value); pauseTimeRef.current = val; setPlaybackTimeDisplay(val); setCombo(0); comboRef.current = 0; const targetObjects = displayObjects; for(const obj of targetObjects) obj.processed = obj.time < val; if (parsedSong) { const currentBar = parsedSong.barLines.find(b => b.time > val); const newMeasure = currentBar ? currentBar.measure - 1 : parsedSong.barLines.length - 1; const totalInMeasure = parsedSong.notesPerMeasure[newMeasure] || 0; const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999; const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length; setCurrentMeasureNotes({ processed: processedInMeasure, total: totalInMeasure, average: parsedSong.avgDensity }); setBackingTracks([]); activeLongSoundsRef.current = []; } clearActiveLanes(); if (isPlaying) startPlayback(); else requestAnimationFrame(renderLoop); };
+  const stopPlayback = (reset = true) => {
+    const wasPlaying = isPlayingRef.current; setIsPlaying(false); stopAudioNodes();
+    if (reset) {
+        if (wasPlaying && showAbortedMonitorRef.current) {
+            const currentTime = pauseTimeRef.current > 0 ? pauseTimeRef.current : playbackTimeDisplay;
+            setBackingTracks(prev => prev.map(t => { if (t.endTime > currentTime) { return { ...t, isAborted: true }; } return t; }));
+            activeLongSoundsRef.current.forEach(t => { if (t.endTime > currentTime) t.isAborted = true; });
+        } else { setBackingTracks([]); activeLongSoundsRef.current = []; }
+        pauseTimeRef.current = 0; setPlaybackTimeDisplay(0); setCombo(0); comboRef.current = 0; lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(8).fill(0));
+        if (parsedSong) displayObjects.forEach(o => o.processed = false);
+        setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsedSong?.avgDensity || 0 });
+        currentMeasureRef.current = -1; setRealtimeBpm(parsedSong?.header.bpm || 130); setReadyAnimState(null);
+        setCurrentLayerBga(null); setCurrentPoorBga(null); setShowMissLayer(false); setNextBpmInfo(null);
+        scratchAngleRef.current = 0; lastScratchTimeRef.current = 0; lastScratchTypeRef.current = 'REVERSE'; scratchDirectionRef.current = -1;
+        activeInputLanesRef.current.clear(); isShiftHeldRef.current = false; isCtrlHeldRef.current = false; if (parsedSong?.header.stagefile) { const asset = imageAssetsRef.current.get(parsedSong.header.stagefile.toLowerCase()); if (asset && asset.type !== 'video') setCurrentBackBga(asset); else setCurrentBackBga(null); } else { setCurrentBackBga(null); }
+    } else { activeShortSoundsRef.current = []; }
+    if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; }
+    longAudioProgressRefs.current.forEach(el => el.style.width = '0%');
+    setTimeout(() => { if (isInputDebugModeRef.current || !animationRef.current) { lastFrameTimeRef.current = performance.now(); animationRef.current = requestAnimationFrame(renderLoop); } }, 0);
+  };
+
+  const handleSeek = (e) => {
+    const val = parseFloat(e.target.value); pauseTimeRef.current = val; setPlaybackTimeDisplay(val); setCombo(0); comboRef.current = 0;
+    const targetObjects = displayObjects; for(const obj of targetObjects) obj.processed = obj.time < val;
+    if (parsedSong) {
+        const currentBar = parsedSong.barLines.find(b => b.time > val);
+        const newMeasure = currentBar ? currentBar.measure - 1 : parsedSong.barLines.length - 1;
+        const totalInMeasure = parsedSong.notesPerMeasure[newMeasure] || 0;
+        const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999;
+        const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
+        setCurrentMeasureNotes({ processed: processedInMeasure, total: totalInMeasure, average: parsedSong.avgDensity });
+        setBackingTracks([]); activeLongSoundsRef.current = [];
+    }
+    clearActiveLanes(); if (isPlaying) startPlayback(); else requestAnimationFrame(renderLoop);
+  };
 
   const renderLoop = () => {
     if (!canvasRef.current) return;
@@ -456,10 +604,36 @@ export default function BmsViewer() {
     const currentTime = isPlayingRef.current && audioContextRef.current ? audioContextRef.current.currentTime - startTimeRef.current : pauseTimeRef.current;
     if (parsedSong) {
         activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime);
-        // ... (BGA Logic: same as before) ...
-        if (parsedSong.backBgaObjects && nextBackBgaIndexRef.current < parsedSong.backBgaObjects.length) { const bgaObj = parsedSong.backBgaObjects[nextBackBgaIndexRef.current]; if (bgaObj.time <= currentTime) { const filename = parsedSong.header.bmps[bgaObj.value]; if (filename) { const asset = imageAssetsRef.current.get(filename.toLowerCase()); if (asset) { if (asset.type === 'video') setCurrentBackBga({ ...asset, startTime: bgaObj.time }); else setCurrentBackBga(asset); } } nextBackBgaIndexRef.current++; } }
-        if (parsedSong.layerBgaObjects && nextLayerBgaIndexRef.current < parsedSong.layerBgaObjects.length) { const bgaObj = parsedSong.layerBgaObjects[nextLayerBgaIndexRef.current]; if (bgaObj.time <= currentTime) { if (bgaObj.value === 0) setCurrentLayerBga(null); else { const filename = parsedSong.header.bmps[bgaObj.value]; if (filename) { const asset = imageAssetsRef.current.get(filename.toLowerCase()); if (asset) { if (asset.type === 'video') setCurrentLayerBga({ ...asset, startTime: bgaObj.time }); else setCurrentLayerBga(asset); } } } nextLayerBgaIndexRef.current++; } }
-        if (parsedSong.poorBgaObjects && nextPoorBgaIndexRef.current < parsedSong.poorBgaObjects.length) { const bgaObj = parsedSong.poorBgaObjects[nextPoorBgaIndexRef.current]; if (bgaObj.time <= currentTime) { const filename = parsedSong.header.bmps[bgaObj.value]; if (filename) { const asset = imageAssetsRef.current.get(filename.toLowerCase()); if (asset) { if (asset.type === 'video') setCurrentPoorBga({ ...asset, startTime: bgaObj.time }); else setCurrentPoorBga(asset); } } nextPoorBgaIndexRef.current++; } }
+        if (parsedSong.backBgaObjects && nextBackBgaIndexRef.current < parsedSong.backBgaObjects.length) {
+            const bgaObj = parsedSong.backBgaObjects[nextBackBgaIndexRef.current];
+            if (bgaObj.time <= currentTime) {
+                const filename = parsedSong.header.bmps[bgaObj.value];
+                if (filename) { 
+                    const asset = imageAssetsRef.current.get(filename.toLowerCase());
+                    if (asset) { if (asset.type === 'video') setCurrentBackBga({ ...asset, startTime: bgaObj.time }); else setCurrentBackBga(asset); }
+                }
+                nextBackBgaIndexRef.current++;
+            }
+        }
+        if (parsedSong.layerBgaObjects && nextLayerBgaIndexRef.current < parsedSong.layerBgaObjects.length) {
+            const bgaObj = parsedSong.layerBgaObjects[nextLayerBgaIndexRef.current];
+            if (bgaObj.time <= currentTime) {
+                if (bgaObj.value === 0) setCurrentLayerBga(null);
+                else { 
+                    const filename = parsedSong.header.bmps[bgaObj.value];
+                    if (filename) { const asset = imageAssetsRef.current.get(filename.toLowerCase()); if (asset) { if (asset.type === 'video') setCurrentLayerBga({ ...asset, startTime: bgaObj.time }); else setCurrentLayerBga(asset); } } 
+                }
+                nextLayerBgaIndexRef.current++;
+            }
+        }
+        if (parsedSong.poorBgaObjects && nextPoorBgaIndexRef.current < parsedSong.poorBgaObjects.length) {
+            const bgaObj = parsedSong.poorBgaObjects[nextPoorBgaIndexRef.current];
+            if (bgaObj.time <= currentTime) {
+                const filename = parsedSong.header.bmps[bgaObj.value];
+                if (filename) { const asset = imageAssetsRef.current.get(filename.toLowerCase()); if (asset) { if (asset.type === 'video') setCurrentPoorBga({ ...asset, startTime: bgaObj.time }); else setCurrentPoorBga(asset); } }
+                nextPoorBgaIndexRef.current++;
+            }
+        }
 
         if (now - lastStateUpdateRef.current > 50) { 
             setPlaybackTimeDisplay(currentTime);
@@ -489,6 +663,7 @@ export default function BmsViewer() {
     const is2P = playSide === '2P';
     const SCRATCH_X = is2P ? BOARD_X + (KEY_W * 7) + 10 : BOARD_X; const KEYS_X = is2P ? BOARD_X : BOARD_X + SCRATCH_W + 10;
 
+    // Board Background: 透明度あり (スマホ用、PCでも悪くない)
     ctx.fillStyle = 'rgba(2, 6, 23, 0.85)'; ctx.fillRect(BOARD_X, 0, BOARD_W, height); 
     
     for(let i=0; i<7; i++) { 
@@ -658,7 +833,7 @@ export default function BmsViewer() {
                     {!showSettings && parsedSong && <div className="absolute bottom-[100px] w-full h-[2px] bg-red-500/60 pointer-events-none z-20 shadow-[0_0_10px_rgba(239,68,68,0.8)]" style={{maxWidth:'600px'}}/>}
                  </div>
 
-                 {/* 右: ログパネル (新設) */}
+                 {/* 右: ログパネル */}
                  <LogPanel 
                     backingTracks={backingTracks} 
                     activeShortSounds={activeShortSoundsRef.current} 
