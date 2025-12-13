@@ -1154,9 +1154,9 @@ export default function BmsViewer() {
              </button>
          )}
 
-         {/* スマホ用: 下部コントロールバー (常駐) - 位置を修正 (bottom-24) */}
+         {/* スマホ用: 下部コントロールバー (常駐) - 位置を修正 (bottom-20) */}
          {isMobile && parsedSong && (
-             <div className="absolute bottom-22 left-4 right-4 z-50 flex flex-col gap-2 pointer-events-auto pb-safe">
+             <div className="absolute bottom-20 left-4 right-4 z-50 flex flex-col gap-2 pointer-events-auto pb-safe">
                  <input type="range" min="0" max={duration || 100} step="0.01" value={playbackTimeDisplay} onChange={handleSeek} className="w-full h-2 bg-gray-700/50 rounded-lg appearance-none cursor-pointer accent-blue-500 backdrop-blur-sm" />
                  <div className="flex items-center justify-between gap-3">
                      <div className="flex gap-2 flex-1">
