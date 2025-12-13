@@ -10,6 +10,7 @@
     "deploy": "npm run build && firebase deploy --only hosting"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "^5.1.2",
     "autoprefixer": "^10.4.22",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
@@ -17,6 +18,9 @@
   },
   "dependencies": {
     "firebase": "^12.6.0",
-    "lit-html": "^3.3.1"
+    "lit-html": "^3.3.1",
+    "lucide-react": "^0.561.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
   }
 }
