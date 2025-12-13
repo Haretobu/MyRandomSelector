@@ -6,7 +6,7 @@ import { KEY_CONFIG_ROWS } from '../constants';
 const ControllerPanel = ({ controllerRefs, keyboardRefs, noteCounts, is2P, parsedSong, difficultyInfo }) => {
     return (
         <div className="w-64 flex flex-col border-r border-blue-900/30 bg-[#080808] p-2 gap-2 shrink-0 overflow-y-auto scrollbar-hide text-blue-100">
-            {/* コントローラー (変更なし) */}
+            {/* コントローラー (ターンテーブル等) */}
             <div className="bg-[#112233]/50 rounded p-2 border border-blue-900/30">
                 <div className="text-[10px] text-blue-400 font-bold mb-2 flex items-center gap-1"><Gamepad2 size={10}/> CONTROLLER</div>
                 <div className={`relative h-48 bg-black rounded border border-blue-900/30 shadow-inner transform transition-transform`}>
@@ -25,7 +25,7 @@ const ControllerPanel = ({ controllerRefs, keyboardRefs, noteCounts, is2P, parse
                 </div>
             </div>
 
-            {/* キーマッピング (★修正: box-shadowを強化) */}
+            {/* キーマッピング (★光り方を強化) */}
             <div className="bg-[#112233]/50 rounded p-2 border border-blue-900/30">
                 <div className="text-[10px] text-blue-400 font-bold mb-2 flex items-center gap-1"><Keyboard size={10}/> KEY MAPPING</div>
                 <div className="flex flex-col gap-1 items-center">

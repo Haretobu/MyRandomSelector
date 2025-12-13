@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
 import { LANE_MAP, VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY } from './constants';
-import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, generateLaneMap, guessDifficulty, extractZipFiles } from './logic/utils';
+import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, generateLaneMap, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 
 import SettingsModal from './components/SettingsModal';
@@ -193,7 +193,7 @@ export default function BmsViewer() {
               kbEl.style.backgroundColor = isScratch ? '#ef4444' : '#3b82f6';
               kbEl.style.color = '#ffffff';
               kbEl.style.borderColor = isScratch ? '#f87171' : '#60a5fa';
-              kbEl.style.boxShadow = isScratch ? '0 0 10px #ef4444' : '0 0 10px #3b82f6';
+              kbEl.style.boxShadow = isScratch ? '0 0 10px #ef4444' : '0 0 10px #3b82f6'; // ★光り方を強化
           } else {
               kbEl.style.backgroundColor = '#0f172a';
               kbEl.style.color = isScratch ? '#fca5a5' : '#475569';
@@ -286,7 +286,7 @@ export default function BmsViewer() {
 
   const processFiles = (fileList) => {
     const validFiles = fileList.filter(f => /\.(bms|bme|bml|pms|wav|ogg|mp3|bmp|jpg|jpeg|png|gif|mp4|webm|mov)$/i.test(f.name));
-    if (validFiles.length === 0) { alert("BMS関連ファイルが見つかりませんでした。"); return; }
+    if (validFiles.length === 0) { alert("有効なBMS関連ファイルが見つかりませんでした。"); return; }
     resetAllState(); 
     setFiles(validFiles);
     const bmsFiles = validFiles.filter(f => /\.(bms|bme|bml|pms)$/i.test(f.name)).map((f, i) => ({ file: f, index: i, name: f.name }));
@@ -296,7 +296,6 @@ export default function BmsViewer() {
 
   const handleFileSelect = (e) => processFiles(Array.from(e.target.files));
   
-  // ★追加: ZIPファイル処理
   const handleZipSelect = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -360,19 +359,18 @@ export default function BmsViewer() {
       parsed.poorBgaObjects.forEach(o => { if (parsed.header.bmps[o.value]) neededImages.add(parsed.header.bmps[o.value]); });
       if (parsed.header.stagefile) neededImages.add(parsed.header.stagefile);
       
+      // ★修正: パス区切り文字を統一してファイル名のみでマッピング
       const fileMap = {};
       files.forEach(f => {
         if (f === bmsFile) return;
-        const base = f.name; // ZIPからのファイルはパスを含むため単純な名前比較ではない場合があるが、utils側で抽出時にnameを設定している
-        // 単純化のため小文字ベース名でマッピング
-        const simpleName = f.name.split('/').pop().toLowerCase();
+        const simpleName = getFileName(f.name);
         if (!fileMap[simpleName]) fileMap[simpleName] = [];
         fileMap[simpleName].push(f);
       });
 
       const imageQueue = [];
       neededImages.forEach(raw => {
-          const simpleName = raw.split('/').pop().toLowerCase(); 
+          const simpleName = getFileName(raw); 
           const candidates = fileMap[simpleName];
           if (candidates?.length) {
               imageQueue.push({ key: raw.toLowerCase(), file: candidates[0] });
@@ -396,22 +394,31 @@ export default function BmsViewer() {
 
       const queue = [];
       neededAudio.forEach(raw => {
-        const simpleName = raw.split('/').pop().toLowerCase(); 
+        const simpleName = getFileName(raw); 
         const candidates = fileMap[simpleName];
         if (candidates?.length) {
           queue.push({ key: raw.toLowerCase(), file: candidates[0] });
         }
       });
-      queue.sort((a, b) => b.file.size - a.file.size);
+      // 小さいファイルから順にロード
+      queue.sort((a, b) => a.file.size - b.file.size);
 
       if (queue.length > 0) setLoadingMessage(`音声ファイルを読み込み中... (${queue.length}個)`);
       const CONCURRENCY = 6;
       for (let i = 0; i < queue.length; i += CONCURRENCY) {
         await Promise.all(queue.slice(i, i + CONCURRENCY).map(async (item) => {
           try {
-            const buf = await item.file.arrayBuffer(); const audioBuf = await audioContextRef.current.decodeAudioData(buf);
+            const buf = await item.file.arrayBuffer(); 
+            // AudioContextがサスペンドされているとデコードできない場合があるため再開を試みる
+            if(audioContextRef.current.state === 'suspended') await audioContextRef.current.resume();
+            
+            const audioBuf = await audioContextRef.current.decodeAudioData(buf);
             audioBuffersRef.current.set(item.key, audioBuf);
-          } catch (e) {} finally { setLoadingProgress(Math.round(((i) / queue.length) * 100)); }
+          } catch (e) {
+              console.warn("Audio decode failed", item.key, e);
+          } finally { 
+              setLoadingProgress(Math.round(((i) / queue.length) * 100)); 
+          }
         }));
       }
       
@@ -431,7 +438,7 @@ export default function BmsViewer() {
     } catch (e) { console.error(e); setIsLoading(false); }
   };
 
-  const scheduleAudio = () => { /* ... (省略: 前と同じ) ... */ 
+  const scheduleAudio = () => {
       if (!parsedSong || !isPlayingRef.current || !audioContextRef.current) return;
       const ctx = audioContextRef.current; const currentTime = ctx.currentTime; const scheduleUntil = currentTime + LOOKAHEAD; 
       let index = nextNoteIndexRef.current;
@@ -493,7 +500,7 @@ export default function BmsViewer() {
       nextNoteIndexRef.current = index;
   };
   
-  const startPlayback = () => { /* ... (省略: 前と同じ) ... */ 
+  const startPlayback = () => {
     if (!parsedSong || isLoading) return;
     if (!parsedSong.isSupportedMode) { setTimeout(() => alert("未実装：この形式（5/7鍵盤以外）のBMS再生はサポートされていません。"), 10); return; }
     if (audioContextRef.current.state === 'suspended') audioContextRef.current.resume();
@@ -550,7 +557,7 @@ export default function BmsViewer() {
 
   const stopAudioNodes = () => { activeNodesRef.current.forEach(n => { try { n.node.stop(); n.node.disconnect(); } catch(e){} }); activeNodesRef.current = []; if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current); };
   const pausePlayback = () => { setIsPlaying(false); stopAudioNodes(); pauseTimeRef.current = audioContextRef.current.currentTime - startTimeRef.current; setReadyAnimState(null); if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; } if (isInputDebugModeRef.current) requestAnimationFrame(renderLoop); };
-  const stopPlayback = (reset = true) => { /* ... (省略: 前と同じ) ... */ 
+  const stopPlayback = (reset = true) => {
     const wasPlaying = isPlayingRef.current; setIsPlaying(false); stopAudioNodes();
     if (reset) {
         if (wasPlaying && showAbortedMonitorRef.current) {
@@ -572,7 +579,7 @@ export default function BmsViewer() {
     setTimeout(() => { if (isInputDebugModeRef.current || !animationRef.current) { lastFrameTimeRef.current = performance.now(); animationRef.current = requestAnimationFrame(renderLoop); } }, 0);
   };
 
-  const handleSeek = (e) => { /* ... (省略: 前と同じ) ... */ 
+  const handleSeek = (e) => {
     const val = parseFloat(e.target.value); pauseTimeRef.current = val; setPlaybackTimeDisplay(val); setCombo(0); comboRef.current = 0;
     const targetObjects = displayObjects; for(const obj of targetObjects) obj.processed = obj.time < val;
     if (parsedSong) {
@@ -599,6 +606,7 @@ export default function BmsViewer() {
     const currentTime = isPlayingRef.current && audioContextRef.current ? audioContextRef.current.currentTime - startTimeRef.current : pauseTimeRef.current;
     if (parsedSong) {
         activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime);
+        // ... BGA Update logic (unchanged) ...
         if (parsedSong.backBgaObjects && nextBackBgaIndexRef.current < parsedSong.backBgaObjects.length) {
             const bgaObj = parsedSong.backBgaObjects[nextBackBgaIndexRef.current];
             if (bgaObj.time <= currentTime) {
@@ -802,7 +810,7 @@ export default function BmsViewer() {
       />
 
       {/* メインエリア: レイヤー構造に変更 */}
-      <div className="flex-1 relative min-h-0 overflow-hidden flex justify-center">
+      <div className="flex-1 relative min-h-0 overflow-hidden bg-black flex justify-center">
          
          {/* Layer 1: 背景BGA (スマホのみ) */}
          {isMobile && (
@@ -834,29 +842,26 @@ export default function BmsViewer() {
             )}
          </div>
 
-         {/* PC用サイドバー (スマホでは非表示) */}
+         {/* PC用サイドバー (スマホでは非表示) - 元のレイアウトに戻す */}
          {!isMobile && (
-             <div className="absolute left-0 top-0 bottom-0 z-20 flex pointer-events-none">
-                 <div className="pointer-events-auto h-full">
-                     <ControllerPanel
-                        controllerRefs={controllerRefs} keyboardRefs={keyboardRefs} noteCounts={noteCounts}
-                        is2P={is2P} parsedSong={parsedSong} difficultyInfo={difficultyInfo}
-                     />
-                 </div>
+             <div className="absolute left-0 top-0 bottom-0 z-20 flex pointer-events-auto h-full">
+                 <ControllerPanel
+                    controllerRefs={controllerRefs} keyboardRefs={keyboardRefs} noteCounts={noteCounts}
+                    is2P={is2P} parsedSong={parsedSong} difficultyInfo={difficultyInfo}
+                 />
              </div>
          )}
          {!isMobile && (
-             <div className="absolute right-0 top-0 bottom-0 z-20 flex pointer-events-none">
-                 <div className="pointer-events-auto h-full">
-                     <InfoPanel
-                        setShowSettings={setShowSettings} playOption={playOption}
-                        currentBackBga={currentBackBga} currentLayerBga={currentLayerBga} currentPoorBga={currentPoorBga}
-                        showMissLayer={showMissLayer} isPlaying={isPlaying} playbackTimeDisplay={playbackTimeDisplay}
-                        playBgaVideo={playBgaVideo} readyAnimState={readyAnimState}
-                        currentMeasureLines={currentMeasureLines} combo={combo} totalNotes={totalNotes}
-                        currentMeasureNotes={currentMeasureNotes} realtimeBpm={realtimeBpm} nextBpmInfo={nextBpmInfo} hiSpeed={hiSpeed}
-                     />
-                 </div>
+             <div className="absolute right-0 top-0 bottom-0 z-20 flex pointer-events-auto h-full">
+                 <InfoPanel
+                    setShowSettings={setShowSettings} playOption={playOption}
+                    // PC版はInfoPanel内でBGAを表示する
+                    currentBackBga={currentBackBga} currentLayerBga={currentLayerBga} currentPoorBga={currentPoorBga}
+                    showMissLayer={showMissLayer} isPlaying={isPlaying} playbackTimeDisplay={playbackTimeDisplay}
+                    playBgaVideo={playBgaVideo} readyAnimState={readyAnimState}
+                    currentMeasureLines={currentMeasureLines} combo={combo} totalNotes={totalNotes}
+                    currentMeasureNotes={currentMeasureNotes} realtimeBpm={realtimeBpm} nextBpmInfo={nextBpmInfo} hiSpeed={hiSpeed}
+                 />
              </div>
          )}
 

@@ -1,12 +1,20 @@
 // src/bms/logic/utils.js
 import { DIFFICULTY_MAP } from '../constants';
+import JSZip from 'jszip'; // ZIP解凍用
 
 export const parseInt36 = (str) => parseInt(str, 36);
 
 export const getBaseName = (n) => { 
-    const p=n.split('.'); 
-    if(p.length>1) p.pop(); 
+    // パス区切り文字を統一してファイル名だけを取り出す
+    const name = n.replace(/\\/g, '/').split('/').pop();
+    const p = name.split('.'); 
+    if(p.length > 1) p.pop(); 
     return p.join('.').toLowerCase(); 
+};
+
+// ファイル名（拡張子あり）を取得するヘルパー
+export const getFileName = (n) => {
+    return n.replace(/\\/g, '/').split('/').pop().toLowerCase();
 };
 
 export const guessDifficulty = (header, fileName) => {
@@ -78,24 +86,19 @@ export const generateLaneMap = (option) => {
     return [0, ...lanes];
 };
 
-import JSZip from 'jszip';
-
+// ★追加: ZIP解凍処理
 export const extractZipFiles = async (file) => {
     const zip = new JSZip();
     const loadedZip = await zip.loadAsync(file);
     const files = [];
     
-    // ZIP内の全ファイルを走査
     for (const relativePath of Object.keys(loadedZip.files)) {
         const zipEntry = loadedZip.files[relativePath];
-        if (zipEntry.dir) continue; // ディレクトリは無視
+        if (zipEntry.dir) continue;
 
-        // ファイルデータをBlobとして取得
         const blob = await zipEntry.async('blob');
-        
-        // Fileオブジェクトに変換 (nameプロパティを持たせるため)
-        // relativePath (フォルダ構造) を name に含めることで、getBaseName等が正しく動くようにする
-        const extractedFile = new File([blob], relativePath, { type: blob.type });
+        // Fileオブジェクトとして再構築（パスを含んだ名前を保持）
+        const extractedFile = new File([blob], relativePath, { type: blob.type || 'application/octet-stream' });
         files.push(extractedFile);
     }
     return files;

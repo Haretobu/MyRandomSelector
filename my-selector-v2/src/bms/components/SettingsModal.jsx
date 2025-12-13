@@ -1,6 +1,5 @@
 // src/bms/components/SettingsModal.jsx
 import React from 'react';
-// ★ここに ChevronDown を追加しています
 import { Settings, X, ChevronsUp, RotateCw, Film, Flag, Music, Layers, Speaker, EyeOff, FileX, Keyboard, FolderOpen, FileArchive, ChevronDown } from 'lucide-react';
 import { VISIBILITY_MODES } from '../constants';
 
@@ -34,35 +33,35 @@ const SettingsModal = ({
 
                 <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-blue-900 pr-2 space-y-6">
                     
-                    {/* ▼▼▼ スマホ用: ファイル読み込み・基本設定 ▼▼▼ */}
-                    {isMobile && (
-                        <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-500/30 space-y-4">
-                            <div className="text-sm font-bold text-blue-300 border-b border-blue-500/30 pb-2 mb-2">ファイル読込</div>
+                    {/* ▼▼▼ ファイル読み込み (PC/スマホ共通) ▼▼▼ */}
+                    <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-500/30 space-y-4">
+                        <div className="text-sm font-bold text-blue-300 border-b border-blue-500/30 pb-2 mb-2">ファイル読込</div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {/* 通常のフォルダアップロード */}
+                            <label className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 text-sm cursor-pointer flex items-center justify-center gap-2 shadow-lg rounded-lg font-bold w-full transition active:scale-95">
+                                <FolderOpen size={18}/> フォルダを開く (BMS)
+                                <input type="file" webkitdirectory="" multiple className="hidden" onChange={handleFileSelect} />
+                            </label>
                             
-                            <div className="grid grid-cols-1 gap-2">
-                                {/* 通常のフォルダアップロード (Androidの一部など対応) */}
-                                <label className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 text-sm cursor-pointer flex items-center justify-center gap-2 shadow-lg rounded-lg font-bold w-full transition active:scale-95">
-                                    <FolderOpen size={18}/> フォルダを開く (BMS)
-                                    <input type="file" webkitdirectory="" multiple className="hidden" onChange={handleFileSelect} />
-                                </label>
-                                
-                                {/* ZIPアップロード (スマホ推奨) */}
-                                <label className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-3 text-sm cursor-pointer flex items-center justify-center gap-2 shadow-lg rounded-lg font-bold w-full transition active:scale-95">
-                                    <FileArchive size={18}/> ZIPを開く (スマホ推奨)
-                                    <input type="file" accept=".zip" className="hidden" onChange={handleZipSelect} />
-                                </label>
-                            </div>
+                            {/* ZIPアップロード */}
+                            <label className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-3 text-sm cursor-pointer flex items-center justify-center gap-2 shadow-lg rounded-lg font-bold w-full transition active:scale-95">
+                                <FileArchive size={18}/> ZIPを開く (スマホ推奨)
+                                <input type="file" accept=".zip,application/zip" className="hidden" onChange={handleZipSelect} />
+                            </label>
+                        </div>
 
-                            {/* 曲選択 */}
-                            <div className="flex flex-col gap-1">
-                                <span className="text-xs text-blue-400">選択中の曲</span>
-                                <select className="bg-black/50 text-white p-2 rounded border border-blue-500/30 w-full text-sm" value={selectedBmsIndex} onChange={e => setSelectedBmsIndex(Number(e.target.value))}>
-                                    {bmsList.length === 0 && <option>なし</option>}
-                                    {bmsList.map((b, i) => <option key={i} value={i}>{b.name}</option>)}
-                                </select>
-                            </div>
+                        {/* 曲選択 (スマホまたはファイル読み込み後用) */}
+                        <div className="flex flex-col gap-1">
+                            <span className="text-xs text-blue-400">選択中の曲</span>
+                            <select className="bg-black/50 text-white p-2 rounded border border-blue-500/30 w-full text-sm" value={selectedBmsIndex} onChange={e => setSelectedBmsIndex(Number(e.target.value))}>
+                                {bmsList.length === 0 && <option>なし</option>}
+                                {bmsList.map((b, i) => <option key={i} value={i}>{b.name}</option>)}
+                            </select>
+                        </div>
 
-                            {/* ハイスピード & 音量 */}
+                        {/* スマホのみ: 簡易設定 (PCはコントロールバーにあるので非表示) */}
+                        {isMobile && (
                             <div className="grid grid-cols-2 gap-4 pt-2">
                                 <div>
                                     <label className="text-xs text-blue-300 block mb-1">HI-SPEED: {hiSpeed}</label>
@@ -73,8 +72,8 @@ const SettingsModal = ({
                                     <input type="range" min="0" max="1.0" step="0.05" value={volume} onChange={e => setVolume(Number(e.target.value))} className="w-full accent-blue-500 h-4" />
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
 
                     {/* ▼▼▼ BGA設定 (共通) ▼▼▼ */}
                     <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
@@ -208,11 +207,6 @@ const SettingsModal = ({
                             <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
                                 <div className="flex items-center gap-3"><FileX className="text-blue-400" size={18}/><span className="text-sm">停止時に音源情報を残す</span></div>
                                  <input type="checkbox" checked={showAbortedMonitor} onChange={e=>setShowAbortedMonitor(e.target.checked)} className="accent-blue-500"/>
-                            </label>
-                            <div className="border-t border-blue-900/30 my-2"></div>
-                             <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
-                                <div className="flex items-center gap-3"><RotateCw className="text-blue-400" size={18}/><span className="text-sm">スクラッチの定常回転</span></div>
-                                 <input type="checkbox" checked={scratchRotationEnabled} onChange={e=>setScratchRotationEnabled(e.target.checked)} className="accent-blue-500"/>
                             </label>
                             
                             {/* デバッグキー入力: スマホでは非表示 */}
