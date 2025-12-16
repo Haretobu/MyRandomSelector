@@ -317,10 +317,24 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
             },
 
             // --- Modal Management ---
+            // ★追加: 背景スクロールロックのヘルパー
+            toggleBodyScroll: (isLocked) => {
+                if (isLocked) {
+                    document.body.style.overflow = 'hidden';
+                    document.body.style.height = '100vh'; // モバイルでのバウンス防止
+                } else {
+                    document.body.style.overflow = '';
+                    document.body.style.height = '';
+                }
+            },
+
             openModal: (title, contentHtml, onOpen = null, options = {}) => {
                 // 新しいメニューを閉じる
                 App.closeFabMenu();
                 
+                // ★追加: 背景固定
+                App.toggleBodyScroll(true);
+
                 AppState.checkModalDirtyState = () => false;
                 const { size = 'max-w-2xl', headerActions = '', autoFocus = true } = options;
                 
@@ -383,6 +397,9 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                     AppState.ui.modalContentHost.innerHTML = '';
                     Object.values(AppState.activeCharts).forEach(chart => chart.destroy());
                     AppState.activeCharts = {};
+                    
+                    // ★追加: 背景固定解除
+                    App.toggleBodyScroll(false);
                 }, 300);
             },
 
@@ -937,23 +954,42 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
             // ★追加: 全データ削除ロジック (イベントリスナーから切り出し)
             handleDeleteAllData: async () => {
                  if (AppState.isDebugMode) return App.showToast('デバッグモード中は全削除できません。');
-                 // 確認は events.js 側で行っているが、念のため二重チェックしても良い
-                 try {
-                    const batch = writeBatch(AppState.db);
-                    const worksRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`);
-                    const worksSnapshot = await getDocs(worksRef);
-                    worksSnapshot.forEach(doc => batch.delete(doc.ref));
-                    
-                    const tagsRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/tags`);
-                    const tagsSnapshot = await getDocs(tagsRef);
-                    tagsSnapshot.forEach(doc => batch.delete(doc.ref));
+                 
+                 // ★改善: フリーズ防止のため、まずローディング画面を出す
+                 AppState.ui.loadingOverlay.classList.remove('hidden');
+                 AppState.ui.loadingOverlay.classList.remove('opacity-0');
+                 AppState.ui.loadingText.textContent = "データを削除しています...";
+                 AppState.ui.loadingProgressBar.style.width = '100%';
 
-                    await batch.commit();
-                    App.showToast("全ての作品・タグデータを削除しました。");
-                } catch(error) { 
-                    if (AppState.isDebugMode) console.error("Error deleting all data:", error);
-                    App.showToast("データ削除中にエラーが発生しました。"); 
-                }
+                 // 画面描画の時間を確保するために setTimeout で処理を逃がす
+                 setTimeout(async () => {
+                     try {
+                        const batch = writeBatch(AppState.db);
+                        const worksRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`);
+                        const worksSnapshot = await getDocs(worksRef);
+                        worksSnapshot.forEach(doc => batch.delete(doc.ref));
+                        
+                        const tagsRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/tags`);
+                        const tagsSnapshot = await getDocs(tagsRef);
+                        tagsSnapshot.forEach(doc => batch.delete(doc.ref));
+
+                        await batch.commit();
+                        
+                        // 完了後の処理
+                        AppState.ui.loadingOverlay.classList.add('hidden');
+                        App.showToast("全ての作品・タグデータを削除しました。");
+                        
+                        // リストをクリア
+                        AppState.works = [];
+                        AppState.tags = new Map();
+                        App.renderAll();
+
+                    } catch(error) { 
+                        AppState.ui.loadingOverlay.classList.add('hidden');
+                        if (AppState.isDebugMode) console.error("Error deleting all data:", error);
+                        App.showToast("データ削除中にエラーが発生しました。"); 
+                    }
+                 }, 100); // 100ms待ってから重い処理を開始
             },
 
             // --- Rendering Logic ---
@@ -1036,6 +1072,11 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                 ui.workListMessage.classList.add('hidden');
                 ui.workListEl.classList.remove('hidden');
 
+                // ★改善: 残像防止のためのフェード処理
+                // 描画前に一瞬透明度を下げる
+                ui.workListEl.style.opacity = '0.5';
+                ui.workListEl.style.transition = 'opacity 0.2s ease-out';
+
                 // ★★★ ここが変更点: lit-html の render 関数を使用 ★★★
                 // map で各作品のテンプレート(HTMLタグの部品)を配列にし、lit-html に渡す
                 const template = html`
@@ -1044,6 +1085,22 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                 
                 // render関数が、前回の表示との「差分だけ」を計算して高速に書き換えてくれる
                 render(template, ui.workListEl);
+
+                // ★改善: 描画後にフェードイン & スクロールトップ
+                requestAnimationFrame(() => {
+                     // 少しだけ待ってから不透明に戻す（DOM更新待ち）
+                     setTimeout(() => {
+                        ui.workListEl.style.opacity = '1';
+                     }, 50);
+                     
+                     // ページ上部へスクロール（モバイルでの体験向上）
+                     // ユーザーが手動でスクロールしていない場合のみ実行するなどの制御も可能ですが、
+                     // ページネーション時は上に戻るのが一般的です。
+                     const listTop = ui.workListEl.getBoundingClientRect().top + window.scrollY - 100;
+                     if (window.scrollY > listTop) {
+                         window.scrollTo({ top: listTop, behavior: 'smooth' });
+                     }
+                });
 
                 // ページネーションの表示更新（ここはDOM操作のまま）
                 const topPagination = $('#pagination-controls-top');

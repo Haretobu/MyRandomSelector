@@ -1,8 +1,10 @@
 // src/ui.js
 import { store as AppState } from './store.js';
 import * as Utils from './utils.js';
-// ★追加: lit-html から html (タグ関数) と nothing (空表示用) を読み込む
 import { html, nothing } from 'lit-html';
+
+// ★高速化: プレースホルダー画像をBase64(SVG)で埋め込み、外部通信(placehold.co)を削減
+const NO_IMG_DATA = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 400' fill='%231f2937'%3E%3Crect width='600' height='400'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-weight='bold' font-size='48' fill='%234b5563' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E";
 
 // ★ 評価スターの生成 (lit-html版)
 export const renderRatingStars = (rating) => {
@@ -51,20 +53,9 @@ export const renderTagsHTML = (tagIds, maxToShow = Infinity, workId = null, view
     const gapClass = viewMode === 'list' ? 'gap-1' : 'gap-2';
     const tagPaddingClass = viewMode === 'list' ? 'px-1 py-0' : 'px-1.5 py-0.5';
 
-    // clickイベントハンドラを定義（lit-htmlなら関数を直接バインドできるため安全）
-    const toggleTags = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        // カスタムイベントを発火してmain.js側でキャッチする、あるいは直接Store操作も可だが
-        // ここでは従来の「data-action」パターンと親和性を保つためイベント委譲を想定したDOM構造にする
-        // ただし、lit-htmlを使うなら本来は @click=${...} がベスト。
-        // 今回は既存の data-action アーキテクチャを壊さないよう、HTML構造を再現します。
-    };
-
     return html`
     <div class="flex flex-wrap ${gapClass} text-xs">
         ${displayedTags.map(tag => {
-            // スタイル属性も安全に埋め込めます
             const style = `background-color:${tag.color}; color:${Utils.getContrastColor(tag.color)}`;
             return html`<span class="${tagPaddingClass} rounded font-semibold text-xs" style="${style}">${tag.name}</span>`;
         })}
@@ -97,11 +88,10 @@ export const renderWorkCard = (work) => {
         : "bg-gray-700 text-gray-500 cursor-not-allowed opacity-50";
     const rocketVisibility = isMobile ? "hidden" : "";
     
-    // lit-html では .? (属性の有無) が使えますが、ここでは標準的な書き方をします
     return html`
     <div class="bg-gray-800 rounded-xl shadow-lg overflow-hidden flex flex-col transition-transform hover:scale-[1.02]">
-        <div class="relative">
-            <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" 
+        <div class="relative bg-gray-700">
+            <img src="${work.imageUrl || NO_IMG_DATA}" 
                  alt="${work.name}" 
                  loading="lazy" 
                  decoding="async" 
@@ -148,8 +138,8 @@ export const renderWorkListItem = (work) => {
 
     return html`
     <div class="work-list-item">
-        <div class="relative flex-shrink-0">
-            <img src="${work.imageUrl || 'https://placehold.co/150x100/1f2937/4b5563?text=No+Img'}" 
+        <div class="relative flex-shrink-0 bg-gray-700">
+            <img src="${work.imageUrl || NO_IMG_DATA}" 
                  alt="${work.name}" 
                  loading="lazy" 
                  decoding="async" 
@@ -181,10 +171,9 @@ export const renderWorkListItem = (work) => {
     </div>`;
 };
 
-// ...（他のUI関数はHTML文字列を返すものなので、必要に応じて後で移行しますが、
-// パフォーマンスに影響するのは上記リスト部分なので、まずはここまででOK）...
+// --- 以下は変更なしですが、ファイル全体を整合させるために記載します ---
+
 export const showToast = (message, type = 'info', duration = 3000) => {
-    // 既存のロジックそのまま
     if (!AppState.ui || !AppState.ui.toastEl) return;
     let finalDuration = duration;
     AppState.ui.toastEl.classList.remove('bg-red-600', 'bg-gray-700');
@@ -206,12 +195,13 @@ export const showToast = (message, type = 'info', duration = 3000) => {
 };
 
 export const showConfirm = (title, message) => {
-    // 既存のロジックそのまま
     return new Promise((resolve) => {
         if (!AppState.ui || !AppState.ui.confirmModal) { resolve(false); return; }
         AppState.ui.confirmTitle.textContent = title;
         AppState.ui.confirmMessage.innerHTML = message;
         AppState.ui.confirmModal.classList.remove('hidden');
+        
+        // ★修正: リスナーが重複しないように設計
         const cleanup = () => {
             AppState.ui.confirmModal.classList.add('hidden');
             AppState.ui.confirmOkBtn.removeEventListener('click', okHandler);
@@ -219,11 +209,13 @@ export const showConfirm = (title, message) => {
         };
         const okHandler = () => { cleanup(); resolve(true); };
         const cancelHandler = () => { cleanup(); resolve(false); };
+        
         AppState.ui.confirmOkBtn.addEventListener('click', okHandler);
         AppState.ui.confirmCancelBtn.addEventListener('click', cancelHandler);
     });
 };
 
+// ★ヘルパー: モバイル判定（Utilsのラッパーとして残すか、直接呼ぶ）
 export const isMobile = () => {
-    return window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    return Utils.isMobile();
 };
