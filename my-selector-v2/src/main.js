@@ -1,4 +1,4 @@
-// src/main.js
+// src/main.js - Part 1
 import './style.css';
 import { auth, db, storage, functions } from './firebaseConfig';
 import { store as AppState } from './store';
@@ -41,15 +41,14 @@ AppState.unsubscribeTags = () => {};
 AppState.checkModalDirtyState = () => false;
 AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', endDate: '' });
 
+// --- App Object Definition Start ---
 const App = {
 
     // --- Initialization ---
     init: () => {
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js')
-                    .then(registration => console.log('Service Worker Registered:', registration.scope))
-                    .catch(error => console.log('Service Worker Failed:', error));
+                navigator.serviceWorker.register('sw.js').catch(() => {});
             });
         }
         $('#version-display').textContent = AppState.appVersion;
@@ -250,16 +249,15 @@ const App = {
     getTagObjects: (tagIds) => {
         return Array.from(tagIds || []).map(id => AppState.tags.get(id)).filter(Boolean);
     },
-
-    // --- FAB Menu Logic ---
+    
+    // --- UI Helpers ---
     toggleFabMenu: () => {
         const menuContent = document.getElementById('fab-menu-content');
         const backdrop = document.getElementById('fab-backdrop');
         const icon = document.getElementById('fab-icon');
-        
         if (!menuContent) return;
+        
         const isClosed = menuContent.classList.contains('hidden');
-
         if (isClosed) {
             menuContent.classList.remove('hidden');
             backdrop.classList.remove('hidden');
@@ -280,8 +278,8 @@ const App = {
         const menuContent = document.getElementById('fab-menu-content');
         const backdrop = document.getElementById('fab-backdrop');
         const icon = document.getElementById('fab-icon');
-        
         if (!menuContent) return;
+        
         menuContent.classList.remove('scale-100', 'opacity-100');
         menuContent.classList.add('scale-95', 'opacity-0');
         backdrop.classList.remove('opacity-100');
@@ -295,7 +293,6 @@ const App = {
         }, 200);
     },
 
-    // --- Modal Management ---
     toggleBodyScroll: (isLocked) => {
         if (isLocked) {
             document.body.style.overflow = 'hidden';
@@ -309,10 +306,9 @@ const App = {
     openModal: (title, contentHtml, onOpen = null, options = {}) => {
         App.closeFabMenu();
         App.toggleBodyScroll(true);
-
         AppState.checkModalDirtyState = () => false;
-        const { size = 'max-w-2xl', headerActions = '', autoFocus = true } = options;
         
+        const { size = 'max-w-2xl', headerActions = '', autoFocus = true } = options;
         Object.values(AppState.activeCharts).forEach(chart => chart.destroy());
         AppState.activeCharts = {};
 
@@ -345,16 +341,13 @@ const App = {
             if (!confirmed) return;
         }
         AppState.checkModalDirtyState = () => false;
-
         if (AppState.modalStateStack.length > 0) {
             const restorePrevious = AppState.modalStateStack.pop();
             restorePrevious();
             return;
         }
-
         AppState.ui.modalContainer.classList.add('scale-95', 'opacity-0');
         AppState.ui.modalBackdrop.classList.remove('opacity-100');
-        
         if (AppState.ui.slidingFabToggle) AppState.ui.slidingFabToggle.classList.remove('hidden');
         
         setTimeout(() => {
@@ -383,6 +376,8 @@ const App = {
             if (editImageUpload) editImageUpload.value = '';
         }
     },
+    
+// src/main.js - Part 2
 
     // --- Loading Logic ---
     updateLoadingProgress: () => {
@@ -592,7 +587,7 @@ const App = {
         }
     },
 
-    // --- Data Load Logic ---
+    // --- Data Load Logic (IndexedDB + Firestore) ---
     loadDataSet: async (newSyncId) => {
         if (AppState.syncId === newSyncId && AppState.isLoadComplete) {
             console.log("Reloading data for the same Sync ID.");
@@ -760,6 +755,8 @@ const App = {
                 tagsSnapshot.forEach(doc => batch.delete(doc.ref));
 
                 await batch.commit();
+                
+                // Clear Local DB
                 await DB.db.works.clear();
                 await DB.db.tags.clear();
 
@@ -858,6 +855,8 @@ const App = {
         const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
         return (r * 0.299 + g * 0.587 + b * 0.114) > 186 ? '#000000' : '#FFFFFF';
     },
+
+// src/main.js - Part 3
 
     getFilteredWorks: (filters, sourceWorks = AppState.works) => {
         let tempWorks = [...sourceWorks];
@@ -1105,7 +1104,222 @@ const App = {
     openExternalSearchModal: Modals.openExternalSearchModal,
     openHistoryModal: Modals.openHistoryModal,
     openEditModal: Modals.openEditModal,
-    openFilterModal: (tempState) => Modals.openFilterModal(App, tempState), // Assuming refactor, or inline logic if needed
+
+    // ★修正: buildエラーを避けるため、modals.jsにないこの関数はここで直接定義する
+    openFilterModal: (tempState = null) => {
+        const source = tempState || AppState.listFilters;
+        const state = {
+            ...source,
+            genres: new Set(source.genres),
+            sites: new Set(source.sites),
+            andTagIds: new Set(source.andTagIds),
+            orTagIds: new Set(source.orTagIds),
+            notTagIds: new Set(source.notTagIds),
+            dateFilter: { ...(source.dateFilter || AppState.defaultDateFilter()) },
+            rating: { ...(source.rating || { type: 'exact', value: 0 }) }
+        };
+        
+        if (!state.dateFilter.date) state.dateFilter.date = App.formatDateForInput(new Date());
+        if (!state.dateFilter.startDate) state.dateFilter.startDate = App.formatDateForInput(new Date());
+        if (!state.dateFilter.endDate) state.dateFilter.endDate = App.formatDateForInput(new Date());
+
+        const genreOptions = [{value:'漫画', label:'漫画'}, {value:'ゲーム', label:'ゲーム'}, {value:'動画', label:'動画'}];
+        const siteOptions = [{value:'dlsite', label:'DLsite'}, {value:'fanza', label:'FANZA'}, {value:'other', label:'その他'}];
+
+        const content = `
+        <div class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <h4 class="font-semibold mb-2 text-sm text-gray-400">ジャンル</h4>
+                    ${App.createCheckboxGroupHTML('filter-genre', genreOptions, state.genres)}
+                </div>
+                <div>
+                    <h4 class="font-semibold mb-2 text-sm text-gray-400">サイト</h4>
+                    ${App.createCheckboxGroupHTML('filter-site', siteOptions, state.sites)}
+                </div>
+            </div>
+            <div>
+                <div class="flex items-center mb-2">
+                     <input type="checkbox" id="filter-unrated" class="h-4 w-4 rounded bg-gray-600 text-sky-500 border-gray-500 focus:ring-sky-600" ${state.unratedOrUntaggedOnly ? 'checked' : ''}>
+                     <label for="filter-unrated" class="ml-2 text-sm font-medium">未評価またはタグ未設定の作品のみ</label>
+                </div>
+            </div>
+            <div>
+                <h4 class="font-semibold mb-2 text-sm text-gray-400">評価 (★)</h4>
+                <div class="flex items-center space-x-4 mb-2">
+                    <select id="filter-rating-type" class="bg-gray-700 p-2 rounded-lg" ${state.unratedOrUntaggedOnly ? 'disabled' : ''}>
+                        <option value="exact" ${state.rating.type === 'exact' ? 'selected' : ''}>と等しい</option>
+                        <option value="above" ${state.rating.type === 'above' ? 'selected' : ''}>以上</option>
+                        <option value="below" ${state.rating.type === 'below' ? 'selected' : ''}>以下</option>
+                    </select>
+                    <div id="filter-rating-stars" class="flex items-center space-x-2 text-3xl ${state.unratedOrUntaggedOnly ? 'opacity-50 pointer-events-none' : ''}"></div>
+                </div>
+            </div>
+            <div><h4 class="text-sm text-gray-400 mb-1">登録日で絞り込む</h4>${App.createDateFilterHTML('filter', state.dateFilter, true)}</div>
+            <div>
+                <h4 class="font-semibold mb-1">タグ絞り込み</h4>
+                <div id="filter-tags-display" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] mb-2"></div>
+                <button type="button" id="filter-select-tags" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグの条件を選択</button>
+            </div>
+            <div class="pt-4 flex justify-between gap-3 flex-wrap sm:flex-nowrap">
+                <button type="button" id="filter-settings-reset" class="w-full sm:w-auto px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-700 text-gray-100">リセット</button>
+                <div class="flex space-x-3 w-full sm:w-auto">
+                    <button type="button" id="filter-settings-cancel" class="flex-1 sm:flex-none px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
+                    <button type="button" id="filter-settings-save" class="flex-1 sm:flex-none px-6 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-sky-600 hover:bg-sky-700 text-white">適用</button>
+                </div>
+            </div>
+        </div>`;
+
+        App.openModal("作品リストの絞り込み", content, () => {
+            let tempAndTags = new Set(state.andTagIds);
+            let tempOrTags = new Set(state.orTagIds);
+            let tempNotTags = new Set(state.notTagIds);
+            let currentRating = state.rating.value;
+            const ratingStars = $('#filter-rating-stars');
+            const ratingTypeSelect = $('#filter-rating-type');
+            const unratedToggle = $('#filter-unrated');
+
+            const getSelectedSet = (name) => {
+                const checked = [];
+                $$(`input[name="${name}"]:checked`).forEach(cb => checked.push(cb.value));
+                return new Set(checked);
+            };
+
+            const updatePreview = () => {
+                const countEl = $('#date-filter-preview-count-filter'), gridEl = $('#date-filter-preview-grid-filter');
+                if (!countEl || !gridEl) return;
+                const filters = {
+                    unratedOrUntaggedOnly: unratedToggle.checked,
+                    rating: { type: ratingTypeSelect.value, value: currentRating },
+                    genres: getSelectedSet('filter-genre'),
+                    sites: getSelectedSet('filter-site'),
+                    andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
+                    dateFilter: {
+                        mode: $(`input[name="date-filter-mode-filter"]:checked`).value,
+                        date: App.getDateInputValue('date-filter-specific-date-filter'),
+                        startDate: App.getDateInputValue('date-filter-start-date-filter'),
+                        endDate: App.getDateInputValue('date-filter-end-date-filter')
+                    }
+                };
+                const filtered = App.getFilteredWorks(filters);
+                countEl.textContent = `対象: ${filtered.length} 作品`;
+                gridEl.innerHTML = filtered.slice(0, 50).map(w => `<div class="text-center"><img src="${w.imageUrl||'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${App.escapeHTML(w.name)}" class="w-full h-16 object-cover rounded-md"><p class="text-xs truncate mt-1">${App.escapeHTML(w.name)}</p></div>`).join('');
+            };
+
+            App.setupDateFilterEventListeners('filter', updatePreview);
+            $$('input[name="filter-genre"], input[name="filter-site"]').forEach(cb => cb.addEventListener('change', updatePreview));
+            unratedToggle.addEventListener('change', () => {
+                const isDisabled = unratedToggle.checked;
+                ratingStars.classList.toggle('opacity-50', isDisabled);
+                ratingStars.classList.toggle('pointer-events-none', isDisabled);
+                ratingTypeSelect.disabled = isDisabled;
+                updatePreview();
+            });
+            ratingTypeSelect.addEventListener('change', updatePreview);
+            
+            const renderStars = r => {
+                if (!ratingStars) return;
+                ratingStars.innerHTML = '';
+                for (let i = 1; i <= 5; i++) {
+                    const s = document.createElement('i');
+                    s.classList.add('fa-star', 'cursor-pointer');
+                    s.dataset.value = i;
+                    if (r >= i) s.classList.add('fas', 'text-yellow-400');
+                    else if (r === (i - 0.5)) s.classList.add('fas', 'fa-star-half-alt', 'text-yellow-400');
+                    else s.classList.add('far', 'text-gray-500');
+                    ratingStars.appendChild(s);
+                }
+            };
+            renderStars(currentRating);
+            ratingStars.addEventListener('click', e => {
+                const s = e.target.closest('.fa-star');
+                if(s){
+                    const v=parseInt(s.dataset.value,10), h=(e.clientX-s.getBoundingClientRect().left)>(s.getBoundingClientRect().width/2);
+                    let n=h?v:v-0.5; if(currentRating===n)n=0; currentRating=n; renderStars(currentRating); updatePreview();
+                }
+            });
+
+            const renderCombinedTags = () => {
+                const container = $('#filter-tags-display');
+                if (!container) return;
+                let html = '';
+                const renderSet = (ids, className, prefix) => { [...ids].map(id => AppState.tags.get(id)).filter(Boolean).forEach(tag => { html += `<span class="px-2 py-1 rounded text-xs font-semibold ${className}">${prefix}: ${App.escapeHTML(tag.name)}</span>`; }); };
+                renderSet(tempAndTags, 'tag-item-and text-white', 'AND');
+                renderSet(tempOrTags, 'tag-item-or text-white', 'OR');
+                renderSet(tempNotTags, 'tag-item-not text-white', 'NOT');
+                container.innerHTML = html || `<span class="text-xs text-gray-500">タグ未選択</span>`;
+            };
+            renderCombinedTags();
+
+            $('#filter-select-tags').addEventListener('click', () => {
+                const capturedState = {
+                    genres: getSelectedSet('filter-genre'),
+                    sites: getSelectedSet('filter-site'),
+                    rating: { type: ratingTypeSelect.value, value: currentRating },
+                    andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
+                    unratedOrUntaggedOnly: unratedToggle.checked,
+                    dateFilter: { mode: $(`input[name="date-filter-mode-filter"]:checked`).value, date: App.getDateInputValue(`date-filter-specific-date-filter`), startDate: App.getDateInputValue(`date-filter-start-date-filter`), endDate: App.getDateInputValue(`date-filter-end-date-filter`) }
+                };
+                App.openTagFilterModal({
+                    and: tempAndTags, or: tempOrTags, not: tempNotTags,
+                    onConfirm: (newTags) => {
+                        if(newTags) { tempAndTags = newTags.and; tempOrTags = newTags.or; tempNotTags = newTags.not; }
+                        App.openFilterModal(capturedState);
+                    }
+                });
+            });
+
+            $('#filter-settings-reset').addEventListener('click', () => {
+                AppState.listFilters = {
+                    genres: new Set(), sites: new Set(),
+                    rating: { type: 'exact', value: 0 },
+                    andTagIds: new Set(), orTagIds: new Set(), notTagIds: new Set(),
+                    dateFilter: AppState.defaultDateFilter(), unratedOrUntaggedOnly: false,
+                };
+                localStorage.removeItem('listFilters_encrypted');
+                App.openFilterModal();
+            });
+
+            $('#filter-settings-save').addEventListener('click', () => {
+                AppState.listFilters.unratedOrUntaggedOnly = unratedToggle.checked;
+                AppState.listFilters.rating.type = ratingTypeSelect.value;
+                AppState.listFilters.rating.value = currentRating;
+                AppState.listFilters.genres = getSelectedSet('filter-genre');
+                AppState.listFilters.sites = getSelectedSet('filter-site');
+                AppState.listFilters.andTagIds = tempAndTags;
+                AppState.listFilters.orTagIds = tempOrTags;
+                AppState.listFilters.notTagIds = tempNotTags;
+
+                const mode = $(`input[name="date-filter-mode-filter"]:checked`).value;
+                AppState.listFilters.dateFilter.mode = mode;
+                if (mode === 'specific') AppState.listFilters.dateFilter.date = App.getDateInputValue('date-filter-specific-date-filter');
+                else if (mode === 'range') { 
+                    AppState.listFilters.dateFilter.startDate = App.getDateInputValue('date-filter-start-date-filter');
+                    AppState.listFilters.dateFilter.endDate = App.getDateInputValue('date-filter-end-date-filter'); 
+                } else { 
+                    AppState.listFilters.dateFilter = AppState.defaultDateFilter(); 
+                }
+                
+                const filtersToSave = {
+                    ...AppState.listFilters,
+                    genres: [...AppState.listFilters.genres],
+                    sites: [...AppState.listFilters.sites],
+                    andTagIds: [...AppState.listFilters.andTagIds],
+                    orTagIds: [...AppState.listFilters.orTagIds],
+                    notTagIds: [...AppState.listFilters.notTagIds]
+                };
+                const encryptedFilters = App.encryptData(filtersToSave);
+                if (encryptedFilters) localStorage.setItem('listFilters_encrypted', encryptedFilters);
+
+                AppState.currentPage = 1;
+                App.renderAll();
+                App.closeModal();
+            });
+            $('#filter-settings-cancel').addEventListener('click', App.closeModal);
+            updatePreview();
+        });
+    },
+
     openTagModal: (options) => Modals.openTagModal(options),
     openTagFilterModal: (options) => Modals.openTagFilterModal(options),
 
@@ -1116,7 +1330,6 @@ const App = {
         { by: 'genre', order: 'asc', label: 'ジャンル (昇順)' },
     ],
     
-    // Checkbox & Date Helpers
     createCheckboxGroupHTML: (groupName, options, selectedSet) => `
         <div class="flex flex-wrap gap-3">${options.map(opt => `
             <label class="inline-flex items-center cursor-pointer bg-gray-700 px-3 py-2 rounded-lg hover:bg-gray-600 transition-colors select-none">
@@ -1203,11 +1416,9 @@ const App = {
             AppState.isDebugMode = true;
             $('#debug-banner').classList.remove('hidden');
             if(AppState.unsubscribeTags) AppState.unsubscribeTags();
-            
-            // Inline debug data generation to avoid build errors
+            // Inline Mock data for debug
             const works = [];
             const tags = new Map();
-            // simple mock
             tags.set('d1', {id:'d1', name:'DebugTag', color:'#f00'});
             works.push({id:'w1', name:'Debug Work 1', rating:5, tagIds:['d1'], registeredAt: new Date()});
             
