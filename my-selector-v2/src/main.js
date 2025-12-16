@@ -588,7 +588,9 @@ const App = {
     },
 
     // --- Data Load Logic (IndexedDB + Firestore) ---
+
     loadDataSet: async (newSyncId) => {
+        // IDが変わっていない、かつ読み込み完了済みなら何もしない
         if (AppState.syncId === newSyncId && AppState.isLoadComplete) {
             console.log("Reloading data for the same Sync ID.");
         } else if (AppState.syncId === newSyncId && !AppState.isLoadComplete) {
@@ -602,6 +604,7 @@ const App = {
         if (AppState.unsubscribeWorks) AppState.unsubscribeWorks();
         if (AppState.unsubscribeTags) AppState.unsubscribeTags();
 
+        // UI初期化
         AppState.ui.workListEl.classList.add('hidden');
         AppState.ui.paginationControls.classList.add('hidden');
         AppState.ui.workListMessage.innerHTML = `
@@ -611,38 +614,57 @@ const App = {
             </div>`;
         AppState.ui.workListMessage.classList.remove('hidden');
 
-        // 1. IndexedDB Load
+        // ★ ステップ1: IndexedDBから爆速ロード
         try {
             const localData = await DB.loadLocalData();
+            
             if (localData.works.length > 0) {
                 console.log(`Loaded ${localData.works.length} works from Local DB.`);
                 AppState.works = localData.works;
                 AppState.tags = localData.tags;
+                
+                // インデックス作成 & 描画
                 Search.initSearchIndex(AppState.works);
                 AppState.isLoadComplete = true;
                 AppState.loadingStatus.works = true;
                 AppState.loadingStatus.tags = true;
+                
                 App.renderAll();
+                
+                // ★★★ 修正ポイント: ここでメイン画面を表示（透明化解除）します ★★★
                 AppState.ui.loadingOverlay.classList.add('hidden');
+                AppState.ui.appContainer.classList.remove('opacity-0'); 
             }
         } catch (e) {
             console.warn("Local load failed:", e);
         }
 
-        // 2. Firestore Sync
+        // ★ ステップ2: サーバー同期 (バックグラウンド)
         if (AppState.currentUser && !AppState.isDebugMode) {
-            App.showToast("サーバーと同期中...", "info", 2000);
+            // もしローカルデータがなくて画面がまだ真っ白なら、トーストではなくローディング表示を維持
+            if (AppState.works.length > 0) {
+                App.showToast("サーバーと同期中...", "info", 2000);
+            }
+            
             try {
                 const syncedData = await DB.syncWithFirestore();
+                
                 if (syncedData) {
-                    console.log("Sync complete.");
+                    console.log("Sync complete. Updating UI.");
                     AppState.works = syncedData.works;
                     AppState.tags = syncedData.tags;
+                    
                     Search.initSearchIndex(AppState.works);
                     AppState.isLoadComplete = true;
                     AppState.loadingStatus.works = true;
                     AppState.loadingStatus.tags = true;
+                    
                     App.renderAll();
+                    
+                    // 同期完了時にも確実に画面を表示
+                    AppState.ui.loadingOverlay.classList.add('hidden');
+                    AppState.ui.appContainer.classList.remove('opacity-0');
+                    
                     App.showToast("データを最新の状態に更新しました");
                 }
             } catch (error) {
@@ -652,6 +674,13 @@ const App = {
                 } else {
                     App.showToast("同期に失敗しました。", "warning");
                 }
+            }
+        } else if (!AppState.works.length) {
+            // 未ログインでローカルデータもない場合（初回など）
+            // ここで loadingOverlay を消さないと詰む可能性があるためチェック
+            if (AppState.isLoadComplete) {
+                    AppState.ui.loadingOverlay.classList.add('hidden');
+                    AppState.ui.appContainer.classList.remove('opacity-0');
             }
         }
     },
