@@ -128,7 +128,8 @@ const App = {
             pageInfo: $('#pageInfo'),
             nextPageBtn: $('#nextPageBtn'),
             slidingFabContainer: $('#fab-menu-content'), 
-            slidingFabToggle: $('#fab-main-toggle')
+            slidingFabToggle: $('#fab-main-toggle'),
+            reloadWorksBtn: $('#reloadWorksBtn')
         };
 
         const sortOptions = App.getSortOptions(); 
@@ -184,6 +185,13 @@ const App = {
         }
         App.setupEventListeners();
         App.checkVersionUpdate();
+
+        setInterval(() => {
+            if (AppState.isLoadComplete && !document.hidden) { // 画面を見ている時だけ
+                console.log("Auto-syncing...");
+                App.loadDataSet(AppState.syncId);
+            }
+        }, 300000);
     },
 
     checkVersionUpdate: () => {
@@ -1113,6 +1121,21 @@ const App = {
         setupAppEventListeners(App);
         if (AppState.ui && AppState.ui.searchInput) App.setupInputClearButton(AppState.ui.searchInput, $('#clearSearchBtn'));
         
+        if (AppState.ui.reloadWorksBtn) {
+            AppState.ui.reloadWorksBtn.addEventListener('click', async () => {
+                const icon = AppState.ui.reloadWorksBtn.querySelector('i');
+                
+                // アイコンを回す (CSSクラス追加)
+                if(icon) icon.classList.add('fa-spin');
+                
+                // データを再読み込み (同期)
+                await App.loadDataSet(AppState.syncId);
+                
+                // 読み込み終わったら回転を止める
+                if(icon) setTimeout(() => icon.classList.remove('fa-spin'), 1000);
+            });
+        }
+
         document.addEventListener('keydown', (e) => {
             const isInputActive = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
             const isModalOpen = !AppState.ui.modalWrapper.classList.contains('hidden');
@@ -1127,7 +1150,10 @@ const App = {
                 case 'l': e.preventDefault(); $('#startLotteryBtn')?.click(); break;
                 case 'r': e.preventDefault(); App.loadDataSet(AppState.syncId); break;
             }
+        
         });
+
+        
     },
 
     openExternalSearchModal: Modals.openExternalSearchModal,

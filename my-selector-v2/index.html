@@ -146,9 +146,15 @@
 
                 <div class="flex flex-wrap gap-4 justify-between items-center px-2">
                     <div id="activeFilters" class="flex flex-wrap gap-2 items-center">
-                         <span class="text-sm text-gray-400">絞り込み:</span>
-                         </div>
-                    <span id="workCount" class="flex-shrink-0 px-3 py-1 bg-gray-700 rounded-full text-sm font-semibold">0 作品</span>
+                        <span class="text-sm text-gray-400">絞り込み:</span>
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        <button id="reloadWorksBtn" title="リストを更新" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-full text-gray-300 hover:text-white transition-colors">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <span id="workCount" class="flex-shrink-0 px-3 py-1 bg-gray-700 rounded-full text-sm font-semibold">0 作品</span>
+                    </div>
                 </div>
                 
                 <div>
