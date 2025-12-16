@@ -12,6 +12,8 @@ import * as Batch from './batch.js';
 import * as Stats from './stats.js';
 import * as Lottery from './lottery.js';
 import { render, html } from 'lit-html';
+import * as DB from './db.js';
+import * as Search from './search.js';
 
 // ★変更点: Chart.jsとCryptoJSのimportは削除しました
 // (index.htmlのCDNから読み込まれる window.Chart や window.CryptoJS をそのまま使います)
@@ -706,86 +708,88 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                 console.log("User settings loaded.");
             },
 
-            loadDataSet: (newSyncId) => {
-                // 既に選択中のIDを再度読み込もうとした場合、リフレッシュとして処理を続行
+            // src/main.js 内の App オブジェクトの loadDataSet メソッド
+
+            loadDataSet: async (newSyncId) => {
+                // IDチェック（変更なし）
                 if (AppState.syncId === newSyncId && AppState.isLoadComplete) {
                     console.log("Reloading data for the same Sync ID.");
-                } else if (AppState.syncId === newSyncId) {
-                    return; // 読み込み中に同じIDがクリックされた場合は無視
+                } else if (AppState.syncId === newSyncId && !AppState.isLoadComplete) {
+                    return; 
                 }
                 
                 AppState.syncId = newSyncId;
                 AppState.ui.syncIdDisplay.value = AppState.syncId;
                 localStorage.setItem('r18_sync_id', AppState.syncId);
                 
-                AppState.unsubscribeWorks();
-                AppState.unsubscribeTags();
+                // 既存の購読解除（念のため残す）
+                if (AppState.unsubscribeWorks) AppState.unsubscribeWorks();
+                if (AppState.unsubscribeTags) AppState.unsubscribeTags();
 
-                AppState.works = [];
-                AppState.tags = new Map();
-                
-                // ★ 修正: App.renderAll() の代わりに、リストエリアにローディング表示を挿入 ★
-                AppState.ui.workListEl.classList.add('hidden'); // リスト本体を隠す
-                AppState.ui.paginationControls.classList.add('hidden'); // ページネーションを隠す
+                // UI初期化：リストを隠してローディング表示
+                AppState.ui.workListEl.classList.add('hidden');
+                AppState.ui.paginationControls.classList.add('hidden');
                 AppState.ui.workListMessage.innerHTML = `
                     <div class="text-center py-10 text-gray-500">
                         <i class="fas fa-spinner fa-spin fa-3x text-teal-400"></i>
                         <p class="mt-4 text-base">データを読み込み中...</p>
                     </div>`;
-                AppState.ui.workListMessage.classList.remove('hidden'); // メッセージエリアを表示
-                AppState.ui.workCountEl.textContent = '読み込み中...'; // 件数表示も更新
+                AppState.ui.workListMessage.classList.remove('hidden');
 
-                // ★ 修正: 読み込みステータスをリセット ★
-                AppState.isLoadComplete = false;
-                AppState.loadingStatus.works = false;
-                AppState.loadingStatus.tags = false;
-                
-                // 読み込みタイムアウトも再設定
-                clearTimeout(AppState.stallTimeout);
-                AppState.stallTimeout = setTimeout(() => App.handleLoadingTimeout(true), 15000); // 15秒停滞したらタイムアウト
-
-                if (AppState.currentUser && AppState.syncId && !AppState.isDebugMode) {
-                    if (AppState.isLiteMode) {
-                        // Liteモード時: onSnapshot を使わず、静的に取得
-                        console.log("Lite Mode: Bypassing subscriptions, fetching limited data...");
-                        App.fetchLimitedData(); // 新しいヘルパー関数を呼ぶ
-                    } else {
-                        // 通常モード時: 従来通り onSnapshot で購読
-                        App.subscribeToWorks();
-                        App.subscribeToTags();
-                    }
-                }
-            },
-            
-            fetchLimitedData: async () => {
-                console.log("Lite Mode: Fetching limited works and all tags...");
+                // ★ ステップ1: IndexedDBから爆速ロード (オフラインでも表示可能)
                 try {
-                    // 1. Fetch Limited Works
-                    AppState.ui.loadingText.textContent = '作品データを取得中... (Lite)';
-                    const worksRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`);
-                    // 登録日の新しい順 (sortState.by は 'registeredAt' がデフォルト) で 50件取得
-                    const worksQuery = query(worksRef, orderBy('registeredAt', 'desc'), limit(50));
-                    const worksSnapshot = await getDocs(worksQuery);
-                    AppState.works = worksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    AppState.loadingStatus.works = true;
-                    App.checkLoadingComplete(); // ワークス完了を通知
-
-                    // 2. Fetch All Tags (statically) - タグはフィルタリングに必須なので全件取得
-                    AppState.ui.loadingText.textContent = 'タグデータを取得中... (Lite)';
-                    const tagsRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/tags`);
-                    const tagsSnapshot = await getDocs(tagsRef);
-                    AppState.tags = new Map(tagsSnapshot.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() }]));
-                    AppState.loadingStatus.tags = true;
-                    App.checkLoadingComplete(); // タグ完了を通知
+                    const localData = await DB.loadLocalData();
                     
-                    App.renderAll(); 
+                    // ローカルデータがあれば即表示
+                    if (localData.works.length > 0) {
+                        console.log(`Loaded ${localData.works.length} works from Local DB.`);
+                        AppState.works = localData.works;
+                        AppState.tags = localData.tags;
+                        
+                        // 検索インデックス作成 & 描画
+                        Search.initSearchIndex(AppState.works);
+                        AppState.isLoadComplete = true;
+                        AppState.loadingStatus.works = true;
+                        AppState.loadingStatus.tags = true;
+                        
+                        App.renderAll();
+                        
+                        // ローディング画面をすぐに消す
+                        AppState.ui.loadingOverlay.classList.add('hidden');
+                    }
+                } catch (e) {
+                    console.warn("Local load failed:", e);
+                }
 
-                } catch (error) {
-                    // どちらかで失敗したらエラー
-                    if (!AppState.loadingStatus.works) {
-                        App.handleDataFetchError(error, '作品 (Lite)');
-                    } else {
-                        App.handleDataFetchError(error, 'タグ (Lite)');
+                // ★ ステップ2: バックグラウンドでサーバーと同期 (最新情報を取得)
+                if (AppState.currentUser && !AppState.isDebugMode) {
+                    App.showToast("サーバーと同期中...", "info", 2000);
+                    
+                    try {
+                        const syncedData = await DB.syncWithFirestore();
+                        
+                        if (syncedData) {
+                            console.log("Sync complete. Updating UI.");
+                            AppState.works = syncedData.works;
+                            AppState.tags = syncedData.tags;
+                            
+                            // インデックス再構築 & 再描画
+                            Search.initSearchIndex(AppState.works);
+                            AppState.isLoadComplete = true;
+                            AppState.loadingStatus.works = true;
+                            AppState.loadingStatus.tags = true;
+                            
+                            App.renderAll();
+                            App.showToast("データを最新の状態に更新しました");
+                        }
+                    } catch (error) {
+                        console.error("Sync failed:", error);
+                        // ローカルデータで動いているならエラー画面にはしない
+                        if (AppState.works.length === 0) {
+                            App.handleDataFetchError(error, '同期');
+                        } else {
+                            App.showToast("同期に失敗しました。オフラインデータを使用します。", "warning");
+                        }
                     }
                 }
             },
@@ -812,7 +816,7 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                 for (let i = 0; i < length; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
                 return result;
             },
-            
+            /*
             subscribeToWorks: () => {
                 if (AppState.isDebugMode) return;
                 AppState.ui.loadingText.textContent = '作品データを取得中...'; // ← 具体的なテキストを追加
@@ -863,7 +867,7 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                      }
                      App.renderAll();
                 }, error => App.handleDataFetchError(error, 'タグ'));
-            },
+            },*/
 
             // --- Image Processing ---
             processImage: Utils.processImage,
@@ -1188,41 +1192,28 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                 return tempWorks;
             },
             
+            // src/main.js 内の App オブジェクトの getFilteredAndSortedWorks メソッド
+
             getFilteredAndSortedWorks: () => {
-                let tempWorks = App.getFilteredWorks(AppState.listFilters);
-                const { searchQuery, sortState, tags } = AppState; // tags を追加
+                let tempWorks;
 
-                if (searchQuery) {
-                    const normalizedQuery = App.normalizeString(searchQuery); // 正規化
-                    const queryRegex = new RegExp(normalizedQuery.replace(/\./g, '.'), 'i'); // ワイルドカード "." を含む正規表現を作成
-
-                    tempWorks = tempWorks.filter(w => {
-                        // 作品名を正規化してチェック
-                        const normalizedName = App.normalizeString(w.name);
-                        if (queryRegex.test(normalizedName)) return true;
-
-                        // ジャンル名を正規化してチェック (部分一致)
-                        const normalizedGenre = App.normalizeString(w.genre);
-                        if (queryRegex.test(normalizedGenre)) return true;
-
-                        // タグ名を正規化してチェック
-                        if (w.tagIds && w.tagIds.length > 0) {
-                            for (const tagId of w.tagIds) {
-                                const tag = tags.get(tagId);
-                                if (tag) {
-                                    const normalizedTagName = App.normalizeString(tag.name);
-                                    if (queryRegex.test(normalizedTagName)) return true;
-                                }
-                            }
-                        }
-                        return false; // どれにも一致しない場合
-                    });
+                // ★ 変更点: Fuse.js (Searchモジュール) を使って検索
+                if (AppState.searchQuery) {
+                    // あいまい検索の結果を取得 (並び順はスコア順になっているが、後でソート設定で上書きしても良い)
+                    tempWorks = Search.searchWorks(AppState.searchQuery);
+                } else {
+                    // 検索ワードがない場合は全件
+                    tempWorks = [...AppState.works];
                 }
 
-                // 並び替え処理 (変更なし)
+                // フィルタリング処理 (既存のロジックを流用)
+                tempWorks = App.getFilteredWorks(AppState.listFilters, tempWorks);
+
+                // 並び替え処理 (既存のロジックを流用)
+                // ※ Fuse.jsの結果は関連度順ですが、ユーザーが「登録日順」などを指定している場合はそちらを優先します
                 return tempWorks.sort((a, b) => {
-                    const order = sortState.order === 'asc' ? 1 : -1;
-                    const by = sortState.by;
+                    const order = AppState.sortState.order === 'asc' ? 1 : -1;
+                    const by = AppState.sortState.by;
 
                     if (by === 'name' || by === 'genre') {
                         const valA = a[by] || '';
@@ -1233,14 +1224,13 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                     // 日付や数値の比較
                     let valA, valB;
                     if (by === 'registeredAt' || by === 'lastSelectedAt') {
-                        // Timestamp オブジェクトまたは null/undefined を想定
-                        valA = a[by] ? a[by].toMillis() : 0;
-                        valB = b[by] ? b[by].toMillis() : 0;
-                        // 日付の場合、null/undefined は最後に来るように調整
+                        // Timestamp互換性対応 (DB.jsで変換していない場合も考慮)
+                        valA = a[by] ? (typeof a[by].toMillis === 'function' ? a[by].toMillis() : new Date(a[by]).getTime()) : 0;
+                        valB = b[by] ? (typeof b[by].toMillis === 'function' ? b[by].toMillis() : new Date(b[by]).getTime()) : 0;
+                        
                         if (valA === 0) valA = (order === 1 ? Infinity : -Infinity);
                         if (valB === 0) valB = (order === 1 ? Infinity : -Infinity);
                     } else {
-                        // rating, selectionCount など
                         valA = a[by] || 0;
                         valB = b[by] || 0;
                     }
@@ -1503,6 +1493,40 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
                 if (AppState.ui && AppState.ui.searchInput) {
                     App.setupInputClearButton(AppState.ui.searchInput, $('#clearSearchBtn'));
                 }
+                // ★追加: キーボードショートカット
+                document.addEventListener('keydown', (e) => {
+                    // 入力フォームやモーダルが開いているときは無効化
+                    const isInputActive = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
+                    const isModalOpen = !AppState.ui.modalWrapper.classList.contains('hidden');
+                    
+                    // Escキーだけはモーダルが開いていても効くようにする (閉じる処理)
+                    if (e.key === 'Escape') {
+                        if (isModalOpen) App.closeModal();
+                        return;
+                    }
+
+                    if (isInputActive || isModalOpen) return;
+
+                    switch(e.key.toLowerCase()) {
+                        case 'f': // Find (検索)
+                            e.preventDefault();
+                            AppState.ui.searchInput.focus();
+                            break;
+                            
+                        case 'l': // Lottery (抽選)
+                            e.preventDefault();
+                            // 抽選ボタンがあればクリック
+                            const lotteryBtn = document.getElementById('startLotteryBtn');
+                            if (lotteryBtn) lotteryBtn.click();
+                            break;
+                        
+                        case 'r': // Reload (同期リロード)
+                            e.preventDefault();
+                            App.loadDataSet(AppState.syncId);
+                            break;
+                    }
+                });
+
             },
 
             // --- Modal Implementations ---
@@ -1973,7 +1997,7 @@ AppState.defaultDateFilter = () => ({ mode: 'none', date: '', startDate: '', end
 
                     AppState.isDebugMode = true; // 修正
                     $('#debug-banner').classList.remove('hidden'); // バナーを表示
-                    AppState.unsubscribeWorks(); // 修正
+                    /*AppState.unsubscribeWorks(); // 修正*/
                     AppState.unsubscribeTags(); // 修正
                     
                     const debugData = App.generateDebugData(); // 修正

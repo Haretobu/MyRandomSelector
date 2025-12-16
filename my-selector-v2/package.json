@@ -17,7 +17,9 @@
     "vite": "^7.2.4"
   },
   "dependencies": {
+    "dexie": "^4.2.1",
     "firebase": "^12.6.0",
+    "fuse.js": "^7.1.0",
     "jszip": "^3.10.1",
     "lit-html": "^3.3.1",
     "lucide-react": "^0.561.0",
