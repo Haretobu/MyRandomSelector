@@ -14,7 +14,7 @@ import * as Stats from './stats.js';
 import * as Lottery from './lottery.js';
 import { render, html } from 'lit-html';
 
-// ★追加: DB & Search
+// DB & Search
 import * as DB from './db.js';
 import * as Search from './search.js';
 
@@ -128,7 +128,6 @@ const App = {
             prevPageBtn: $('#prevPageBtn'),
             pageInfo: $('#pageInfo'),
             nextPageBtn: $('#nextPageBtn'),
-            // Sliding FAB (if needed)
             slidingFabContainer: $('#fab-menu-content'), 
             slidingFabToggle: $('#fab-main-toggle')
         };
@@ -173,7 +172,6 @@ const App = {
     },
     
     startApp: () => {
-        // Show loading content
         if(AppState.ui.loadingContent) AppState.ui.loadingContent.classList.remove('opacity-0');
 
         App.initializeFirebase();
@@ -255,7 +253,6 @@ const App = {
 
     // --- FAB Menu Logic ---
     toggleFabMenu: () => {
-        // New logic uses 'fab-menu-content' directly in handleExportBackup or similar
         const menuContent = document.getElementById('fab-menu-content');
         const backdrop = document.getElementById('fab-backdrop');
         const icon = document.getElementById('fab-icon');
@@ -595,7 +592,7 @@ const App = {
         }
     },
 
-    // ★★★ NEW Load Data Logic (IndexedDB + Sync) ★★★
+    // --- Data Load Logic ---
     loadDataSet: async (newSyncId) => {
         if (AppState.syncId === newSyncId && AppState.isLoadComplete) {
             console.log("Reloading data for the same Sync ID.");
@@ -763,8 +760,6 @@ const App = {
                 tagsSnapshot.forEach(doc => batch.delete(doc.ref));
 
                 await batch.commit();
-                
-                // Clear Local DB
                 await DB.db.works.clear();
                 await DB.db.tags.clear();
 
@@ -899,7 +894,6 @@ const App = {
         return tempWorks;
     },
     
-    // ★★★ NEW Search Logic (Fuzzy) ★★★
     getFilteredAndSortedWorks: () => {
         let tempWorks;
         if (AppState.searchQuery) {
@@ -1209,9 +1203,17 @@ const App = {
             AppState.isDebugMode = true;
             $('#debug-banner').classList.remove('hidden');
             if(AppState.unsubscribeTags) AppState.unsubscribeTags();
-            const debugData = await import('./debugData.js').then(m => m.generateDebugData()).catch(() => ({works:[], tags:new Map()}));
-            // Or simple inline mock if debugData.js not exists
-            AppState.works = []; AppState.tags = new Map(); // Reset
+            
+            // Inline debug data generation to avoid build errors
+            const works = [];
+            const tags = new Map();
+            // simple mock
+            tags.set('d1', {id:'d1', name:'DebugTag', color:'#f00'});
+            works.push({id:'w1', name:'Debug Work 1', rating:5, tagIds:['d1'], registeredAt: new Date()});
+            
+            AppState.works = works;
+            AppState.tags = tags;
+            
             App.showToast("デバッグモード: データクリア");
             App.renderAll();
         }
