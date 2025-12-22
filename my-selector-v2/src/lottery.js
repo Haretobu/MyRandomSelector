@@ -425,8 +425,10 @@ export const performLottery = async (App) => {
     let selectedWork = weightedPool.find(work => (random -= work.weight) <= 0) || weightedPool[weightedPool.length - 1];
     
     localStorage.setItem('lastSelectedWorkId', selectedWork.id);
-    // ★追加: 感想入力待ちの状態としてIDを保存
+    
+    // ▼▼▼ 追加: リロード対策として、評価待ちの作品IDを保存 ▼▼▼
     localStorage.setItem('r18_pending_feedback_work_id', selectedWork.id);
+    // ▲▲▲ 追加終了 ▲▲▲
 
     if (!AppState.isDebugMode) {
         const newHistoryEntry = Timestamp.now();
@@ -701,18 +703,20 @@ export const openFeedbackModal = (work, App, tempState = null) => {
             });
         });
 
-        // ★修正: 「また今度」でPending状態を解除する
+        // ▼▼▼ 修正: 「また今度」ボタンで保留状態を解除 ▼▼▼
         $('#feedback-later-btn').addEventListener('click', () => {
             localStorage.removeItem('r18_pending_feedback_work_id');
             App.closeModal();
         });
+        // ▲▲▲ 修正終了 ▲▲▲
 
+        // ▼▼▼ 修正: 保存成功時に保留状態を解除 ▼▼▼
         saveBtn.addEventListener('click', async () => {
             AppState.checkModalDirtyState = () => false;
             if (await App.updateWork(work.id, { rating: currentRating, tagIds: Array.from(currentTagIds) })) {
-                // ★修正: 保存成功でPending状態を解除する
                 localStorage.removeItem('r18_pending_feedback_work_id');
-                App.showToast(`「${work.name}」の情報を更新しました。`); App.closeModal();
+                App.showToast(`「${work.name}」の情報を更新しました。`); 
+                App.closeModal();
             }
         });
         checkSaveButton();

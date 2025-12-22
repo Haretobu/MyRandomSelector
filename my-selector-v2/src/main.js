@@ -481,20 +481,22 @@ const App = {
                     AppState.ui.appContainer.classList.remove('opacity-0');
                     setTimeout(() => AppState.ui.loadingOverlay.classList.add('hidden'), 500);
 
-                    // ★追加: 未評価の抽選結果があるか確認して表示
+                    // ▼▼▼ 追加: リロード前に評価待ちだった作品があればウィンドウを表示 ▼▼▼
                     const pendingWorkId = localStorage.getItem('r18_pending_feedback_work_id');
                     if (pendingWorkId) {
                         const pendingWork = AppState.works.find(w => w.id === pendingWorkId);
                         if (pendingWork) {
+                            // UIの描画安定を待ってから表示
                             setTimeout(() => {
-                                console.log("Opening pending feedback for:", pendingWork.name);
+                                console.log("Restoring pending feedback modal for:", pendingWork.name);
                                 App.openFeedbackModal(pendingWork);
-                            }, 500);
+                            }, 600);
                         } else {
-                            // 作品が見つからない場合はIDを削除
+                            // 作品が見つからない（削除済みなど）場合はキーを掃除
                             localStorage.removeItem('r18_pending_feedback_work_id');
                         }
                     }
+                    // ▲▲▲ 追加終了 ▲▲▲
 
                     if (AppState.isLiteMode) {
                         const banner = $('#lite-mode-banner');
