@@ -481,6 +481,21 @@ const App = {
                     AppState.ui.appContainer.classList.remove('opacity-0');
                     setTimeout(() => AppState.ui.loadingOverlay.classList.add('hidden'), 500);
 
+                    // ★追加: 未評価の抽選結果があるか確認して表示
+                    const pendingWorkId = localStorage.getItem('r18_pending_feedback_work_id');
+                    if (pendingWorkId) {
+                        const pendingWork = AppState.works.find(w => w.id === pendingWorkId);
+                        if (pendingWork) {
+                            setTimeout(() => {
+                                console.log("Opening pending feedback for:", pendingWork.name);
+                                App.openFeedbackModal(pendingWork);
+                            }, 500);
+                        } else {
+                            // 作品が見つからない場合はIDを削除
+                            localStorage.removeItem('r18_pending_feedback_work_id');
+                        }
+                    }
+
                     if (AppState.isLiteMode) {
                         const banner = $('#lite-mode-banner');
                         if (banner) banner.classList.remove('hidden');
