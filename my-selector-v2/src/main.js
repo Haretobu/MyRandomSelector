@@ -481,22 +481,9 @@ const App = {
                     AppState.ui.appContainer.classList.remove('opacity-0');
                     setTimeout(() => AppState.ui.loadingOverlay.classList.add('hidden'), 500);
 
-                    // ▼▼▼ 追加: リロード前に評価待ちだった作品があればウィンドウを表示 ▼▼▼
-                    const pendingWorkId = localStorage.getItem('r18_pending_feedback_work_id');
-                    if (pendingWorkId) {
-                        const pendingWork = AppState.works.find(w => w.id === pendingWorkId);
-                        if (pendingWork) {
-                            // UIの描画安定を待ってから表示
-                            setTimeout(() => {
-                                console.log("Restoring pending feedback modal for:", pendingWork.name);
-                                App.openFeedbackModal(pendingWork);
-                            }, 600);
-                        } else {
-                            // 作品が見つからない（削除済みなど）場合はキーを掃除
-                            localStorage.removeItem('r18_pending_feedback_work_id');
-                        }
-                    }
-                    // ▲▲▲ 追加終了 ▲▲▲
+                    // ▼▼▼ 修正: 共通関数を呼び出し ▼▼▼
+                    App.processPendingFeedback();
+                    // ▲▲▲ 修正終了 ▲▲▲
 
                     if (AppState.isLiteMode) {
                         const banner = $('#lite-mode-banner');
@@ -504,6 +491,27 @@ const App = {
                         App.showToast("Liteモードで起動中", "info", 4000);
                     }
                 }, 500);
+            }
+        }
+    },
+
+    processPendingFeedback: () => {
+        // 二重表示防止
+        if (AppState.hasCheckedPendingFeedback) return;
+        AppState.hasCheckedPendingFeedback = true;
+
+        const pendingWorkId = localStorage.getItem('r18_pending_feedback_work_id');
+        if (pendingWorkId) {
+            const pendingWork = AppState.works.find(w => w.id === pendingWorkId);
+            if (pendingWork) {
+                // UIの安定を待ってから表示 (少し長めに待機)
+                setTimeout(() => {
+                    console.log("Restoring pending feedback modal for:", pendingWork.name);
+                    App.openFeedbackModal(pendingWork);
+                }, 800);
+            } else {
+                // 作品が見つからない場合はIDを削除
+                localStorage.removeItem('r18_pending_feedback_work_id');
             }
         }
     },
@@ -659,6 +667,10 @@ const App = {
                 // ★★★ 修正ポイント: ここでメイン画面を表示（透明化解除）します ★★★
                 AppState.ui.loadingOverlay.classList.add('hidden');
                 AppState.ui.appContainer.classList.remove('opacity-0'); 
+
+                // ▼▼▼ 追加: 高速ロード時も評価待ちチェックを実行 ▼▼▼
+                App.processPendingFeedback();
+                // ▲▲▲ 追加終了 ▲▲▲
             }
         } catch (e) {
             console.warn("Local load failed:", e);
@@ -689,6 +701,10 @@ const App = {
                     // 同期完了時にも確実に画面を表示
                     AppState.ui.loadingOverlay.classList.add('hidden');
                     AppState.ui.appContainer.classList.remove('opacity-0');
+
+                    // ▼▼▼ 追加: 同期完了時も評価待ちチェックを実行 (ローカルロードが失敗していた場合のため) ▼▼▼
+                    App.processPendingFeedback();
+                    // ▲▲▲ 追加終了 ▲▲▲
                     
                     App.showToast("データを最新の状態に更新しました");
                 }
