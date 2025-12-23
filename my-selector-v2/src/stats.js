@@ -1,4 +1,4 @@
-import { store as AppState } from './store';
+import { store as AppState } from './store/store.js';
 
 // ヘルパー関数
 const $ = (selector) => document.querySelector(selector);

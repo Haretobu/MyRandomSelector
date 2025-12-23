@@ -1,12 +1,12 @@
 // src/actions.js
-import { store as AppState } from './store.js';
-import { db, storage } from './firebaseConfig.js';
-import * as UI from './ui.js';
-import * as Utils from './utils.js';
+import { store as AppState } from '../store/store.js';
+import { db, storage } from './firebaseConfig.js'; // 同じ階層
+import * as UI from '../components/ui.js';
+import * as Utils from '../utils/utils.js';
 
 // ★追加: ローカルDBと検索モジュールをインポート
-import * as DB from './db.js';
-import * as Search from './search.js';
+import * as DB from './db.js'; // 同じ階層
+import * as Search from '../search.js';
 
 import { 
     collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, 

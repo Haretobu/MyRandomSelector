@@ -1,12 +1,12 @@
 // src/main.js - Part 1
 import './style.css';
-import { auth, db, storage, functions } from './firebaseConfig';
-import { store as AppState } from './store';
-import * as Utils from './utils';
+import { auth, db, storage, functions } from './services/firebaseConfig';
+import { store as AppState } from './store/store';
+import * as Utils from './utils/utils';
 
 // UI生成ロジック & アクション
-import * as UI from './ui.js';
-import * as Actions from './actions.js';
+import * as UI from './components/ui.js';
+import * as Actions from './services/actions.js';
 import { setupAppEventListeners } from './events.js';
 import * as Modals from './modals.js';
 import * as Batch from './batch.js';
@@ -15,7 +15,7 @@ import * as Lottery from './lottery.js';
 import { render, html } from 'lit-html';
 
 // DB & Search
-import * as DB from './db.js';
+import * as DB from './services/db.js';
 import * as Search from './search.js';
 
 // Firebase Modules

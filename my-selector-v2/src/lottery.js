@@ -1,4 +1,4 @@
-import { store as AppState } from './store';
+import { store as AppState } from './store/store.js';
 import { Timestamp, arrayUnion } from "firebase/firestore";
 
 // ヘルパー関数

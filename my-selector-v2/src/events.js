@@ -1,5 +1,5 @@
 // src/events.js
-import { store as AppState } from './store.js';
+import { store as AppState } from './store/store.js';
 
 // ヘルパー関数（このファイル内用）
 const $ = (selector) => document.querySelector(selector);

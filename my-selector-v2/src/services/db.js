@@ -2,7 +2,7 @@
 import Dexie from 'dexie';
 import { collection, getDocs, query, where, Timestamp } from "firebase/firestore";
 import { db as firestoreDb } from './firebaseConfig';
-import { store as AppState } from './store';
+import { store as AppState } from './store/store.js';
 
 // データベース定義
 export const db = new Dexie('R18RandomSelectorDB');

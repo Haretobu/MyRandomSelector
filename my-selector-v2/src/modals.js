@@ -1,10 +1,10 @@
 // src/modals.js
 
 import { Timestamp, deleteField } from "firebase/firestore";
-import { store as AppState } from './store.js';
-import * as UI from './ui.js';
-import * as Utils from './utils.js';
-import * as Actions from './actions.js';
+import { store as AppState } from './store/store.js';
+import * as UI from './components/ui.js';
+import * as Utils from './utils/utils.js';
+import * as Actions from './services/actions.js';
 // 循環参照を避けるため、main.js の App を直接 import せず、
 // 必要な機能は関数の引数として受け取るか、専用のヘルパーを使います。
 // ただし、今回は移行の過渡期として、window.App を利用する形（または関数内で動的import）で対応します。

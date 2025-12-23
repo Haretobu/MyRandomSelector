@@ -1,6 +1,6 @@
 // src/ui.js
-import { store as AppState } from './store.js';
-import * as Utils from './utils.js';
+import { store as AppState } from '../store/store.js';
+import * as Utils from '../utils/utils.js';
 import { html, nothing } from 'lit-html';
 
 // ★高速化: プレースホルダー画像をBase64(SVG)で埋め込み、外部通信(placehold.co)を削減
