@@ -551,7 +551,7 @@ export const openTagFilterModal = (options) => {
         });
 
         $('#reset-tag-filters-btn').addEventListener('click', () => { tempAnd.clear(); tempOr.clear(); tempNot.clear(); renderTagList(); });
-        $('#tag-modal-confirm')?.addEventListener('click', () => { onConfirm({and: tempAnd, or: tempOr, not: tempNot}); App.closeModal(); });
-        $('#tag-modal-cancel')?.addEventListener('click', () => { onConfirm(null); App.closeModal(); });
+        $('#tag-modal-confirm')?.addEventListener('click', () => { onConfirm({and: tempAnd, or: tempOr, not: tempNot}); });
+        $('#tag-modal-cancel')?.addEventListener('click', () => { onConfirm(null); });
     }, { autoFocus: false });
 };

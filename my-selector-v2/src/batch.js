@@ -264,7 +264,7 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-400 mb-1">登録日</label>
-                                    ${App.createDateInputHTML('batchWorkRegisteredAt', App.getTodayString())}
+                                    ${App.createDateInputHTML('batchWorkRegisteredAt', new Date().toISOString().split('T')[0])}
                                 </div>
                             </div>
 
