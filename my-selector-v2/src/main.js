@@ -30,6 +30,7 @@ import { ref, uploadString, getDownloadURL, deleteObject } from "firebase/storag
 import { httpsCallable } from "firebase/functions";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import { getApp } from "firebase/app";
+import { NetworkService } from './services/network.js';
 
 // Helper Functions
 const $ = (selector) => document.querySelector(selector);
@@ -177,6 +178,9 @@ const App = {
         App.initializeFirebase();
         App.initializeDateInputs(document.body);
 
+        NetworkService.init(App);
+        document.addEventListener('visibilitychange', App.handleVisibilityChange);
+
         if (window.innerWidth < 1024) {
             const syncDetails = $('#sync-panel-details');
             const regDetails = $('#registration-panel-details');
@@ -192,6 +196,30 @@ const App = {
                 App.loadDataSet(AppState.syncId);
             }
         }, 300000);
+    },
+
+    handleVisibilityChange: () => {
+        if (document.hidden) {
+            AppState.lastHiddenTime = Date.now();
+        } else {
+            const now = Date.now();
+            const hiddenDuration = now - (AppState.lastHiddenTime || now);
+            
+            // 5分以上バックグラウンドにいたら、データ不整合を防ぐため再読み込み
+            // または、接続が切れている可能性があるため強制同期
+            if (hiddenDuration > 5 * 60 * 1000) {
+                console.log("App returned from long background. Reloading data...");
+                App.showToast("長時間経過したため、データを最新化します...", "info");
+                App.loadDataSet(AppState.syncId);
+            } else {
+                // 短時間でも念のため画面描画等のズレを直す処理があればここに入れる
+                // 必要であれば同期チェック
+                if (AppState.works.length > 0) {
+                     // 簡易的な生存確認として検索履歴再描画などを呼んでも良いが
+                     // ここでは特になし
+                }
+            }
+        }
     },
 
     checkVersionUpdate: () => {
@@ -1440,7 +1468,10 @@ const App = {
                 <div class="space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-2">${App.createDateInputHTML(`date-filter-start-date-${context}`, state.startDate)}<span>～</span>${App.createDateInputHTML(`date-filter-end-date-${context}`, state.endDate)}</div>
             </div>
             <details class="bg-gray-700 rounded-lg" ${isOpen ? 'open' : ''}><summary class="px-3 py-2 text-xs text-gray-400 cursor-pointer">プレビュー</summary>
-                <div class="p-3 border-t border-gray-600"><p id="date-filter-preview-count-${context}" class="text-sm mb-2">0 作品</p><div id="date-filter-preview-grid-${context}" class="grid grid-cols-5 gap-2"></div></div>
+                <div class="p-3 border-t border-gray-600">
+                    <p id="date-filter-preview-count-${context}" class="text-sm mb-2">0 作品</p>
+                    <div id="date-filter-preview-grid-${context}" class="grid grid-cols-3 md:grid-cols-5 gap-2"></div>
+                </div>
             </details>
         </div>`,
 

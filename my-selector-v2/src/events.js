@@ -28,15 +28,6 @@ export const setupAppEventListeners = (App) => {
         fabBackdrop.addEventListener('click', App.closeFabMenu);
     }
 
-    // ★画像生成ボタンのイベント (HTMLに最初から書いたのでIDで取得するだけ)
-    const imgGenBtn = $('#imgGenFab');
-    if (imgGenBtn) {
-        imgGenBtn.addEventListener('click', () => {
-            App.openImageGeneratorModal();
-            App.closeFabMenu();
-        });
-    }
-
     // キーボードショートカット (Escキー)
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
@@ -190,14 +181,21 @@ export const setupAppEventListeners = (App) => {
 
     const suggestBox = $('#search-suggest-box');
     if (suggestBox) {
-        suggestBox.addEventListener('click', (e) => {
+        suggestBox.addEventListener('mousedown', (e) => {
             const selectButton = e.target.closest('button[data-action="select-history"]');
             const deleteButton = e.target.closest('button[data-action="delete-history"]');
             const clearAllButton = e.target.closest('button[data-action="clear-history"]');
             const suggestionButton = e.target.closest('button.search-suggestion-item');
 
+            e.preventDefault();
+
             let query = null;
             let action = null;
+
+            const anyButton = e.target.closest('button');
+            if (anyButton && anyButton.dataset.query && !anyButton.dataset.action) {
+                 query = anyButton.dataset.query; action = 'search';
+            }
 
             if (selectButton) { query = selectButton.dataset.query; action = 'search'; }
             else if (suggestionButton) { query = suggestionButton.dataset.query; action = 'search'; }

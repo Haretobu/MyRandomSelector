@@ -170,7 +170,6 @@ export const openEditModal = (workId, tempState = null) => {
     const storedFileName = work.imageFileName ? Utils.escapeHTML(work.imageFileName) : '';
     const fileNameDisplay = storedFileName || 'ファイルが選択されていません。';
 
-    // 抽選確率の計算
     const pool = App.getLotteryPool();
     const thisWorkInPool = pool.find(w => w.id === workId);
     const totalWeight = pool.reduce((sum, w) => sum + w.weight, 0);
@@ -195,13 +194,15 @@ export const openEditModal = (workId, tempState = null) => {
                     </div>
                     <div>
                         <label for="editWorkUrl" class="block text-sm font-medium text-gray-400 mb-1">作品URL</label>
-                        <div class="flex items-center gap-2">
-                            <div class="relative flex-grow">
-                                <input type="url" id="editWorkUrl" value="${safeWorkUrl}" placeholder="https://..." class="w-full bg-gray-700 p-2 rounded-lg pr-10"> <button type="button" id="clear-editWorkUrl" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"> <i class="fas fa-times-circle"></i></button>
+                        <div class="relative group">
+                            <div class="flex items-center gap-2">
+                                <div class="relative flex-grow">
+                                    <input type="url" id="editWorkUrl" value="${safeWorkUrl}" placeholder="https://..." class="w-full bg-gray-700 p-2 rounded-lg pr-10"> <button type="button" id="clear-editWorkUrl" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"> <i class="fas fa-times-circle"></i></button>
+                                </div>
+                                <button type="button" id="openWorkUrlBtn" class="flex-shrink-0 w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" title="URLを開く" ${!safeWorkUrl ? 'disabled' : ''}><i class="fas fa-external-link-alt"></i></button>
                             </div>
-                            <button type="button" id="openWorkUrlBtn" class="flex-shrink-0 w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" title="URLを開く" ${!safeWorkUrl ? 'disabled' : ''}><i class="fas fa-external-link-alt"></i></button>
+                            <div id="edit-url-preview-box" class="hidden absolute z-50 top-full left-0 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-2"></div>
                         </div>
-                        <div id="edit-url-preview-box" class="hidden mt-2"></div>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
@@ -271,6 +272,8 @@ export const openEditModal = (workId, tempState = null) => {
         workUrlInput.addEventListener('blur', () => {
             const url = workUrlInput.value.trim();
             if (url && url.length > 10 && url.startsWith('http')) {
+                // クラス操作で表示 (absoluteクラスはHTML側で定義済み)
+                editUrlPreviewBox.classList.remove('hidden');
                 App.fetchLinkPreview(url, editUrlPreviewBox);
             } else { 
                 editUrlPreviewBox.innerHTML = ''; 

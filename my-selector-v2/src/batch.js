@@ -191,8 +191,15 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
         const previewBox = $('#batch-url-preview-box');
         urlInput.addEventListener('blur', () => {
             const url = urlInput.value.trim();
-            if (url && url.length > 10 && url.startsWith('http')) App.fetchLinkPreview(url, previewBox);
-            else { previewBox.innerHTML = ''; previewBox.classList.add('hidden'); }
+            if (url && url.length > 10 && url.startsWith('http')) {
+                // UIを押し下げないよう、絶対配置にするクラスを追加
+                previewBox.className = "absolute z-20 top-full left-0 w-full mt-1 bg-gray-800 rounded shadow-xl border border-gray-600 p-2 hidden";
+                previewBox.classList.remove('hidden');
+                App.fetchLinkPreview(url, previewBox);
+            } else { 
+                previewBox.innerHTML = ''; 
+                previewBox.classList.add('hidden'); 
+            }
         });
 
         imageInput.addEventListener('change', async (e) => {
@@ -266,7 +273,13 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
             suggestContainer.innerHTML = '';
         });
 
-        $('#batch-clear-form-btn').addEventListener('click', () => { App.resetBatchRegForm(); App.showToast("フォームをクリアしました"); });
+        $('#batch-clear-form-btn').addEventListener('click', async () => { 
+            if (AppState.isRegFormDirty) {
+                if (!await App.showConfirm("フォームのクリア", "入力中の内容があります。本当にクリアしますか？")) return;
+            }
+            App.resetBatchRegForm(); 
+            App.showToast("フォームをクリアしました"); 
+        });
 
         // ★新機能: リストリセットボタン
         $('#batch-reset-list-btn').addEventListener('click', async () => {
@@ -402,7 +415,7 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
 
                         <div>
                             <label class="block text-sm font-medium text-gray-400 mb-1">作品URL (任意)</label>
-                            <div class="relative">
+                            <div class="relative group">
                                 <input type="url" id="batchWorkUrl" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-lime-500 pr-10" placeholder="https://..." autocomplete="off">
                                 <button type="button" id="clear-batchWorkUrl" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"><i class="fas fa-times-circle text-lg"></i></button>
                             </div>
