@@ -8,7 +8,9 @@ import { Timestamp } from "firebase/firestore";
 
 const $ = (selector) => document.querySelector(selector);
 
-// 画像をBase64に変換するローカルヘルパー
+// --- ローカルヘルパー関数 ---
+
+// 画像をBase64に変換
 const fileToBase64 = (file) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -17,6 +19,24 @@ const fileToBase64 = (file) => {
         reader.onerror = error => reject(error);
     });
 };
+
+// 連打防止（debounce）
+const debounce = (func, wait) => {
+    let timeout;
+    return (...args) => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+};
+
+// HTMLエスケープ（念のためローカルにも用意）
+const escapeHTML = (str) => {
+    if (!str) return '';
+    return str.replace(/[&<>"']/g, match => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[match]);
+};
+
 
 export const openBatchRegistrationModal = (App, keepData = false) => {
     
@@ -31,7 +51,7 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
     // 画像変数（このモーダル内でのみ有効）
     let batchTempImageData = null;
 
-    // --- 内部関数定義 (App.xxx ではなく、ここで定義して使う) ---
+    // --- 内部関数定義 ---
 
     // リストの描画
     const renderBatchList = () => {
@@ -60,7 +80,7 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
                 </div>
                 <div class="flex-grow min-w-0">
                     <div class="flex justify-between items-start">
-                        <h5 class="font-bold text-gray-200 truncate text-sm mb-1">${Utils.escapeHTML(work.name)}</h5>
+                        <h5 class="font-bold text-gray-200 truncate text-sm mb-1">${escapeHTML(work.name)}</h5>
                         <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2 bg-gray-700 rounded pl-2">
                             <button class="text-sky-400 hover:text-sky-300" onclick="document.dispatchEvent(new CustomEvent('batch-edit', {detail: ${index}}))">
                                 <i class="fas fa-pen"></i>
@@ -103,13 +123,12 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
             name: name,
             sourceUrl: urlInput.value.trim(),
             genre: genreInput.value,
-            registeredAt: regDateInput.value, // 文字列のまま保持 (保存時に変換)
-            imageData: batchTempImageData // { base64, fileName, fileType }
+            registeredAt: regDateInput.value, 
+            imageData: batchTempImageData
         };
 
         if (AppState.editingTempIndex >= 0) {
-            // 編集モードの場合
-            // 画像が変更されていない場合は元の画像を維持
+            // 編集モード
             if (!workData.imageData && AppState.tempWorks[AppState.editingTempIndex].imageData) {
                 workData.imageData = AppState.tempWorks[AppState.editingTempIndex].imageData;
             }
@@ -117,7 +136,6 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
             UI.showToast("リストの内容を更新しました");
             AppState.editingTempIndex = -1;
             
-            // 追加ボタンの見た目を戻す
             const addBtn = $('#batch-add-list-btn');
             addBtn.innerHTML = `<i class="fas fa-plus-circle mr-2"></i>リストに追加`;
             addBtn.classList.remove('from-yellow-600', 'to-yellow-500');
@@ -128,12 +146,8 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
             UI.showToast("リストに追加しました");
         }
 
-        // フォームリセット
         resetBatchRegForm();
         renderBatchList();
-        
-        // スマホの場合はリストタブに切り替え通知（オプション）
-        // if (window.innerWidth < 1024) document.getElementById('batch-tab-list').click();
     };
 
     // フォームのリセット
@@ -163,13 +177,11 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
         AppState.isRegFormDirty = false;
         AppState.editingTempIndex = -1;
 
-        // ボタンリセット
         const addBtn = $('#batch-add-list-btn');
         addBtn.innerHTML = `<i class="fas fa-plus-circle mr-2"></i>リストに追加`;
         addBtn.classList.remove('from-yellow-600', 'to-yellow-500');
         addBtn.classList.add('from-lime-600', 'to-lime-500');
         
-        // フォーカス
         setTimeout(() => $('#batchWorkName').focus(), 100);
     };
 
@@ -199,13 +211,11 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
             $('#batch-image-delete').classList.add('hidden');
         }
 
-        // ボタンを「更新」に変更
         const addBtn = $('#batch-add-list-btn');
         addBtn.innerHTML = `<i class="fas fa-sync-alt mr-2"></i>更新する`;
         addBtn.classList.remove('from-lime-600', 'to-lime-500');
         addBtn.classList.add('from-yellow-600', 'to-yellow-500');
 
-        // スマホの場合はフォームタブに切り替え
         const tabForm = document.getElementById('batch-tab-form');
         if (tabForm && tabForm.offsetParent !== null) tabForm.click();
         
@@ -223,11 +233,8 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
         let errorCount = 0;
 
         try {
-            // 1件ずつ登録 (並列処理するとサーバー負荷やレートリミットの可能性があるため直列推奨だが、数件ならPromise.allでも可)
-            // ここでは安全のため for...of で順番に処理
             for (const tempWork of AppState.tempWorks) {
                 try {
-                    // データ整形
                     const newWork = {
                         name: tempWork.name,
                         sourceUrl: tempWork.sourceUrl,
@@ -238,17 +245,6 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
                         memo: ''
                     };
 
-                    // Actions.addWork を使用
-                    // 画像がある場合は Actions.addWork 内でアップロードされるか、別途処理が必要
-                    // Actions.addWork の実装によるが、通常は file オブジェクトを期待する場合が多い。
-                    // ここでは Base64 から File オブジェクトへの復元は複雑なため、
-                    // もし Actions.addWork が「imageDataオブジェクト(base64入り)」に対応していない場合は
-                    // 別途アップロードロジックが必要だが、今回は簡易的に Actions.addWork に任せる（または拡張する）前提。
-                    // ※簡易対応: imageData があればそれを渡すよう Actions.addWork が対応していると仮定、
-                    // またはここで uploadImage 相当の処理を行う。
-                    
-                    // 今回は Actions.addWork が (workData, imageFile) を受け取ると仮定。
-                    // Base64からBlob/Fileを作るヘルパー
                     let imageFile = null;
                     if (tempWork.imageData) {
                         const res = await fetch(tempWork.imageData.base64);
@@ -272,9 +268,7 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
                 AppState.tempWorks = [];
                 App.closeModal();
             } else {
-                UI.showToast(`${successCount}件完了、${errorCount}件失敗しました。コンソールを確認してください`, "warning");
-                // 失敗したものはリストに残すなどの処理があれば親切だが、一旦クリアするかは仕様次第
-                // 今回は成功したものだけ消す実装は複雑になるため、全クリアして再読み込み
+                UI.showToast(`${successCount}件完了、${errorCount}件失敗しました。`, "warning");
                 AppState.tempWorks = [];
                 App.closeModal();
             }
@@ -286,7 +280,6 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
         }
     };
 
-    // ボタンの有効/無効切り替えヘルパー
     const disabledButton = (btn, isDisabled) => {
         btn.disabled = isDisabled;
         if (isDisabled) {
@@ -298,14 +291,11 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
         }
     };
 
-    // --- ここまで内部関数 ---
-
-    // モーダルが開かれた後の処理
+    // --- モーダルOpen後の処理 ---
     const onOpen = () => {
         const modalBody = $('#modal-content-body');
         if(modalBody) modalBody.classList.remove('p-6');
 
-        // タブ切り替えロジック
         const tabForm = $('#batch-tab-form');
         const tabList = $('#batch-tab-list');
         const colForm = $('#batch-col-form');
@@ -334,14 +324,13 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
         if (tabForm) tabForm.addEventListener('click', () => switchTab('form'));
         if (tabList) tabList.addEventListener('click', () => switchTab('list'));
 
-        // --- フォーム要素の取得 ---
         const nameInput = $('#batchWorkName');
         const urlInput = $('#batchWorkUrl');
         const imageInput = $('#batchWorkImage');
         const suggestContainer = $('#batch-suggest-container');
         
-        // --- 検索サジェスト機能 ---
-        const handleInputSuggestion = Utils.debounce(() => {
+        // ★修正ポイント: ローカルで定義した debounce を使用
+        const handleInputSuggestion = debounce(() => {
             const query = nameInput.value.trim();
             if (!query || query.length < 2) {
                 suggestContainer.innerHTML = '';
@@ -365,16 +354,15 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
 
             let html = `<div class="absolute z-50 w-full bg-gray-800 border border-gray-600 rounded-lg shadow-xl overflow-hidden mt-1">`;
             registeredMatches.forEach(w => {
-                html += `<div class="p-2 border-b border-gray-700 hover:bg-gray-600 cursor-pointer flex items-center gap-2 bg-gray-900 bg-opacity-50" onclick="UI.showToast('「${Utils.escapeHTML(w.name)}」は既に登録されています', 'error')">
+                html += `<div class="p-2 border-b border-gray-700 hover:bg-gray-600 cursor-pointer flex items-center gap-2 bg-gray-900 bg-opacity-50" onclick="alert('「${escapeHTML(w.name)}」は既に登録されています')">
                     <img src="${w.imageUrl || 'https://placehold.co/40x40/1f2937/4b5563?text=?'}" class="w-8 h-8 object-cover rounded flex-shrink-0">
-                    <span class="text-sm truncate text-gray-400">${Utils.escapeHTML(w.name)} <span class="text-xs text-red-400">(登録済)</span></span>
+                    <span class="text-sm truncate text-gray-400">${escapeHTML(w.name)} <span class="text-xs text-red-400">(登録済)</span></span>
                 </div>`;
             });
             listMatches.forEach(w => {
-                // onclickイベントを文字列で埋め込むのはスコープ的に難しいため、データ属性で処理するか、event delegationを使う
                 html += `<div class="p-2 border-b border-gray-700 hover:bg-gray-600 cursor-pointer flex items-center gap-2" data-action="load-temp" data-index="${w.originalIndex}">
                     <img src="${(w.imageData && w.imageData.base64) || 'https://placehold.co/40x40/1f2937/4b5563?text=?'}" class="w-8 h-8 object-cover rounded flex-shrink-0">
-                    <span class="text-sm truncate text-gray-300">${Utils.escapeHTML(w.name)} <span class="text-xs text-lime-400">(リスト内)</span></span>
+                    <span class="text-sm truncate text-gray-300">${escapeHTML(w.name)} <span class="text-xs text-lime-400">(リスト内)</span></span>
                 </div>`;
             });
             html += `</div>`;
@@ -383,10 +371,9 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
 
         nameInput.addEventListener('input', () => {
             AppState.isRegFormDirty = true;
-            handleInputSuggestion(); // ここでは Utils.debounce 済みの関数を呼ぶ
+            handleInputSuggestion();
         });
 
-        // サジェストのクリックイベント
         suggestContainer.addEventListener('click', (e) => {
             const item = e.target.closest('div[data-action="load-temp"]');
             if (item) {
@@ -395,21 +382,17 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
             }
         });
 
-        // blur遅延
         nameInput.addEventListener('blur', () => setTimeout(() => suggestContainer.innerHTML = '', 500));
 
-        // フォーム変更検知
         const setDirty = () => { AppState.isRegFormDirty = true; };
         $('#batchWorkGenre').addEventListener('change', setDirty);
         imageInput.addEventListener('change', setDirty);
         
-        // クリアボタン
         if (App.setupInputClearButton) {
             App.setupInputClearButton(nameInput, $('#clear-batchWorkName'));
             App.setupInputClearButton(urlInput, $('#clear-batchWorkUrl'));
         }
 
-        // --- URLプレビュー ---
         const previewBox = $('#batch-url-preview-box');
         if(previewBox) previewBox.className = "hidden absolute z-40 w-full mt-1 shadow-xl rounded-lg overflow-hidden";
 
@@ -429,7 +412,6 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
         urlInput.addEventListener('input', setDirty);
         urlInput.addEventListener('blur', handleUrlBlur);
 
-        // --- 画像アップロード ---
         const previewImg = $('#batch-image-preview');
         const placeholder = $('#batch-image-placeholder');
         const deleteBtn = $('#batch-image-delete');
@@ -439,7 +421,6 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
             if (!file) return;
 
             try {
-                // App.fileToBase64 ではなく、ローカルの fileToBase64 を使用
                 const base64 = await fileToBase64(file);
                 batchTempImageData = { base64: base64, fileName: file.name, fileType: file.type };
                 
@@ -464,7 +445,6 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
             placeholder.classList.remove('hidden');
         });
 
-        // --- イベントリスナー登録 (ボタン類) ---
         $('#batch-add-list-btn').addEventListener('click', addBatchWorkToList);
 
         $('#batch-clear-form-btn').addEventListener('click', async () => { 
@@ -477,25 +457,14 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
 
         $('#batch-save-all-btn').addEventListener('click', saveBatchWorks);
 
-        // リスト内の編集・削除ボタン用イベント (Delegationの代わりにCustomEventを使用)
         document.addEventListener('batch-edit', (e) => loadTempWorkToForm(e.detail), { once: true }); 
-        // ※注意: addEventListenerにonce:trueをつけると1回で消えるため、リスト描画ごとにイベントリスナーを設定しなおすのは非効率。
-        // ここでは親要素でのデリゲーションがベストだが、onclick属性を使っているので、
-        // 実際には document レベルでキャッチするリスナーをモーダル生存中だけ有効にする実装がきれい。
-        // 簡易実装として、containerにリスナーをつける。
-        
+
         const listContainer = $('#batch-list-container');
-        // 既存のイベントを削除できないため、IDを変えるか、onclickで直接呼ぶのが簡単。
-        // 上記のrenderBatchList内のHTMLでは onclick="..." を使っているため、グローバルスコープに関数が必要だが、モジュール内なので呼べない。
-        // 解決策: コンテナに対するクリックイベントリスナーを使う。
-        
         listContainer.addEventListener('click', (e) => {
             const editBtn = e.target.closest('button');
             if (!editBtn) return;
             
-            // アイコンの中身をクリックした場合の対応
-            const parentDiv = editBtn.closest('.bg-gray-700'); // 行の要素
-            // インデックスを特定するのはDOMの並び順から推測
+            const parentDiv = editBtn.closest('.bg-gray-700');
             const index = Array.from(listContainer.children).indexOf(parentDiv);
             
             if (index === -1) return;
@@ -512,7 +481,6 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
             }
         });
 
-        // 初期描画
         renderBatchList();
     };
 
@@ -524,7 +492,6 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
             </div>
 
             <div class="flex flex-col lg:flex-row gap-4 flex-grow overflow-hidden relative">
-                
                 <div id="batch-col-form" class="w-full lg:w-7/12 flex flex-col h-full overflow-y-auto pr-1 lg:pr-2 custom-scrollbar transition-all absolute inset-0 lg:relative z-10 bg-gray-800 lg:bg-transparent">
                     <div class="bg-gray-800 p-4 rounded-xl shadow-inner border border-gray-700 flex-grow flex flex-col">
                         <h4 class="text-lg font-bold text-gray-200 mb-4 border-b border-gray-700 pb-2"><i class="fas fa-pen mr-2 text-lime-400"></i>作品情報を入力</h4>
@@ -607,7 +574,7 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
                         </div>
                         
                         <div id="batch-list-container" class="flex-grow overflow-y-auto pr-1 custom-scrollbar space-y-2 min-h-0">
-                            </div>
+                        </div>
 
                         <div class="pt-4 mt-2">
                             <button type="button" id="batch-save-all-btn" class="w-full py-4 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white text-lg font-bold shadow-xl transform hover:-translate-y-1 transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed" disabled>
