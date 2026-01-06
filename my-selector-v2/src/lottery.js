@@ -29,12 +29,12 @@ export const getLotteryPool = (App) => {
         
         // 1. 登録日 (Priority)
         if (work.registeredAt) {
-            const daysAgo = (now - work.registeredAt.toMillis()) / oneDay;
-            if (priority === 'new') {
-                weight *= Math.max(0.1, 100 / (daysAgo + 10)); // 新しいほど重い
-            } else if (priority === 'old') {
-                weight *= Math.log10(daysAgo + 10) * 50; // 古いほど重い
-            }
+            // ★修正: Timestamp型でもDate型でも動くように変更
+            const regTime = work.registeredAt.toMillis ? work.registeredAt.toMillis() : new Date(work.registeredAt).getTime();
+            const daysAgo = (now - regTime) / oneDay;
+            
+            if (priority === 'newer' && daysAgo < 30) weight *= 1.2;
+            if (priority === 'older' && daysAgo > 365) weight *= 1.2;
         }
 
         const selectionCount = work.selectionCount || 0;
@@ -186,7 +186,7 @@ export const openLotterySettingsModal = (App, tempState = null) => {
             
             gridEl.innerHTML = filtered.slice(0, 50).map(w => `<div class="text-center"><img src="${w.imageUrl||'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${App.escapeHTML(w.name)}" class="w-full h-16 object-cover rounded-md"><p class="text-xs truncate mt-1">${App.escapeHTML(w.name)}</p></div>`).join('');
         };
-        
+
         App.setupDateFilterEventListeners('lottery', updatePreview);
         $$('input[name="lottery-genre"], input[name="lottery-site"]').forEach(cb => cb.addEventListener('change', updatePreview));
 
