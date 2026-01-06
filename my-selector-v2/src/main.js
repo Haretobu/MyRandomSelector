@@ -532,8 +532,10 @@ const App = {
 
         try {
             const app = getApp();
+            // ▼▼▼ 追加: ローカル環境なら App Check を完全にスキップする ▼▼▼
             if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
-                self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+                console.log("Localhost detected: App Check skipped.");
+                return;
             }
             initializeAppCheck(app, {
                 provider: new ReCaptchaEnterpriseProvider('6Lem8v8rAAAAAJiur2mblUOHF28x-Vh0zRjg6B6u'),
