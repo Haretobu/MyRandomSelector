@@ -1,7 +1,7 @@
 // src/db.js
 import Dexie from 'dexie';
 import { collection, getDocs, query, where, Timestamp } from "firebase/firestore";
-import { db as firestoreDb } from './firebaseConfig';
+import { db as firestoreDb } from './src/services/firebaseConfig.js';
 import { store as AppState } from './store/store.js';
 
 // データベース定義
