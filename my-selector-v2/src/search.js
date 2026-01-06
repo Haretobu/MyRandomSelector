@@ -1,6 +1,6 @@
 // src/search.js
 import Fuse from 'fuse.js';
-import { store as AppState } from './store';
+import { store as AppState } from './store/store.js';
 
 let fuseInstance = null;
 
