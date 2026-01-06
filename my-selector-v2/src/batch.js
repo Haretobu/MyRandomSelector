@@ -416,12 +416,12 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
 
                         <div>
                             <label class="block text-sm font-medium text-gray-400 mb-1">作品URL (任意)</label>
-                            <div class="relative group">
+                            <div class="group">
                                 <div class="relative">
                                     <input type="url" id="batchWorkUrl" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-lime-500 pr-10" placeholder="https://..." autocomplete="off">
                                     <button type="button" id="clear-batchWorkUrl" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"><i class="fas fa-times-circle text-lg"></i></button>
                                 </div>
-                                <div id="batch-url-preview-box" class="hidden"></div>
+                                <div id="batch-url-preview-box" class="hidden mt-2 border border-gray-600 rounded-lg bg-gray-800 shadow-md"></div>
                             </div>
                         </div>
 
@@ -521,7 +521,7 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
             </div>
         </div>
     `;
-
+    
     App.openModal("作品の一括登録", content, onOpen, { size: 'max-w-7xl' });
 };
 

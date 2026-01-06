@@ -24,7 +24,7 @@ import {
     collection, doc, getDoc, setDoc, updateDoc, deleteDoc, 
     onSnapshot, query, writeBatch, Timestamp, serverTimestamp, 
     getDocs, addDoc, arrayUnion, arrayRemove, deleteField, 
-    orderBy, limit 
+    orderBy, limit, enableNetwork, disableNetwork
 } from "firebase/firestore";
 import { ref, uploadString, getDownloadURL, deleteObject } from "firebase/storage";
 import { httpsCallable } from "firebase/functions";
@@ -210,18 +210,19 @@ const App = {
             const hiddenDuration = now - (AppState.lastHiddenTime || now);
             
             // 5分以上バックグラウンドにいたら、データ不整合を防ぐため再読み込み
-            // または、接続が切れている可能性があるため強制同期
             if (hiddenDuration > 5 * 60 * 1000) {
                 console.log("App returned from long background. Reloading data...");
                 App.showToast("長時間経過したため、データを最新化します...", "info");
-                App.loadDataSet(AppState.syncId);
+                
+                // ★追加: ネットワーク接続のリセットを試みる
+                disableNetwork(AppState.db).then(() => {
+                    enableNetwork(AppState.db);
+                    App.loadDataSet(AppState.syncId);
+                }).catch(() => {
+                    App.loadDataSet(AppState.syncId);
+                });
             } else {
                 // 短時間でも念のため画面描画等のズレを直す処理があればここに入れる
-                // 必要であれば同期チェック
-                if (AppState.works.length > 0) {
-                     // 簡易的な生存確認として検索履歴再描画などを呼んでも良いが
-                     // ここでは特になし
-                }
             }
         }
     },
@@ -687,6 +688,8 @@ const App = {
                 console.log(`Loaded ${localData.works.length} works from Local DB.`);
                 AppState.works = localData.works;
                 AppState.tags = localData.tags;
+
+                App.fixWorkDates();
                 
                 // インデックス作成 & 描画
                 Search.initSearchIndex(AppState.works);
@@ -756,6 +759,31 @@ const App = {
                     AppState.ui.appContainer.classList.remove('opacity-0');
             }
         }
+    },
+
+    fixWorkDates: () => {
+        AppState.works.forEach(work => {
+            // registeredAt が壊れている(プレーンなオブジェクトになっている)場合を検知して修復
+            if (work.registeredAt && typeof work.registeredAt.toDate !== 'function') {
+                // Firestore Timestamp形式 (seconds, nanoseconds) の場合
+                if (work.registeredAt.seconds) {
+                    work.registeredAt = new Timestamp(work.registeredAt.seconds, work.registeredAt.nanoseconds);
+                } else if (work.registeredAt instanceof Date) {
+                    work.registeredAt = Timestamp.fromDate(work.registeredAt);
+                } else if (typeof work.registeredAt === 'string') {
+                    work.registeredAt = Timestamp.fromDate(new Date(work.registeredAt));
+                }
+            }
+            
+            // lastSelectedAt も同様に修復
+            if (work.lastSelectedAt && typeof work.lastSelectedAt.toDate !== 'function') {
+                if (work.lastSelectedAt.seconds) {
+                    work.lastSelectedAt = new Timestamp(work.lastSelectedAt.seconds, work.lastSelectedAt.nanoseconds);
+                } else {
+                    work.lastSelectedAt = null;
+                }
+            }
+        });
     },
 
     updateSyncIdHistory: (newId) => {
