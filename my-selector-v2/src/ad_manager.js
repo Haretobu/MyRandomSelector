@@ -47,7 +47,14 @@ export const AdManager = {
         // DLsiteのブログパーツ風デザイン
         // クリックで詳細モーダルを開く
         const imageUrl = work.imageUrl || 'https://placehold.co/200x200/374151/9ca3af?text=No+Image';
-        const siteBadge = App.getSiteBadgeHTML ? App.getSiteBadgeHTML(work.sourceUrl) : '';
+        
+        // ★修正: ここで直接HTML文字列を作成するように変更
+        let siteBadge = '';
+        if (work.sourceUrl) {
+            if (work.sourceUrl.includes('dlsite')) siteBadge = '<span class="px-1 text-[10px] bg-sky-600 text-white rounded mr-1">DL</span>';
+            else if (work.sourceUrl.includes('dmm')) siteBadge = '<span class="px-1 text-[10px] bg-red-600 text-white rounded mr-1">FZ</span>';
+        }
+
         const ratingStar = '★'.repeat(work.rating || 0);
 
         container.innerHTML = `
