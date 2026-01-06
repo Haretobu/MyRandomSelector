@@ -10,7 +10,7 @@ const $ = (selector) => document.querySelector(selector);
 
 // --- ローカルヘルパー関数 ---
 
-// 画像をBase64に変換
+// 画像をBase64に変換 (読み込み用)
 const fileToBase64 = (file) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -18,6 +18,16 @@ const fileToBase64 = (file) => {
         reader.onload = () => resolve(reader.result);
         reader.onerror = error => reject(error);
     });
+};
+
+// Base64をBlobに変換 (保存用 - fetchを使わない方式)
+const base64ToBlob = (base64, mimeType) => {
+    const bin = atob(base64.replace(/^.*,/, ''));
+    const buffer = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) {
+        buffer[i] = bin.charCodeAt(i);
+    }
+    return new Blob([buffer.buffer], { type: mimeType });
 };
 
 // 連打防止（debounce）
@@ -29,7 +39,7 @@ const debounce = (func, wait) => {
     };
 };
 
-// HTMLエスケープ（念のためローカルにも用意）
+// HTMLエスケープ
 const escapeHTML = (str) => {
     if (!str) return '';
     return str.replace(/[&<>"']/g, match => ({
@@ -228,7 +238,12 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
         
         if (!confirm(`${AppState.tempWorks.length}件の作品を一括登録します。よろしいですか？`)) return;
         
-        const loadingToast = UI.showToast("登録処理中...", "info", 0);
+        // ローディング表示（変数を外に出して参照可能にする）
+        let loadingToast = null;
+        try {
+            loadingToast = UI.showToast("登録処理中...", "info", 0);
+        } catch(e) { console.log("Toast error ignored"); }
+
         let successCount = 0;
         let errorCount = 0;
 
@@ -247,9 +262,12 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
 
                     let imageFile = null;
                     if (tempWork.imageData) {
-                        const res = await fetch(tempWork.imageData.base64);
-                        const blob = await res.blob();
-                        imageFile = new File([blob], tempWork.imageData.fileName, { type: tempWork.imageData.fileType });
+                        // ★修正ポイント: fetchを使わずにBlob変換 (CSPエラー回避)
+                        imageFile = new File(
+                            [base64ToBlob(tempWork.imageData.base64, tempWork.imageData.fileType)], 
+                            tempWork.imageData.fileName, 
+                            { type: tempWork.imageData.fileType }
+                        );
                     }
 
                     await Actions.addWork(newWork, imageFile);
@@ -261,7 +279,8 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
                 }
             }
 
-            loadingToast.hideToast();
+            // 安全に隠す
+            if(loadingToast && typeof loadingToast.hideToast === 'function') loadingToast.hideToast();
             
             if (errorCount === 0) {
                 UI.showToast(`${successCount}件の登録が完了しました！`);
@@ -275,7 +294,7 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
 
         } catch (globalError) {
             console.error(globalError);
-            loadingToast.hideToast();
+            if(loadingToast && typeof loadingToast.hideToast === 'function') loadingToast.hideToast();
             UI.showToast("予期せぬエラーが発生しました", "error");
         }
     };
@@ -329,7 +348,7 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
         const imageInput = $('#batchWorkImage');
         const suggestContainer = $('#batch-suggest-container');
         
-        // ★修正ポイント: ローカルで定義した debounce を使用
+        // debounceを使用
         const handleInputSuggestion = debounce(() => {
             const query = nameInput.value.trim();
             if (!query || query.length < 2) {
