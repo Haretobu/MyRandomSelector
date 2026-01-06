@@ -1,20 +1,21 @@
-// src/actions.js
+// src/services/actions.js
 import { store as AppState } from '../store/store.js';
-import { db, storage } from './firebaseConfig.js'; // 同じ階層
+import { db, storage } from './firebaseConfig.js'; 
 import * as UI from '../components/ui.js';
 import * as Utils from '../utils/utils.js';
 
-// ★追加: ローカルDBと検索モジュールをインポート
-import * as DB from './db.js'; // 同じ階層
+import * as DB from './db.js'; 
 import * as Search from '../search.js';
 
 import { 
     collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, 
     Timestamp, arrayUnion, deleteField 
 } from "firebase/firestore";
-import { ref, uploadString, getDownloadURL, deleteObject } from "firebase/storage";
 
-// ★ Storageへのアップロード処理
+// ★ uploadBytes を追加しました
+import { ref, uploadString, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+
+// ★ Storageへのアップロード処理 (DataURL用)
 export const uploadImageToStorage = async (dataUrl, workId) => {
     if (!dataUrl || !dataUrl.startsWith('data:image')) return null;
     const timestamp = Date.now();
@@ -25,14 +26,72 @@ export const uploadImageToStorage = async (dataUrl, workId) => {
     return await getDownloadURL(storageRef);
 };
 
-// ★ 作品追加ロジック
+// ▼▼▼ 追加: 一括登録用の関数 (batch.jsから呼ばれます) ▼▼▼
+export const addWork = async (workData, imageFile = null) => {
+    if (AppState.isDebugMode) { throw new Error("デバッグモード中は作品を登録できません。"); }
+
+    try {
+        // 保存先パスの生成 (handleAddWorkと同じロジック)
+        const worksRef = collection(db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`);
+        const newDocRef = doc(worksRef);
+
+        let imageUrl = null;
+        let imageFileName = null;
+
+        // 画像がある場合のアップロード処理
+        if (imageFile) {
+            const timestamp = Date.now();
+            // IDとタイムスタンプでユニークなファイル名を生成
+            const path = `works/${AppState.syncId}/${newDocRef.id}_${timestamp}.jpg`;
+            const storageRef = ref(storage, path);
+            
+            // Fileオブジェクトを直接アップロード
+            await uploadBytes(storageRef, imageFile);
+            imageUrl = await getDownloadURL(storageRef);
+            imageFileName = imageFile.name;
+        }
+
+        // 保存データの構築
+        const newWork = {
+            ...workData,
+            imageUrl: imageUrl || null,
+            imageFileName: imageFileName || null,
+            // 必須項目の初期値保証
+            selectionCount: 0, 
+            rating: 0, 
+            tagIds: [], 
+            lastSelectedAt: null, 
+            selectionHistory: []
+        };
+
+        // 1. Firebaseに保存
+        await setDoc(newDocRef, newWork);
+
+        // 2. ローカルデータの更新 (ここが重要)
+        const fullWork = { id: newDocRef.id, ...newWork };
+        AppState.works.push(fullWork);
+        await DB.saveWorkLocal(fullWork);
+        Search.initSearchIndex(AppState.works);
+        
+        // 画面更新
+        if (window.App && window.App.renderAll) window.App.renderAll();
+
+        return fullWork;
+    } catch (error) {
+        console.error("Error in addWork:", error);
+        throw error;
+    }
+};
+// ▲▲▲ 追加終了 ▲▲▲
+
+
+// ★ 作品追加ロジック (フォーム用)
 export const handleAddWork = async (e) => {
     e.preventDefault();
     if (AppState.isDebugMode) { return UI.showToast("デバッグモード中は作品を登録できません。"); }
     
     const form = e.target;
     const name = form.elements.workName.value.trim();
-    // DOM要素を直接取得
     const registeredAtInput = document.getElementById('workRegisteredAt');
     const registeredAtStr = registeredAtInput ? registeredAtInput.value : '';
     
@@ -40,7 +99,6 @@ export const handleAddWork = async (e) => {
     if (!Utils.isValidDate(registeredAtStr)) return UI.showToast("登録日の形式が正しくありません (YYYY/MM/DD)。");
     
     const errorEl = document.getElementById('addWorkError');
-    // 重複チェック
     if (AppState.works.some(w => w.name.toLowerCase() === name.toLowerCase())) {
         if(errorEl) {
             errorEl.textContent = `「${name}」は既に登録されています。`;
@@ -78,27 +136,16 @@ export const handleAddWork = async (e) => {
             selectionHistory: []
         };
 
-        // 1. Firebaseに保存
         await setDoc(newDocRef, newWork);
 
-        // ★★★ 2. ローカル情報の手動更新 (ここが重要！) ★★★
         const fullWork = { id: newDocRef.id, ...newWork };
-        
-        // メモリ配列に追加
         AppState.works.push(fullWork);
-        
-        // ローカルDB (IndexedDB) にも保存
         await DB.saveWorkLocal(fullWork);
-        
-        // 検索インデックスを更新
         Search.initSearchIndex(AppState.works);
-        
-        // 画面を再描画 (main.js の renderAll を呼ぶ)
         if (window.App && window.App.renderAll) window.App.renderAll();
 
         UI.showToast(`"${name}" を登録しました。`);
         
-        // フォームクリア
         form.elements.workName.value = '';
         form.elements.workUrl.value = '';
         form.elements.workImage.value = '';
@@ -117,7 +164,6 @@ export const handleAddWork = async (e) => {
 // ★ 作品更新ロジック
 export const updateWork = async (workId, updatedData) => {
     if (AppState.isDebugMode) {
-        // デバッグモード用簡易更新
         const workIndex = AppState.works.findIndex(w => w.id === workId);
         if (workIndex !== -1) {
             AppState.works[workIndex] = { ...AppState.works[workIndex], ...updatedData };
@@ -128,20 +174,13 @@ export const updateWork = async (workId, updatedData) => {
     try {
         const workRef = doc(db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`, workId);
         
-        // 1. Firebase更新
         await updateDoc(workRef, updatedData);
 
-        // ★★★ 2. ローカル手動更新 ★★★
         const index = AppState.works.findIndex(w => w.id === workId);
         if (index !== -1) {
-            // メモリ上のデータを更新
             const mergedWork = { ...AppState.works[index], ...updatedData };
             AppState.works[index] = mergedWork;
-            
-            // ローカルDB更新
             await DB.saveWorkLocal(mergedWork);
-            
-            // 画面更新
             Search.initSearchIndex(AppState.works);
             if (window.App && window.App.renderAll) window.App.renderAll();
         }
@@ -170,17 +209,10 @@ export const deleteWork = async (workId, workName) => {
             }
         }
 
-        // 1. Firebase削除
         await deleteDoc(doc(db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`, workId));
 
-        // ★★★ 2. ローカル手動更新 ★★★
-        // メモリから削除
         AppState.works = AppState.works.filter(w => w.id !== workId);
-        
-        // ローカルDBから削除
         await DB.deleteWorkLocal(workId);
-        
-        // 画面更新
         Search.initSearchIndex(AppState.works);
         if (window.App && window.App.renderAll) window.App.renderAll();
 
@@ -205,13 +237,11 @@ export const addTag = async (name, color) => {
      try {
         const docRef = doc(collection(db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/tags`));
         
-        // 1. Firebase保存
         await setDoc(docRef, newTag);
         
-        // ★★★ 2. ローカル手動更新 ★★★
         const fullTag = { id: docRef.id, ...newTag };
         AppState.tags.set(docRef.id, fullTag);
-        await DB.db.tags.put(fullTag); // db.jsのインスタンスへアクセス
+        await DB.db.tags.put(fullTag); 
         
         if (window.App && window.App.renderAll) window.App.renderAll();
 
@@ -239,14 +269,11 @@ export const deleteTag = async (tagId) => {
             batch.update(doc(db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`, work.id), { tagIds: newTagIds });
         });
         
-        // 1. Firebase削除
         await batch.commit();
 
-        // ★★★ 2. ローカル手動更新 ★★★
         AppState.tags.delete(tagId);
         await DB.db.tags.delete(tagId);
         
-        // 影響を受けた作品のタグIDリストも更新
         for (const work of worksToUpdate) {
             work.tagIds = work.tagIds.filter(id => id !== tagId);
             await DB.saveWorkLocal(work);
