@@ -1,6 +1,6 @@
-// src/search.js
 import Fuse from 'fuse.js';
-import { store as AppState } from './store';
+// ▼ 修正: パスを './store' から './store/store.js' に変更
+import { store as AppState } from './store/store.js';
 
 let fuseInstance = null;
 
@@ -56,12 +56,13 @@ document.addEventListener('keydown', (e) => {
             if (lotteryBtn) lotteryBtn.click();
             break;
             
-        case 'n': // New (Add Work) - モーダルを開くなど
+        case 'n': // New (Add Work)
              // 実装に合わせて
              break;
              
         case 'escape': // Close Modal
-             App.closeModal();
+             // window.App が存在する場合のみ実行
+             if (window.App && window.App.closeModal) window.App.closeModal();
              break;
     }
 });
