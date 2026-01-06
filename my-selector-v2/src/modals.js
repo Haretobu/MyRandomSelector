@@ -180,73 +180,145 @@ export const openEditModal = (workId, tempState = null) => {
     const registeredAtStr = work.registeredAt ? Utils.formatDate(work.registeredAt, false) : App.formatDateForInput(new Date());
 
     const content = `
-        <form id="editWorkForm">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="md:col-span-2 space-y-4">
-                    <div>
-                        <label for="editWorkName" class="block text-sm font-medium text-gray-400 mb-1">作品名</label>
-                        <div class="flex items-center gap-2">
-                            <div class="relative flex-grow">
-                                <input type="text" id="editWorkName" value="${safeWorkName}" class="w-full bg-gray-700 p-2 rounded-lg pr-10" required> <button type="button" id="clear-editWorkName" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"> <i class="fas fa-times-circle"></i></button>
-                            </div>
-                            <button type="button" id="copy-edit-title-btn" class="flex-shrink-0 w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" title="コピー"><i class="fas fa-copy"></i></button>
-                        </div>
+        <div class="flex flex-col h-[80vh] lg:h-[75vh]">
+            <div class="flex lg:hidden bg-gray-900 rounded-t-lg mb-2 p-1 gap-1 shrink-0">
+                <button id="batch-tab-input" class="flex-1 py-2 text-sm font-bold rounded-md bg-gray-700 text-white transition-colors text-center"><i class="fas fa-pen mr-2"></i>入力</button>
+                <button id="batch-tab-import" class="flex-1 py-2 text-sm font-bold rounded-md text-gray-400 hover:bg-gray-800 transition-colors text-center"><i class="fas fa-file-import mr-2"></i>一括貼付</button>
+                <button id="batch-tab-list" class="flex-1 py-2 text-sm font-bold rounded-md text-gray-400 hover:bg-gray-800 transition-colors text-center relative">
+                    <i class="fas fa-list-ul mr-2"></i>リスト
+                    <span id="batch-tab-badge" class="hidden absolute top-1 right-2 w-2 h-2 bg-sky-500 rounded-full"></span>
+                </button>
+            </div>
+
+            <div class="flex flex-col lg:flex-row gap-4 flex-grow overflow-hidden relative">
+                
+                <div id="batch-col-form" class="w-full lg:w-7/12 flex flex-col h-full overflow-y-auto pr-1 lg:pr-2 custom-scrollbar transition-all absolute inset-0 lg:relative z-10 bg-gray-800 lg:bg-transparent">
+                    <div class="flex justify-between items-center mb-3 hidden lg:flex">
+                        <h4 class="text-lg font-bold text-lime-400"><i class="fas fa-pen mr-2"></i>作品情報を入力</h4>
+                        <button id="batch-tab-import-pc" class="text-sm px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-gray-300" onclick="document.getElementById('batch-tab-import').click()">
+                            <i class="fas fa-file-import mr-1"></i>テキストから一括登録
+                        </button>
                     </div>
-                    <div>
-                        <label for="editWorkUrl" class="block text-sm font-medium text-gray-400 mb-1">作品URL</label>
-                        <div class="relative group">
+
+                    <form id="batchRegForm" class="space-y-4 flex-grow pb-2">
+                        <div class="relative">
+                            <label class="block text-sm font-medium text-gray-400 mb-1">作品名 <span class="text-red-500">*</span></label>
                             <div class="flex items-center gap-2">
                                 <div class="relative flex-grow">
-                                    <input type="url" id="editWorkUrl" value="${safeWorkUrl}" placeholder="https://..." class="w-full bg-gray-700 p-2 rounded-lg pr-10"> <button type="button" id="clear-editWorkUrl" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"> <i class="fas fa-times-circle"></i></button>
+                                    <input type="text" id="batchWorkName" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-base focus:ring-2 focus:ring-lime-500 pr-10" placeholder="作品名を入力..." autocomplete="off">
+                                    <button type="button" id="clear-batchWorkName" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"><i class="fas fa-times-circle text-lg"></i></button>
                                 </div>
-                                <button type="button" id="openWorkUrlBtn" class="flex-shrink-0 w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" title="URLを開く" ${!safeWorkUrl ? 'disabled' : ''}><i class="fas fa-external-link-alt"></i></button>
+                                <button type="button" id="batch-external-search-btn" class="w-12 h-12 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-white flex items-center justify-center shrink-0" title="外部検索"><i class="fas fa-globe-asia text-lg"></i></button>
                             </div>
-                            <div id="edit-url-preview-box" class="hidden absolute z-50 top-full left-0 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-2"></div>
+                            <div id="batch-suggest-container" class="relative z-50"></div>
                         </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
+
                         <div>
-                            <label for="editWorkGenre" class="block text-sm font-medium text-gray-400 mb-1">ジャンル</label>
-                            <select id="editWorkGenre" class="w-full bg-gray-700 p-2 rounded-lg">
-                                <option value="漫画" ${work.genre === '漫画' ? 'selected' : ''}>漫画</option>
-                                <option value="ゲーム" ${work.genre === 'ゲーム' ? 'selected' : ''}>ゲーム</option>
-                                <option value="動画" ${work.genre === '動画' ? 'selected' : ''}>動画</option>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">作品URL (任意)</label>
+                            <div class="relative group">
+                                <div class="relative">
+                                    <input type="url" id="batchWorkUrl" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-lime-500 pr-10" placeholder="https://..." autocomplete="off">
+                                    <button type="button" id="clear-batchWorkUrl" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"><i class="fas fa-times-circle text-lg"></i></button>
+                                </div>
+                                <div id="batch-url-preview-box" class="hidden"></div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-400 mb-1">ジャンル <span class="text-red-500">*</span></label>
+                                <div class="relative">
+                                    <select id="batchWorkGenre" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm appearance-none">
+                                        <option value="漫画">漫画</option>
+                                        <option value="ゲーム">ゲーム</option>
+                                        <option value="動画">動画</option>
+                                    </select>
+                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-400"><i class="fas fa-chevron-down"></i></div>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-400 mb-1">登録日 <span class="text-red-500">*</span></label>
+                                ${App.createDateInputHTML('batchWorkRegisteredAt', App.formatDateForInput(new Date()))}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">画像 (任意)</label>
+                            <div class="flex items-center gap-3 bg-gray-700 p-2 rounded-lg border border-gray-600">
+                                <label class="cursor-pointer bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 rounded-lg text-sm shrink-0">
+                                    <i class="fas fa-image mr-1"></i> 選択
+                                    <input type="file" id="batchWorkImage" accept="image/jpeg,image/png,image/webp" class="hidden">
+                                </label>
+                                <span id="batch-image-filename" class="text-xs text-gray-400 truncate flex-1">未選択</span>
+                                <button type="button" id="batch-image-clear-btn" class="text-gray-400 hover:text-red-400 hidden px-2"><i class="fas fa-trash"></i></button>
+                            </div>
+                            <div id="batch-image-preview-container" class="mt-2 hidden text-center bg-gray-900 rounded-lg p-2">
+                                <img id="batch-image-preview" src="" class="max-h-32 mx-auto rounded border border-gray-700">
+                            </div>
+                        </div>
+                        
+                        <div class="pt-4 flex gap-3 mt-auto sticky bottom-0 bg-gray-800 pb-1">
+                            <button type="button" id="batch-clear-form-btn" class="px-4 py-3 bg-gray-600 hover:bg-gray-700 rounded-lg text-sm shrink-0">クリア</button>
+                            <button type="submit" id="batch-add-list-btn" class="flex-grow px-4 py-3 bg-lime-600 hover:bg-lime-700 rounded-lg font-bold text-white shadow-lg transition-transform active:scale-95 flex items-center justify-center">
+                                <i class="fas fa-cart-plus mr-2"></i>リストに追加
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="batch-col-import" class="hidden w-full lg:w-7/12 flex-col h-full bg-gray-800 lg:bg-transparent absolute inset-0 lg:relative z-10">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="text-lg font-bold text-sky-400"><i class="fas fa-file-import mr-2"></i>テキスト一括貼り付け</h4>
+                        <button class="text-sm px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-gray-300 lg:hidden" onclick="document.getElementById('batch-tab-input').click()">
+                            戻る
+                        </button>
+                    </div>
+                    <div class="bg-gray-900 p-3 rounded-lg border border-gray-700 text-sm text-gray-400 mb-3">
+                        <p>作品名を改行区切りで貼り付けてください。<br>URLが含まれている行は、URLも自動で登録されます。</p>
+                    </div>
+                    <textarea id="batch-import-textarea" class="flex-grow w-full bg-gray-700 border border-gray-600 rounded-lg p-3 focus:ring-2 focus:ring-sky-500 mb-3 text-sm" placeholder="作品A&#13;&#10;作品B https://example.com/b&#13;&#10;作品C"></textarea>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-3">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">ジャンル</label>
+                            <select id="batchImportGenre" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm">
+                                <option value="漫画">漫画</option>
+                                <option value="ゲーム">ゲーム</option>
+                                <option value="動画">動画</option>
                             </select>
                         </div>
                         <div>
-                            <label for="editWorkRegisteredAt" class="block text-sm font-medium text-gray-400 mb-1">登録日</label>
-                            ${App.createDateInputHTML('editWorkRegisteredAt', registeredAtStr)}
+                            <label class="block text-xs text-gray-400 mb-1">登録日</label>
+                            ${App.createDateInputHTML('batchImportRegisteredAt', App.formatDateForInput(new Date()))}
                         </div>
                     </div>
-                    <div><label class="block text-sm font-medium text-gray-400 mb-1">評価 (現在: ${currentRating} / 5)</label><div class="flex items-center space-x-2 text-2xl" id="editWorkRating"></div></div>
-                    <div><label class="block text-sm font-medium text-gray-400 mb-1">タグ</label><div id="editWorkTags" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] mb-2"></div><button type="button" id="editWorkAssignTagsBtn" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグを割り当て/編集</button></div>
-                    <div class="space-y-2 md:hidden"><label class="block text-sm font-medium text-gray-400">メモ</label><div id="memo-preview-display" class="w-full p-3 bg-gray-900 rounded-lg text-sm text-gray-400 min-h-[44px] italic break-words line-clamp-3">${currentMemo || 'メモなし'}</div><button type="button" id="open-memo-modal-btn" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">メモを編集</button></div>
+                    
+                    <button id="batch-import-run-btn" class="w-full py-3 bg-sky-600 hover:bg-sky-700 rounded-lg font-bold text-white shadow-lg">
+                        <i class="fas fa-magic mr-2"></i>解析してリストに追加
+                    </button>
                 </div>
-                <div class="md:col-span-1 space-y-6">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-400 mb-2">画像</label>
-                        <div class="relative w-full h-32 bg-gray-700 rounded-lg flex items-center justify-center mb-2">
-                            <img id="edit-current-image-preview" src="${work.imageUrl || ''}" class="w-full h-full object-contain rounded-lg ${!work.imageUrl ? 'hidden' : ''}">
-                            <div id="edit-no-image-placeholder" class="text-gray-500 ${work.imageUrl ? 'hidden' : ''}"><i class="fas fa-image fa-3x"></i></div>
-                            <button type="button" id="edit-image-delete-btn" class="absolute top-2 right-2 btn-icon bg-red-600 hover:bg-red-700 w-9 h-9 ${!work.imageUrl ? 'hidden' : ''}" title="画像を削除"><i class="fas fa-trash"></i></button>
+
+                <div id="batch-col-list" class="hidden lg:flex w-full lg:w-5/12 bg-gray-900 rounded-xl p-3 flex-col h-full border border-gray-700 absolute lg:relative inset-0 z-20 lg:z-0">
+                    <div class="flex justify-between items-center mb-3 pb-2 border-b border-gray-700 shrink-0">
+                        <div class="flex items-center gap-2">
+                            <h4 class="font-bold text-sky-400"><i class="fas fa-list-ul mr-2"></i>登録予定</h4>
+                            <span id="batch-list-count" class="bg-gray-700 text-xs px-2 py-1 rounded-full">0</span>
                         </div>
-                        <div class="flex items-center">
-                            <label for="edit-image-upload" class="flex-shrink-0 cursor-pointer text-sm font-semibold px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">参照...</label>
-                            <span id="edit-image-filename" class="ml-3 text-sm text-gray-400 break-words min-w-0 truncate">${fileNameDisplay}</span>
-                            <input type="file" id="edit-image-upload" accept="image/jpeg,image/png,image/webp" class="hidden">
+                        <button id="batch-reset-list-btn" class="text-gray-400 hover:text-red-500 p-2 rounded hover:bg-gray-800 transition-colors" title="リストを空にする">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                    <div id="batch-temp-list" class="flex-grow overflow-y-auto space-y-2 pr-1 mb-3 custom-scrollbar">
+                        <div class="text-center py-10 text-gray-500 text-sm">
+                            リストは空です。<br>左側で入力するか、一括貼付してください。
                         </div>
                     </div>
-                    <div><label class="block text-sm font-medium text-gray-400 mb-1">現在の抽選確率</label><p class="text-sm text-gray-300">${probabilityText}</p></div>
-                    <div class="hidden md:block space-y-2"><label for="editWorkMemo" class="block text-sm font-medium text-gray-400">メモ欄</label><textarea id="editWorkMemo" rows="10" class="w-full bg-gray-700 p-2 rounded-lg text-sm" placeholder="感想やメモ...">${currentMemo}</textarea></div>
+                    <button id="batch-finalize-btn" class="w-full py-4 bg-sky-600 hover:bg-sky-700 rounded-lg font-bold text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed shrink-0">
+                        確定画面へ進む <i class="fas fa-arrow-right ml-2"></i>
+                    </button>
                 </div>
             </div>
-            <div class="pt-6 mt-6 border-t border-gray-700 flex justify-end gap-3 flex-wrap sm:flex-nowrap">
-                <div class="flex space-x-3 w-full sm:w-auto">
-                    <button type="button" id="edit-cancel-btn" class="flex-1 sm:flex-none px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button>
-                    <button type="submit" class="flex-1 sm:flex-none px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-sky-600 hover:bg-sky-700 text-white">保存</button>
-                </div>
-            </div>
-        </form>
+        </div>
     `;
 
     const headerSearchBtn = `<button type="button" id="edit-external-search-header" class="text-sm py-1 rounded-lg flex items-center transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700 text-white px-2 md:px-3"><i class="fas fa-globe-asia md:mr-2"></i><span class="hidden md:inline">外部サイト検索</span></button>`;

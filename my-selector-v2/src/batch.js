@@ -192,8 +192,8 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
         urlInput.addEventListener('blur', () => {
             const url = urlInput.value.trim();
             if (url && url.length > 10 && url.startsWith('http')) {
-                // UIを押し下げないよう、絶対配置にするクラスを追加
-                previewBox.className = "absolute z-20 top-full left-0 w-full mt-1 bg-gray-800 rounded shadow-xl border border-gray-600 p-2 hidden";
+                // UIを押し下げないようabsolute、かつスクロール可能に
+                previewBox.className = "absolute z-50 top-full left-0 w-full mt-1 bg-gray-800 rounded shadow-xl border border-gray-600 p-2 hidden max-h-40 overflow-y-auto custom-scrollbar";
                 previewBox.classList.remove('hidden');
                 App.fetchLinkPreview(url, previewBox);
             } else { 
@@ -379,6 +379,7 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
         });
     };
 
+    // ▼ ここからコピーして、既存の const content = `...`; を上書きしてください ▼
     const content = `
         <div class="flex flex-col h-[80vh] lg:h-[75vh]">
             <div class="flex lg:hidden bg-gray-900 rounded-t-lg mb-2 p-1 gap-1 shrink-0">
@@ -416,10 +417,12 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
                         <div>
                             <label class="block text-sm font-medium text-gray-400 mb-1">作品URL (任意)</label>
                             <div class="relative group">
-                                <input type="url" id="batchWorkUrl" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-lime-500 pr-10" placeholder="https://..." autocomplete="off">
-                                <button type="button" id="clear-batchWorkUrl" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"><i class="fas fa-times-circle text-lg"></i></button>
+                                <div class="relative">
+                                    <input type="url" id="batchWorkUrl" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-lime-500 pr-10" placeholder="https://..." autocomplete="off">
+                                    <button type="button" id="clear-batchWorkUrl" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"><i class="fas fa-times-circle text-lg"></i></button>
+                                </div>
+                                <div id="batch-url-preview-box" class="hidden"></div>
                             </div>
-                            <div id="batch-url-preview-box" class="hidden mt-2"></div>
                         </div>
 
                         <div class="grid grid-cols-2 gap-4">

@@ -277,6 +277,9 @@ export const openLotterySettingsModal = (App, tempState = null) => {
                 unratedOrUntaggedOnly: $('#lottery-unrated').checked,
                 dateFilter: { mode: $(`input[name="date-filter-mode-lottery"]:checked`).value, date: App.getDateInputValue(`date-filter-specific-date-lottery`), startDate: App.getDateInputValue(`date-filter-start-date-lottery`), endDate: App.getDateInputValue(`date-filter-end-date-lottery`) }
             };
+
+            AppState.modalStateStack.push(() => App.openLotterySettingsModal(capturedState));
+
             App.openTagFilterModal({
                 and: tempAndTags, or: tempOrTags, not: tempNotTags,
                 onConfirm: (newTags) => {
@@ -284,8 +287,11 @@ export const openLotterySettingsModal = (App, tempState = null) => {
                         capturedState.andTagIds = newTags.and;
                         capturedState.orTagIds = newTags.or;
                         capturedState.notTagIds = newTags.not;
+                        
+                        // 更新されたstateで再開するようにスタックを更新
+                        AppState.modalStateStack.pop();
+                        AppState.modalStateStack.push(() => App.openLotterySettingsModal(capturedState));
                     }
-                    App.openLotterySettingsModal(capturedState);
                 }
             });
         });

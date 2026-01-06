@@ -191,9 +191,13 @@ const App = {
         App.checkVersionUpdate();
 
         setInterval(() => {
-            if (AppState.isLoadComplete && !document.hidden) { // 画面を見ている時だけ
+            const isModalOpen = !AppState.ui.modalWrapper.classList.contains('hidden');
+            
+            if (AppState.isLoadComplete && !document.hidden && !isModalOpen) {
                 console.log("Auto-syncing...");
                 App.loadDataSet(AppState.syncId);
+            } else if (isModalOpen) {
+                console.log("Auto-sync skipped due to open modal.");
             }
         }, 300000);
     },
@@ -1376,11 +1380,22 @@ const App = {
                     unratedOrUntaggedOnly: unratedToggle.checked,
                     dateFilter: { mode: $(`input[name="date-filter-mode-filter"]:checked`).value, date: App.getDateInputValue(`date-filter-specific-date-filter`), startDate: App.getDateInputValue(`date-filter-start-date-filter`), endDate: App.getDateInputValue(`date-filter-end-date-filter`) }
                 };
+
+                AppState.modalStateStack.push(() => App.openFilterModal(capturedState));
+
                 App.openTagFilterModal({
                     and: tempAndTags, or: tempOrTags, not: tempNotTags,
                     onConfirm: (newTags) => {
-                        if(newTags) { tempAndTags = newTags.and; tempOrTags = newTags.or; tempNotTags = newTags.not; }
-                        App.openFilterModal(capturedState);
+                        if(newTags) { 
+                            // 戻ってきたときに使うデータを更新
+                            capturedState.andTagIds = newTags.and; 
+                            capturedState.orTagIds = newTags.or; 
+                            capturedState.notTagIds = newTags.not;
+                            
+                            // スタックの関数を、新しいstateを持つものに置き換え（強引だが確実）
+                            AppState.modalStateStack.pop(); 
+                            AppState.modalStateStack.push(() => App.openFilterModal(capturedState));
+                        }
                     }
                 });
             });
@@ -1470,7 +1485,7 @@ const App = {
             <details class="bg-gray-700 rounded-lg" ${isOpen ? 'open' : ''}><summary class="px-3 py-2 text-xs text-gray-400 cursor-pointer">プレビュー</summary>
                 <div class="p-3 border-t border-gray-600">
                     <p id="date-filter-preview-count-${context}" class="text-sm mb-2">0 作品</p>
-                    <div id="date-filter-preview-grid-${context}" class="grid grid-cols-3 md:grid-cols-5 gap-2"></div>
+                    <div id="date-filter-preview-grid-${context}" class="grid grid-cols-3 md:grid-cols-5 gap-2 max-h-40 overflow-y-auto custom-scrollbar pr-1"></div>
                 </div>
             </details>
         </div>`,
