@@ -185,20 +185,24 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
         $('#batchWorkGenre').addEventListener('change', setDirty);
         imageInput.addEventListener('change', setDirty);
         
-        App.setupInputClearButton(nameInput, $('#clear-batchWorkName'));
+        App.setupInputClearButton($('#batchWorkName'), $('#clear-batchWorkName'));
         App.setupInputClearButton(urlInput, $('#clear-batchWorkUrl'));
 
         const previewBox = $('#batch-url-preview-box');
         urlInput.addEventListener('blur', () => {
             const url = urlInput.value.trim();
+            // 念のため hidden を削除して表示状態にする
+            previewBox.classList.remove('hidden');
+            
             if (url && url.length > 10 && url.startsWith('http')) {
-                // UIを押し下げないようabsolute、かつスクロール可能に
-                previewBox.className = "absolute z-50 top-full left-0 w-full mt-1 bg-gray-800 rounded shadow-xl border border-gray-600 p-2 hidden max-h-40 overflow-y-auto custom-scrollbar";
-                previewBox.classList.remove('hidden');
+                // 読み込み中表示
+                previewBox.innerHTML = '<div class="h-full flex items-center justify-center text-gray-400 text-xs"><i class="fas fa-spinner fa-spin mr-2"></i>情報を取得中...</div>';
+                
+                // プレビュー取得実行
                 App.fetchLinkPreview(url, previewBox);
             } else { 
-                previewBox.innerHTML = ''; 
-                previewBox.classList.add('hidden'); 
+                // URLがない/無効な場合は初期表示に戻す
+                previewBox.innerHTML = '<div class="h-full flex items-center justify-center text-gray-600 text-xs">URLを入力するとここにプレビューが表示されます</div>';
             }
         });
 
@@ -416,12 +420,20 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
 
                         <div>
                             <label class="block text-sm font-medium text-gray-400 mb-1">作品URL (任意)</label>
-                            <div class="group">
+                            <div class="relative group">
                                 <div class="relative">
                                     <input type="url" id="batchWorkUrl" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-lime-500 pr-10" placeholder="https://..." autocomplete="off">
                                     <button type="button" id="clear-batchWorkUrl" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"><i class="fas fa-times-circle text-lg"></i></button>
                                 </div>
-                                <div id="batch-url-preview-box" class="hidden mt-2 border border-gray-600 rounded-lg bg-gray-800 shadow-md"></div>
+                            </div>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="block text-xs text-gray-500 mb-1 ml-1">URLプレビュー</label>
+                            <div class="w-full h-32 bg-gray-800 border border-gray-600 rounded-lg overflow-hidden relative">
+                                <div id="batch-url-preview-box" class="w-full h-full overflow-y-auto custom-scrollbar">
+                                    <div class="h-full flex items-center justify-center text-gray-600 text-xs">URLを入力するとここにプレビューが表示されます</div>
+                                </div>
                             </div>
                         </div>
 
@@ -521,7 +533,7 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
             </div>
         </div>
     `;
-    
+
     App.openModal("作品の一括登録", content, onOpen, { size: 'max-w-7xl' });
 };
 
