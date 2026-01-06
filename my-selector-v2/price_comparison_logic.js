@@ -1,5 +1,5 @@
 // ↓ 新しい設定ファイルを読み込む（これだけでFirebase接続完了！）
-import { auth, db } from './src/firebaseConfig';
+import { auth, db } from './src/services/firebaseConfig.js';
 import { signInWithEmailAndPassword, onIdTokenChanged } from "firebase/auth";
 import { collection, onSnapshot } from "firebase/firestore";
 
