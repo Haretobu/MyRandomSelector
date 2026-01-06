@@ -28,15 +28,6 @@ export const setupAppEventListeners = (App) => {
         fabBackdrop.addEventListener('click', App.closeFabMenu);
     }
 
-    // ★画像生成ボタンのイベント (HTMLに最初から書いたのでIDで取得するだけ)
-    const imgGenBtn = $('#imgGenFab');
-    if (imgGenBtn) {
-        imgGenBtn.addEventListener('click', () => {
-            App.openImageGeneratorModal();
-            App.closeFabMenu();
-        });
-    }
-
     // キーボードショートカット (Escキー)
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
@@ -46,6 +37,38 @@ export const setupAppEventListeners = (App) => {
                 App.closeModal();
             } else if (!AppState.ui.fabBackdrop.classList.contains('hidden')) {
                 App.closeFabMenu();
+            }
+        }
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            // アプリに戻ってきた時
+            console.log("App resumed. Refreshing UI states...");
+            
+            // 1. 同期IDが消えていないかチェック
+            if (!AppState.syncId && localStorage.getItem('r18_sync_id')) {
+                AppState.syncId = localStorage.getItem('r18_sync_id');
+                if(!AppState.works.length) App.loadDataSet(AppState.syncId);
+            }
+
+            // 2. モーダルが開いている場合、ボタンが反応しない現象対策として再描画
+            // 特定のモーダルが開いているかチェック
+            const modalTitle = AppState.ui.modalTitle.textContent;
+            if (!AppState.ui.modalWrapper.classList.contains('hidden')) {
+                if (modalTitle === "抽選結果" && localStorage.getItem('lastSelectedWorkId')) {
+                   // 結果画面なら再描画してイベントを張り直す（これがタグ押せない対策）
+                   const workId = localStorage.getItem('lastSelectedWorkId');
+                   const work = AppState.works.find(w => w.id === workId);
+                   if (work) {
+                       // モーダルを閉じる処理を挟まず、中身だけ更新するのは複雑なので
+                       // 一度閉じて開くか、再レンダリング関数を呼ぶ
+                       // ここでは安全にトーストを出しつつ、強制リロードボタンを表示する等の案もあるが、
+                       // ユーザー体験のために自動修復を試みる
+                       console.log("Refreshing Result Modal...");
+                       App.openLotteryResultModal(work);
+                   }
+                }
             }
         }
     });

@@ -178,22 +178,38 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
             }
         });
 
-        nameInput.addEventListener('blur', () => setTimeout(() => suggestContainer.innerHTML = '', 200));
+        // 修正: blurを少し遅延させて、クリックイベントが先に発火するようにする
+        nameInput.addEventListener('blur', () => setTimeout(() => suggestContainer.innerHTML = '', 500));
 
         const setDirty = () => { AppState.isRegFormDirty = true; };
-        urlInput.addEventListener('input', setDirty);
+        // urlInput.addEventListener('input', setDirty); // 下記で設定するため重複削除
         $('#batchWorkGenre').addEventListener('change', setDirty);
         imageInput.addEventListener('change', setDirty);
         
         App.setupInputClearButton(nameInput, $('#clear-batchWorkName'));
         App.setupInputClearButton(urlInput, $('#clear-batchWorkUrl'));
 
+        // 修正: URLプレビューのレイアウト崩れ防止設定
         const previewBox = $('#batch-url-preview-box');
-        urlInput.addEventListener('blur', () => {
+        previewBox.className = "hidden absolute z-40 w-full mt-1 shadow-xl rounded-lg overflow-hidden"; // クラスを強制上書き
+
+        const handleUrlBlur = () => {
             const url = urlInput.value.trim();
-            if (url && url.length > 10 && url.startsWith('http')) App.fetchLinkPreview(url, previewBox);
-            else { previewBox.innerHTML = ''; previewBox.classList.add('hidden'); }
+            if (url && url.length > 10 && url.startsWith('http')) {
+                App.fetchLinkPreview(url, previewBox);
+                previewBox.classList.remove('hidden');
+            } else { 
+                previewBox.innerHTML = ''; 
+                previewBox.classList.add('hidden'); 
+            }
+        };
+
+        urlInput.addEventListener('input', () => {
+            setDirty();
+            // 入力中もURLっぽければプレビューしてもよいが、今回はblur時のみ更新とする
         });
+        
+        urlInput.addEventListener('blur', handleUrlBlur);
 
         imageInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
@@ -266,7 +282,14 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
             suggestContainer.innerHTML = '';
         });
 
-        $('#batch-clear-form-btn').addEventListener('click', () => { App.resetBatchRegForm(); App.showToast("フォームをクリアしました"); });
+        $('#batch-clear-form-btn').addEventListener('click', async () => {
+            // 修正: 入力がある場合のみ確認を出す
+            if (nameInput.value || urlInput.value || batchTempImageData) {
+                if (!await App.showConfirm("フォームのクリア", "入力中の内容を消去してもよろしいですか？")) return;
+            }
+            App.resetBatchRegForm(); 
+            App.showToast("フォームをクリアしました"); 
+        });
 
         // ★新機能: リストリセットボタン
         $('#batch-reset-list-btn').addEventListener('click', async () => {
@@ -388,33 +411,29 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
                     </div>
 
                     <form id="batchRegForm" class="space-y-4 flex-grow pb-2">
-                        <div class="relative">
+                        <div>
                             <label class="block text-sm font-medium text-gray-400 mb-1">作品名 <span class="text-red-500">*</span></label>
-                            <div class="flex items-center gap-2">
-                                <div class="relative flex-grow">
-                                    <input type="text" id="batchWorkName" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-base focus:ring-2 focus:ring-lime-500 pr-10" placeholder="作品名を入力..." autocomplete="off">
-                                    <button type="button" id="clear-batchWorkName" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"><i class="fas fa-times-circle text-lg"></i></button>
-                                </div>
-                                <button type="button" id="batch-external-search-btn" class="w-12 h-12 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-white flex items-center justify-center shrink-0" title="外部検索"><i class="fas fa-globe-asia text-lg"></i></button>
+                            <div class="relative">
+                                <input type="text" id="batchWorkName" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-lime-500 pr-10" placeholder="作品名を入力..." autocomplete="off">
+                                <button type="button" id="clear-batchWorkName" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"><i class="fas fa-times-circle text-lg"></i></button>
                             </div>
-                            <div id="batch-suggest-container" class="relative z-50"></div>
+                            <div id="batch-suggest-container" class="relative"></div>
                         </div>
 
-                        <div>
+                        <div class="relative z-30">
                             <label class="block text-sm font-medium text-gray-400 mb-1">作品URL (任意)</label>
                             <div class="relative">
                                 <input type="url" id="batchWorkUrl" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-lime-500 pr-10" placeholder="https://..." autocomplete="off">
                                 <button type="button" id="clear-batchWorkUrl" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"><i class="fas fa-times-circle text-lg"></i></button>
                             </div>
-                            <div id="batch-url-preview-box" class="hidden mt-2"></div>
+                            <div id="batch-url-preview-box" class="hidden absolute left-0 right-0 mt-2 z-50 shadow-2xl rounded-lg"></div>
                         </div>
 
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm font-medium text-gray-400 mb-1">ジャンル <span class="text-red-500">*</span></label>
-                                <div class="relative">
-                                    <select id="batchWorkGenre" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm appearance-none">
-                                        <option value="漫画">漫画</option>
+                                <label class="block text-sm font-medium text-gray-400 mb-1">ジャンル</label>
+                                <select id="batchWorkGenre" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-lime-500">
+                                    <option value="漫画">漫画</option>
                                         <option value="ゲーム">ゲーム</option>
                                         <option value="動画">動画</option>
                                     </select>

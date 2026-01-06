@@ -180,9 +180,13 @@ export const openLotterySettingsModal = (App, tempState = null) => {
             };
             const filtered = App.getFilteredWorks(filters);
             countEl.textContent = `対象: ${filtered.length} 作品`;
+            
+            // 修正: クラスに max-h-40 overflow-y-auto を追加して高さ制限
+            gridEl.className = "grid grid-cols-5 gap-2 max-h-40 overflow-y-auto pr-1 custom-scrollbar";
+            
             gridEl.innerHTML = filtered.slice(0, 50).map(w => `<div class="text-center"><img src="${w.imageUrl||'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${App.escapeHTML(w.name)}" class="w-full h-16 object-cover rounded-md"><p class="text-xs truncate mt-1">${App.escapeHTML(w.name)}</p></div>`).join('');
         };
-
+        
         App.setupDateFilterEventListeners('lottery', updatePreview);
         $$('input[name="lottery-genre"], input[name="lottery-site"]').forEach(cb => cb.addEventListener('change', updatePreview));
 

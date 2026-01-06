@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 【修正版】アプリで使用する特定のパス配下のみ、読み書きを許可する設定
+    // パス: artifacts / (アプリID) / public / data / r18_works_sync / (同期ID) / ...
+    match /artifacts/{appId}/public/data/r18_works_sync/{syncId}/{document=**} {
+      
+      // ログイン済みであれば、このパスの下にあるデータ（itemsやtags）は自由に触ってOK
+      allow read, write: if request.auth != null;
+      
+    }
+  }
+}

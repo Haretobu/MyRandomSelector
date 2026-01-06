@@ -31,6 +31,9 @@ import { httpsCallable } from "firebase/functions";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import { getApp } from "firebase/app";
 
+import { AdManager } from './ad_manager.js';
+import { NetworkMonitor } from './network_monitor.js';
+
 // Helper Functions
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => document.querySelectorAll(selector);
@@ -167,6 +170,8 @@ const App = {
                     });
             });
         }
+
+        NetworkMonitor.checkConnection(App);
 
         App.startApp();
     },
@@ -852,6 +857,7 @@ const App = {
         App.renderWorkList();
         App.renderActiveFilters();
         App.renderLotterySummary();
+        AdManager.render(App);
     },
 
     getWorkSite: (url) => {
@@ -1291,6 +1297,7 @@ const App = {
                 };
                 const filtered = App.getFilteredWorks(filters);
                 countEl.textContent = `対象: ${filtered.length} 作品`;
+                gridEl.className = "grid grid-cols-5 gap-2 max-h-40 overflow-y-auto pr-1 custom-scrollbar";
                 gridEl.innerHTML = filtered.slice(0, 50).map(w => `<div class="text-center"><img src="${w.imageUrl||'https://placehold.co/100x100/1f2937/4b5563?text=?'}" alt="${App.escapeHTML(w.name)}" class="w-full h-16 object-cover rounded-md"><p class="text-xs truncate mt-1">${App.escapeHTML(w.name)}</p></div>`).join('');
             };
 

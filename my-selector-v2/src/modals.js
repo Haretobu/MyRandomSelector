@@ -193,7 +193,8 @@ export const openEditModal = (workId, tempState = null) => {
                             <button type="button" id="copy-edit-title-btn" class="flex-shrink-0 w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" title="コピー"><i class="fas fa-copy"></i></button>
                         </div>
                     </div>
-                    <div>
+                    
+                    <div class="relative z-30">
                         <label for="editWorkUrl" class="block text-sm font-medium text-gray-400 mb-1">作品URL</label>
                         <div class="flex items-center gap-2">
                             <div class="relative flex-grow">
@@ -201,8 +202,9 @@ export const openEditModal = (workId, tempState = null) => {
                             </div>
                             <button type="button" id="openWorkUrlBtn" class="flex-shrink-0 w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" title="URLを開く" ${!safeWorkUrl ? 'disabled' : ''}><i class="fas fa-external-link-alt"></i></button>
                         </div>
-                        <div id="edit-url-preview-box" class="hidden mt-2"></div>
+                        <div id="edit-url-preview-box" class="hidden absolute left-0 right-0 mt-2 z-50 shadow-xl rounded-lg bg-gray-800 border border-gray-600"></div>
                     </div>
+
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label for="editWorkGenre" class="block text-sm font-medium text-gray-400 mb-1">ジャンル</label>
