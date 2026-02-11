@@ -2,6 +2,7 @@
 import React from 'react';
 import { Gamepad2, Keyboard } from 'lucide-react';
 import { KEY_CONFIG_ROWS } from '../constants';
+import DensityGraph from './DensityGraph';
 
 const ControllerPanel = ({ controllerRefs, keyboardRefs, noteCounts, is2P, parsedSong, difficultyInfo }) => {
     return (
@@ -39,6 +40,8 @@ const ControllerPanel = ({ controllerRefs, keyboardRefs, noteCounts, is2P, parse
                     </div>
                 </div>
             </div>
+
+            <DensityGraph parsedSong={parsedSong} currentMeasure={currentMeasure} />
 
             {/* 曲情報パネル */}
             <div className="bg-[#0f172a] p-4 rounded mt-auto border border-blue-900/30 min-h-[120px] flex flex-col justify-center items-center text-center shadow-lg relative overflow-hidden group">

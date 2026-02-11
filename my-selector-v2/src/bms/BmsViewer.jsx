@@ -1105,6 +1105,7 @@ export default function BmsViewer() {
                  <ControllerPanel
                     controllerRefs={controllerRefs} keyboardRefs={keyboardRefs} noteCounts={noteCounts}
                     is2P={is2P} parsedSong={parsedSong} difficultyInfo={difficultyInfo}
+                    currentMeasure={currentMeasure}
                  />
                  
                  {/* 中央左: 情報・BGA */}
