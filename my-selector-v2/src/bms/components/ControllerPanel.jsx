@@ -4,7 +4,7 @@ import { Gamepad2, Keyboard } from 'lucide-react';
 import { KEY_CONFIG_ROWS } from '../constants';
 import DensityGraph from './DensityGraph';
 
-const ControllerPanel = ({ controllerRefs, keyboardRefs, noteCounts, is2P, parsedSong, difficultyInfo }) => {
+const ControllerPanel = ({ controllerRefs, keyboardRefs, noteCounts, is2P, parsedSong, difficultyInfo, currentMeasure }) => {
     return (
         <div className="w-64 flex flex-col border-r border-blue-900/30 bg-[#080808] p-2 gap-2 shrink-0 overflow-y-auto scrollbar-hide text-blue-100">
             {/* コントローラー (ターンテーブル等) */}
