@@ -208,11 +208,17 @@ export default function BmsViewer() {
       if (kbEl) {
           const isScratch = idx === 0;
           if (active) {
+            
+              kbEl.style.transition = 'none';
+
               kbEl.style.backgroundColor = isScratch ? '#ef4444' : '#3b82f6';
               kbEl.style.color = '#ffffff';
               kbEl.style.borderColor = isScratch ? '#f87171' : '#60a5fa';
               kbEl.style.boxShadow = isScratch ? '0 0 10px #ef4444' : '0 0 10px #3b82f6';
           } else {
+
+              kbEl.style.transition = 'background-color 0.1s, box-shadow 0.1s';
+
               kbEl.style.backgroundColor = '#0f172a';
               kbEl.style.color = isScratch ? '#fca5a5' : '#475569';
               kbEl.style.borderColor = isScratch ? '#7f1d1d' : '#1e293b';
