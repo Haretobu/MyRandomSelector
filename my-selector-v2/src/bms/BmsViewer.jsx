@@ -217,7 +217,7 @@ export default function BmsViewer() {
               kbEl.style.boxShadow = isScratch ? '0 0 10px #ef4444' : '0 0 10px #3b82f6';
           } else {
 
-              kbEl.style.transition = 'background-color 0.1s, box-shadow 0.1s';
+              kbEl.style.transition = 'none';
 
               kbEl.style.backgroundColor = '#0f172a';
               kbEl.style.color = isScratch ? '#fca5a5' : '#475569';
