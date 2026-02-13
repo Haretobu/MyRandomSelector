@@ -720,11 +720,14 @@ export default function BmsViewer() {
     canvas.height = rect.height * dpr; ctx.scale(dpr, dpr); } 
     else ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const currentTime = isPlayingRef.current && audioContextRef.current ? audioContextRef.current.currentTime - startTimeRef.current : pauseTimeRef.current;
+
+    const bgaTime = currentTime + 0.05;
+
     if (parsedSong) {
         activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime);
         if (parsedSong.backBgaObjects && nextBackBgaIndexRef.current < parsedSong.backBgaObjects.length) {
             const bgaObj = parsedSong.backBgaObjects[nextBackBgaIndexRef.current];
-            if (bgaObj.time <= currentTime) {
+            if (bgaObj.time <= bgaTime) {
                 const filename = parsedSong.header.bmps[bgaObj.value];
                 if (filename) { 
                     const asset = imageAssetsRef.current.get(filename.toLowerCase());
@@ -738,7 +741,7 @@ export default function BmsViewer() {
         }
         if (parsedSong.layerBgaObjects && nextLayerBgaIndexRef.current < parsedSong.layerBgaObjects.length) {
             const bgaObj = parsedSong.layerBgaObjects[nextLayerBgaIndexRef.current];
-            if (bgaObj.time <= currentTime) {
+            if (bgaObj.time <= bgaTime) {
                 if (bgaObj.value === 0) setCurrentLayerBga(null);
                 else { 
                     const filename = parsedSong.header.bmps[bgaObj.value];
@@ -755,7 +758,7 @@ export default function BmsViewer() {
         }
         if (parsedSong.poorBgaObjects && nextPoorBgaIndexRef.current < parsedSong.poorBgaObjects.length) {
             const bgaObj = parsedSong.poorBgaObjects[nextPoorBgaIndexRef.current];
-            if (bgaObj.time <= currentTime) {
+            if (bgaObj.time <= bgaTime) {
                 const filename = parsedSong.header.bmps[bgaObj.value];
                 if (filename) { 
                     const asset = imageAssetsRef.current.get(filename.toLowerCase());

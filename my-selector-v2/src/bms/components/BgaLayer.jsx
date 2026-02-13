@@ -10,7 +10,7 @@ const BgaLayer = ({ bgaState, zIndex, blendMode = 'normal', opacity = 1, isPlayi
              
              if (isPlaying) {
                  if (video.paused) video.play().catch(() => {});
-                 if (Math.abs(video.currentTime - targetTime) > 0.2) {
+                 if (Math.abs(video.currentTime - targetTime) > 0.05) {
                      video.currentTime = targetTime;
                  }
              } else {
