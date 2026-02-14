@@ -1,6 +1,7 @@
 import { store as AppState } from './store/store.js';
 import { writeBatch, collection, doc, Timestamp } from "firebase/firestore";
 
+import { processImportFiles } from './importParser.js';
 // ヘルパー関数
 const $ = (selector) => document.querySelector(selector);
 
@@ -304,81 +305,128 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
             App.openBatchConfirmModal();
         });
 
-        // --- テキスト一括取り込みロジック (改良版) ---
-        $('#batch-import-run-btn').addEventListener('click', () => {
-            const text = $('#batch-import-textarea').value;
-            if (!text.trim()) return App.showToast("テキストを入力してください。", "error");
+        // --- フォルダ(複数ファイル)一括インポートロジック ---
+        const dropZone = $('#import-drop-zone');
+        const fileInput = $('#import-file-input');
+        const loadingZone = $('#import-loading-zone');
+        const previewZone = $('#import-preview-zone');
+        const previewList = $('#import-preview-list');
+        
+        let parsedImportResults = []; // 解析結果を一時保持する変数
 
-            const lines = text.split(/\r\n|\n|\r/);
+        // 画面を初期状態（ドロップ待ち）に戻す関数
+        const resetImportUI = () => {
+            dropZone.classList.remove('hidden');
+            loadingZone.classList.add('hidden');
+            previewZone.classList.add('hidden');
+            previewZone.classList.remove('flex');
+            fileInput.value = '';
+            parsedImportResults = [];
+        };
+
+        // ファイル群を受け取って処理を回すメイン関数
+        const handleFiles = async (files) => {
+            if (!files || files.length === 0) return;
+            
             const dateStr = App.getDateInputValue('batchImportRegisteredAt');
-            const genre = $('#batchImportGenre').value;
-            let addedCount = 0;
+            if (!App.isValidDate(dateStr)) return App.showToast("日付形式が不正です。", "error");
 
-            lines.forEach(line => {
-                line = line.trim();
-                if (!line) return;
+            // UIをロード中に切り替え
+            dropZone.classList.add('hidden');
+            loadingZone.classList.remove('hidden');
 
-                let url = '';
-                const urlMatch = line.match(/https?:\/\/[^\s]+/);
-                if (urlMatch) {
-                    url = urlMatch[0];
-                    line = line.replace(url, '').trim(); 
-                }
+            try {
+                // ここで裏方ファイル (importParser.js) に処理を丸投げする！
+                const fileArray = Array.from(files);
+                parsedImportResults = await processImportFiles(fileArray, App, AppState, dateStr);
 
-                const normalizedLine = App.normalizeString(line);
+                // 解析が終わったら、UIをプレビュー画面に切り替え
+                loadingZone.classList.add('hidden');
+                previewZone.classList.remove('hidden');
+                previewZone.classList.add('flex'); // flex-colとして表示
                 
-                // 重複・類似判定
-                let warningStatus = null;
-                let warningMessage = null;
+                $('#import-commit-count').textContent = parsedImportResults.length;
 
-                // 1. 完全一致チェック (登録済み)
-                const isRegistered = AppState.works.some(w => App.normalizeString(w.name) === normalizedLine);
-                if (isRegistered) {
-                    warningStatus = 'duplicate';
-                    warningMessage = '登録済';
-                }
+                // プレビューリストの描画
+                previewList.innerHTML = parsedImportResults.map((work) => {
+                    let activeClass = 'border-gray-700 bg-gray-800';
+                    let warningBadge = '';
 
-                // 2. 類似チェック (登録済み) - 完全一致でない場合のみ
-                if (!warningStatus) {
-                    const isSimilar = AppState.works.some(w => {
-                        const n = App.normalizeString(w.name);
-                        return n.includes(normalizedLine) || normalizedLine.includes(n);
-                    });
-                    if (isSimilar) {
-                        warningStatus = 'similar';
-                        warningMessage = '類似あり';
+                    if (work.warningStatus === 'duplicate') {
+                        activeClass = 'border-red-500 bg-red-900/20';
+                        warningBadge = `<span class="inline-block bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded ml-2 font-bold">${work.warningMessage}</span>`;
+                    } else if (work.warningStatus === 'similar') {
+                        activeClass = 'border-yellow-500 bg-yellow-900/20';
+                        warningBadge = `<span class="inline-block bg-yellow-600 text-white text-[10px] px-1.5 py-0.5 rounded ml-2 font-bold">${work.warningMessage}</span>`;
                     }
-                }
 
-                // 3. リスト内重複チェック
-                if (!warningStatus) {
-                    const isTempDup = AppState.tempWorks.some(w => App.normalizeString(w.name) === normalizedLine);
-                    if (isTempDup) {
-                        warningStatus = 'duplicate'; // リスト内重複も赤警告にする
-                        warningMessage = 'リスト重複';
-                    }
-                }
+                    const imgUrl = work.imageData ? work.imageData.base64 : 'https://placehold.co/100x100/374151/9ca3af?text=No+Img';
+                    const siteBadge = getInlineBadge(work.url); // batch.js内の関数を利用
 
-                AppState.tempWorks.push({
-                    name: line,
-                    url: url,
-                    genre: genre,
-                    registeredAtStr: dateStr,
-                    imageData: null,
-                    site: App.getWorkSite(url),
-                    warningStatus: warningStatus, // ステータスを保持
-                    warningMessage: warningMessage
-                });
-                addedCount++;
-            });
+                    return `
+                    <div class="flex items-center gap-3 p-2 rounded-lg border ${activeClass} mb-2">
+                        <img src="${imgUrl}" class="w-10 h-10 rounded object-cover flex-shrink-0 bg-gray-900">
+                        <div class="flex-grow min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <p class="font-bold text-sm truncate text-gray-200">${App.escapeHTML(work.name)}</p>
+                                ${siteBadge}
+                                ${warningBadge}
+                            </div>
+                            <p class="text-xs text-gray-400 truncate">${work.genre}</p>
+                        </div>
+                    </div>
+                    `;
+                }).join('');
 
-            if (addedCount > 0) {
-                App.showToast(`${addedCount}件を解析しました。リストを確認してください。`, "success");
-                $('#batch-import-textarea').value = '';
-                switchTab('list'); // インポート後はリストタブへ
-                App.renderTempWorkList();
-            } else {
-                App.showToast("有効な行が見つかりませんでした。", "info");
+            } catch (error) {
+                // エラー時は初期画面に戻してトースト表示
+                resetImportUI();
+                App.showToast(error.message, "error");
+            }
+        };
+
+        // --- イベントリスナー ---
+        
+        // ファイル選択ダイアログで選んだ場合
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+        // ドラッグ＆ドロップのスタイル制御と発火
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault(); // 必須
+            dropZone.classList.add('border-sky-500', 'bg-gray-800');
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-sky-500', 'bg-gray-800');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-sky-500', 'bg-gray-800');
+            if (e.dataTransfer.files) handleFiles(e.dataTransfer.files);
+        });
+
+        // プレビュー画面のキャンセルボタン
+        $('#import-cancel-btn').addEventListener('click', resetImportUI);
+
+        // プレビュー画面のリスト追加（コミット）ボタン
+        $('#import-commit-btn').addEventListener('click', () => {
+            if (parsedImportResults.length === 0) return;
+            
+            // 既存の一時リストへ合流させる
+            AppState.tempWorks.push(...parsedImportResults);
+            
+            App.showToast(`${parsedImportResults.length}件をリストに追加しました！`, "success");
+            
+            // UIをリセットして、右側の「リストタブ」へ表示を切り替える
+            resetImportUI();
+            switchTab('list');
+            App.renderTempWorkList();
+            
+            // バッジのアニメーション（追加されたアピール）
+            const badge = $('#batch-tab-badge');
+            if(badge) { 
+                badge.classList.remove('hidden'); 
+                setTimeout(() => badge.classList.add('animate-ping'), 100); 
+                setTimeout(() => badge.classList.remove('animate-ping'), 600); 
             }
         });
     };
@@ -481,34 +529,44 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
 
                 <div id="batch-col-import" class="hidden w-full lg:w-7/12 flex-col h-full bg-gray-800 lg:bg-transparent absolute inset-0 lg:relative z-10">
                     <div class="flex justify-between items-center mb-3">
-                        <h4 class="text-lg font-bold text-sky-400"><i class="fas fa-file-import mr-2"></i>テキスト一括貼り付け</h4>
+                        <h4 class="text-lg font-bold text-sky-400"><i class="fas fa-folder-open mr-2"></i>ファイルから一括読込</h4>
                         <button class="text-sm px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-gray-300 lg:hidden" onclick="document.getElementById('batch-tab-input').click()">
                             戻る
                         </button>
                     </div>
-                    <div class="bg-gray-900 p-3 rounded-lg border border-gray-700 text-sm text-gray-400 mb-3">
-                        <p>作品名を改行区切りで貼り付けてください。<br>URLが含まれている行は、URLも自動で登録されます。</p>
+
+                    <div class="mb-3">
+                        <label class="block text-xs text-gray-400 mb-1">登録日 (一括適用)</label>
+                        ${App.createDateInputHTML('batchImportRegisteredAt', App.formatDateForInput(new Date()))}
                     </div>
-                    <textarea id="batch-import-textarea" class="flex-grow w-full bg-gray-700 border border-gray-600 rounded-lg p-3 focus:ring-2 focus:ring-sky-500 mb-3 text-sm" placeholder="作品A&#13;&#10;作品B https://example.com/b&#13;&#10;作品C"></textarea>
-                    
-                    <div class="grid grid-cols-2 gap-4 mb-3">
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">ジャンル</label>
-                            <select id="batchImportGenre" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm">
-                                <option value="漫画">漫画</option>
-                                <option value="ゲーム">ゲーム</option>
-                                <option value="動画">動画</option>
-                            </select>
+
+                    <div id="import-drop-zone" class="flex-grow border-2 border-dashed border-gray-600 hover:border-sky-500 bg-gray-900/50 hover:bg-gray-800 rounded-lg flex flex-col items-center justify-center p-6 transition-colors cursor-pointer relative">
+                        <input type="file" id="import-file-input" multiple accept=".json,image/jpeg,image/png,image/webp" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" title="ファイルを選択">
+                        <i class="fas fa-file-upload text-4xl text-gray-500 mb-3"></i>
+                        <p class="text-gray-300 font-bold mb-1 text-center">JSONと画像ファイルを<br>すべて選択してここにドロップ</p>
+                        <p class="text-xs text-gray-500 text-center">またはクリックしてファイルを選択<br>(複数選択可)</p>
+                    </div>
+
+                    <div id="import-loading-zone" class="hidden flex-grow flex flex-col items-center justify-center">
+                        <i class="fas fa-spinner fa-spin text-4xl text-sky-500 mb-3"></i>
+                        <p class="text-gray-300 font-bold">データを解析中...</p>
+                        <p class="text-xs text-gray-500 mt-2">画像が多い場合は数秒かかります</p>
+                    </div>
+
+                    <div id="import-preview-zone" class="hidden flex-grow flex-col h-full overflow-hidden">
+                        <div class="flex justify-between items-end mb-2 shrink-0">
+                            <span class="text-sm font-bold text-gray-300">インポート結果の確認</span>
+                            <span class="text-xs text-gray-500">問題なければリストに追加してください</span>
                         </div>
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">登録日</label>
-                            ${App.createDateInputHTML('batchImportRegisteredAt', App.formatDateForInput(new Date()))}
+                        <div class="bg-gray-900 rounded-lg p-2 overflow-y-auto custom-scrollbar flex-grow border border-gray-700 mb-3" id="import-preview-list">
+                            </div>
+                        <div class="flex gap-3 shrink-0">
+                            <button type="button" id="import-cancel-btn" class="flex-1 py-3 bg-gray-600 hover:bg-gray-700 rounded-lg font-bold transition-colors">キャンセル</button>
+                            <button type="button" id="import-commit-btn" class="flex-1 py-3 bg-sky-600 hover:bg-sky-700 rounded-lg font-bold text-white shadow-lg transition-transform active:scale-95">
+                                <i class="fas fa-check mr-2"></i><span id="import-commit-count">0</span>件をリストに追加
+                            </button>
                         </div>
                     </div>
-                    
-                    <button id="batch-import-run-btn" class="w-full py-3 bg-sky-600 hover:bg-sky-700 rounded-lg font-bold text-white shadow-lg">
-                        <i class="fas fa-magic mr-2"></i>解析してリストに追加
-                    </button>
                 </div>
 
                 <div id="batch-col-list" class="hidden lg:flex w-full lg:w-5/12 bg-gray-900 rounded-xl p-3 flex-col h-full border border-gray-700 absolute lg:relative inset-0 z-20 lg:z-0">
