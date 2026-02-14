@@ -208,9 +208,17 @@ const App = {
         } else {
             const now = Date.now();
             const hiddenDuration = now - (AppState.lastHiddenTime || now);
+
+            const isModalOpen = !AppState.ui.modalWrapper.classList.contains('hidden');
             
             // 5分以上バックグラウンドにいたら、データ不整合を防ぐため再読み込み
             if (hiddenDuration > 5 * 60 * 1000) {
+                
+                if (isModalOpen) {
+                    console.log("App returned from background, but modal is open. Skipping network reset.");
+                    return; 
+                }
+
                 console.log("App returned from long background. Reloading data...");
                 App.showToast("長時間経過したため、データを最新化します...", "info");
                 
@@ -712,7 +720,13 @@ const App = {
         }
 
         // ★ ステップ2: サーバー同期 (バックグラウンド)
+        // 修正後: Liteモード時は重い同期通信をスキップする
         if (AppState.currentUser && !AppState.isDebugMode) {
+            if (AppState.isLiteMode) {
+                console.log("Lite mode is active. Skipping server sync.");
+                // 既にローカルデータのロードで画面は表示されているため、ここで終了します
+                return; 
+            }
             // もしローカルデータがなくて画面がまだ真っ白なら、トーストではなくローディング表示を維持
             if (AppState.works.length > 0) {
                 App.showToast("サーバーと同期中...", "info", 2000);
