@@ -606,6 +606,60 @@ const App = {
         });
     },
 
+    // --- Liteモード移行の確認ダイアログ ---
+    promptLiteModeTransition: () => {
+        // スヌーズ期間の設定（例：30分 = 30 * 60 * 1000 ミリ秒）
+        const SNOOZE_DURATION_MS = 30 * 60 * 1000;
+        const snoozeUntil = localStorage.getItem('liteModePromptSnoozeUntil');
+        
+        // スヌーズ期間中であれば、ダイアログを出さずに処理を終了（元の処理を継続）
+        if (snoozeUntil && Date.now() < parseInt(snoozeUntil, 10)) {
+            return; 
+        }
+
+        // 既に他のモーダル（評価や編集画面など）が開いている場合は表示しない
+        if (!AppState.ui.modalWrapper.classList.contains('hidden')) return;
+
+        // モーダルに表示するHTML
+        const contentHtml = `
+            <div class="space-y-4 text-gray-200">
+                <p>通信速度が低下しているか、読み込みに時間がかかっています。<br>データ通信量を抑え、動作を軽くする「Liteモード」に移行しますか？</p>
+                
+                <label class="inline-flex items-center cursor-pointer mt-4 bg-gray-700 px-3 py-3 rounded-lg hover:bg-gray-600 transition-colors w-full select-none">
+                    <input type="checkbox" id="snooze-lite-prompt" class="form-checkbox h-5 w-5 text-teal-500 rounded border-gray-500 bg-gray-800 focus:ring-teal-500">
+                    <span class="ml-3 text-sm text-gray-200 font-medium">今後30分間は再確認しない</span>
+                </label>
+
+                <div class="flex justify-end space-x-3 pt-5 border-t border-gray-700 mt-4">
+                    <button type="button" id="btn-lite-no" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors font-semibold">そのまま待機</button>
+                    <button type="button" id="btn-lite-yes" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg transition-colors">Liteモードへ移行</button>
+                </div>
+            </div>
+        `;
+
+        App.openModal("Liteモードへの移行確認", contentHtml, () => {
+            const snoozeCheckbox = document.getElementById('snooze-lite-prompt');
+            
+            // 「そのまま待機」を選んだ場合の処理
+            document.getElementById('btn-lite-no').addEventListener('click', () => {
+                if (snoozeCheckbox.checked) {
+                    localStorage.setItem('liteModePromptSnoozeUntil', Date.now() + SNOOZE_DURATION_MS);
+                }
+                App.closeModal();
+            });
+
+            // 「Liteモードへ移行」を選んだ場合の処理
+            document.getElementById('btn-lite-yes').addEventListener('click', () => {
+                if (snoozeCheckbox.checked) {
+                    // 移行後も不要な再確認を防ぐためスヌーズ時間を記録
+                    localStorage.setItem('liteModePromptSnoozeUntil', Date.now() + SNOOZE_DURATION_MS);
+                }
+                localStorage.setItem('isLiteMode', 'true');
+                location.reload(); // Liteモードを有効にしてリロード
+            });
+        }, { size: 'max-w-md' });
+    },
+
     setupSyncId: () => {
         let currentSyncId = localStorage.getItem('r18_sync_id');
         if (!currentSyncId) {

@@ -69,22 +69,57 @@ export const NetworkService = {
         // 既にLiteモードなら何もしない
         if (this.App.AppState.isLiteMode) return;
         
-        // 何度も出ないようにセッションストレージ等で制御しても良いが、今回はシンプルにトースト通知
-        // ユーザーが意図的に通常モードを選んでいる可能性もあるため、強制はしない
-        UI.showToast(
-            `回線速度が低下しています。<br>動作が重い場合は<button id="toast-switch-lite" class="underline font-bold ml-1">Liteモード</button>へ切り替えてください。`,
-            'warning',
-            8000
-        );
+        // スヌーズ（再確認しない）期間のチェック（例: 30分 = 30 * 60 * 1000 ミリ秒）
+        const SNOOZE_DURATION_MS = 30 * 60 * 1000;
+        const snoozeUntil = localStorage.getItem('liteModePromptSnoozeUntil');
         
-        setTimeout(() => {
-            const btn = document.getElementById('toast-switch-lite');
-            if (btn) {
-                btn.addEventListener('click', () => {
-                    localStorage.setItem('isLiteMode', 'true');
-                    location.reload();
-                });
-            }
-        }, 100);
+        // スヌーズ期間中であれば、ダイアログを出さずに処理を終了
+        if (snoozeUntil && Date.now() < parseInt(snoozeUntil, 10)) {
+            return; 
+        }
+
+        // 既に他のモーダル（評価や編集画面など）が開いている場合は作業の邪魔をしないよう表示しない
+        if (this.App.AppState.ui && !this.App.AppState.ui.modalWrapper.classList.contains('hidden')) {
+            return;
+        }
+
+        // モーダルに表示するHTML（チェックボックス付き）
+        const contentHtml = `
+            <div class="space-y-4 text-gray-200">
+                <p>通信速度が低下しているか、読み込みに時間がかかっています。<br>データ通信量を抑え、動作を軽くする「Liteモード」に移行しますか？</p>
+                
+                <label class="inline-flex items-center cursor-pointer mt-4 bg-gray-700 px-3 py-3 rounded-lg hover:bg-gray-600 transition-colors w-full select-none">
+                    <input type="checkbox" id="snooze-lite-prompt" class="form-checkbox h-5 w-5 text-teal-500 rounded border-gray-500 bg-gray-800 focus:ring-teal-500">
+                    <span class="ml-3 text-sm text-gray-200 font-medium">今後30分間は再確認しない</span>
+                </label>
+
+                <div class="flex justify-end space-x-3 pt-5 border-t border-gray-700 mt-4">
+                    <button type="button" id="btn-lite-no" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors font-semibold">そのまま待機</button>
+                    <button type="button" id="btn-lite-yes" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg transition-colors">Liteモードへ移行</button>
+                </div>
+            </div>
+        `;
+
+        // main.js で定義されている openModal を呼び出す
+        this.App.openModal("Liteモードへの移行確認", contentHtml, () => {
+            const snoozeCheckbox = document.getElementById('snooze-lite-prompt');
+            
+            // 「そのまま待機」を選んだ場合の処理
+            document.getElementById('btn-lite-no').addEventListener('click', () => {
+                if (snoozeCheckbox && snoozeCheckbox.checked) {
+                    localStorage.setItem('liteModePromptSnoozeUntil', Date.now() + SNOOZE_DURATION_MS);
+                }
+                this.App.closeModal(); // モーダルを閉じる
+            });
+
+            // 「Liteモードへ移行」を選んだ場合の処理
+            document.getElementById('btn-lite-yes').addEventListener('click', () => {
+                if (snoozeCheckbox && snoozeCheckbox.checked) {
+                    localStorage.setItem('liteModePromptSnoozeUntil', Date.now() + SNOOZE_DURATION_MS);
+                }
+                localStorage.setItem('isLiteMode', 'true');
+                location.reload(); // Liteモードを有効にしてリロード
+            });
+        }, { size: 'max-w-md' });
     }
 };
