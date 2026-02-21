@@ -947,9 +947,9 @@ export default function BmsViewer() {
                 const yEnd = JUDGE_Y - (endBeatDelta / visibleDuration * BASE_JUDGE_Y);
                 if (beatDelta <= 0 && endBeatDelta > 0) {
                     currentActiveLanes[obj.laneIndex] = true;
-                    const effectHeight = 300;
-                    const topY = JUDGE_Y - effectHeight;
-                    const grad = ctx.createLinearGradient(x, JUDGE_Y, x, 0); 
+                    const effectHeight = 300; // エフェクトの高さを固定
+                    const topY = JUDGE_Y - effectHeight; // 上端のY座標を計算
+                    const grad = ctx.createLinearGradient(x, JUDGE_Y, x, topY);
                     grad.addColorStop(0, `rgba(100, 200, 255, 0.3)`); 
                     grad.addColorStop(1, `rgba(0,0,0,0)`);
                     ctx.fillStyle = grad;
