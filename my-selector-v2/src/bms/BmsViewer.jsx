@@ -550,10 +550,16 @@ export default function BmsViewer() {
                 const isLong = buffer.duration > 10.0;
                 let shouldPlay = true;
                 if (obj.isNote && !playKeySoundsRef.current) shouldPlay = false;
-                if (isInputDebugModeRef.current && muteDebugAutoPlayRef.current) {
-                         shouldPlay = false;
-                     }
-                else if (!obj.isNote && !playBgSoundsRef.current) shouldPlay = false;
+                if (obj.isNote) {
+                    // ノーツの場合
+                    if (!playKeySoundsRef.current) shouldPlay = false;
+                    if (isInputDebugModeRef.current && muteDebugAutoPlayRef.current) {
+                        shouldPlay = false;
+                    }
+                } else {
+                    // ノーツ以外（BGMなど）の場合
+                    if (!playBgSoundsRef.current) shouldPlay = false;
+                }
                 if (isLong && !playLongAudioRef.current) shouldPlay = false;
                 
                 const isBgmMonitor = buffer.duration > 5.0 && !obj.isNote;
@@ -1151,6 +1157,7 @@ export default function BmsViewer() {
         playBgSounds={playBgSounds} setPlayBgSounds={setPlayBgSounds} showMutedMonitor={showMutedMonitor} setShowMutedMonitor={setShowMutedMonitor}
         showAbortedMonitor={showAbortedMonitor} setShowAbortedMonitor={setShowAbortedMonitor} scratchRotationEnabled={scratchRotationEnabled} setScratchRotationEnabled={setScratchRotationEnabled}
         isInputDebugMode={isInputDebugMode} setIsInputDebugMode={setIsInputDebugMode}
+        muteDebugAutoPlay={muteDebugAutoPlay} setMuteDebugAutoPlay={setMuteDebugAutoPlay}
         // Mobile Controls
         handleFileSelect={handleFileSelect} handleZipSelect={handleZipSelect} bmsList={bmsList} selectedBmsIndex={selectedBmsIndex} setSelectedBmsIndex={setSelectedBmsIndex}
         isPlaying={isPlaying} startPlayback={startPlayback} pausePlayback={pausePlayback} stopPlayback={stopPlayback}
