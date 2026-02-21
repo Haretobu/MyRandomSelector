@@ -953,7 +953,7 @@ export default function BmsViewer() {
                     grad.addColorStop(0, `rgba(100, 200, 255, 0.3)`); 
                     grad.addColorStop(1, `rgba(0,0,0,0)`);
                     ctx.fillStyle = grad;
-                    ctx.fillRect(x, topY, w, JUDGE_Y);
+                    ctx.fillRect(x, topY, w, effectHeight);
                 }
                 const drawBottom = Math.min(JUDGE_Y, yBase);
                 const drawTop = yEnd;
