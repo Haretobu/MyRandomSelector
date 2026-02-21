@@ -771,52 +771,62 @@ export default function BmsViewer() {
             }
         }
 
-        if (now - lastStateUpdateRef.current > 150) { 
+        if (parsedSong) {
+            activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime);
+        }
+
+        // 2. 再生時間の表示更新：解析用に毎フレーム実行する（高精度維持）
+        // ここをif文の外に出すことで、滑らかな数値変化に戻ります
+        setPlaybackTimeDisplay(currentTime);
+
+        // 3. その他の重い処理（小節線の計算やログ表示用のリスト更新など）
+        // これらは毎フレームやる必要がないので、ここだけ間引いて軽量化します
+        if (now - lastStateUpdateRef.current > 100) { // 100ms(秒間10回)程度に設定
             if (parsedSong) {
-                activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime);
-            }
-            setPlaybackTimeDisplay(currentTime);
-            const currentBar = parsedSong.barLines.find(b => b.time > currentTime);
-            const newMeasure = currentBar ? currentBar.measure - 1 : parsedSong.barLines.length - 1;
-            if (newMeasure !== currentMeasureRef.current) {
-                currentMeasureRef.current = newMeasure;
-                setCurrentMeasure(newMeasure);
-                if (parsedSong.rawLinesByMeasure[newMeasure]) setCurrentMeasureLines(parsedSong.rawLinesByMeasure[newMeasure].map(l => ({ text: l, isCurrent: true })));
-                else setCurrentMeasureLines([]);
-                const totalInMeasure = parsedSong.notesPerMeasure[newMeasure] || 0;
-                const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999;
-                const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
-                setCurrentMeasureNotes({ processed: processedInMeasure, total: totalInMeasure, average: parsedSong.avgDensity });
-            } else {
-                const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999;
-                const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
-                setCurrentMeasureNotes(prev => ({ ...prev, processed: processedInMeasure }));
-            }
-            
-            const currentBpmVal = getBpmFromTime(parsedSong.timePoints, currentTime);
-            setRealtimeBpm(currentBpmVal);
-            const futureTime = currentTime + 2.0; 
-            const nextTp = parsedSong.timePoints.find(tp => tp.time > currentTime && tp.time <= futureTime && tp.bpm !== currentBpmVal);
-            setNextBpmInfo(nextTp ? { value: nextTp.bpm, direction: nextTp.bpm > currentBpmVal ? 'up' : 'down', old: currentBpmVal } : null);
-            lastStateUpdateRef.current = now;
-            
-            activeLongSoundsRef.current = activeLongSoundsRef.current.filter(s => {
-                if (s.isAborted) return true; 
-                return currentTime < s.endTime;
-            });
-            const visibleTracks = activeLongSoundsRef.current.filter(s => s.isAborted || s.startTime <= currentTime);
-            if (visibleTracks.length !== backingTracks.length || (visibleTracks.length > 0 && visibleTracks[0].id !== backingTracks[0].id) || (visibleTracks.length > 0 && visibleTracks[visibleTracks.length-1].id !== backingTracks[backingTracks.length-1]?.id)) {
-                setBackingTracks([...visibleTracks]);
-            }
-            
-            activeLongSoundsRef.current.forEach(s => {
-                const ref = longAudioProgressRefs.current.get(s.id);
-                if (ref && !s.isAborted) {
-                    const duration = s.displayDuration || 1; const elapsed = currentTime - s.startTime;
-                    const progress = Math.min(100, Math.max(0, (elapsed / duration) * 100));
-                    ref.style.width = `${progress}%`;
+                 // 小節情報の更新などはここで行う
+                const currentBar = parsedSong.barLines.find(b => b.time > currentTime);
+                const newMeasure = currentBar ? currentBar.measure - 1 : parsedSong.barLines.length - 1;
+                
+                if (newMeasure !== currentMeasureRef.current) {
+                    currentMeasureRef.current = newMeasure;
+                    setCurrentMeasure(newMeasure);
+                    if (parsedSong.rawLinesByMeasure[newMeasure]) setCurrentMeasureLines(parsedSong.rawLinesByMeasure[newMeasure].map(l => ({ text: l, isCurrent: true })));
+                    else setCurrentMeasureLines([]);
+                    const totalInMeasure = parsedSong.notesPerMeasure[newMeasure] || 0;
+                    const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999;
+                    const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
+                    setCurrentMeasureNotes({ processed: processedInMeasure, total: totalInMeasure, average: parsedSong.avgDensity });
+                } else {
+                    const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999;
+                    const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
+                    setCurrentMeasureNotes(prev => ({ ...prev, processed: processedInMeasure }));
                 }
-            });
+                
+                const currentBpmVal = getBpmFromTime(parsedSong.timePoints, currentTime);
+                setRealtimeBpm(currentBpmVal);
+                const futureTime = currentTime + 2.0; 
+                const nextTp = parsedSong.timePoints.find(tp => tp.time > currentTime && tp.time <= futureTime && tp.bpm !== currentBpmVal);
+                setNextBpmInfo(nextTp ? { value: nextTp.bpm, direction: nextTp.bpm > currentBpmVal ? 'up' : 'down', old: currentBpmVal } : null);
+                
+                activeLongSoundsRef.current = activeLongSoundsRef.current.filter(s => {
+                    if (s.isAborted) return true; 
+                    return currentTime < s.endTime;
+                });
+                const visibleTracks = activeLongSoundsRef.current.filter(s => s.isAborted || s.startTime <= currentTime);
+                if (visibleTracks.length !== backingTracks.length || (visibleTracks.length > 0 && visibleTracks[0].id !== backingTracks[0].id) || (visibleTracks.length > 0 && visibleTracks[visibleTracks.length-1].id !== backingTracks[backingTracks.length-1]?.id)) {
+                    setBackingTracks([...visibleTracks]);
+                }
+                
+                activeLongSoundsRef.current.forEach(s => {
+                    const ref = longAudioProgressRefs.current.get(s.id);
+                    if (ref && !s.isAborted) {
+                        const duration = s.displayDuration || 1; const elapsed = currentTime - s.startTime;
+                        const progress = Math.min(100, Math.max(0, (elapsed / duration) * 100));
+                        ref.style.width = `${progress}%`;
+                    }
+                });
+            }
+            lastStateUpdateRef.current = now; // 時間更新タイミングを記録
         }
 
         const isFinished = currentTime > duration + 0.5 && activeNodesRef.current.length === 0;
@@ -937,7 +947,10 @@ export default function BmsViewer() {
                 const yEnd = JUDGE_Y - (endBeatDelta / visibleDuration * BASE_JUDGE_Y);
                 if (beatDelta <= 0 && endBeatDelta > 0) {
                     currentActiveLanes[obj.laneIndex] = true;
-                    ctx.fillStyle = `rgba(100, 200, 255, 0.15)`;
+                    const grad = ctx.createLinearGradient(x, JUDGE_Y, x, 0); 
+                    grad.addColorStop(0, `rgba(100, 200, 255, 0.3)`); 
+                    grad.addColorStop(1, `rgba(0,0,0,0)`);
+                    ctx.fillStyle = grad;
                     ctx.fillRect(x, 0, w, JUDGE_Y);
                 }
                 const drawBottom = Math.min(JUDGE_Y, yBase);
@@ -953,8 +966,11 @@ export default function BmsViewer() {
                         currentActiveLanes[obj.laneIndex] = true;
                         const alpha = 1.0 - (timeDelta / -0.05);
                         ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`; ctx.fillRect(x, JUDGE_Y - 5, w, 10);
+                        const grad = ctx.createLinearGradient(x, JUDGE_Y, x, JUDGE_Y - 200);
                         const color = obj.laneIndex === 0 ? '239, 68, 68' : '59, 130, 246'; 
-                        ctx.fillStyle = `rgba(${color}, ${alpha * 0.3})`;
+                        grad.addColorStop(0, `rgba(${color}, ${alpha * 0.6})`); 
+                        grad.addColorStop(1, `rgba(0,0,0,0)`);
+                        ctx.fillStyle = grad;
                         ctx.fillRect(x, JUDGE_Y - 200, w, 200);
                     }
                     continue;
