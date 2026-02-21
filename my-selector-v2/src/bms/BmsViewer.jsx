@@ -724,7 +724,7 @@ export default function BmsViewer() {
     const bgaTime = currentTime + 0.05;
 
     if (parsedSong) {
-        activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime);
+        //activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime);
         if (parsedSong.backBgaObjects && nextBackBgaIndexRef.current < parsedSong.backBgaObjects.length) {
             const bgaObj = parsedSong.backBgaObjects[nextBackBgaIndexRef.current];
             if (bgaObj.time <= bgaTime) {
@@ -771,7 +771,10 @@ export default function BmsViewer() {
             }
         }
 
-        if (now - lastStateUpdateRef.current > 50) { 
+        if (now - lastStateUpdateRef.current > 150) { 
+            if (parsedSong) {
+                activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime);
+            }
             setPlaybackTimeDisplay(currentTime);
             const currentBar = parsedSong.barLines.find(b => b.time > currentTime);
             const newMeasure = currentBar ? currentBar.measure - 1 : parsedSong.barLines.length - 1;
@@ -934,8 +937,7 @@ export default function BmsViewer() {
                 const yEnd = JUDGE_Y - (endBeatDelta / visibleDuration * BASE_JUDGE_Y);
                 if (beatDelta <= 0 && endBeatDelta > 0) {
                     currentActiveLanes[obj.laneIndex] = true;
-                    const grad = ctx.createLinearGradient(x, JUDGE_Y, x, 0); grad.addColorStop(0, `rgba(100, 200, 255, 0.3)`); grad.addColorStop(1, `rgba(0,0,0,0)`);
-                    ctx.fillStyle = grad;
+                    ctx.fillStyle = `rgba(100, 200, 255, 0.15)`;
                     ctx.fillRect(x, 0, w, JUDGE_Y);
                 }
                 const drawBottom = Math.min(JUDGE_Y, yBase);
@@ -951,10 +953,8 @@ export default function BmsViewer() {
                         currentActiveLanes[obj.laneIndex] = true;
                         const alpha = 1.0 - (timeDelta / -0.05);
                         ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`; ctx.fillRect(x, JUDGE_Y - 5, w, 10);
-                        const grad = ctx.createLinearGradient(x, JUDGE_Y, x, JUDGE_Y - 200);
                         const color = obj.laneIndex === 0 ? '239, 68, 68' : '59, 130, 246'; 
-                        grad.addColorStop(0, `rgba(${color}, ${alpha * 0.6})`); grad.addColorStop(1, `rgba(0,0,0,0)`);
-                        ctx.fillStyle = grad;
+                        ctx.fillStyle = `rgba(${color}, ${alpha * 0.3})`;
                         ctx.fillRect(x, JUDGE_Y - 200, w, 200);
                     }
                     continue;
