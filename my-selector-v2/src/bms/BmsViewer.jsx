@@ -76,6 +76,8 @@ export default function BmsViewer() {
   const [playLongAudio, setPlayLongAudio] = useState(true);
   const [scratchRotationEnabled, setScratchRotationEnabled] = useState(true);
   const [isInputDebugMode, setIsInputDebugMode] = useState(false);
+  const [muteDebugAutoPlay, setMuteDebugAutoPlay] = useState(true); 
+  const muteDebugAutoPlayRef = useRef(true);
   const [showSettings, setShowSettings] = useState(false);
   
   const [showMutedMonitor, setShowMutedMonitor] = useState(true);
@@ -190,6 +192,7 @@ export default function BmsViewer() {
           animationRef.current = requestAnimationFrame(renderLoop);
       }
   }, [isInputDebugMode]);
+  useEffect(() => { muteDebugAutoPlayRef.current = muteDebugAutoPlay; }, [muteDebugAutoPlay]);
 
   const setLaneActive = (idx, active) => {
       const ctrlEl = controllerRefs.current[idx];
@@ -278,38 +281,49 @@ export default function BmsViewer() {
             setLaneActive(lane, true); 
 
             if (isInputDebugModeRef.current && parsedSong && audioContextRef.current) {
-                // 1. 現在の再生時間を取得 (再生中なら進行時間、停止中なら停止位置)
                 const ctxTime = audioContextRef.current.currentTime;
                 const bmsTime = isPlayingRef.current 
                     ? (ctxTime - startTimeRef.current) 
                     : pauseTimeRef.current;
 
-                // 2. 「次に降ってくるノーツ」を探す
-                // パフォーマンス対策: 全探索せず、現在の再生位置(nextNoteIndexRef)から少し先までだけ探す
-                const searchStart = nextNoteIndexRef.current || 0;
-                const searchLimit = Math.min(displayObjects.length, searchStart + 1000); // 1000個先まで制限
+                // 修正: 未来の予約位置(nextNoteIndexRef)ではなく、現在時刻から近い場所を探す
+                // findStartIndexを使って現在時刻付近のインデックスを取得
+                const centerIndex = findStartIndex(displayObjects, bmsTime);
+                
+                // 前後を探して、このレーンで一番近い未処理のノーツ(または直近のノーツ)を探す
+                // 範囲は適当に前後20個くらいで十分
+                const searchStart = Math.max(0, centerIndex - 20);
+                const searchEnd = Math.min(displayObjects.length, centerIndex + 50);
 
-                for (let i = searchStart; i < searchLimit; i++) {
+                let targetObj = null;
+                let minDiff = 9999;
+
+                for (let i = searchStart; i < searchEnd; i++) {
                     const obj = displayObjects[i];
-                    // そのレーンのノーツで、かつ現在時刻より先(あるいは直近)にあるものを探す
-                    // (bmsTime - 0.2 は「ちょっと通り過ぎた」ものも許容して鳴らすため)
-                    if (obj.laneIndex === lane && obj.isNote && obj.time >= bmsTime - 0.2) {
-                        const wavName = parsedSong.header.wavs[obj.value];
-                        if (wavName) {
-                            const buffer = audioBuffersRef.current.get(wavName.toLowerCase());
-                            if (buffer) {
-                                // 3. 音を鳴らす (Reactの状態更新はしないので重くならない)
-                                const src = audioContextRef.current.createBufferSource();
-                                src.buffer = buffer;
-                                const gain = audioContextRef.current.createGain();
-                                // マスターボリュームを適用
-                                gain.gain.value = volumeRef.current; 
-                                src.connect(gain);
-                                gain.connect(gainNodeRef.current);
-                                src.start(0); // 即座に再生
-                            }
+                    if (obj.laneIndex === lane && obj.isNote) {
+                        // 時間差を計算
+                        const diff = Math.abs(obj.time - bmsTime);
+                        // 0.5秒以内の範囲で、一番近い音を採用する
+                        if (diff < 0.5 && diff < minDiff) {
+                            minDiff = diff;
+                            targetObj = obj;
                         }
-                        break; // 1つ鳴らしたらループ終了 (和音にはしない)
+                    }
+                }
+
+                if (targetObj) {
+                    const wavName = parsedSong.header.wavs[targetObj.value];
+                    if (wavName) {
+                        const buffer = audioBuffersRef.current.get(wavName.toLowerCase());
+                        if (buffer) {
+                            const src = audioContextRef.current.createBufferSource();
+                            src.buffer = buffer;
+                            const gain = audioContextRef.current.createGain();
+                            gain.gain.value = volumeRef.current; 
+                            src.connect(gain);
+                            gain.connect(gainNodeRef.current);
+                            src.start(0);
+                        }
                     }
                 }
             }
@@ -536,6 +550,9 @@ export default function BmsViewer() {
                 const isLong = buffer.duration > 10.0;
                 let shouldPlay = true;
                 if (obj.isNote && !playKeySoundsRef.current) shouldPlay = false;
+                if (isInputDebugModeRef.current && muteDebugAutoPlayRef.current) {
+                         shouldPlay = false;
+                     }
                 else if (!obj.isNote && !playBgSoundsRef.current) shouldPlay = false;
                 if (isLong && !playLongAudioRef.current) shouldPlay = false;
                 

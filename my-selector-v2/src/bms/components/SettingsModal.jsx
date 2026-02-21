@@ -1,6 +1,6 @@
 // src/bms/components/SettingsModal.jsx
 import React from 'react';
-import { Settings, X, ChevronsUp, RotateCw, Film, Flag, Music, Layers, Speaker, EyeOff, FileX, Keyboard, FolderOpen, FileArchive, ChevronDown } from 'lucide-react';
+import { Settings, X, ChevronsUp, RotateCw, Film, Flag, Music, Layers, Speaker, EyeOff, FileX, Keyboard, FolderOpen, FileArchive, ChevronDown, Gamepad2 } from 'lucide-react'; // Gamepad2を追加
 import { VISIBILITY_MODES } from '../constants';
 
 const SettingsModal = ({
@@ -17,6 +17,8 @@ const SettingsModal = ({
     playBgSounds, setPlayBgSounds, showMutedMonitor, setShowMutedMonitor,
     showAbortedMonitor, setShowAbortedMonitor, scratchRotationEnabled, setScratchRotationEnabled,
     isInputDebugMode, setIsInputDebugMode,
+    // ▼▼▼ 追加: デバッグ時の自動再生ミュート設定を受け取る ▼▼▼
+    muteDebugAutoPlay, setMuteDebugAutoPlay,
     // ファイル操作
     handleFileSelect, handleZipSelect, bmsList, selectedBmsIndex, setSelectedBmsIndex,
     hiSpeed, setHiSpeed, bgaOpacity, setBgaOpacity,
@@ -231,9 +233,24 @@ const SettingsModal = ({
                                 <>
                                     <div className="border-t border-blue-900/30 my-2"></div>
                                     <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
-                                        <div className="flex items-center gap-3"><Keyboard className="text-red-400" size={18}/><span className="text-sm font-bold text-red-200">デバッグ用キー入力</span></div>
-                                        <input type="checkbox" checked={isInputDebugMode} onChange={e=>setIsInputDebugMode(e.target.checked)} className="accent-red-500"/>
+                                        <div className="flex items-center gap-3"><Gamepad2 className="text-blue-400" size={18}/><span className="text-sm font-bold text-blue-200">デバッグ用キー入力</span></div>
+                                        <input type="checkbox" checked={isInputDebugMode} onChange={e=>setIsInputDebugMode(e.target.checked)} className="accent-blue-500"/>
                                     </label>
+
+                                    {isInputDebugMode && (
+                                        <div className="flex items-center justify-between pl-6 border-l-2 border-gray-700 ml-1 bg-black/10 p-2 rounded">
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-medium text-gray-300">入力時に自動再生音をミュート</span>
+                                                <span className="text-[10px] text-gray-500">キー音再生設定に関わらず自動再生音が消えます</span>
+                                            </div>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={muteDebugAutoPlay} 
+                                                onChange={(e) => setMuteDebugAutoPlay(e.target.checked)} 
+                                                className="accent-green-500 w-4 h-4" 
+                                            />
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </div>
