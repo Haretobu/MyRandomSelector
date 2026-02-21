@@ -273,7 +273,47 @@ export default function BmsViewer() {
         else if (e.code === 'ControlLeft' || e.code === 'ControlRight') { isCtrlHeldRef.current = true; lane = 0; }
         else if (e.code === 'KeyM') { triggerMiss(); } 
         switch(e.code) { case 'KeyZ': lane = 1; break; case 'KeyS': lane = 2; break; case 'KeyX': lane = 3; break; case 'KeyD': lane = 4; break; case 'KeyC': lane = 5; break; case 'KeyF': lane = 6; break; case 'KeyV': lane = 7; break; }
-        if (lane !== -1) { activeInputLanesRef.current.add(lane); setLaneActive(lane, true); }
+        if (lane !== -1) { 
+            activeInputLanesRef.current.add(lane); 
+            setLaneActive(lane, true); 
+
+            if (isInputDebugModeRef.current && parsedSong && audioContextRef.current) {
+                // 1. 現在の再生時間を取得 (再生中なら進行時間、停止中なら停止位置)
+                const ctxTime = audioContextRef.current.currentTime;
+                const bmsTime = isPlayingRef.current 
+                    ? (ctxTime - startTimeRef.current) 
+                    : pauseTimeRef.current;
+
+                // 2. 「次に降ってくるノーツ」を探す
+                // パフォーマンス対策: 全探索せず、現在の再生位置(nextNoteIndexRef)から少し先までだけ探す
+                const searchStart = nextNoteIndexRef.current || 0;
+                const searchLimit = Math.min(displayObjects.length, searchStart + 1000); // 1000個先まで制限
+
+                for (let i = searchStart; i < searchLimit; i++) {
+                    const obj = displayObjects[i];
+                    // そのレーンのノーツで、かつ現在時刻より先(あるいは直近)にあるものを探す
+                    // (bmsTime - 0.2 は「ちょっと通り過ぎた」ものも許容して鳴らすため)
+                    if (obj.laneIndex === lane && obj.isNote && obj.time >= bmsTime - 0.2) {
+                        const wavName = parsedSong.header.wavs[obj.value];
+                        if (wavName) {
+                            const buffer = audioBuffersRef.current.get(wavName.toLowerCase());
+                            if (buffer) {
+                                // 3. 音を鳴らす (Reactの状態更新はしないので重くならない)
+                                const src = audioContextRef.current.createBufferSource();
+                                src.buffer = buffer;
+                                const gain = audioContextRef.current.createGain();
+                                // マスターボリュームを適用
+                                gain.gain.value = volumeRef.current; 
+                                src.connect(gain);
+                                gain.connect(gainNodeRef.current);
+                                src.start(0); // 即座に再生
+                            }
+                        }
+                        break; // 1つ鳴らしたらループ終了 (和音にはしない)
+                    }
+                }
+            }
+        }
         if (!animationRef.current) { lastFrameTimeRef.current = performance.now(); animationRef.current = requestAnimationFrame(renderLoop); }
     };
     const handleKeyUp = (e) => {
