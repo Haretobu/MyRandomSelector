@@ -724,7 +724,7 @@ export default function BmsViewer() {
     const bgaTime = currentTime + 0.05;
 
     if (parsedSong) {
-        //activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime);
+        activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime);
         if (parsedSong.backBgaObjects && nextBackBgaIndexRef.current < parsedSong.backBgaObjects.length) {
             const bgaObj = parsedSong.backBgaObjects[nextBackBgaIndexRef.current];
             if (bgaObj.time <= bgaTime) {
@@ -947,11 +947,13 @@ export default function BmsViewer() {
                 const yEnd = JUDGE_Y - (endBeatDelta / visibleDuration * BASE_JUDGE_Y);
                 if (beatDelta <= 0 && endBeatDelta > 0) {
                     currentActiveLanes[obj.laneIndex] = true;
+                    const effectHeight = 300;
+                    const topY = JUDGE_Y - effectHeight;
                     const grad = ctx.createLinearGradient(x, JUDGE_Y, x, 0); 
                     grad.addColorStop(0, `rgba(100, 200, 255, 0.3)`); 
                     grad.addColorStop(1, `rgba(0,0,0,0)`);
                     ctx.fillStyle = grad;
-                    ctx.fillRect(x, 0, w, JUDGE_Y);
+                    ctx.fillRect(x, topY, w, JUDGE_Y);
                 }
                 const drawBottom = Math.min(JUDGE_Y, yBase);
                 const drawTop = yEnd;
