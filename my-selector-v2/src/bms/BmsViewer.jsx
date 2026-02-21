@@ -143,7 +143,8 @@ export default function BmsViewer() {
   const suddenPlusValRef = useRef(suddenPlusVal);
   const hiddenPlusValRef = useRef(hiddenPlusVal);
   const liftValRef = useRef(liftVal);
-  const isMobileRef = useRef(isMobile); 
+  const isMobileRef = useRef(isMobile);
+  const lastNotesByLaneRef = useRef(new Array(8).fill(null)); 
   
   const boardOpacityRef = useRef(boardOpacity);
   const laneOpacityRef = useRef(laneOpacity);
@@ -286,33 +287,62 @@ export default function BmsViewer() {
                     ? (ctxTime - startTimeRef.current) 
                     : pauseTimeRef.current;
 
-                // 修正: 未来の予約位置(nextNoteIndexRef)ではなく、現在時刻から近い場所を探す
-                // findStartIndexを使って現在時刻付近のインデックスを取得
-                const centerIndex = findStartIndex(displayObjects, bmsTime);
-                
-                // 前後を探して、このレーンで一番近い未処理のノーツ(または直近のノーツ)を探す
-                // 範囲は適当に前後20個くらいで十分
-                const searchStart = Math.max(0, centerIndex - 20);
+                // ■ 設定に基づいた判定幅 (beatoraja BAD判定基準)
+                // Early(早入り/未来): -0.28s まで (280ms)
+                // Late (遅入り/過去): +0.22s まで (220ms)
+                const EARLY_LIMIT = 0.28; 
+                const LATE_LIMIT = 0.22;
+
+                // 1. 近くのノーツを探す (範囲を少し広めに取って検索)
+                const centerIndex = findStartIndex(displayObjects, bmsTime - LATE_LIMIT);
+                const searchStart = Math.max(0, centerIndex - 10);
                 const searchEnd = Math.min(displayObjects.length, centerIndex + 50);
 
                 let targetObj = null;
-                let minDiff = 9999;
+                let minAbsDiff = 9999; // 最も近いものを選ぶための記録用
 
                 for (let i = searchStart; i < searchEnd; i++) {
                     const obj = displayObjects[i];
                     if (obj.laneIndex === lane && obj.isNote) {
-                        // 時間差を計算
-                        const diff = Math.abs(obj.time - bmsTime);
-                        // 0.5秒以内の範囲で、一番近い音を採用する
-                        if (diff < 0.5 && diff < minDiff) {
-                            minDiff = diff;
-                            targetObj = obj;
+                        const diff = obj.time - bmsTime; // 正なら未来、負なら過去
+
+                        // 判定範囲内かチェック (-0.22 <= diff <= 0.28)
+                        // diffが負(過去)の場合は -diff <= 0.22
+                        // diffが正(未来)の場合は diff <= 0.28
+                        const isLateValid = diff < 0 && -diff <= LATE_LIMIT;
+                        const isEarlyValid = diff >= 0 && diff <= EARLY_LIMIT;
+
+                        if (isLateValid || isEarlyValid) {
+                            // 範囲内なら、より中心に近いものを優先する
+                            const absDiff = Math.abs(diff);
+                            if (absDiff < minAbsDiff) {
+                                minAbsDiff = absDiff;
+                                targetObj = obj;
+                            }
                         }
                     }
                 }
 
+                // 2. 音を鳴らす処理
+                let soundToPlay = null;
+
                 if (targetObj) {
-                    const wavName = parsedSong.header.wavs[targetObj.value];
+                    // ヒットしたノーツがある場合
+                    soundToPlay = targetObj.value;
+                } else {
+                    // ■ 追加機能: 最後のノーツを過ぎた後の処理
+                    // そのレーンの最後のノーツを取得
+                    const lastNote = lastNotesByLaneRef.current[lane];
+                    
+                    // 「最後のノーツが存在し」かつ「現在時刻が最後のノーツのLate判定(-0.22s)より後ろ」なら
+                    if (lastNote && bmsTime > lastNote.time + LATE_LIMIT) {
+                        soundToPlay = lastNote.value;
+                    }
+                }
+
+                // 音源再生実行
+                if (soundToPlay !== null) {
+                    const wavName = parsedSong.header.wavs[soundToPlay];
                     if (wavName) {
                         const buffer = audioBuffersRef.current.get(wavName.toLowerCase());
                         if (buffer) {
@@ -514,6 +544,16 @@ export default function BmsViewer() {
               if (buffer) { const endTime = obj.time + buffer.duration; if (endTime > calculatedMaxDuration) calculatedMaxDuration = endTime; }
           }
       });
+      const lasts = new Array(8).fill(null);
+      parsed.objects.forEach(obj => {
+          if (obj.isNote && obj.laneIndex >= 0 && obj.laneIndex <= 7) {
+              // より後ろの時間にあるノーツを更新していく
+              if (!lasts[obj.laneIndex] || obj.time > lasts[obj.laneIndex].time) {
+                  lasts[obj.laneIndex] = obj;
+              }
+          }
+      });
+      lastNotesByLaneRef.current = lasts;
       setDuration(calculatedMaxDuration); setParsedSong(parsed); setTotalNotes(parsed.totalNotes);
       setPlaybackTimeDisplay(0); pauseTimeRef.current = 0; setCombo(0); comboRef.current = 0;
       lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(8).fill(0));
@@ -521,6 +561,7 @@ export default function BmsViewer() {
       setLoadingMessage('準備完了'); setIsLoading(false);
     } catch (e) { console.error(e); setIsLoading(false); }
   };
+
 
   const scheduleAudio = () => {
       if (!parsedSong || !isPlayingRef.current || !audioContextRef.current) return;
