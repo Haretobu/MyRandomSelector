@@ -104,6 +104,7 @@ export default function BmsViewer() {
   const activeInputLanesRef = useRef(new Set()); 
   const activeShortSoundsRef = useRef([]);
   const activeLongSoundsRef = useRef([]); 
+  const activeDebugSoundsRef = useRef(new Set());
   const nextBackBgaIndexRef = useRef(0);
   const nextLayerBgaIndexRef = useRef(0);
   const nextPoorBgaIndexRef = useRef(0);
@@ -357,6 +358,11 @@ export default function BmsViewer() {
                             gain.gain.value = volumeRef.current; 
                             src.connect(gain);
                             gain.connect(gainNodeRef.current);
+                            src.onended = () => {
+                                activeDebugSoundsRef.current.delete(src);
+                            };
+                            activeDebugSoundsRef.current.add(src);
+
                             src.start(0);
                         }
                     }
@@ -748,6 +754,11 @@ export default function BmsViewer() {
           try { n.node.stop(); n.node.disconnect(); } catch(e){} 
       });
       activeNodesRef.current = [];
+
+      activeDebugSoundsRef.current.forEach(node => {
+          try { node.stop(); node.disconnect(); } catch(e){}
+      });
+      activeDebugSoundsRef.current.clear();
       if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current);
   };
 
