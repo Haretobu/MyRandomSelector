@@ -1267,10 +1267,13 @@ export default function BmsViewer() {
                     ref={infoPanelRef}
                     setShowSettings={setShowSettings} playOption={playOption}
                     currentBackBga={currentBackBga} currentLayerBga={currentLayerBga} currentPoorBga={currentPoorBga}
-                    showMissLayer={showMissLayer} isPlaying={isPlaying} playbackTimeDisplay={playbackTimeDisplay}
+                    showMissLayer={showMissLayer} isPlaying={isPlaying} //playbackTimeDisplay={playbackTimeDisplay}
                     playBgaVideo={playBgaVideo} readyAnimState={readyAnimState}
                     currentMeasureLines={currentMeasureLines} combo={combo} totalNotes={totalNotes}
                     currentMeasureNotes={currentMeasureNotes} realtimeBpm={realtimeBpm} nextBpmInfo={nextBpmInfo} hiSpeed={hiSpeed}
+                    suddenPlusVal={suddenPlusVal}
+                    liftVal={liftVal}
+                    visibilityMode={visibilityMode}
                  />
 
                  {/* 中央右: レーン (Canvas) */}
