@@ -7,28 +7,32 @@ const InfoPanel = forwardRef(({
     setShowSettings, playOption, 
     currentBackBga, currentLayerBga, currentPoorBga,
     showMissLayer, isPlaying, 
-    // playbackTimeDisplay は削除（Refで受け取る）
-    // combo も削除（Refで受け取る）
     playBgaVideo, readyAnimState,
     currentMeasureLines, totalNotes, currentMeasureNotes, realtimeBpm, nextBpmInfo, hiSpeed
 }, ref) => {
     
     const comboTextRef = useRef(null);
     const notesTextRef = useRef(null);
-    // BGAの時間は BgaLayer に渡す必要があるが、
-    // ここでは簡易的に props の変更検知に任せるか、あるいはここもRefで掘り下げるか。
-    // 今回は「重い数字表示」を優先してRef化します。
-    // （BGAは現状のprops渡しでも、親が再レンダリングしなければ実は止まってしまう問題がありますが、
-    //  完全に直すには BgaLayer も修正が必要です。まずは数字を直します）
+
+    // BGA操作用のリモコンを3つ用意
+    const backBgaRef = useRef(null);
+    const layerBgaRef = useRef(null);
+    const poorBgaRef = useRef(null);
 
     useImperativeHandle(ref, () => ({
         updateInfo: (time, currentCombo) => {
+            // 1. 数字の更新
             if (comboTextRef.current) {
                 comboTextRef.current.innerText = currentCombo;
             }
             if (notesTextRef.current) {
                 notesTextRef.current.innerText = currentCombo;
             }
+
+            // 2. BGAの時間同期（ここを追加！）
+            if (backBgaRef.current) backBgaRef.current.syncTime(time);
+            if (layerBgaRef.current) layerBgaRef.current.syncTime(time);
+            if (showMissLayer && poorBgaRef.current) poorBgaRef.current.syncTime(time);
         }
     }));
 
@@ -42,21 +46,30 @@ const InfoPanel = forwardRef(({
 
             {/* BGA表示エリア */}
             <div className="aspect-video w-full bg-black border border-blue-900/30 flex items-center justify-center text-blue-900/50 text-xs shrink-0 overflow-hidden relative shadow-inner rounded-sm">
-                {/* 注意: ここで currentTime に渡す変数が props から消えたため、
-                   BGAが時間同期しなくなる可能性があります。
-                   本来は BgaLayer も Ref化すべきですが、今回は「カクつき防止」優先のため
-                   親コンポーネントで計算している playbackTimeDisplay を渡す形に戻すか、
-                   あるいはここも書き換える必要があります。
-                   
-                   ★応急処置: 親の BmsViewer から playbackTimeDisplay を渡すのをやめた場合、
-                   ここの currentTime は undefined になります。
-                   BgaLayer は内部で video.currentTime を制御しているため、ここもRef経由にするのが正解です。
-                */}
-                <BgaLayer bgaState={currentBackBga} zIndex={0} isPlaying={isPlaying} currentTime={0 /* Ref化推奨 */} isVideoEnabled={playBgaVideo} />
-                <BgaLayer bgaState={currentLayerBga} zIndex={10} blendMode="screen" isPlaying={isPlaying} currentTime={0} isVideoEnabled={playBgaVideo} />
+                <BgaLayer 
+                    ref={backBgaRef} // リモコンセット
+                    bgaState={currentBackBga} 
+                    zIndex={0} 
+                    isPlaying={isPlaying} 
+                    isVideoEnabled={playBgaVideo} 
+                />
+                <BgaLayer 
+                    ref={layerBgaRef} // リモコンセット
+                    bgaState={currentLayerBga} 
+                    zIndex={10} 
+                    blendMode="screen" 
+                    isPlaying={isPlaying} 
+                    isVideoEnabled={playBgaVideo} 
+                />
                 {showMissLayer && currentPoorBga ? (
                     <div className="absolute inset-0 w-full h-full z-50 bg-black flex items-center justify-center">
-                        <BgaLayer bgaState={currentPoorBga} zIndex={50} isPlaying={isPlaying} currentTime={0} isVideoEnabled={playBgaVideo} />
+                        <BgaLayer 
+                            ref={poorBgaRef} // リモコンセット
+                            bgaState={currentPoorBga} 
+                            zIndex={50} 
+                            isPlaying={isPlaying} 
+                            isVideoEnabled={playBgaVideo} 
+                        />
                     </div>
                 ) : null}
 
@@ -76,13 +89,11 @@ const InfoPanel = forwardRef(({
             <div className="bg-[#112233]/30 border border-blue-900/30 p-2 text-xs space-y-2 shrink-0 text-blue-200 font-mono rounded-sm">
                 <div className="flex justify-between items-baseline border-b border-blue-900/30 pb-1">
                     <span className="text-[10px] text-blue-400">COMBO</span>
-                    {/* ここをRef対応に */}
                     <span ref={comboTextRef} className="text-xl font-bold text-white drop-shadow-[0_0_5px_rgba(59,130,246,0.5)]">0</span>
                 </div>
                 <div className="flex justify-between items-baseline">
                     <span className="text-[10px] text-blue-400">NOTES</span>
                     <span>
-                        {/* ここもRef対応に */}
                         <span ref={notesTextRef} className="text-white">0</span> 
                         <span className="text-blue-500"> / </span> 
                         {totalNotes}
