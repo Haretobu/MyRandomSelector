@@ -151,6 +151,9 @@ export default function BmsViewer() {
 
   const timeSliderRef = useRef(null);
 
+  const pcControlBarRef = useRef(null); 
+  const infoPanelRef = useRef(null);
+
   useEffect(() => { 
       const handleResize = () => {
           const mobile = window.innerWidth < MOBILE_BREAKPOINT;
@@ -889,6 +892,14 @@ export default function BmsViewer() {
             timeSliderRef.current.value = currentTime;
         }
 
+        if (pcControlBarRef.current) {
+            pcControlBarRef.current.updateTime(currentTime);
+        }
+        if (infoPanelRef.current) {
+            // 時間だけでなく、コンボ数なども渡せます
+            infoPanelRef.current.updateInfo(currentTime, comboRef.current);
+        }
+
         // 3. その他の重い処理（小節線の計算やログ表示用のリスト更新など）
         // これらは毎フレームやる必要がないので、ここだけ間引いて軽量化します
         if (now - lastStateUpdateRef.current > 100) { // 100ms(秒間10回)程度に設定
@@ -1242,6 +1253,7 @@ export default function BmsViewer() {
                  
                  {/* 中央左: 情報・BGA */}
                  <InfoPanel
+                    ref={infoPanelRef}
                     setShowSettings={setShowSettings} playOption={playOption}
                     currentBackBga={currentBackBga} currentLayerBga={currentLayerBga} currentPoorBga={currentPoorBga}
                     showMissLayer={showMissLayer} isPlaying={isPlaying} playbackTimeDisplay={playbackTimeDisplay}
@@ -1324,6 +1336,7 @@ export default function BmsViewer() {
       {/* PC用コントロールバー (スマホでは非表示) */}
       {!isMobile && (
           <ControlBar
+            ref={pcControlBarRef}
             handleFileSelect={handleFileSelect} selectedBmsIndex={selectedBmsIndex} setSelectedBmsIndex={setSelectedBmsIndex} bmsList={bmsList}
             stopPlayback={stopPlayback} isPlaying={isPlaying} pausePlayback={pausePlayback} startPlayback={startPlayback}
             duration={duration} playbackTimeDisplay={playbackTimeDisplay} handleSeek={handleSeek}
