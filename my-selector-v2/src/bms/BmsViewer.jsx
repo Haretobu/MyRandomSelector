@@ -149,6 +149,8 @@ export default function BmsViewer() {
   const boardOpacityRef = useRef(boardOpacity);
   const laneOpacityRef = useRef(laneOpacity);
 
+  const timeSliderRef = useRef(null);
+
   useEffect(() => { 
       const handleResize = () => {
           const mobile = window.innerWidth < MOBILE_BREAKPOINT;
@@ -881,7 +883,11 @@ export default function BmsViewer() {
 
         // 2. 再生時間の表示更新：解析用に毎フレーム実行する（高精度維持）
         // ここをif文の外に出すことで、滑らかな数値変化に戻ります
-        setPlaybackTimeDisplay(currentTime);
+        //setPlaybackTimeDisplay(currentTime);
+
+        if (timeSliderRef.current) {
+            timeSliderRef.current.value = currentTime;
+        }
 
         // 3. その他の重い処理（小節線の計算やログ表示用のリスト更新など）
         // これらは毎フレームやる必要がないので、ここだけ間引いて軽量化します
@@ -1293,7 +1299,16 @@ export default function BmsViewer() {
          {/* スマホ用: 下部コントロールバー (常駐) - ★修正: 位置を bottom-12 に下げる */}
          {isMobile && parsedSong && (
              <div className="absolute bottom-12 left-4 right-4 z-50 flex flex-col gap-2 pointer-events-auto pb-safe">
-                 <input type="range" min="0" max={duration || 100} step="0.01" value={playbackTimeDisplay} onChange={handleSeek} className="w-full h-2 bg-gray-700/50 rounded-lg appearance-none cursor-pointer accent-blue-500 backdrop-blur-sm" />
+                 <input 
+                    ref={timeSliderRef}  // ← これを追加！
+                    type="range" 
+                    min="0" 
+                    max={duration || 100} 
+                    step="0.01" 
+                    defaultValue={0} // ← value={playbackTimeDisplay} を defaultValue={0} に変更！
+                    onChange={handleSeek} 
+                    className="w-full h-2 bg-gray-700/50 rounded-lg appearance-none cursor-pointer accent-blue-500 backdrop-blur-sm" 
+                 />
                  <div className="flex items-center justify-between gap-3">
                      <div className="flex gap-2 flex-1">
                         <button onClick={() => stopPlayback(true)} className="bg-gray-800/80 backdrop-blur-sm text-white p-3 rounded-full shadow-lg border border-white/10 active:scale-95"><ChevronFirst size={24}/></button>
