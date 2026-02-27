@@ -3,7 +3,7 @@ import { store as AppState } from './store/store.js';
 // ヘルパー関数
 const $ = (selector) => document.querySelector(selector);
 
-// --- 以下、main.jsから移動した統計ロジック ---
+// --- 統計ロジック ---
 
 export const openStatsDashboardModal = (App) => {
     if (AppState.works.length === 0) {
@@ -13,11 +13,13 @@ export const openStatsDashboardModal = (App) => {
     const content = `
         <div class="space-y-4">
             <div class="flex flex-col sm:flex-row justify-between gap-2 items-center mb-4">
-                <div class="bg-gray-900 p-1 rounded-lg flex space-x-1">
+                <div class="bg-gray-900 p-1 rounded-lg flex space-x-1 w-full sm:w-auto overflow-x-auto">
                     <button id="stats-tab-overview" class="stats-tab flex-1 px-4 py-2 rounded-md text-sm font-semibold transition-colors stats-tab-active whitespace-nowrap">コレクション概要</button>
                     <button id="stats-tab-trends" class="stats-tab flex-1 px-4 py-2 rounded-md text-sm font-semibold transition-colors whitespace-nowrap">登録日分析</button>
+                    <button id="stats-tab-backlog" class="stats-tab flex-1 px-4 py-2 rounded-md text-sm font-semibold transition-colors whitespace-nowrap text-amber-400"><i class="fas fa-box-open mr-1"></i>積み消化状況</button>
                 </div>
-                <div class="flex items-center space-x-2">
+                
+                <div id="stats-filter-container" class="flex items-center space-x-2">
                     <label for="stats-genre-filter" class="text-sm text-gray-400">ジャンル:</label>
                     <select id="stats-genre-filter" class="bg-gray-700 border border-gray-600 rounded-md p-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                         <option value="all">すべて</option>
@@ -80,6 +82,42 @@ export const openStatsDashboardModal = (App) => {
                     </div>
                 </div>
             </div>
+
+            <div id="stats-content-backlog" class="hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-gray-900 p-6 rounded-lg flex flex-col items-center justify-center relative">
+                        <h4 class="font-bold text-amber-400 mb-4 text-center w-full">全体の消化状況</h4>
+                        <div class="relative w-48 h-48">
+                            <canvas id="backlog-ratio-chart"></canvas>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                <span class="text-xs text-gray-400">消化率</span>
+                                <span id="backlog-ratio-text" class="text-3xl font-bold text-white">0%</span>
+                            </div>
+                        </div>
+                        <div class="mt-4 text-sm text-gray-300 text-center">
+                            <p>登録済み: <span id="backlog-total-count" class="font-mono text-white">0</span> 件</p>
+                            <p class="text-gray-500 mt-1 text-xs">※未評価(★0)かつタグ未設定を「未着手」として計算</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-900 p-4 rounded-lg flex flex-col">
+                        <h4 class="font-bold text-amber-400 mb-2 text-center">ジャンル別 積み内訳</h4>
+                        <div class="flex-grow flex items-center justify-center relative min-h-0" style="height: 250px;">
+                            <canvas id="backlog-genre-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-800 p-4 rounded-lg md:col-span-2 flex justify-between items-center">
+                        <div>
+                            <p class="font-bold text-white">未着手の作品を整理しますか？</p>
+                            <p class="text-xs text-gray-400">「未着手」の作品だけを絞り込んでリストに表示します。</p>
+                        </div>
+                        <button id="btn-filter-backlog" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-bold transition-colors">
+                            未着手をリストアップ
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     `;
 
@@ -87,29 +125,46 @@ export const openStatsDashboardModal = (App) => {
         App.setupChartDefaults();
         App.renderStatsOverview();
 
-        const overviewTab = $('#stats-tab-overview');
-        const trendsTab = $('#stats-tab-trends');
-        const overviewContent = $('#stats-content-overview');
-        const trendsContent = $('#stats-content-trends');
+        // UI要素の取得
+        const tabs = {
+            overview: $('#stats-tab-overview'),
+            trends: $('#stats-tab-trends'),
+            backlog: $('#stats-tab-backlog')
+        };
+        const contents = {
+            overview: $('#stats-content-overview'),
+            trends: $('#stats-content-trends'),
+            backlog: $('#stats-content-backlog')
+        };
+        const filterContainer = $('#stats-filter-container');
 
-        if(overviewTab && trendsTab) {
-            overviewTab.addEventListener('click', () => {
-                overviewTab.classList.add('stats-tab-active');
-                trendsTab.classList.remove('stats-tab-active');
-                overviewContent.classList.remove('hidden');
-                trendsContent.classList.add('hidden');
-                App.renderStatsOverview(); 
-            });
+        // タブ切り替え処理
+        const switchTab = (target) => {
+            Object.values(tabs).forEach(t => t.classList.remove('stats-tab-active', 'text-amber-400'));
+            Object.values(contents).forEach(c => c.classList.add('hidden'));
 
-            trendsTab.addEventListener('click', () => {
-                trendsTab.classList.add('stats-tab-active');
-                overviewTab.classList.remove('stats-tab-active');
-                trendsContent.classList.remove('hidden');
-                overviewContent.classList.add('hidden');
-                App.renderTrendsChart('monthly'); 
-            });
-        }
+            tabs[target].classList.add('stats-tab-active');
+            if(target === 'backlog') tabs[target].classList.add('text-amber-400');
+            contents[target].classList.remove('hidden');
 
+            // フィルタの表示制御 (概要とトレンドのみ表示)
+            if (filterContainer) {
+                if (target === 'backlog') filterContainer.classList.add('invisible');
+                else filterContainer.classList.remove('invisible');
+            }
+
+            // レンダリング実行
+            if (target === 'overview') App.renderStatsOverview();
+            else if (target === 'trends') App.renderTrendsChart('monthly');
+            else if (target === 'backlog') App.renderBacklogStats();
+        };
+
+        // イベントリスナー設定
+        if(tabs.overview) tabs.overview.addEventListener('click', () => switchTab('overview'));
+        if(tabs.trends) tabs.trends.addEventListener('click', () => switchTab('trends'));
+        if(tabs.backlog) tabs.backlog.addEventListener('click', () => switchTab('backlog'));
+
+        // トレンドグラフの月/年切り替え
         $('#trends-view-monthly')?.addEventListener('click', (e) => {
             e.target.classList.add('stats-tab-active');
             $('#trends-view-yearly').classList.remove('stats-tab-active');
@@ -121,18 +176,32 @@ export const openStatsDashboardModal = (App) => {
             App.renderTrendsChart('yearly');
         });
 
+        // ジャンルフィルタ変更時
         const genreFilterSelect = $('#stats-genre-filter');
         if (genreFilterSelect) {
             genreFilterSelect.addEventListener('change', () => {
-                if (trendsContent.classList.contains('hidden')) {
+                if (!contents.overview.classList.contains('hidden')) {
                     App.renderStatsOverview();
-                } else {
+                } else if (!contents.trends.classList.contains('hidden')) {
                     const currentMode = $('#trends-view-monthly').classList.contains('stats-tab-active') ? 'monthly' : 'yearly';
                     App.renderTrendsChart(currentMode);
                     $('#trends-detail-panel').classList.add('hidden');
                 }
             });
         }
+
+        // 未着手リストアップボタン
+        $('#btn-filter-backlog')?.addEventListener('click', () => {
+            // 絞り込み設定を上書き
+            AppState.listFilters = {
+                ...AppState.listFilters,
+                unratedOrUntaggedOnly: true, // これを有効にする
+                rating: { type: 'exact', value: 0 }
+            };
+            App.closeModal();
+            App.showToast("未着手の作品を絞り込みました");
+            App.renderAll();
+        });
 
     }, { size: 'max-w-5xl' });
 };
@@ -149,6 +218,7 @@ export const setupChartDefaults = (App) => {
     Chart.defaults.plugins.tooltip.borderWidth = 1;
 };
 
+// --- 1. コレクション概要レンダリング ---
 export const renderStatsOverview = (App) => {
     const genreFilterSelect = $('#stats-genre-filter');
     const genreFilter = genreFilterSelect ? genreFilterSelect.value : 'all';
@@ -287,6 +357,7 @@ export const renderStatsOverview = (App) => {
     }
 };
 
+// --- 2. 登録日トレンドレンダリング ---
 export const renderTrendsChart = (mode, App) => {
     const trendsChartCanvas = $('#trends-chart');
     if (!trendsChartCanvas || typeof Chart === 'undefined') return;
@@ -294,11 +365,7 @@ export const renderTrendsChart = (mode, App) => {
     if(AppState.activeCharts.trends) AppState.activeCharts.trends.destroy();
     $('#trends-detail-panel').classList.add('hidden');
 
-    const genreFilterSelect = $('#stats-genre-filter');
-    const genreFilter = genreFilterSelect ? genreFilterSelect.value : 'all';
-    const filteredWorks = genreFilter === 'all'
-        ? AppState.works
-        : AppState.works.filter(w => w.genre === genreFilter);
+    const filteredWorks = AppState.works; // トレンドはフィルタ無視（または必要に応じて適用）
 
     const trendData = filteredWorks.reduce((acc, work) => {
         if (!work.registeredAt) return acc;
@@ -372,4 +439,132 @@ export const renderTrendsDetail = (key, detailData, App) => {
     }
 
     panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+};
+
+// --- 3. 積み消化状況レンダリング (New) ---
+export const renderBacklogStats = (App) => {
+    if (typeof Chart === 'undefined') return;
+    
+    // 定義: 未評価(★0) かつ タグ未設定
+    const isUndigested = (w) => (!w.rating || w.rating === 0) && (!w.tagIds || w.tagIds.length === 0);
+
+    const allWorks = AppState.works;
+    const totalCount = allWorks.length;
+    const undigestedCount = allWorks.filter(isUndigested).length;
+    const digestedCount = totalCount - undigestedCount;
+    
+    const progressRate = totalCount > 0 ? ((digestedCount / totalCount) * 100).toFixed(1) : 0;
+
+    // 数値更新
+    const totalCountEl = $('#backlog-total-count');
+    const ratioTextEl = $('#backlog-ratio-text');
+    if(totalCountEl) totalCountEl.textContent = totalCount;
+    if(ratioTextEl) ratioTextEl.textContent = `${Math.floor(progressRate)}%`;
+
+    // 1. 全体消化率チャート (Doughnut)
+    const ratioCanvas = $('#backlog-ratio-chart');
+    if (ratioCanvas) {
+        if (AppState.activeCharts.backlogRatio) AppState.activeCharts.backlogRatio.destroy();
+        AppState.activeCharts.backlogRatio = new Chart(ratioCanvas.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: ['消化済み', '未着手'],
+                datasets: [{
+                    data: [digestedCount, undigestedCount],
+                    backgroundColor: ['#0d9488', '#374151'], // Teal vs Dark Gray
+                    borderColor: '#1f2937',
+                    borderWidth: 2,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                cutout: '75%', // ドーナツの太さ
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                const val = context.raw;
+                                const pct = totalCount > 0 ? ((val / totalCount) * 100).toFixed(1) : 0;
+                                return `${context.label}: ${val}件 (${pct}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // 2. ジャンル別 積み上げ棒グラフ
+    const genreCanvas = $('#backlog-genre-chart');
+    if (genreCanvas) {
+        // ジャンルごとの集計
+        const genreStats = allWorks.reduce((acc, w) => {
+            const g = w.genre || 'その他';
+            if(!acc[g]) acc[g] = { total: 0, undigested: 0 };
+            acc[g].total++;
+            if(isUndigested(w)) acc[g].undigested++;
+            return acc;
+        }, {});
+
+        const genres = Object.keys(genreStats);
+        const digestedData = genres.map(g => genreStats[g].total - genreStats[g].undigested);
+        const undigestedData = genres.map(g => genreStats[g].undigested);
+
+        if (AppState.activeCharts.backlogGenre) AppState.activeCharts.backlogGenre.destroy();
+        AppState.activeCharts.backlogGenre = new Chart(genreCanvas.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: genres,
+                datasets: [
+                    {
+                        label: '消化済み',
+                        data: digestedData,
+                        backgroundColor: '#0d9488',
+                        stack: 'Stack 0',
+                    },
+                    {
+                        label: '未着手',
+                        data: undigestedData,
+                        backgroundColor: '#4b5563', // Gray 600
+                        stack: 'Stack 0',
+                    }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                indexAxis: 'y', // 横棒グラフにする
+                plugins: {
+                    legend: { display: true },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            footer: (tooltipItems) => {
+                                let total = 0;
+                                let undigested = 0;
+                                tooltipItems.forEach(t => {
+                                    total += t.raw;
+                                    if(t.datasetIndex === 1) undigested = t.raw;
+                                });
+                                const rate = total > 0 ? (( (total - undigested) / total) * 100).toFixed(0) : 0;
+                                return `ジャンル消化率: ${rate}%`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { 
+                        stacked: true,
+                        grid: { color: '#374151' }
+                    },
+                    y: { 
+                        stacked: true,
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    }
 };
