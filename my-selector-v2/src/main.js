@@ -1635,6 +1635,7 @@ const App = {
     renderStatsOverview: () => Stats.renderStatsOverview(App),
     renderTrendsChart: (mode) => Stats.renderTrendsChart(mode, App),
     renderTrendsDetail: (key, detailData) => Stats.renderTrendsDetail(key, detailData, App),
+    renderBacklogStats: () => Stats.renderBacklogStats(App),
 
     toggleDebugMode: async () => {
         if (AppState.isDebugMode) {
