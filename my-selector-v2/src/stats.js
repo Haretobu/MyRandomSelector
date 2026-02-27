@@ -442,6 +442,7 @@ export const renderTrendsDetail = (key, detailData, App) => {
 };
 
 // --- 3. 積み消化状況レンダリング (New) ---
+// --- 3. 積み消化状況レンダリング (New) ---
 export const renderBacklogStats = (App) => {
     if (typeof Chart === 'undefined') return;
     
@@ -478,11 +479,19 @@ export const renderBacklogStats = (App) => {
                 }]
             },
             options: {
-                responsive: true, maintainAspectRatio: false,
+                responsive: true, 
+                maintainAspectRatio: false,
                 cutout: '75%', // ドーナツの太さ
+                // ★修正点1: リング部分に触れたときだけツールチップを出す設定
+                interaction: {
+                    mode: 'nearest',
+                    intersect: true
+                },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
+                        // ツールチップが中央に被らないように少し位置をずらす（念のため）
+                        yAlign: 'bottom',
                         callbacks: {
                             label: (context) => {
                                 const val = context.raw;
@@ -533,23 +542,31 @@ export const renderBacklogStats = (App) => {
                 ]
             },
             options: {
-                responsive: true, maintainAspectRatio: false,
+                responsive: true, 
+                maintainAspectRatio: false,
                 indexAxis: 'y', // 横棒グラフにする
+                // ★修正点2: 横棒グラフ用の当たり判定に修正
+                interaction: {
+                    mode: 'nearest', // カーソルに一番近い要素を取得
+                    axis: 'y',       // Y軸（ジャンル）方向で距離を測る
+                    intersect: true  // 棒の上にカーソルがある時だけ反応（空白地帯を無視）
+                },
                 plugins: {
                     legend: { display: true },
                     tooltip: {
-                        mode: 'index',
-                        intersect: false,
                         callbacks: {
                             footer: (tooltipItems) => {
                                 let total = 0;
                                 let undigested = 0;
-                                tooltipItems.forEach(t => {
-                                    total += t.raw;
-                                    if(t.datasetIndex === 1) undigested = t.raw;
-                                });
-                                const rate = total > 0 ? (( (total - undigested) / total) * 100).toFixed(0) : 0;
-                                return `ジャンル消化率: ${rate}%`;
+                                // 同じY軸インデックスのデータセットを集計
+                                const dataIndex = tooltipItems[0].dataIndex;
+                                
+                                // データセット全体から計算し直す（tooltipItemsだけだとhoverしている方しか取れない場合があるため）
+                                const totalVal = digestedData[dataIndex] + undigestedData[dataIndex];
+                                const undigestedVal = undigestedData[dataIndex];
+                                
+                                const rate = totalVal > 0 ? (( (totalVal - undigestedVal) / totalVal) * 100).toFixed(0) : 0;
+                                return `ジャンル消化率: ${rate}% (残${undigestedVal}件)`;
                             }
                         }
                     }
