@@ -17,7 +17,9 @@ export const openStatsDashboardModal = (App) => {
                 <div class="bg-gray-900 p-1 rounded-lg flex space-x-1 w-full sm:w-auto overflow-x-auto">
                     <button id="stats-tab-overview" class="stats-tab flex-1 px-4 py-2 rounded-md text-sm font-semibold transition-colors stats-tab-active whitespace-nowrap">コレクション概要</button>
                     <button id="stats-tab-trends" class="stats-tab flex-1 px-4 py-2 rounded-md text-sm font-semibold transition-colors whitespace-nowrap">登録日分析</button>
-                    <button id="stats-tab-backlog" class="stats-tab flex-1 px-4 py-2 rounded-md text-sm font-semibold transition-colors whitespace-nowrap text-amber-400"><i class="fas fa-box-open mr-1"></i>積み消化状況</button>
+                    <button id="stats-tab-backlog" class="stats-tab flex-1 px-4 py-2 rounded-md text-sm font-semibold transition-colors whitespace-nowrap">
+                        <i class="fas fa-box-open mr-1 text-amber-400"></i>積み消化状況
+                    </button>
                 </div>
                 
                 <div id="stats-filter-container" class="flex items-center space-x-2">
@@ -141,14 +143,16 @@ export const openStatsDashboardModal = (App) => {
 
         // タブ切り替え処理
         const switchTab = (target) => {
-            Object.values(tabs).forEach(t => t.classList.remove('stats-tab-active', 'text-amber-400'));
+            // 全タブからアクティブクラスを削除
+            Object.values(tabs).forEach(t => t.classList.remove('stats-tab-active'));
+            // 全コンテンツを非表示
             Object.values(contents).forEach(c => c.classList.add('hidden'));
 
+            // ターゲットをアクティブ化
             tabs[target].classList.add('stats-tab-active');
-            if(target === 'backlog') tabs[target].classList.add('text-amber-400');
             contents[target].classList.remove('hidden');
 
-            // フィルタの表示制御 (概要とトレンドのみ表示)
+            // フィルタの表示制御
             if (filterContainer) {
                 if (target === 'backlog') filterContainer.classList.add('invisible');
                 else filterContainer.classList.remove('invisible');
