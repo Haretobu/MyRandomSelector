@@ -3,30 +3,6 @@ import { store as AppState } from './store/store.js';
 // ヘルパー関数
 const $ = (selector) => document.querySelector(selector);
 
-// --- Chart.js カスタムプラグイン/設定 ---
-
-// Chart.js が読み込まれている場合のみ実行
-if (typeof Chart !== 'undefined') {
-    // ★新機能: ドーナツグラフの外側にツールチップを配置するカスタムポジション
-    // これを登録することで、plugins.tooltip.position = 'outsideBacklogDoughnut' が使えるようになります
-    Chart.Tooltip.positioners.outsideBacklogDoughnut = function(elements, eventPosition) {
-        if (!elements.length) {
-            return false;
-        }
-
-        const element = elements[0].element;
-        // Chart.js v3/v4 では element 自身が描画情報を持つ
-        const angle = (element.startAngle + element.endAngle) / 2;
-        const radius = element.outerRadius + 15; // リングの外側境界からさらに15px外側に配置
-
-        // 中心 (element.x, element.y) から、角度と半径に基づいて座標を計算
-        return {
-            x: element.x + Math.cos(angle) * radius,
-            y: element.y + Math.sin(angle) * radius
-        };
-    };
-}
-
 
 // --- 統計ロジック ---
 
@@ -514,13 +490,22 @@ export const renderBacklogStats = (App) => {
                 plugins: {
                     legend: { display: false },
                     tooltip: {
-                        // ★修正点: 先頭で定義したカスタムポジション 'outsideBacklogDoughnut' を使用
-                        position: 'outsideBacklogDoughnut',
-                        // アライメントを自動調整（左側ならツールチップの右端をグラフに合わせる等）
-                        //caretSize: 0, // 必要に応じて矢印を消す
+                        // ★修正: 座標計算をやめ、上下の位置関係で向きを制御する
+                        // カーソルがグラフの上半分ならツールチップを上に、下半分なら下に表示
+                        yAlign: (context) => {
+                            const chart = context.chart;
+                            // チャートの縦中心を取得
+                            const center = chart.chartArea.height / 2;
+                            // ツールチップの基準点（キャレット）のY座標
+                            const pointY = context.tooltip.caretY;
+                            
+                            // 中心より上なら'bottom'(上に伸ばす)、下なら'top'(下に伸ばす)
+                            return pointY < center ? 'bottom' : 'top';
+                        },
                         callbacks: {
                             label: (context) => {
                                 const val = context.raw;
+                                // totalCount変数はクロージャで参照可能
                                 const pct = totalCount > 0 ? ((val / totalCount) * 100).toFixed(1) : 0;
                                 return `${context.label}: ${val}件 (${pct}%)`;
                             }
