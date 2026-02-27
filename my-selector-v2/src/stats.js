@@ -3,6 +3,31 @@ import { store as AppState } from './store/store.js';
 // ヘルパー関数
 const $ = (selector) => document.querySelector(selector);
 
+// --- Chart.js カスタムプラグイン/設定 ---
+
+// Chart.js が読み込まれている場合のみ実行
+if (typeof Chart !== 'undefined') {
+    // ★新機能: ドーナツグラフの外側にツールチップを配置するカスタムポジション
+    // これを登録することで、plugins.tooltip.position = 'outsideBacklogDoughnut' が使えるようになります
+    Chart.Tooltip.positioners.outsideBacklogDoughnut = function(elements, eventPosition) {
+        if (!elements.length) {
+            return false;
+        }
+
+        const element = elements[0].element;
+        // Chart.js v3/v4 では element 自身が描画情報を持つ
+        const angle = (element.startAngle + element.endAngle) / 2;
+        const radius = element.outerRadius + 15; // リングの外側境界からさらに15px外側に配置
+
+        // 中心 (element.x, element.y) から、角度と半径に基づいて座標を計算
+        return {
+            x: element.x + Math.cos(angle) * radius,
+            y: element.y + Math.sin(angle) * radius
+        };
+    };
+}
+
+
 // --- 統計ロジック ---
 
 export const openStatsDashboardModal = (App) => {
@@ -442,7 +467,6 @@ export const renderTrendsDetail = (key, detailData, App) => {
 };
 
 // --- 3. 積み消化状況レンダリング (New) ---
-// --- 3. 積み消化状況レンダリング (New) ---
 export const renderBacklogStats = (App) => {
     if (typeof Chart === 'undefined') return;
     
@@ -482,7 +506,7 @@ export const renderBacklogStats = (App) => {
                 responsive: true, 
                 maintainAspectRatio: false,
                 cutout: '75%', // ドーナツの太さ
-                // ★修正点1: リング部分に触れたときだけツールチップを出す設定
+                // リング部分に触れたときだけツールチップを出す設定
                 interaction: {
                     mode: 'nearest',
                     intersect: true
@@ -490,8 +514,10 @@ export const renderBacklogStats = (App) => {
                 plugins: {
                     legend: { display: false },
                     tooltip: {
-                        // ツールチップが中央に被らないように少し位置をずらす（念のため）
-                        yAlign: 'bottom',
+                        // ★修正点: 先頭で定義したカスタムポジション 'outsideBacklogDoughnut' を使用
+                        position: 'outsideBacklogDoughnut',
+                        // アライメントを自動調整（左側ならツールチップの右端をグラフに合わせる等）
+                        //caretSize: 0, // 必要に応じて矢印を消す
                         callbacks: {
                             label: (context) => {
                                 const val = context.raw;
@@ -545,7 +571,7 @@ export const renderBacklogStats = (App) => {
                 responsive: true, 
                 maintainAspectRatio: false,
                 indexAxis: 'y', // 横棒グラフにする
-                // ★修正点2: 横棒グラフ用の当たり判定に修正
+                // 横棒グラフ用の当たり判定に修正
                 interaction: {
                     mode: 'nearest', // カーソルに一番近い要素を取得
                     axis: 'y',       // Y軸（ジャンル）方向で距離を測る
@@ -556,12 +582,10 @@ export const renderBacklogStats = (App) => {
                     tooltip: {
                         callbacks: {
                             footer: (tooltipItems) => {
-                                let total = 0;
-                                let undigested = 0;
                                 // 同じY軸インデックスのデータセットを集計
                                 const dataIndex = tooltipItems[0].dataIndex;
                                 
-                                // データセット全体から計算し直す（tooltipItemsだけだとhoverしている方しか取れない場合があるため）
+                                // データセット全体から計算し直す
                                 const totalVal = digestedData[dataIndex] + undigestedData[dataIndex];
                                 const undigestedVal = undigestedData[dataIndex];
                                 
