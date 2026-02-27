@@ -490,22 +490,19 @@ export const renderBacklogStats = (App) => {
                 plugins: {
                     legend: { display: false },
                     tooltip: {
-                        // ★修正: 座標計算をやめ、上下の位置関係で向きを制御する
-                        // カーソルがグラフの上半分ならツールチップを上に、下半分なら下に表示
+                        // ★修正1: グラフとツールチップの距離を20px空ける（これで中央の文字から離す）
+                        caretPadding: 20,
+                        
+                        // ★修正2: 上下の位置判定ロジック
                         yAlign: (context) => {
                             const chart = context.chart;
-                            // チャートの縦中心を取得
                             const center = chart.chartArea.height / 2;
-                            // ツールチップの基準点（キャレット）のY座標
-                            const pointY = context.tooltip.caretY;
-                            
-                            // 中心より上なら'bottom'(上に伸ばす)、下なら'top'(下に伸ばす)
-                            return pointY < center ? 'bottom' : 'top';
+                            // 中心より上にあるときはツールチップを上に、下にあるときは下に強制配置
+                            return context.tooltip.caretY < center ? 'bottom' : 'top';
                         },
                         callbacks: {
                             label: (context) => {
                                 const val = context.raw;
-                                // totalCount変数はクロージャで参照可能
                                 const pct = totalCount > 0 ? ((val / totalCount) * 100).toFixed(1) : 0;
                                 return `${context.label}: ${val}件 (${pct}%)`;
                             }
