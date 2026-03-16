@@ -607,6 +607,7 @@ export const openLotteryResultModal = (work, App, tempState = null) => {
         $('#result-save-btn').addEventListener('click', async () => {
             AppState.checkModalDirtyState = () => false; 
             if (await App.updateWork(work.id, { rating: currentRating, tagIds: Array.from(currentTagIds) })) { 
+                localStorage.removeItem('r18_pending_feedback_work_id'); // ★この1行を追加！
                 App.showToast(`「${work.name}」の情報を更新しました。`); App.closeModal(); 
             }
         });
