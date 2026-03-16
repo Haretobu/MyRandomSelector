@@ -472,7 +472,7 @@ const App = {
         clearTimeout(AppState.loadingTimeout);
         AppState.loadingTimeout = setTimeout(() => App.handleLoadingTimeout(false), 90000);
         setTimeout(() => {
-            if (!AppState.isLoadComplete) { 
+            if (!AppState.isLoadComplete && AppState.isDebugMode) { 
                  const btn = $('#lite-mode-switch-prod');
                  if (btn) btn.classList.remove('hidden');
             }
@@ -609,6 +609,8 @@ const App = {
     // --- Liteモード移行の確認ダイアログ ---
     promptLiteModeTransition: () => {
         // スヌーズ期間の設定（例：30分 = 30 * 60 * 1000 ミリ秒）
+        if (!AppState.isDebugMode) return;
+
         const SNOOZE_DURATION_MS = 30 * 60 * 1000;
         const snoozeUntil = localStorage.getItem('liteModePromptSnoozeUntil');
         
