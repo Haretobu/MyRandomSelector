@@ -155,6 +155,12 @@ export default function BmsViewer() {
   const pcControlBarRef = useRef(null); 
   const infoPanelRef = useRef(null);
 
+  const [isSeparateHitSound, setIsSeparateHitSound] = useState(false);
+  const [tempKeyHitSoundBuffer, setTempKeyHitSoundBuffer] = useState(null);
+  const [tempScratchHitSoundBuffer, setTempScratchHitSoundBuffer] = useState(null);
+  const [tempKeySoundName, setTempKeySoundName] = useState(null);
+  const [tempScratchSoundName, setTempScratchSoundName] = useState(null);
+
   useEffect(() => { 
       const handleResize = () => {
           const mobile = window.innerWidth < MOBILE_BREAKPOINT;
@@ -439,22 +445,85 @@ export default function BmsViewer() {
   const handleDragLeave = useCallback((e) => { e.preventDefault(); setIsDragOver(false); }, []);
   const handleDrop = useCallback((e) => { e.preventDefault(); setIsDragOver(false); if (e.dataTransfer.items) processFiles(Array.from(e.dataTransfer.files)); }, []);
 
+// ▼▼▼ 変更: 打鍵音のバリデーションと一時保存、適用ロジック ▼▼▼
+  const validateAndDecodeAudio = async (file) => {
+    if (!file || !audioContextRef.current) return null;
+    try {
+        const buf = await file.arrayBuffer();
+        const audioBuf = await audioContextRef.current.decodeAudioData(buf);
+        // 負荷対策: 2.0秒以上のファイルはエラーを出して弾く
+        if (audioBuf.duration >= 2.0) {
+            alert(`ファイル「${file.name}」は長すぎます (${audioBuf.duration.toFixed(1)}秒)。\n負荷軽減のため、2.0秒未満の短い打鍵音を選択してください。`);
+            return null;
+        }
+        return audioBuf;
+    } catch (err) {
+        alert(`ファイル「${file.name}」の読み込みに失敗しました。\n未対応の形式か、ファイルが破損しています。`);
+        return null;
+    }
+  };
+
+  const applyHitSounds = (keyBuf, scratchBuf, isSeparate, keyName, scratchName) => {
+    // 1. 通常ノーツの適用
+    if (keyBuf) {
+        keyHitSoundBufferRef.current = keyBuf;
+        setCustomKeyHitSound(keyName);
+        // 「分けない」設定なら、スクラッチの箱にも同じものを入れる（重要！）
+        if (!isSeparate) {
+            scratchHitSoundBufferRef.current = keyBuf;
+            setCustomScratchHitSound(keyName);
+        }
+    }
+    // 2. スクラッチ用ノーツの適用（分ける設定の時だけ）
+    if (isSeparate && scratchBuf) {
+        scratchHitSoundBufferRef.current = scratchBuf;
+        setCustomScratchHitSound(scratchName);
+    }
+  };
+
+  // 分離設定（チェックボックス）が切り替わった時、再生中でなければ即時適用
+  useEffect(() => {
+      if (!isPlaying) applyHitSounds(tempKeyHitSoundBuffer, tempScratchHitSoundBuffer, isSeparateHitSound, tempKeySoundName, tempScratchSoundName);
+  }, [isSeparateHitSound]);
+
   const handleKeyHitSoundUpload = async (e) => {
     const file = e.target.files[0];
-    if (!file || !audioContextRef.current) return;
-    const buf = await file.arrayBuffer();
-    keyHitSoundBufferRef.current = await audioContextRef.current.decodeAudioData(buf);
-    setCustomKeyHitSound(file.name);
+    const buffer = await validateAndDecodeAudio(file);
+    if (buffer) {
+        setTempKeyHitSoundBuffer(buffer);
+        setTempKeySoundName(file.name);
+        if (!isPlaying) applyHitSounds(buffer, tempScratchHitSoundBuffer, isSeparateHitSound, file.name, tempScratchSoundName);
+    }
   };
-  const handleKeyHitSoundReset = () => { if (audioContextRef.current) { keyHitSoundBufferRef.current = createHitSound(audioContextRef.current); setCustomKeyHitSound(null); } };
+
   const handleScratchHitSoundUpload = async (e) => {
     const file = e.target.files[0];
-    if (!file || !audioContextRef.current) return;
-    const buf = await file.arrayBuffer();
-    scratchHitSoundBufferRef.current = await audioContextRef.current.decodeAudioData(buf);
-    setCustomScratchHitSound(file.name);
+    const buffer = await validateAndDecodeAudio(file);
+    if (buffer) {
+        setTempScratchHitSoundBuffer(buffer);
+        setTempScratchSoundName(file.name);
+        if (!isPlaying) applyHitSounds(tempKeyHitSoundBuffer, buffer, isSeparateHitSound, tempKeySoundName, file.name);
+    }
   };
-  const handleScratchHitSoundReset = () => { if (audioContextRef.current) { scratchHitSoundBufferRef.current = createHitSound(audioContextRef.current); setCustomScratchHitSound(null); } };
+
+  const handleKeyHitSoundReset = () => {
+    if (audioContextRef.current) {
+        const defaultSound = createHitSound(audioContextRef.current);
+        setTempKeyHitSoundBuffer(null); setTempKeySoundName(null);
+        keyHitSoundBufferRef.current = defaultSound; setCustomKeyHitSound(null);
+        if (!isSeparateHitSound) {
+            scratchHitSoundBufferRef.current = defaultSound; setCustomScratchHitSound(null);
+        }
+    }
+  };
+
+  const handleScratchHitSoundReset = () => {
+    if (audioContextRef.current) {
+        setTempScratchHitSoundBuffer(null); setTempScratchSoundName(null);
+        scratchHitSoundBufferRef.current = createHitSound(audioContextRef.current);
+        setCustomScratchHitSound(null);
+    }
+  };
 
   const refreshRandom = () => { if (!parsedSong) return; stopPlayback(true); setDisplayObjects(applyOptions(parsedSong.objects, playOption)); };
   useEffect(() => { if (parsedSong) setDisplayObjects(applyOptions(parsedSong.objects, playOption)); }, [parsedSong, playOption]);
@@ -670,6 +739,7 @@ export default function BmsViewer() {
   
   const startPlayback = () => {
     if (!parsedSong || isLoading) return;
+    applyHitSounds(tempKeyHitSoundBuffer, tempScratchHitSoundBuffer, isSeparateHitSound, tempKeySoundName, tempScratchSoundName);
     if (!parsedSong.isSupportedMode) {
         setTimeout(() => alert("未実装：この形式（5/7鍵盤以外）のBMS再生はサポートされていません。"), 10);
         return;
@@ -1227,6 +1297,8 @@ export default function BmsViewer() {
         showAbortedMonitor={showAbortedMonitor} setShowAbortedMonitor={setShowAbortedMonitor} scratchRotationEnabled={scratchRotationEnabled} setScratchRotationEnabled={setScratchRotationEnabled}
         isInputDebugMode={isInputDebugMode} setIsInputDebugMode={setIsInputDebugMode}
         muteDebugAutoPlay={muteDebugAutoPlay} setMuteDebugAutoPlay={setMuteDebugAutoPlay}
+        isSeparateHitSound={isSeparateHitSound} setIsSeparateHitSound={setIsSeparateHitSound}
+        tempKeySoundName={tempKeySoundName} tempScratchSoundName={tempScratchSoundName}
         // Mobile Controls
         handleFileSelect={handleFileSelect} handleZipSelect={handleZipSelect} bmsList={bmsList} selectedBmsIndex={selectedBmsIndex} setSelectedBmsIndex={setSelectedBmsIndex}
         isPlaying={isPlaying} startPlayback={startPlayback} pausePlayback={pausePlayback} stopPlayback={stopPlayback}

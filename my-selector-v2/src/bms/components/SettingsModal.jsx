@@ -25,7 +25,9 @@ const SettingsModal = ({
     // ★追加: 透明度設定 (ボード全体 / 各レーン)
     boardOpacity, setBoardOpacity,
     laneOpacity, setLaneOpacity,
-    parsedSong
+    parsedSong,
+    isSeparateHitSound, setIsSeparateHitSound,
+    tempKeySoundName, tempScratchSoundName,
 }) => {
     if (!showSettings) return null;
 
@@ -195,64 +197,67 @@ const SettingsModal = ({
                     {/* 詳細設定 */}
                     <details className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50 mt-2 group" open={!isMobile}>
                         <summary className="text-xs text-blue-400 mb-2 font-bold uppercase tracking-wider flex items-center justify-between cursor-pointer list-none">
-                            <span>詳細設定 (サウンド・デバッグ)</span>
+                            <span>詳細設定2 (カスタム打鍵音)</span>
                             <ChevronDown size={16} className="transition-transform group-open:rotate-180" />
                         </summary>
                         <div className="space-y-3 pt-2">
+                            
                             <div className="flex items-center justify-between bg-black/20 p-2 rounded">
-                                 <span className="text-sm text-blue-300">打鍵音の音量</span>
+                                <span className="text-sm text-blue-300">打鍵音の音量</span>
                                 <input type="range" min="0" max="2" step="0.1" value={hitSoundVolume} onChange={e => setHitSoundVolume(parseFloat(e.target.value))} className="w-32 accent-blue-500 cursor-pointer"/>
                             </div>
-                             <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
-                                <div className="flex items-center gap-3"><Flag className="text-blue-400" size={18}/><span className="text-sm">開始時のREADY演出</span></div>
-                                <input type="checkbox" checked={showReady} onChange={e=>setShowReady(e.target.checked)} className="accent-blue-500"/>
-                             </label>
-                             <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
+                            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
                                 <div className="flex items-center gap-3"><Music className="text-blue-400" size={18}/><span className="text-sm">キー音を再生</span></div>
-                                 <input type="checkbox" checked={playKeySounds} onChange={e=>setPlayKeySounds(e.target.checked)} className="accent-blue-500"/>
+                                <input type="checkbox" checked={playKeySounds} onChange={e=>setPlayKeySounds(e.target.checked)} className="accent-blue-500"/>
                             </label>
-                            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
-                                <div className="flex items-center gap-3"><Layers className="text-blue-400" size={18}/><span className="text-sm">BGMを再生</span></div>
-                                <input type="checkbox" checked={playLongAudio} onChange={e=>setPlayLongAudio(e.target.checked)} className="accent-blue-500"/>
-                             </label>
-                            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
-                                <div className="flex items-center gap-3"><Speaker className="text-blue-400" size={18}/><span className="text-sm">バックサウンドを再生</span></div>
-                                 <input type="checkbox" checked={playBgSounds} onChange={e=>setPlayBgSounds(e.target.checked)} className="accent-blue-500"/>
-                            </label>
-                            <div className="border-t border-blue-900/30 my-2"></div>
-                             <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
-                                <div className="flex items-center gap-3"><EyeOff className="text-blue-400" size={18}/><span className="text-sm">ミュート音源をモニターに表示</span></div>
-                                <input type="checkbox" checked={showMutedMonitor} onChange={e=>setShowMutedMonitor(e.target.checked)} className="accent-blue-500"/>
-                               </label>
-                            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
-                                <div className="flex items-center gap-3"><FileX className="text-blue-400" size={18}/><span className="text-sm">停止時に音源情報を残す</span></div>
-                                 <input type="checkbox" checked={showAbortedMonitor} onChange={e=>setShowAbortedMonitor(e.target.checked)} className="accent-blue-500"/>
-                            </label>
-                            
-                            {!isMobile && (
-                                <>
-                                    <div className="border-t border-blue-900/30 my-2"></div>
-                                    <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
-                                        <div className="flex items-center gap-3"><Gamepad2 className="text-blue-400" size={18}/><span className="text-sm font-bold text-blue-200">デバッグ用キー入力</span></div>
-                                        <input type="checkbox" checked={isInputDebugMode} onChange={e=>setIsInputDebugMode(e.target.checked)} className="accent-blue-500"/>
-                                    </label>
 
-                                    {isInputDebugMode && (
-                                        <div className="flex items-center justify-between pl-6 border-l-2 border-gray-700 ml-1 bg-black/10 p-2 rounded">
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-medium text-gray-300">入力時に自動再生音をミュート</span>
-                                                <span className="text-[10px] text-gray-500">キー音再生設定に関わらず自動再生音が消えます</span>
-                                            </div>
-                                            <input 
-                                                type="checkbox" 
-                                                checked={muteDebugAutoPlay} 
-                                                onChange={(e) => setMuteDebugAutoPlay(e.target.checked)} 
-                                                className="accent-green-500 w-4 h-4" 
-                                            />
+                            <div className="border-t border-blue-900/30 my-2"></div>
+
+                            <div className="bg-black/20 p-3 rounded space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-bold text-blue-200">打鍵音ファイルの変更</span>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <span className="text-xs text-gray-400">通常とスクラッチを分ける</span>
+                                        <input type="checkbox" checked={isSeparateHitSound} onChange={e => setIsSeparateHitSound(e.target.checked)} className="accent-blue-500" />
+                                    </label>
+                                </div>
+
+
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-xs text-gray-400">{isSeparateHitSound ? "通常ノーツ用 (WAV/OGG等)" : "共通打鍵音 (WAV/OGG等)"}</span>
+                                    <div className="flex items-center gap-2">
+                                        <label className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 text-xs cursor-pointer rounded transition shadow">
+                                            ファイル選択
+                                            <input type="file" accept="audio/*" className="hidden" onChange={handleKeyHitSoundUpload} onClick={(e) => { e.target.value = null; }} />
+                                        </label>
+                                        <span className="text-xs text-gray-300 truncate flex-1">{tempKeySoundName || customKeyHitSound || "デフォルト音源"}</span>
+                                        {(tempKeySoundName || customKeyHitSound) && (
+                                            <button onClick={handleKeyHitSoundReset} className="text-red-400 hover:text-red-300 px-2 py-1 text-xs rounded border border-red-900/50 bg-red-900/20 active:scale-95">リセット</button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {isSeparateHitSound && (
+                                    <div className="flex flex-col gap-1 pt-1">
+                                        <span className="text-xs text-gray-400">スクラッチ用 (WAV/OGG等)</span>
+                                        <div className="flex items-center gap-2">
+                                            <label className="bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 text-xs cursor-pointer rounded transition shadow">
+                                                ファイル選択
+                                                <input type="file" accept="audio/*" className="hidden" onChange={handleScratchHitSoundUpload} onClick={(e) => { e.target.value = null; }} />
+                                            </label>
+                                            <span className="text-xs text-gray-300 truncate flex-1">{tempScratchSoundName || customScratchHitSound || "デフォルト音源"}</span>
+                                            {(tempScratchSoundName || customScratchHitSound) && (
+                                                <button onClick={handleScratchHitSoundReset} className="text-red-400 hover:text-red-300 px-2 py-1 text-xs rounded border border-red-900/50 bg-red-900/20 active:scale-95">リセット</button>
+                                            )}
                                         </div>
-                                    )}
-                                </>
-                            )}
+                                    </div>
+                                )}
+                                
+                                <p className="text-[10px] text-gray-500 mt-2 leading-relaxed">
+                                    ※ 変更は次回の再生開始時（または曲の停止時）に安全に適用されます。<br/>
+                                    ※ 負荷防止のため、長さが 2.0秒 以上、または読み込めない形式のファイルは自動的にスキップされます。
+                                </p>
+                            </div>
                         </div>
                     </details>
                 </div>
