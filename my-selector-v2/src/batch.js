@@ -449,7 +449,7 @@ export const openBatchRegistrationModal = (App, keepData = false) => {
                     <div class="flex justify-between items-center mb-3 hidden lg:flex">
                         <h4 class="text-lg font-bold text-lime-400"><i class="fas fa-pen mr-2"></i>作品情報を入力</h4>
                         <button id="batch-tab-import-pc" class="text-sm px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-gray-300" onclick="document.getElementById('batch-tab-import').click()">
-                            <i class="fas fa-file-import mr-1"></i>テキストから一括登録
+                            <i class="fas fa-file-import mr-1"></i>jsonファイルから一括登録
                         </button>
                     </div>
 
