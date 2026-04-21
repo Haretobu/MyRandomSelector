@@ -24,7 +24,6 @@ export const store = {
     listViewMode: localStorage.getItem('listViewMode') || 'grid',
     itemsPerPage: parseInt(localStorage.getItem('itemsPerPage') || '20', 10),
     showSiteIcon: localStorage.getItem('showSiteIcon') === 'false' ? false : true,
-    isLiteMode: false,
     isDebugMode: false,
     
     // --- UI要素 & モーダル管理 ---

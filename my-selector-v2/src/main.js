@@ -609,7 +609,7 @@ const App = {
     // --- Liteモード移行の確認ダイアログ ---
     promptLiteModeTransition: () => {
         // スヌーズ期間の設定（例：30分 = 30 * 60 * 1000 ミリ秒）
-        if (!AppState.isDebugMode) return;
+        return;
 
         const SNOOZE_DURATION_MS = 30 * 60 * 1000;
         const snoozeUntil = localStorage.getItem('liteModePromptSnoozeUntil');

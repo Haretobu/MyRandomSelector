@@ -307,7 +307,7 @@ export const setupAppEventListeners = (App) => {
     setupPaginationListeners($('#pagination-controls'));
 
     // --- Liteモード切替 ---
-    const activateLiteMode = () => {
+    /*const activateLiteMode = () => {
         AppState.isLiteMode = true;
         localStorage.setItem('isLiteMode', 'true');
         App.showToast("Liteモードで再読み込みします...", "info");
@@ -317,6 +317,6 @@ export const setupAppEventListeners = (App) => {
     const liteModeDebugBtn = $('#lite-mode-switch-debug');
     const liteModeProdBtn = $('#lite-mode-switch-prod');
     if (liteModeDebugBtn) liteModeDebugBtn.addEventListener('click', activateLiteMode);
-    if (liteModeProdBtn) liteModeProdBtn.addEventListener('click', activateLiteMode);
+    if (liteModeProdBtn) liteModeProdBtn.addEventListener('click', activateLiteMode);*/
 
 };
