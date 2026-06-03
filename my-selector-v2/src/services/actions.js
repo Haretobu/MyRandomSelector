@@ -134,8 +134,23 @@ export const updateWork = async (workId, updatedData) => {
         // ★★★ 2. ローカル手動更新 ★★★
         const index = AppState.works.findIndex(w => w.id === workId);
         if (index !== -1) {
+
+            // FieldValueによるクラッシュを防ぐため、ローカル用の更新データを生成
+            const localUpdatedData = { ...updatedData };
+            
+            // selectionHistoryに特殊なオブジェクト(arrayUnion)が含まれている場合、ローカル配列に変換
+            if (localUpdatedData.selectionHistory && typeof localUpdatedData.selectionHistory === 'object' && localUpdatedData.selectionHistory.constructor.name !== 'Array') {
+                const currentHistory = Array.isArray(AppState.works[index].selectionHistory) 
+                    ? [...AppState.works[index].selectionHistory] 
+                    : [];
+                if (localUpdatedData.lastSelectedAt) {
+                    currentHistory.push(localUpdatedData.lastSelectedAt);
+                }
+                localUpdatedData.selectionHistory = currentHistory;
+            }
+
             // メモリ上のデータを更新
-            const mergedWork = { ...AppState.works[index], ...updatedData };
+            const mergedWork = { ...AppState.works[index], ...localUpdatedData };
             AppState.works[index] = mergedWork;
             
             // ローカルDB更新
