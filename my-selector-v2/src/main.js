@@ -1330,7 +1330,7 @@ const App = {
                         
                         <div class="bg-gray-700 p-4 rounded-lg text-center border-2 border-dashed border-sky-500">
                             <p class="text-xs text-sky-400 font-bold mb-2">▼このボタンをブックマークバーにドラッグ＆ドロップ！</p>
-                            <a href='${bookmarkletCode}' class="inline-block px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded shadow-lg cursor-grab active:cursor-grabbing">
+                            <a id="bookmarkletLink" href="#" class="inline-block px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded shadow-lg cursor-grab active:cursor-grabbing">
                                 <i class="fas fa-bookmark mr-2"></i>多重購入チェッカー
                             </a>
                         </div>
@@ -1341,7 +1341,12 @@ const App = {
                         </details>
                     </div>
                 `;
-                App.openModal("多重購入チェッカー設定", modalHtml, null, { size: "max-w-md" });
+                App.openModal("多重購入チェッカー設定", modalHtml, () => {
+                    const linkElement = document.getElementById('bookmarkletLink');
+                    if (linkElement) {
+                        linkElement.href = bookmarkletCode;
+                    }
+                }, { size: "max-w-md" });
             });
         }
 
