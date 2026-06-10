@@ -1,4 +1,4 @@
-const functions = require('firebase-functions');
+const { onRequest } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const cors = require('cors')({ origin: true });
 const Fuse = require('fuse.js');
@@ -8,7 +8,8 @@ if (!admin.apps.length) {
 }
 const db = admin.firestore();
 
-exports.checkDuplicates = functions.region('asia-northeast1').https.onRequest((req, res) => {
+// ここが新しい（v2）書き方です
+exports.checkDuplicates = onRequest({ region: 'asia-northeast1' }, (req, res) => {
     cors(req, res, async () => {
         if (req.method !== 'POST') {
             return res.status(405).send('Method Not Allowed');
