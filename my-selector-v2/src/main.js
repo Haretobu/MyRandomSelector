@@ -1337,14 +1337,19 @@ const App = {
 
                         <details class="bg-gray-900 rounded p-3">
                             <summary class="text-xs text-gray-400 cursor-pointer font-bold outline-none">ソースコードを手動でコピーする場合</summary>
-                            <textarea readonly class="w-full h-24 mt-2 bg-gray-800 text-xs text-gray-300 p-2 rounded focus:outline-none custom-scrollbar" onclick="this.select()">${bookmarkletCode}</textarea>
+                            <textarea id="bookmarkletTextarea" readonly class="w-full h-24 mt-2 bg-gray-800 text-xs text-gray-300 p-2 rounded focus:outline-none custom-scrollbar" onclick="this.select()"></textarea>
                         </details>
                     </div>
                 `;
                 App.openModal("多重購入チェッカー設定", modalHtml, () => {
                     const linkElement = document.getElementById('bookmarkletLink');
+                    const textareaElement = document.getElementById('bookmarkletTextarea');
+                    
                     if (linkElement) {
                         linkElement.href = bookmarkletCode;
+                    }
+                    if (textareaElement) {
+                        textareaElement.value = bookmarkletCode;
                     }
                 }, { size: "max-w-md" });
             });
