@@ -18,6 +18,8 @@ import { render, html } from 'lit-html';
 import * as DB from './services/db.js';
 import * as Search from './search.js';
 
+import bookmarkletCodeRaw from './bookmarklet.txt?raw';
+
 // Firebase Modules
 import { signInWithEmailAndPassword, onIdTokenChanged } from "firebase/auth";
 import { 
@@ -1315,6 +1317,33 @@ const App = {
             }
         
         });
+
+        // 多重購入チェッカー（ブックマークレット）のモーダル表示
+        const bookmarkletFab = $('#bookmarkletFab');
+        if (bookmarkletFab) {
+            bookmarkletFab.addEventListener('click', () => {
+                const bookmarkletCode = bookmarkletCodeRaw.trim();
+
+                const modalHtml = `
+                    <div class="space-y-4">
+                        <p class="text-sm text-gray-300">DLsiteやFANZAのカート・お気に入り画面で、すでに持っている作品をハイライトするツールです。</p>
+                        
+                        <div class="bg-gray-700 p-4 rounded-lg text-center border-2 border-dashed border-sky-500">
+                            <p class="text-xs text-sky-400 font-bold mb-2">▼このボタンをブックマークバーにドラッグ＆ドロップ！</p>
+                            <a href='${bookmarkletCode}' class="inline-block px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded shadow-lg cursor-grab active:cursor-grabbing">
+                                <i class="fas fa-bookmark mr-2"></i>多重購入チェッカー
+                            </a>
+                        </div>
+
+                        <details class="bg-gray-900 rounded p-3">
+                            <summary class="text-xs text-gray-400 cursor-pointer font-bold outline-none">ソースコードを手動でコピーする場合</summary>
+                            <textarea readonly class="w-full h-24 mt-2 bg-gray-800 text-xs text-gray-300 p-2 rounded focus:outline-none custom-scrollbar" onclick="this.select()">${bookmarkletCode}</textarea>
+                        </details>
+                    </div>
+                `;
+                App.openModal("多重購入チェッカー設定", modalHtml, null, { size: "max-w-md" });
+            });
+        }
 
         
     },
