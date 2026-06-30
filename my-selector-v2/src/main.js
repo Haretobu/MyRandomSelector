@@ -600,8 +600,8 @@ const App = {
 
                     clearTimeout(AppState.stallTimeout);
                     AppState.stallTimeout = setTimeout(() => App.handleLoadingTimeout(true), 15000);
-                    App.checkLoadingComplete();
                     App.setupSyncId();
+                    App.checkLoadingComplete();
                 }
             } else {
                 AppState.ui.loadingOverlay.classList.add('hidden'); 
@@ -1743,6 +1743,11 @@ const App = {
     },
 
     updateLauncherPath: async (syncId, path) => {
+        
+        if (!syncId) {
+            console.warn("syncIdが未準備のため、パスの保存を保留しました。");
+            return;
+        }
         try {
             // ★修正: 既にルールで許可されている「r18_works_sync」以下のパスに変更
             const settingsRef = doc(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${syncId}/settings`, 'launcher');
