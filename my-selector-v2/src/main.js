@@ -595,6 +595,9 @@ const App = {
                     AppState.loadingStatus.auth = true;
 
                     App.loadUserSettings();
+
+                    App.initLauncherSync();
+
                     clearTimeout(AppState.stallTimeout);
                     AppState.stallTimeout = setTimeout(() => App.handleLoadingTimeout(true), 15000);
                     App.checkLoadingComplete();
@@ -1725,6 +1728,59 @@ const App = {
         } catch (e) {
             console.error(e);
             App.showToast("バックアップ失敗", "error");
+        }
+    },
+    initLauncherSync: () => {
+        // 1. Pythonから渡されたパス情報をURLから取得する (GETで開かれた場合)
+        const urlParams = new URLSearchParams(window.location.search);
+        const launcherPath = urlParams.get('launcherPath');
+        const syncId = urlParams.get('syncId') || AppState.syncId;
+
+        // パス情報が含まれていればFirestoreに保存する
+        if (launcherPath && AppState.currentUser) {
+            App.updateLauncherPath(syncId, launcherPath);
+        }
+    },
+    updateLauncherPath: async (syncId, path) => {
+        try {
+            const userSettingsRef = doc(AppState.db, `users/${AppState.currentUser.uid}/settings`, 'launcher');
+            await setDoc(userSettingsRef, {
+                latestPath: decodeURIComponent(path),
+                lastSyncedAt: serverTimestamp(),
+                syncId: syncId
+            }, { merge: true });
+            
+            console.log("ランチャーのパスを同期しました:", path);
+            App.showToast("ランチャーと同期しました", "success");
+            
+            // URLのパラメータを消してスッキリさせる（任意）
+            window.history.replaceState({}, document.title, window.location.pathname);
+            
+        } catch (error) {
+            console.error("ランチャーパスの保存に失敗:", error);
+            App.showToast("ランチャーとの同期に失敗しました", "error");
+        }
+    },
+    
+    // UI側の「パスを保存」ボタンなどが押されたときに実行する関数
+    sendPathToLauncher: async () => {
+        // Firestoreから最新のパスを取得
+        if (!AppState.currentUser) return;
+        
+        try {
+            const userSettingsRef = doc(AppState.db, `users/${AppState.currentUser.uid}/settings`, 'launcher');
+            const docSnap = await getDoc(userSettingsRef);
+            
+            if (docSnap.exists()) {
+                const latestPath = docSnap.data().latestPath;
+                // Pythonアプリに送信（nightowlスキーム）
+                const targetUri = `nightowl://update-path?new=${encodeURIComponent(latestPath)}`;
+                window.location.href = targetUri;
+            } else {
+                App.showToast("同期されたランチャーパスがありません", "warning");
+            }
+        } catch (error) {
+             console.error("パスの取得に失敗:", error);
         }
     }
 };
