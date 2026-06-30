@@ -1741,10 +1741,13 @@ const App = {
             App.updateLauncherPath(syncId, launcherPath);
         }
     },
+
     updateLauncherPath: async (syncId, path) => {
         try {
-            const userSettingsRef = doc(AppState.db, `users/${AppState.currentUser.uid}/settings`, 'launcher');
-            await setDoc(userSettingsRef, {
+            // ★修正: 既にルールで許可されている「r18_works_sync」以下のパスに変更
+            const settingsRef = doc(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${syncId}/settings`, 'launcher');
+            
+            await setDoc(settingsRef, {
                 latestPath: decodeURIComponent(path),
                 lastSyncedAt: serverTimestamp(),
                 syncId: syncId
@@ -1753,7 +1756,7 @@ const App = {
             console.log("ランチャーのパスを同期しました:", path);
             App.showToast("ランチャーと同期しました", "success");
             
-            // URLのパラメータを消してスッキリさせる（任意）
+            // URLのパラメータを消してスッキリさせる
             window.history.replaceState({}, document.title, window.location.pathname);
             
         } catch (error) {
@@ -1762,14 +1765,13 @@ const App = {
         }
     },
     
-    // UI側の「パスを保存」ボタンなどが押されたときに実行する関数
     sendPathToLauncher: async () => {
-        // Firestoreから最新のパスを取得
         if (!AppState.currentUser) return;
         
         try {
-            const userSettingsRef = doc(AppState.db, `users/${AppState.currentUser.uid}/settings`, 'launcher');
-            const docSnap = await getDoc(userSettingsRef);
+            // ★修正: 読み込み先も同じパスに変更
+            const settingsRef = doc(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/settings`, 'launcher');
+            const docSnap = await getDoc(settingsRef);
             
             if (docSnap.exists()) {
                 const latestPath = docSnap.data().latestPath;
@@ -1782,7 +1784,7 @@ const App = {
         } catch (error) {
              console.error("パスの取得に失敗:", error);
         }
-    }
+    },
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
