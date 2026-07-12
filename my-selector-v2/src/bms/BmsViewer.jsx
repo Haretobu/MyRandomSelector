@@ -904,7 +904,7 @@ export default function BmsViewer() {
     if (!canvasRef.current) return;
     const now = performance.now(); const dt = (now - lastFrameTimeRef.current) / 1000; lastFrameTimeRef.current = now;
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d', { alpha: false });
+    const ctx = canvas.getContext('2d', { alpha: true });
     const dpr = window.devicePixelRatio || 1; const rect = canvas.getBoundingClientRect();
     if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) { canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr; ctx.scale(dpr, dpr); } 
