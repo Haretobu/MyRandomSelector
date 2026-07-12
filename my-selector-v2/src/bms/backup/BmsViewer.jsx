@@ -97,7 +97,6 @@ export default function BmsViewer() {
   const pauseTimeRef = useRef(0);
   const animationRef = useRef(null);
   const canvasRef = useRef(null);
-  const ctxRef = useRef(null); // ★軽量化: canvasの2Dコンテキストをキャッシュ（毎フレームgetContext()しない）
   const keyHitSoundBufferRef = useRef(null);
   const scratchHitSoundBufferRef = useRef(null);
   const controllerRefs = useRef([]); 
@@ -571,10 +570,6 @@ export default function BmsViewer() {
               imageQueue.push({ key: raw.toLowerCase(), file: best });
            }
       });
-      // ★修正: React stateのcurrentBackBga(stale closure)に頼らず、ローカル変数でこの読み込み処理内の割り当て状況を追跡する
-      let stageFileAssigned = false;
-      let videoDetected = false; // ★修正: 動画アセットを検出したかどうか（hasVideoに反映する）
-
       for (const item of imageQueue) {
           try {
               const url = URL.createObjectURL(item.file);
@@ -582,7 +577,6 @@ export default function BmsViewer() {
               
               if (isVideo) {
                   imageAssetsRef.current.set(item.key, { type: 'video', url: url });
-                  videoDetected = true;
               } else {
                   const img = new Image();
                   img.src = url;
@@ -590,15 +584,12 @@ export default function BmsViewer() {
               }
               
               if (parsed.header.stagefile && item.key === parsed.header.stagefile.toLowerCase()) {
-                  if (!isVideo) { setCurrentBackBga(imageAssetsRef.current.get(item.key)); stageFileAssigned = true; }
+                  if (!isVideo) setCurrentBackBga(imageAssetsRef.current.get(item.key));
               }
           } catch(e) { console.warn("Asset load failed", item.key); }
       }
-
-      // ★修正: hasVideoは動画BGAの検出結果をそのまま反映（今まで一度もtrueにならなかった）
-      setHasVideo(videoDetected);
-
-      if (parsed.header.stagefile && !stageFileAssigned) { 
+      
+      if (parsed.header.stagefile && !currentBackBga) { 
           const asset = imageAssetsRef.current.get(parsed.header.stagefile.toLowerCase());
           if(asset && asset.type !== 'video') setCurrentBackBga(asset); 
       }
@@ -667,13 +658,7 @@ export default function BmsViewer() {
           const killedIds = new Set(toKill.map(n => n.id));
           activeNodesRef.current = activeNodesRef.current.filter(n => !killedIds.has(n.id));
       }
-      const currentPolyCount = activeNodesRef.current.length;
-      setPolyphonyCount(currentPolyCount);
-      // ★修正: 最大同時発音数(M POLY)の追跡（今まで一度も更新されていなかった）
-      if (currentPolyCount > maxPolyRef.current) { maxPolyRef.current = currentPolyCount; setMaxPolyphonyCount(currentPolyCount); }
-      // ★修正+軽量化: 平均算出用の履歴を積む。無限に伸びないよう一定数でキャップする
-      polyphonyHistoryRef.current.push(currentPolyCount);
-      if (polyphonyHistoryRef.current.length > 400) polyphonyHistoryRef.current.shift();
+      setPolyphonyCount(activeNodesRef.current.length);
       while (index < objects.length) {
           const obj = objects[index];
           const absolutePlayTime = startTimeRef.current + obj.time;
@@ -728,10 +713,7 @@ export default function BmsViewer() {
                         setBackingTracks(prev => [...prev, item]); 
                     }
                     else { 
-                        // ★軽量化: LogPanelはslice(-25)しか使わないのに、これまで曲の最初から最後まで無制限に配列が伸び続けていた
-                        // (密度の高い譜面だと数千件たまり、メモリ・GC負荷の原因になる)。直近100件だけ保持する。
                         activeShortSoundsRef.current.push(item);
-                        if (activeShortSoundsRef.current.length > 100) activeShortSoundsRef.current.shift();
                     }
                 }
               }
@@ -922,10 +904,7 @@ export default function BmsViewer() {
     if (!canvasRef.current) return;
     const now = performance.now(); const dt = (now - lastFrameTimeRef.current) / 1000; lastFrameTimeRef.current = now;
     const canvas = canvasRef.current;
-    // ★軽量化: getContext()は初回だけ呼び、以降はキャッシュを使い回す（毎フレーム呼ぶとブラウザによっては無駄なオーバーヘッドになる）
-    // ★BGA修正: alpha:trueにして、canvasの透明部分から背面のBGAレイヤーが透けるようにする
-    if (!ctxRef.current) ctxRef.current = canvas.getContext('2d', { alpha: true });
-    const ctx = ctxRef.current;
+    const ctx = canvas.getContext('2d', { alpha: true });
     const dpr = window.devicePixelRatio || 1; const rect = canvas.getBoundingClientRect();
     if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) { canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr; ctx.scale(dpr, dpr); } 
@@ -982,8 +961,9 @@ export default function BmsViewer() {
             }
         }
 
-        // ★軽量化: activeNodesRef のフィルタは scheduleAudio() 側で毎tick行っているため、
-        // ここ(renderLoop、毎フレーム)での重複フィルタ処理は削除
+        if (parsedSong) {
+            activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime);
+        }
 
         // 2. 再生時間の表示更新：解析用に毎フレーム実行する（高精度維持）
         // ここをif文の外に出すことで、滑らかな数値変化に戻ります
@@ -1004,11 +984,6 @@ export default function BmsViewer() {
         // 3. その他の重い処理（小節線の計算やログ表示用のリスト更新など）
         // これらは毎フレームやる必要がないので、ここだけ間引いて軽量化します
         if (now - lastStateUpdateRef.current > 100) { // 100ms(秒間10回)程度に設定
-            // ★修正: 平均同時発音数(AVG POLY)の算出。毎フレームではなくこの間引き済みブロックでのみ計算して負荷を抑える
-            if (polyphonyHistoryRef.current.length > 0) {
-                const sum = polyphonyHistoryRef.current.reduce((a, b) => a + b, 0);
-                setAveragePolyphony(Math.round(sum / polyphonyHistoryRef.current.length));
-            }
             if (parsedSong) {
                  // 小節情報の更新などはここで行う
                 const currentBar = parsedSong.barLines.find(b => b.time > currentTime);
@@ -1084,14 +1059,17 @@ export default function BmsViewer() {
     const lOpacity = laneOpacityRef.current;
     
     // ボード全体の背景
-    ctx.fillStyle = `rgba(2, 6, 23, ${bOpacity})`; // ★修正: PC/スマホで同じ値だった無意味な三項演算子を削除
+    ctx.fillStyle = isMobileRef.current ? `rgba(2, 6, 23, ${bOpacity})` : `rgba(2, 6, 23, ${bOpacity})`;
     ctx.fillRect(BOARD_X, 0, BOARD_W, height); 
     
     for(let i=0; i<7; i++) { 
         const laneHeight = isLiftEnabled ? JUDGE_Y : height;
         // 各レーンの背景
         const baseColor = [1,3,5].includes(i) ? [15, 23, 42] : [30, 41, 59];
-        ctx.fillStyle = `rgba(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]}, ${lOpacity})`; // ★修正: 無意味な三項演算子を削除
+        const color = isMobileRef.current 
+            ? `rgba(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]}, ${lOpacity})` 
+            : `rgba(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]}, ${lOpacity})`;
+        ctx.fillStyle = color;
         ctx.fillRect(KEYS_X + i * KEY_W, 0, KEY_W, laneHeight);
     }
     

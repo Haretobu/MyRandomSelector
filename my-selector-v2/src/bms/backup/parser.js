@@ -148,9 +148,7 @@ export const parseBMS = async (file) => {
         const lane = obj.laneIndex;
         if (header.lnObj && obj.value === header.lnObj && lastNoteByLane[lane]) {
             const start = lastNoteByLane[lane];
-            start.type = 'long'; start.endTime = obj.time; start.duration = obj.time - start.time; start.endBeat = obj.beat;
-            if (start.duration > maxLNDuration) maxLNDuration = start.duration; // ★修正: #LNOBJ方式のLNもmaxLNDurationに反映
-            lastNoteByLane[lane] = null; continue;
+            start.type = 'long'; start.endTime = obj.time; start.duration = obj.time - start.time; start.endBeat = obj.beat; lastNoteByLane[lane] = null; continue;
         }
         if (obj.isLong) {
             if (pendingLN[lane]) {
