@@ -5,7 +5,7 @@ import { decodeBmsText, parseInt36 } from './utils';
 export const parseBMS = async (file) => {
     const text = await decodeBmsText(file);
     const lines = text.split(/\r?\n/);
-    const header = { bpm: 130, wavs: {}, bmps: {}, bpms: {}, title: 'Unknown', artist: 'Unknown', genre: '', playlevel: '', rank: null, difficulty: null, stagefile: null, lnObj: null, player: 1 };
+    const header = { bpm: 130, wavs: {}, bmps: {}, bpms: {}, stops: {}, title: 'Unknown', artist: 'Unknown', genre: '', playlevel: '', rank: null, difficulty: null, stagefile: null, lnObj: null, player: 1 };
     let rawObjects = [];
     const measureLen = {}; const rawLinesByMeasure = {}; const notesPerMeasure = {}; 
     let maxMeasureIndex = 0;
@@ -30,6 +30,7 @@ export const parseBMS = async (file) => {
       else if (key === '#BPM') header.bpm = parseFloat(value) || 130;
       else if (key === '#PLAYER') header.player = parseInt(value); 
       else if (key === '#LNOBJ') header.lnObj = parseInt36(value);
+      else if (key.startsWith('#STOP') && key.length > 5) header.stops[parseInt36(key.substring(5))] = parseFloat(value);
       else if (key.startsWith('#WAV')) header.wavs[parseInt36(key.substring(4))] = value;
       else if (key.startsWith('#BMP')) header.bmps[parseInt36(key.substring(4))] = value;
       else if (key.startsWith('#BPM') && key.length > 4) header.bpms[parseInt36(key.substring(4))] = parseFloat(value); 
@@ -52,8 +53,16 @@ export const parseBMS = async (file) => {
               }
               
               if (ch.match(/^(2[1-9]|6[1-9])$/)) isSupportedMode = false;
-              if (lane || ch === '01' || ch === '04' || ch === '06' || ch === '07' || ch === '03' || ch === '08') {
-                rawObjects.push({ measure, channel: ch, position: i / total, value: val, isNote: !!lane && !lane.isBg, isBackBga: (ch === '04'), isPoorBga: (ch === '06'), isLayerBga: (ch === '07'), isBpm: (ch === '03' || ch === '08'), laneIndex: lane ? lane.index : -1, isLong: lane ? lane.isLong : false });
+              if (lane || ch === '01' || ch === '04' || ch === '06' || ch === '07' || ch === '03' || ch === '08' || ch === '09') {
+                rawObjects.push({
+                    measure, channel: ch, position: i / total, value: val,
+                    isNote: !!lane && !lane.isBg,
+                    isBackBga: (ch === '04'),
+                    isPoorBga: (ch === '06'), isLayerBga: (ch === '07'),
+                    isBpm: (ch === '03' || ch === '08'),
+                    isStop: (ch === '09'),
+                    laneIndex: lane ? lane.index : -1, isLong: lane ? lane.isLong : false 
+                });
               }
             }
           }
@@ -72,7 +81,7 @@ export const parseBMS = async (file) => {
     const maxMeasure = maxMeasureIndex;
     const measureStartBeats = [0];
     for (let m = 0; m <= maxMeasure; m++) measureStartBeats[m + 1] = measureStartBeats[m] + (4.0 * (measureLen[m] || 1.0));
-    const finalObjects = []; const backBgaObjects = []; const layerBgaObjects = []; const poorBgaObjects = []; const bpmEvents = [];
+    const finalObjects = []; const backBgaObjects = []; const layerBgaObjects = []; const poorBgaObjects = []; const bpmEvents = []; const stopEvents = [];
     for (const obj of rawObjects) {
         const beat = measureStartBeats[obj.measure] + (4.0 * (measureLen[obj.measure]||1.0) * obj.position);
         const processedObj = { ...obj, beat: beat };
@@ -82,6 +91,9 @@ export const parseBMS = async (file) => {
             bpmVal = upper * 16 + lower; }
             else if (obj.channel === '08') bpmVal = header.bpms[obj.value] || 130; 
             if (bpmVal > 0) bpmEvents.push({ beat: beat, bpm: bpmVal });
+        } else if (obj.isStop) {
+            const stopUnit = header.stops[obj.value];                // 1/192拍単位
+            if (stopUnit) stopEvents.push({ beat: beat, beats: (stopUnit / 192) * 4 });
         } else if (obj.isBackBga) backBgaObjects.push({ ...processedObj, filename: header.bmps[obj.value] || '' });
         else if (obj.isPoorBga) poorBgaObjects.push({ ...processedObj, filename: header.bmps[obj.value] || '' });
         else if (obj.isLayerBga) layerBgaObjects.push({ ...processedObj, filename: header.bmps[obj.value] || '' });
@@ -90,16 +102,33 @@ export const parseBMS = async (file) => {
             else finalObjects.push({ ...processedObj, filename: header.wavs[obj.value] || '', type: 'note', duration: 0 });
         }
     }
-    bpmEvents.sort((a, b) => a.beat - b.beat);
-    const timePoints = [{ time: 0, beat: 0, bpm: header.bpm }]; 
-    let currentBeat = 0; let currentTime = 0;
-    let currentBpmHeader = header.bpm;
-    for (const e of bpmEvents) {
-        if (e.beat <= currentBeat) { currentBpmHeader = e.bpm; timePoints[timePoints.length - 1].bpm = currentBpmHeader; continue; }
+
+    const timeline = [
+    ...bpmEvents.map(e => ({ ...e, kind: 'bpm' })),
+    ...stopEvents.map(e => ({ ...e, kind: 'stop' }))
+    ].sort((a, b) => a.beat - b.beat);
+
+    const timePoints = [{ time: 0, beat: 0, bpm: header.bpm }];
+    let currentBeat = 0; let currentTime = 0; let currentBpmHeader = header.bpm;
+
+    for (const e of timeline) {                 // ← timelineに変更
         const deltaBeat = e.beat - currentBeat;
-        const deltaTime = deltaBeat * (60.0 / currentBpmHeader);
-        currentTime += deltaTime; currentBeat = e.beat; currentBpmHeader = e.bpm;
-        timePoints.push({ time: currentTime, beat: currentBeat, bpm: currentBpmHeader });
+        if (deltaBeat > 0) {
+            currentTime += deltaBeat * (60.0 / currentBpmHeader);
+            currentBeat = e.beat;
+        }
+        if (e.kind === 'bpm') {
+            currentBpmHeader = e.bpm;
+            // 直前のtimePointと同じ拍なら上書き、違えば新規追加（同一拍の連続BPM変化対策）
+            if (timePoints[timePoints.length - 1].beat === currentBeat) {
+                timePoints[timePoints.length - 1].bpm = currentBpmHeader;
+            } else {
+                timePoints.push({ time: currentTime, beat: currentBeat, bpm: currentBpmHeader });
+            }
+        } else { // stop
+            currentTime += e.beats * (60.0 / currentBpmHeader); // 停止時間を加算（拍位置は進めない）
+            timePoints.push({ time: currentTime, beat: currentBeat, bpm: currentBpmHeader });
+        }
     }
     timePoints.push({ time: Infinity, beat: Infinity, bpm: currentBpmHeader });
     const applyTime = (obj) => {
