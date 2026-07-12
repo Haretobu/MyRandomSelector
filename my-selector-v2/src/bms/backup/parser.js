@@ -108,14 +108,16 @@ export const parseBMS = async (file) => {
     ...stopEvents.map(e => ({ ...e, kind: 'stop' }))
     ].sort((a, b) => a.beat - b.beat);
 
+    // ======== 修正箇所: タイムラインと時間計算ロジック ========
     const timeline = [
         ...bpmEvents.map(e => ({ ...e, kind: 'bpm' })),
         ...stopEvents.map(e => ({ ...e, kind: 'stop' }))
     ].sort((a, b) => {
-        // 同一拍にBPM変化とSTOPが重なった場合、BPM変化を先に処理して計算を安定させる
         if (a.beat !== b.beat) return a.beat - b.beat;
+        // 同じ拍にBPM変更とSTOPが重なった場合、BPMを先に処理する
         if (a.kind === 'bpm' && b.kind === 'stop') return -1;
-        return 1;
+        if (a.kind === 'stop' && b.kind === 'bpm') return 1;
+        return 0; // ← 修正: 同種イベントの場合は0を返す（ソート破壊の防止）
     });
 
     const timePoints = [{ time: 0, beat: 0, bpm: header.bpm }];
@@ -130,24 +132,24 @@ export const parseBMS = async (file) => {
         
         if (e.kind === 'bpm') {
             currentBpmHeader = e.bpm;
-            // 直前のtimePointと同じ拍なら上書き、違えば新規追加（同一拍の連続BPM変化対策）
+            // 直前のtimePointと同じ拍なら上書き、違えば新規追加
             if (timePoints[timePoints.length - 1].beat === currentBeat) {
                 timePoints[timePoints.length - 1].bpm = currentBpmHeader;
             } else {
                 timePoints.push({ time: currentTime, beat: currentBeat, bpm: currentBpmHeader });
             }
         } else { // stop
-            // 1. STOP開始時点（BPM=0）を記録。これで描画時の「行き過ぎ」を防ぐ
+            // STOP開始時点を追加し、一時的にBPM=0として記録
             if (timePoints[timePoints.length - 1].beat === currentBeat && timePoints[timePoints.length - 1].time === currentTime) {
                 timePoints[timePoints.length - 1].bpm = 0;
             } else {
                 timePoints.push({ time: currentTime, beat: currentBeat, bpm: 0 });
             }
             
-            // 停止時間分だけcurrentTimeを進める
+            // 停止時間分（759ms等）だけcurrentTimeを先に進める
             currentTime += e.beats * (60.0 / currentBpmHeader);
             
-            // 2. STOP終了時点（元のBPMに復帰）を記録。これで描画が再開される
+            // STOP終了時点を追加し、元のBPMに復帰させる
             timePoints.push({ time: currentTime, beat: currentBeat, bpm: currentBpmHeader });
         }
     }
@@ -155,18 +157,18 @@ export const parseBMS = async (file) => {
 
     const applyTime = (obj) => {
         let tp = timePoints[0];
-        // オブジェクトのbeat以下の最大のtimePointを探す。
+        // オブジェクトのbeat以下の最大のtimePointを探す
         for (let i = 0; i < timePoints.length; i++) {
             if (timePoints[i].beat > obj.beat) break;
             
-            // beatが同じtimePointが複数ある場合、最初のもの（STOP開始地点等）を維持する
+            // STOPなどで同じ拍に複数のポイントがある場合、一番最初（停止開始時）を維持する
             if (tp.beat === timePoints[i].beat && obj.beat === timePoints[i].beat) {
-                continue;
+                continue; 
             }
             tp = timePoints[i];
         }
         
-        // BPM0（停止中）の区間にいる場合は時間を進めず、STOP開始時刻で固定する（キー音ズレ防止）
+        // BPM0（停止中）の区間にいる場合は時間を進めず、STOP開始時刻で固定する
         if (tp.bpm === 0) {
             obj.time = tp.time; 
         } else {
