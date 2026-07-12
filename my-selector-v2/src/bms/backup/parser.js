@@ -108,6 +108,17 @@ export const parseBMS = async (file) => {
     ...stopEvents.map(e => ({ ...e, kind: 'stop' }))
     ].sort((a, b) => a.beat - b.beat);
 
+    const timeline = [
+        ...bpmEvents.map(e => ({ ...e, kind: 'bpm' })),
+        ...stopEvents.map(e => ({ ...e, kind: 'stop' }))
+    ].sort((a, b) => {
+        // 同一拍にBPM変更とSTOPがある場合、BPM変更を先に処理してSTOPの計算を正確にする
+        if (a.beat !== b.beat) return a.beat - b.beat;
+        if (a.kind === 'bpm' && b.kind === 'stop') return -1;
+        if (a.kind === 'stop' && b.kind === 'bpm') return 1;
+        return 0;
+    });
+
     const timePoints = [{ time: 0, beat: 0, bpm: header.bpm }];
     let currentBeat = 0; let currentTime = 0; let currentBpmHeader = header.bpm;
 
@@ -126,7 +137,7 @@ export const parseBMS = async (file) => {
                 timePoints.push({ time: currentTime, beat: currentBeat, bpm: currentBpmHeader });
             }
         } else { // stop
-            // ▼ 修正: STOP開始時点のポイントを追加し、一時的にBPM=0として記録（視覚的な行き過ぎを防ぐ）
+            // ▼ 修正: STOP開始時点を追加し、BPM=0として記録（UIの巻き戻りを防ぎ完全に停止させる）
             if (timePoints[timePoints.length - 1].beat === currentBeat && timePoints[timePoints.length - 1].time === currentTime) {
                 timePoints[timePoints.length - 1].bpm = 0;
             } else {
@@ -136,7 +147,7 @@ export const parseBMS = async (file) => {
             // 停止時間分だけcurrentTimeを進める
             currentTime += e.beats * (60.0 / currentBpmHeader);
             
-            // ▼ 修正: STOP終了時点を同一beatで記録し、元のBPMに復帰させる
+            // ▼ 修正: STOP終了時点を追加し、元のBPMに復帰させる
             timePoints.push({ time: currentTime, beat: currentBeat, bpm: currentBpmHeader });
         }
     }
@@ -148,7 +159,7 @@ export const parseBMS = async (file) => {
         for (let i = 0; i < timePoints.length; i++) {
             if (obj.beat < timePoints[i].beat) break;
             
-            // ▼ 修正: beatが同じtimePointが複数ある場合（STOP等）、一番最初（停止開始時）のものを採用する
+            // ▼ 修正: beatが同じtimePointが複数ある場合（STOP等）、一番最初（停止開始時）のものを採用
             if (tp.beat === timePoints[i].beat && obj.beat === timePoints[i].beat) {
                 continue; 
             } else {
