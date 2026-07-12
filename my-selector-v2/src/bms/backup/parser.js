@@ -112,11 +112,10 @@ export const parseBMS = async (file) => {
         ...bpmEvents.map(e => ({ ...e, kind: 'bpm' })),
         ...stopEvents.map(e => ({ ...e, kind: 'stop' }))
     ].sort((a, b) => {
-        // 同一拍にBPM変更とSTOPがある場合、BPM変更を先に処理してSTOPの計算を正確にする
+        // 同一拍にBPM変化とSTOPが重なった場合、BPM変化を先に処理して計算を安定させる
         if (a.beat !== b.beat) return a.beat - b.beat;
         if (a.kind === 'bpm' && b.kind === 'stop') return -1;
-        if (a.kind === 'stop' && b.kind === 'bpm') return 1;
-        return 0;
+        return 1;
     });
 
     const timePoints = [{ time: 0, beat: 0, bpm: header.bpm }];
@@ -128,6 +127,7 @@ export const parseBMS = async (file) => {
             currentTime += deltaBeat * (60.0 / currentBpmHeader);
             currentBeat = e.beat;
         }
+        
         if (e.kind === 'bpm') {
             currentBpmHeader = e.bpm;
             // 直前のtimePointと同じ拍なら上書き、違えば新規追加（同一拍の連続BPM変化対策）
@@ -137,7 +137,7 @@ export const parseBMS = async (file) => {
                 timePoints.push({ time: currentTime, beat: currentBeat, bpm: currentBpmHeader });
             }
         } else { // stop
-            // ▼ 修正: STOP開始時点を追加し、BPM=0として記録（UIの巻き戻りを防ぎ完全に停止させる）
+            // 1. STOP開始時点（BPM=0）を記録。これで描画時の「行き過ぎ」を防ぐ
             if (timePoints[timePoints.length - 1].beat === currentBeat && timePoints[timePoints.length - 1].time === currentTime) {
                 timePoints[timePoints.length - 1].bpm = 0;
             } else {
@@ -147,7 +147,7 @@ export const parseBMS = async (file) => {
             // 停止時間分だけcurrentTimeを進める
             currentTime += e.beats * (60.0 / currentBpmHeader);
             
-            // ▼ 修正: STOP終了時点を追加し、元のBPMに復帰させる
+            // 2. STOP終了時点（元のBPMに復帰）を記録。これで描画が再開される
             timePoints.push({ time: currentTime, beat: currentBeat, bpm: currentBpmHeader });
         }
     }
@@ -155,19 +155,18 @@ export const parseBMS = async (file) => {
 
     const applyTime = (obj) => {
         let tp = timePoints[0];
-        // オブジェクトのbeatに対応する正しいtimePointを探す
+        // オブジェクトのbeat以下の最大のtimePointを探す。
         for (let i = 0; i < timePoints.length; i++) {
-            if (obj.beat < timePoints[i].beat) break;
+            if (timePoints[i].beat > obj.beat) break;
             
-            // ▼ 修正: beatが同じtimePointが複数ある場合（STOP等）、一番最初（停止開始時）のものを採用
+            // beatが同じtimePointが複数ある場合、最初のもの（STOP開始地点等）を維持する
             if (tp.beat === timePoints[i].beat && obj.beat === timePoints[i].beat) {
-                continue; 
-            } else {
-                tp = timePoints[i];
+                continue;
             }
+            tp = timePoints[i];
         }
         
-        // ▼ 修正: BPMが0（STOP中）の場合は時間を進めず、STOP開始時間に固定する（音ズレ防止）
+        // BPM0（停止中）の区間にいる場合は時間を進めず、STOP開始時刻で固定する（キー音ズレ防止）
         if (tp.bpm === 0) {
             obj.time = tp.time; 
         } else {
