@@ -111,7 +111,7 @@ export const parseBMS = async (file) => {
     const timePoints = [{ time: 0, beat: 0, bpm: header.bpm }];
     let currentBeat = 0; let currentTime = 0; let currentBpmHeader = header.bpm;
 
-    for (const e of timeline) {                 // ← timelineに変更
+    for (const e of timeline) {
         const deltaBeat = e.beat - currentBeat;
         if (deltaBeat > 0) {
             currentTime += deltaBeat * (60.0 / currentBpmHeader);
@@ -119,22 +119,45 @@ export const parseBMS = async (file) => {
         }
         if (e.kind === 'bpm') {
             currentBpmHeader = e.bpm;
-            // 直前のtimePointと同じ拍なら上書き、違えば新規追加（同一拍の連続BPM変化対策）
             if (timePoints[timePoints.length - 1].beat === currentBeat) {
                 timePoints[timePoints.length - 1].bpm = currentBpmHeader;
             } else {
                 timePoints.push({ time: currentTime, beat: currentBeat, bpm: currentBpmHeader });
             }
         } else { // stop
-            currentTime += e.beats * (60.0 / currentBpmHeader); // 停止時間を加算（拍位置は進めない）
+            // ▼ 修正: STOP開始時点のポイントをBPM=0として記録（停止区間の補間バグによる巻き戻りを防ぐ）
+            if (timePoints[timePoints.length - 1].time !== currentTime) {
+                timePoints.push({ time: currentTime, beat: currentBeat, bpm: 0 });
+            } else {
+                timePoints[timePoints.length - 1].bpm = 0; 
+            }
+            
+            currentTime += e.beats * (60.0 / currentBpmHeader); // 停止時間を加算
+            
+            // ▼ 修正: STOP終了時点を同一beatで記録し、元のBPMに復帰させる
             timePoints.push({ time: currentTime, beat: currentBeat, bpm: currentBpmHeader });
         }
     }
     timePoints.push({ time: Infinity, beat: Infinity, bpm: currentBpmHeader });
     const applyTime = (obj) => {
         let tp = timePoints[0];
-        for (let i = 0; i < timePoints.length - 1; i++) { if (obj.beat >= timePoints[i].beat && obj.beat < timePoints[i+1].beat) { tp = timePoints[i]; break; } }
-        obj.time = tp.time + (obj.beat - tp.beat) * (60.0 / tp.bpm);
+        for (let i = 0; i < timePoints.length; i++) {
+            if (obj.beat < timePoints[i].beat) break;
+            
+            // ▼ 修正: ノーツと同じbeat（STOP開始時点など）の場合は、最初のtimePoint（START）を優先して維持する
+            if (tp.beat === timePoints[i].beat && obj.beat === timePoints[i].beat) {
+                continue; // tpを更新しない
+            } else {
+                tp = timePoints[i];
+            }
+        }
+        
+        // ▼ 修正: BPMが0（STOP中）の場合は時間を進めず、ゼロ除算を回避してSTOP開始時間（tp.time）を割り当てる
+        if (tp.bpm === 0) {
+            obj.time = tp.time; 
+        } else {
+            obj.time = tp.time + (obj.beat - tp.beat) * (60.0 / tp.bpm);
+        }
     };
     finalObjects.forEach(applyTime); backBgaObjects.forEach(applyTime); layerBgaObjects.forEach(applyTime); poorBgaObjects.forEach(applyTime);
     finalObjects.sort((a, b) => a.time - b.time); backBgaObjects.sort((a, b) => a.time - b.time);
