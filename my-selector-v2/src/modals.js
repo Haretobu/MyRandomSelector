@@ -205,6 +205,7 @@ export const openEditModal = (workId, tempState = null) => {
                                 <option value="漫画" ${work.genre === '漫画' ? 'selected' : ''}>漫画</option>
                                 <option value="ゲーム" ${work.genre === 'ゲーム' ? 'selected' : ''}>ゲーム</option>
                                 <option value="動画" ${work.genre === '動画' ? 'selected' : ''}>動画</option>
+                                <option value="ASMR" ${work.genre === 'ASMR' ? 'selected' : ''}>ASMR</option>
                             </select>
                         </div>
                         <div>
@@ -326,6 +327,11 @@ export const openEditModal = (workId, tempState = null) => {
             e.preventDefault();
             if (!workNameInput.value.trim()) return UI.showToast("作品名は必須です。", "error");
             
+            const dateStr = App.getDateInputValue('editWorkRegisteredAt');
+            if (!dateStr || !Utils.isValidDate(dateStr)) {
+                return UI.showToast("正しい登録日を入力してください。", "error");
+            }
+
             const updatedData = {
                 name: workNameInput.value.trim(), sourceUrl: workUrlInput.value.trim(), genre: $('#editWorkGenre').value,
                 registeredAt: Timestamp.fromDate(new Date(App.getDateInputValue('editWorkRegisteredAt').replace(/\//g, '-'))),
@@ -471,9 +477,12 @@ export const openTagModal = (options) => {
         setupMenu('filterTagBtn', 'filterTagMenu');
         setupMenu('sortTagBtn', 'sortTagMenu');
 
-        document.addEventListener('click', () => {
-            $$('.popup-menu').forEach(m => m.classList.add('hidden'));
-        });
+        if (!AppState._popupListenerAdded) {
+            document.addEventListener('click', () => {
+                $$('.popup-menu').forEach(m => m.classList.add('hidden'));
+            });
+            AppState._popupListenerAdded = true;
+        };
 
         $('#filterTagMenu')?.addEventListener('click', e => {
             const btn = e.target.closest('button[data-filter]');

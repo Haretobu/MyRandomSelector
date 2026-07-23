@@ -70,7 +70,7 @@ export const openLotterySettingsModal = (App, tempState = null) => {
     if (!state.dateFilter.startDate) state.dateFilter.startDate = App.formatDateForInput(new Date());
     if (!state.dateFilter.endDate) state.dateFilter.endDate = App.formatDateForInput(new Date());
 
-    const genreOptions = [{value:'漫画', label:'漫画'}, {value:'ゲーム', label:'ゲーム'}, {value:'動画', label:'動画'}];
+    const genreOptions = [{value:'漫画', label:'漫画'}, {value:'ゲーム', label:'ゲーム'}, {value:'動画', label:'動画'}, {value:'ASMR', label:'ASMR'}];
     const siteOptions = [{value:'dlsite', label:'DLsite'}, {value:'fanza', label:'FANZA'}, {value:'other', label:'その他'}];
 
     const content = `
@@ -599,6 +599,7 @@ export const openLotteryResultModal = (work, App, tempState = null) => {
             const confirmed = await App.showConfirm("評価の保存", "評価/タグが変更されています。保存して詳細編集に進みますか？<br>（「キャンセル」を選ぶと、変更を破棄して詳細編集に進みます）");
             if (confirmed) {
                 await App.updateWork(work.id, { rating: currentRating, tagIds: Array.from(currentTagIds) });
+                localStorage.removeItem('r18_pending_feedback_work_id');
                 App.closeModal(); setTimeout(() => App.openEditModal(work.id), 300);
             }
         });

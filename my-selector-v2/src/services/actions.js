@@ -138,6 +138,14 @@ export const updateWork = async (workId, updatedData) => {
             // FieldValueによるクラッシュを防ぐため、ローカル用の更新データを生成
             const localUpdatedData = { ...updatedData };
             
+            const delToken = deleteField();
+            for (const key of Object.keys(localUpdatedData)) {
+                if (localUpdatedData[key] && typeof localUpdatedData[key].isEqual === 'function' && localUpdatedData[key].isEqual(delToken)) {
+                    delete localUpdatedData[key];
+                    delete AppState.works[index][key];
+                }
+            }
+
             // selectionHistoryに特殊なオブジェクト(arrayUnion)が含まれている場合、ローカル配列に変換
             if (localUpdatedData.selectionHistory && typeof localUpdatedData.selectionHistory === 'object' && localUpdatedData.selectionHistory.constructor.name !== 'Array') {
                 const currentHistory = Array.isArray(AppState.works[index].selectionHistory) 
