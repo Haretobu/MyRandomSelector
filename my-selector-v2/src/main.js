@@ -548,16 +548,16 @@ const App = {
         const pendingWorkId = localStorage.getItem('r18_pending_feedback_work_id');
         if (pendingWorkId) {
             const pendingWork = AppState.works.find(w => w.id === pendingWorkId);
-            if (pendingWork) {
+            if (pendingWork && (pendingWork.rating || 0) === 0) {
                 // UIの安定を待ってから表示 (少し長めに待機)
                 setTimeout(() => {
                     console.log("Restoring pending feedback modal for:", pendingWork.name);
                     App.openFeedbackModal(pendingWork);
-                }, 800);
-            } else {
-                // 作品が見つからない場合はIDを削除
-                localStorage.removeItem('r18_pending_feedback_work_id');
-            }
+                    }, 800);
+                } else {
+                    // 作品が見つからない、または既に評価済みの場合はIDを削除してスルー
+                    localStorage.removeItem('r18_pending_feedback_work_id');
+                }
         }
     },
 

@@ -432,9 +432,11 @@ export const performLottery = async (App) => {
     
     localStorage.setItem('lastSelectedWorkId', selectedWork.id);
     
-    // ▼▼▼ 追加: リロード対策として、評価待ちの作品IDを保存 ▼▼▼
-    localStorage.setItem('r18_pending_feedback_work_id', selectedWork.id);
-    // ▲▲▲ 追加終了 ▲▲▲
+    if ((selectedWork.rating || 0) === 0) {
+        localStorage.setItem('r18_pending_feedback_work_id', selectedWork.id);
+    } else {
+        localStorage.removeItem('r18_pending_feedback_work_id'); // 念のため過去のフラグも消去
+    }
 
     if (!AppState.isDebugMode) {
         const newHistoryEntry = Timestamp.now();
