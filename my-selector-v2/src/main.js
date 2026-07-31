@@ -354,19 +354,78 @@ const App = {
         }
     },
 
+    // ★修正: 文字の実際のはみ出し量(px)を基準に、一定速度でスクロールさせる
     setModalTitleWithMarquee: (title) => {
         const titleEl = AppState.ui.modalTitle;
+        // このモーダル呼び出し専用の世代IDを発行（前のアニメーションを確実に停止させるため）
+        const myGen = (titleEl._marqueeGen = (titleEl._marqueeGen || 0) + 1);
+
         titleEl.classList.remove('marquee-title');
+        titleEl.innerHTML = '';
         titleEl.textContent = title;
 
-        // 描画後にはみ出しているかどうかを判定
         requestAnimationFrame(() => {
-            if (titleEl.scrollWidth > titleEl.clientWidth) {
-                const distance = titleEl.scrollWidth - titleEl.clientWidth;
-                const duration = Math.max(4, distance / 30); // 長いタイトルほどゆっくり流す
-                titleEl.classList.add('marquee-title');
-                titleEl.innerHTML = `<span class="marquee-inner" style="animation-duration:${duration}s;">${App.escapeHTML(title)}</span>`;
-            }
+            if (titleEl._marqueeGen !== myGen) return; // 既に次のモーダルに切り替わっていたら中断
+            const overflow = titleEl.scrollWidth - titleEl.clientWidth;
+            if (overflow <= 4) return; // はみ出していなければ通常表示のまま何もしない
+
+            titleEl.classList.add('marquee-title');
+            titleEl.innerHTML = `<span class="marquee-inner">${App.escapeHTML(title)}</span>`;
+            const inner = titleEl.querySelector('.marquee-inner');
+
+            // ▼▼▼ ここの数値を変えるとお好みの速さ・間合いに調整できます ▼▼▼
+            const PIXELS_PER_SECOND = 45; // スクロール速度(px/秒)。画面幅に関係なく一定になる
+            const PAUSE_START_MS = 900;   // ① 左端で静止する時間
+            const PAUSE_END_MS = 1200;    // ③ 右端まで見えた後に静止する時間
+            const FADE_MS = 350;          // ④⑤ フェードにかける時間
+            // ▲▲▲ ここまで ▲▲▲
+
+            const scrollDuration = (overflow / PIXELS_PER_SECOND) * 1000;
+
+            const runCycle = (isFirstTime) => {
+                if (titleEl._marqueeGen !== myGen) return; // 中断チェック
+
+                // 位置を左端に瞬間リセット
+                inner.style.transition = 'none';
+                inner.style.transform = 'translateX(0)';
+
+                const afterFadeIn = () => {
+                    if (titleEl._marqueeGen !== myGen) return;
+                    // ① 左端で少し静止
+                    setTimeout(() => {
+                        if (titleEl._marqueeGen !== myGen) return;
+                        // ② 左へスクロール
+                        inner.style.transition = `transform ${scrollDuration}ms linear`;
+                        inner.style.transform = `translateX(-${overflow}px)`;
+
+                        setTimeout(() => {
+                            if (titleEl._marqueeGen !== myGen) return;
+                            // ③ 右端が見えた状態で少し静止
+                            setTimeout(() => {
+                                if (titleEl._marqueeGen !== myGen) return;
+                                // ④ フェードアウト
+                                inner.style.transition = `opacity ${FADE_MS}ms ease`;
+                                inner.style.opacity = '0';
+
+                                setTimeout(() => runCycle(false), FADE_MS); // ⑤ 左端へ戻してフェードイン→最初に戻る
+                            }, PAUSE_END_MS);
+                        }, scrollDuration);
+                    }, PAUSE_START_MS);
+                };
+
+                if (isFirstTime) {
+                    inner.style.opacity = '1';
+                    afterFadeIn();
+                } else {
+                    inner.style.opacity = '0';
+                    void inner.offsetWidth; // 強制リフロー（フェードインを確実に発生させるおまじない）
+                    inner.style.transition = `opacity ${FADE_MS}ms ease`;
+                    inner.style.opacity = '1';
+                    setTimeout(afterFadeIn, FADE_MS); // ⑤ フェードイン完了後、①に戻る
+                }
+            };
+
+            runCycle(true);
         });
     },
 
