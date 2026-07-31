@@ -34,6 +34,7 @@ import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-ch
 import { getApp } from "firebase/app";
 import { NetworkService } from './services/network.js';
 import * as AdWidget from './adWidget.js';
+import * as LotteryAnimation from './lotteryAnimation.js';
 
 // Helper Functions
 const $ = (selector) => document.querySelector(selector);
@@ -1770,6 +1771,7 @@ const App = {
     openFeedbackModal: (work, tempState) => Lottery.openFeedbackModal(work, App, tempState),
     openAdWidgetSettingsModal: () => AdWidget.openAdWidgetSettingsModal(App),
     toggleAdWidgetMinimized: () => AdWidget.toggleAdWidgetMinimized(App),
+    openLotteryAnimationSettingsModal: () => LotteryAnimation.openAnimationSettingsModal(App),
 
     openBatchRegistrationModal: (keepData) => Batch.openBatchRegistrationModal(App, keepData),
     renderTempWorkList: () => Batch.renderTempWorkList(App),

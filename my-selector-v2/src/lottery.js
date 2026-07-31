@@ -1,5 +1,6 @@
 import { store as AppState } from './store/store.js';
 import { Timestamp, arrayUnion } from "firebase/firestore";
+import * as LotteryAnimation from './lotteryAnimation.js';
 
 // ヘルパー関数
 const $ = (selector) => document.querySelector(selector);
@@ -79,6 +80,7 @@ export const openLotterySettingsModal = (App, tempState = null) => {
                 <h4 class="font-semibold">抽選設定</h4>
                 <div class="flex items-center gap-2">
                     <button id="lottery-apply-to-list" class="text-xs px-3 py-1 bg-teal-600 hover:bg-teal-700 rounded-full transition-colors">リストに適用</button>
+                    <button id="lottery-animation-settings-btn" title="抽選演出の設定" class="text-gray-400 hover:text-white"><i class="fas fa-film fa-lg"></i></button>
                     <button id="lottery-help-btn" class="text-gray-400 hover:text-white"><i class="fas fa-question-circle fa-lg"></i></button>
                 </div>
         </div>
@@ -373,6 +375,9 @@ export const openLotterySettingsModal = (App, tempState = null) => {
         });
         $('#lottery-settings-cancel').addEventListener('click', App.closeModal);
 
+        $('#lottery-animation-settings-btn').addEventListener('click', () => {
+            App.openLotteryAnimationSettingsModal();
+        });
         $('#lottery-help-btn').addEventListener('click', () => {
             App.openHelpModal();
         });
@@ -462,7 +467,15 @@ export const performLottery = async (App) => {
             }
             }
     }
-    App.openLotteryResultModal(selectedWork);
+
+    const animSettings = LotteryAnimation.loadAnimationSettings();
+    if (animSettings.enabled && weightedPool.length > 1) {
+        LotteryAnimation.playLotteryAnimation(App, weightedPool, selectedWork, () => {
+            App.openLotteryResultModal(selectedWork);
+        });
+    } else {
+        App.openLotteryResultModal(selectedWork);
+    }
 };
 
 export const openLotteryResultModal = (work, App, tempState = null) => {
