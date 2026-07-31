@@ -73,8 +73,8 @@ const IMAGE_BASE_HEIGHT = { small: 80, medium: 112, large: 158 };
 const computeBarHeight = (settings) => {
     let height = IMAGE_BASE_HEIGHT[settings.image] || 112;
     if (settings.detail) height += 40;   // 作品名・サークル名の分
-    if (settings.wrapper) height += 90;  // ★修正: パーツタイトルの分（実測に合わせて32→60に修正）
-    height += 16; // 余白
+    if (settings.wrapper) height += 75;  // ★修正: パーツタイトルの分（実測に合わせて32→60に修正）
+    height += 30; // 余白
     height += 26; // 下部の最小化ボタン分のスペース
 
     const isDesktop = window.innerWidth >= 1024;
