@@ -33,6 +33,7 @@ import { httpsCallable } from "firebase/functions";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import { getApp } from "firebase/app";
 import { NetworkService } from './services/network.js';
+import * as AdWidget from './adWidget.js';
 
 // Helper Functions
 const $ = (selector) => document.querySelector(selector);
@@ -132,7 +133,8 @@ const App = {
             nextPageBtn: $('#nextPageBtn'),
             slidingFabContainer: $('#fab-menu-content'), 
             slidingFabToggle: $('#fab-main-toggle'),
-            reloadWorksBtn: $('#reloadWorksBtn')
+            reloadWorksBtn: $('#reloadWorksBtn'),
+            adWidgetSettingsBtn: $('#adWidgetSettingsBtn')
         };
 
         const sortOptions = App.getSortOptions(); 
@@ -191,6 +193,7 @@ const App = {
         }
         App.setupEventListeners();
         App.checkVersionUpdate();
+        AdWidget.renderAdWidget(App);
 
         setInterval(() => {
             const isModalOpen = !AppState.ui.modalWrapper.classList.contains('hidden');
@@ -1759,6 +1762,7 @@ const App = {
     performLottery: () => Lottery.performLottery(App),
     openLotteryResultModal: (work, tempState) => Lottery.openLotteryResultModal(work, App, tempState),
     openFeedbackModal: (work, tempState) => Lottery.openFeedbackModal(work, App, tempState),
+    openAdWidgetSettingsModal: () => AdWidget.openAdWidgetSettingsModal(App),
 
     openBatchRegistrationModal: (keepData) => Batch.openBatchRegistrationModal(App, keepData),
     renderTempWorkList: () => Batch.renderTempWorkList(App),

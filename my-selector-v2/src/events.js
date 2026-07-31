@@ -250,6 +250,15 @@ export const setupAppEventListeners = (App) => {
     ui.openLotterySettingsBtn.addEventListener('click', () => App.openLotterySettingsModal());
     ui.startLotteryBtn.addEventListener('click', App.performLottery);
 
+    // --- おすすめ情報(DLsite)パネル ---
+    if (ui.adWidgetSettingsBtn) {
+        ui.adWidgetSettingsBtn.addEventListener('click', (e) => {
+            e.preventDefault();  // <summary>内のボタンなので、開閉が誤作動しないように止める
+            e.stopPropagation();
+            App.openAdWidgetSettingsModal();
+        });
+    }
+
     const lotteryPanel = $('#lottery-panel');
     if (lotteryPanel && ui.drawerLotteryFab) {
         ui.drawerLotteryFab.addEventListener('click', () => {
