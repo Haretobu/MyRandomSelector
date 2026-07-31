@@ -251,9 +251,6 @@ export const setupAppEventListeners = (App) => {
     ui.startLotteryBtn.addEventListener('click', App.performLottery);
 
     // --- おすすめ情報(DLsite)バー ---
-    if (ui.adWidgetSettingsBtn) {
-        ui.adWidgetSettingsBtn.addEventListener('click', () => App.openAdWidgetSettingsModal());
-    }
     if (ui.adWidgetMinimizeBtn) {
         ui.adWidgetMinimizeBtn.addEventListener('click', () => App.toggleAdWidgetMinimized());
     }

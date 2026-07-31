@@ -134,7 +134,6 @@ const App = {
             slidingFabContainer: $('#fab-menu-content'), 
             slidingFabToggle: $('#fab-main-toggle'),
             reloadWorksBtn: $('#reloadWorksBtn'),
-            adWidgetSettingsBtn: $('#adWidgetSettingsBtn'),
             adWidgetMinimizeBtn: $('#adWidgetMinimizeBtn'),
             adWidgetTab: $('#adWidgetTab'),
             adWidgetFab: $('#adWidgetFab')
@@ -204,6 +203,7 @@ const App = {
             if (AppState.isLoadComplete && !document.hidden && !isModalOpen) {
                 console.log("Auto-syncing...");
                 App.loadDataSet(AppState.syncId);
+                AdWidget.renderAdWidget(App); // ★自動更新のタイミングでおすすめ情報もランダム更新
             } else if (isModalOpen) {
                 console.log("Auto-sync skipped due to open modal.");
             }
@@ -1397,6 +1397,9 @@ const App = {
                 
                 // アイコンを回す (CSSクラス追加)
                 if(icon) icon.classList.add('fa-spin');
+
+                // ★おすすめ情報もこのタイミングでランダム更新
+                AdWidget.renderAdWidget(App);
                 
                 // データを再読み込み (同期)
                 await App.loadDataSet(AppState.syncId);

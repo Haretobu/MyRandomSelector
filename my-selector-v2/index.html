@@ -14,19 +14,20 @@
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans antialiased">
 
-    <div id="ad-widget-bar" class="hidden w-full bg-gray-800 border-b border-gray-700 relative z-[65]">
-        <div class="max-w-7xl mx-auto px-2 py-1 flex items-center gap-2">
-            <span class="text-[10px] text-gray-500 font-bold pl-1 shrink-0 hidden sm:inline">PR</span>
-            <div id="ad-widget-frame-container" class="flex-grow min-w-0"></div>
-            <div class="flex items-center gap-1 shrink-0">
-                <button id="adWidgetSettingsBtn" title="表示設定" class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-white rounded hover:bg-gray-700"><i class="fas fa-cog"></i></button>
-                <button id="adWidgetMinimizeBtn" title="最小化" class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-white rounded hover:bg-gray-700"><i class="fas fa-chevron-up"></i></button>
-            </div>
+    <div id="ad-widget-bar" class="hidden w-full bg-gray-800 border-b border-gray-700 relative z-30">
+        <span class="absolute top-0.5 left-1.5 text-[9px] text-gray-500 font-bold z-10">PR</span>
+        <div class="w-full px-1 pt-2">
+            <div id="ad-widget-frame-container" class="w-full"></div>
+        </div>
+        <div class="flex justify-center pb-1">
+            <button id="adWidgetMinimizeBtn" title="最小化" class="w-12 h-5 flex items-center justify-center text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 rounded-b-lg">
+                <i class="fas fa-chevron-up text-xs"></i>
+            </button>
         </div>
     </div>
 
-    <button id="adWidgetTab" title="おすすめ情報を開く" class="hidden fixed top-1/2 right-0 -translate-y-1/2 z-40 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-600 border-r-0 rounded-l-lg px-1.5 py-4 shadow-lg">
-        <i class="fas fa-chevron-left"></i>
+    <button id="adWidgetTab" title="おすすめ情報を開く" class="hidden fixed top-0 left-1/2 -translate-x-1/2 z-30 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-600 border-t-0 rounded-b-lg px-5 py-1.5 shadow-lg">
+        <i class="fas fa-chevron-down"></i>
     </button>
 
     <div id="version-display" class="fixed top-2 right-3 text-xs text-gray-600 font-mono z-[60]"></div>
