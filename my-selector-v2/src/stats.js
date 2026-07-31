@@ -29,6 +29,7 @@ export const openStatsDashboardModal = (App) => {
                         <option value="漫画">漫画</option>
                         <option value="ゲーム">ゲーム</option>
                         <option value="動画">動画</option>
+                        <option value="ASMR">ASMR</option>
                     </select>
                 </div>
             </div>
@@ -239,7 +240,7 @@ export const renderStatsOverview = (App) => {
     genreTitle.textContent = `ジャンル別統計 (${genreFilter === 'all' ? `全${AppState.works.length}` : genreFilter} / ${totalWorks}件)`;
 
     const genreCounts = filteredWorks.reduce((acc, work) => ({ ...acc, [work.genre]: (acc[work.genre] || 0) + 1 }), {});
-    const genreColors = { '漫画': '#3b82f6', 'ゲーム': '#10b981', '動画': '#8b5cf6' };
+    const genreColors = { '漫画': '#3b82f6', 'ゲーム': '#10b981', '動画': '#8b5cf6', 'ASMR': '#ec4899' };
     genreContainer.innerHTML = Object.entries(genreCounts).sort((a,b) => b[1] - a[1]).map(([genre, count]) => {
     const percentage = totalWorks > 0 ? ((count / totalWorks) * 100).toFixed(1) : 0;
     return `<div><div class="flex justify-between mb-1 text-sm"><span class="font-bold" style="color:${genreColors[genre] || '#9ca3af'}">${genre}</span><span>${count}件 (${percentage}%)</span></div><div class="w-full bg-gray-700 rounded-full h-2.5"><div class="h-2.5 rounded-full" style="width: ${percentage}%; background-color:${genreColors[genre] || '#9ca3af'}"></div></div></div>`;
@@ -432,7 +433,7 @@ export const renderTrendsDetail = (key, detailData, App) => {
             type: 'doughnut',
             data: {
                 labels: Object.keys(genreCounts),
-                datasets: [{ data: Object.values(genreCounts), backgroundColor: ['#3b82f6', '#10b981', '#8b5cf6'], borderColor: '#1f2937', borderWidth: 2 }]
+                datasets: [{ data: Object.values(genreCounts), backgroundColor: ['#3b82f6', '#10b981', '#8b5cf6', '#ec4899'], borderColor: '#1f2937', borderWidth: 2 }]
             },
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
         });

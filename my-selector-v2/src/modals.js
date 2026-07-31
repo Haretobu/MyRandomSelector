@@ -194,6 +194,7 @@ export const openEditModal = (workId, tempState = null) => {
                                     <input type="url" id="editWorkUrl" value="${safeWorkUrl}" placeholder="https://..." class="w-full bg-gray-700 p-2 rounded-lg pr-10"> <button type="button" id="clear-editWorkUrl" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white hidden"> <i class="fas fa-times-circle"></i></button>
                                 </div>
                                 <button type="button" id="openWorkUrlBtn" class="flex-shrink-0 w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-600 hover:bg-gray-500" disabled><i class="fas fa-external-link-alt"></i></button>
+                                <button type="button" id="copyWorkUrlBtn" class="flex-shrink-0 w-10 h-10 rounded-lg text-white flex items-center justify-center transition-colors bg-gray-600 hover:bg-gray-500" title="URLをコピー"><i class="fas fa-copy"></i></button>
                             </div>
                             <div id="edit-url-preview-box" class="hidden absolute z-50 top-full left-0 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-2 max-h-40 overflow-y-auto custom-scrollbar"></div>
                         </div>
@@ -244,7 +245,7 @@ export const openEditModal = (workId, tempState = null) => {
         </form>
     `;
 
-    const headerSearchBtn = `<button type="button" id="edit-external-search-header" class="text-sm py-1 rounded-lg flex items-center transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700 text-white px-2 md:px-3"><i class="fas fa-globe-asia md:mr-2"></i><span class="hidden md:inline">外部サイト検索</span></button>`;
+    const headerSearchBtn = `<button type="button" id="edit-external-search-header" class="text-sm rounded-lg flex items-center justify-center transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700 text-white min-w-[44px] min-h-[44px] px-3 py-2 md:px-3 md:py-1 md:min-w-0 md:min-h-0"><i class="fas fa-globe-asia md:mr-2"></i><span class="hidden md:inline">外部サイト検索</span></button>`;
 
     App.openModal(`「${work.name}」を編集`, content, () => {
         const ratingStars = $('#editWorkRating'), tagsContainer = $('#editWorkTags');
@@ -272,6 +273,11 @@ export const openEditModal = (workId, tempState = null) => {
             } else { 
                 editUrlPreviewBox.innerHTML = ''; 
                 editUrlPreviewBox.classList.add('hidden'); 
+            }
+        });
+        document.addEventListener('click', (e) => {
+            if (!editUrlPreviewBox.contains(e.target) && e.target !== workUrlInput) {
+                editUrlPreviewBox.classList.add('hidden');
             }
         });
 
@@ -312,6 +318,11 @@ export const openEditModal = (workId, tempState = null) => {
         if(workUrlInput.value.trim()) openUrlBtn.disabled = false;
         workUrlInput.addEventListener('input', () => { openUrlBtn.disabled = !workUrlInput.value.trim(); });
         openUrlBtn.addEventListener('click', () => { const url = workUrlInput.value.trim(); if (url) window.open(url, '_blank', 'noopener,noreferrer'); });
+        $('#copyWorkUrlBtn').addEventListener('click', () => {
+            const url = workUrlInput.value.trim();
+            if (!url) return UI.showToast("URLが入力されていません。", "error");
+            navigator.clipboard.writeText(url).then(() => UI.showToast("URLをコピーしました。"));
+        });
         $('#copy-edit-title-btn').addEventListener('click', () => navigator.clipboard.writeText(workNameInput.value).then(() => UI.showToast(`「${workNameInput.value}」をコピーしました。`)));
 
         const renderStars = r => { if(!ratingStars)return; ratingStars.innerHTML=''; for(let i=1;i<=5;i++){ const s=document.createElement('i'); s.classList.add('fa-star','cursor-pointer'); s.dataset.value=i; if(r>=i)s.classList.add('fas','text-yellow-400'); else if(r===i-0.5)s.classList.add('fas','fa-star-half-alt','text-yellow-400'); else s.classList.add('far','text-gray-500'); ratingStars.appendChild(s); }};
