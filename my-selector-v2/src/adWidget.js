@@ -67,7 +67,7 @@ export const renderAdWidget = (App) => {
     const encoded = encodeURIComponent(JSON.stringify(config));
     const src = `/dlsite-widget.html?c=${encoded}&t=${Date.now()}`; // t=でキャッシュを回避し、確実に再読み込みさせる
 
-    container.innerHTML = `<iframe src="${src}" title="DLsiteおすすめ情報" style="width:100%;height:380px;border:0;background:transparent;" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"></iframe>`;
+    container.innerHTML = `<iframe src="${src}" title="DLsiteおすすめ情報" style="width:100%;height:380px;border:0;background:transparent;" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-same-origin"></iframe>`;
 };
 
 // 設定モーダル
