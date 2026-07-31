@@ -1,24 +1,23 @@
 // src/adWidget.js
 // DLsiteのおすすめ情報パーツの設定管理・表示処理
 
-const STORAGE_KEY = 'dlsiteAdWidgetSettings_v1';
+const SETTINGS_KEY = 'dlsiteAdWidgetSettings_v1';
+const MINIMIZED_KEY = 'dlsiteAdWidgetMinimized_v1';
 
 const DEFAULT_SETTINGS = {
-    enabled: false,      // 初期状態は非表示（設定で有効化する）
-    type: 'ranking',     // 'ranking' | 'new'
-    period: '24h',       // 'ranking'の時のみ使用: 24h/week/month/year/total
-    display: 'vertical', // 'vertical'(タテ) | 'horizontal'(ヨコ)
-    column: 'v',         // 'v'(タテ並び) | 'h'(ヨコ並び)
-    image: 'medium',     // 'small' | 'medium' | 'large'
-    count: 3,            // 1 | 3 | 5 | 10
-    detail: true,        // true: 画像・作品名・サークル名 / false: 画像のみ
-    wrapper: true,       // パーツタイトルの表示/非表示
-    autorotate: true,    // 自動スクロール
+    enabled: false,     // 初期状態は非表示（設定で有効化する）
+    type: 'ranking',    // 'ranking' | 'new'
+    period: '24h',      // 'ranking'の時のみ使用: 24h/week/month/year/total
+    image: 'medium',    // 'small' | 'medium' | 'large'
+    count: 3,           // 1 | 3 | 5 | 10
+    detail: true,       // true: 画像・作品名・サークル名 / false: 画像のみ
+    wrapper: true,      // パーツタイトルの表示/非表示
+    autorotate: true,   // 自動スクロール
 };
 
 export const loadAdWidgetSettings = () => {
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(SETTINGS_KEY);
         if (!raw) return { ...DEFAULT_SETTINGS };
         return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
     } catch (e) {
@@ -27,8 +26,11 @@ export const loadAdWidgetSettings = () => {
 };
 
 export const saveAdWidgetSettings = (settings) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 };
+
+const isMinimized = () => localStorage.getItem(MINIMIZED_KEY) === 'true';
+const setMinimized = (value) => localStorage.setItem(MINIMIZED_KEY, value ? 'true' : 'false');
 
 export const buildBlogPartsConfig = (settings) => {
     return {
@@ -37,37 +39,55 @@ export const buildBlogPartsConfig = (settings) => {
         site: 'maniax', // 同人 R18 固定
         query: settings.type === 'ranking' ? { period: settings.period } : { days: '7' },
         title: settings.type === 'ranking' ? 'ランキング' : '新着作品',
-        display: settings.display,
+        display: 'horizontal', // ★横長バー専用のため固定
         detail: settings.detail ? '1' : '0',
-        column: settings.column,
+        column: 'h', // ★横並び固定
         image: settings.image,
         count: String(settings.count),
         wrapper: settings.wrapper ? '1' : '0',
         autorotate: !!settings.autorotate,
-        aid: '' // アフィリエイトIDは使用しない
+        aid: ''
     };
 };
 
-// パネルの表示内容を最新の設定で描き直す
+// 現在の状態(表示/最小化)に応じて、バーとタブの見た目を切り替える
 export const renderAdWidget = (App) => {
-    const panel = document.getElementById('ad-widget-panel');
+    const bar = document.getElementById('ad-widget-bar');
+    const tab = document.getElementById('adWidgetTab');
     const container = document.getElementById('ad-widget-frame-container');
-    if (!panel || !container) return;
+    if (!bar || !tab || !container) return;
 
     const settings = loadAdWidgetSettings();
 
     if (!settings.enabled) {
-        panel.classList.add('hidden');
+        bar.classList.add('hidden');
+        tab.classList.add('hidden');
         container.innerHTML = '';
         return;
     }
-    panel.classList.remove('hidden');
+
+    if (isMinimized()) {
+        bar.classList.add('hidden');
+        tab.classList.remove('hidden');
+        container.innerHTML = ''; // 最小化中は読み込みを止めて負荷を減らす
+        return;
+    }
+
+    bar.classList.remove('hidden');
+    tab.classList.add('hidden');
 
     const config = buildBlogPartsConfig(settings);
     const encoded = encodeURIComponent(JSON.stringify(config));
-    const src = `/dlsite-widget.html?c=${encoded}&t=${Date.now()}`; // t=でキャッシュを回避し、確実に再読み込みさせる
+    // ★毎回新しく読み込み直すことで、幅がおかしくなる不具合を防ぐ
+    const src = `/dlsite-widget.html?c=${encoded}&t=${Date.now()}`;
 
-    container.innerHTML = `<iframe src="${src}" title="DLsiteおすすめ情報" style="width:100%;height:380px;border:0;background:transparent;" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-same-origin"></iframe>`;
+    container.innerHTML = `<iframe src="${src}" title="DLsiteおすすめ情報" style="width:100%;height:110px;border:0;background:transparent;" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-same-origin"></iframe>`;
+};
+
+// 最小化⇔展開の切り替え
+export const toggleAdWidgetMinimized = (App) => {
+    setMinimized(!isMinimized());
+    renderAdWidget(App);
 };
 
 // 設定モーダル
@@ -102,23 +122,6 @@ export const openAdWidgetSettingsModal = (App) => {
 
         <div class="grid grid-cols-2 gap-4">
             <div>
-                <label class="block text-sm text-gray-400 mb-1">タイプ</label>
-                <select id="adw-display" class="w-full bg-gray-700 p-2 rounded-lg">
-                    <option value="vertical" ${s.display === 'vertical' ? 'selected' : ''}>タテ</option>
-                    <option value="horizontal" ${s.display === 'horizontal' ? 'selected' : ''}>ヨコ</option>
-                </select>
-            </div>
-            <div>
-                <label class="block text-sm text-gray-400 mb-1">段組み</label>
-                <select id="adw-column" class="w-full bg-gray-700 p-2 rounded-lg">
-                    <option value="v" ${s.column === 'v' ? 'selected' : ''}>タテ並び</option>
-                    <option value="h" ${s.column === 'h' ? 'selected' : ''}>ヨコ並び</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-2 gap-4">
-            <div>
                 <label class="block text-sm text-gray-400 mb-1">画像サイズ</label>
                 <select id="adw-image" class="w-full bg-gray-700 p-2 rounded-lg">
                     <option value="small" ${s.image === 'small' ? 'selected' : ''}>小</option>
@@ -136,6 +139,8 @@ export const openAdWidgetSettingsModal = (App) => {
                 </select>
             </div>
         </div>
+
+        <p class="text-xs text-gray-500 -mt-2">※ 画面上部の横長バーで表示するため、レイアウトは横並びで固定しています。</p>
 
         <div class="flex items-center">
             <input type="checkbox" id="adw-detail" class="h-4 w-4 rounded bg-gray-600 text-orange-500 border-gray-500 focus:ring-orange-600" ${s.detail ? 'checked' : ''}>
@@ -173,8 +178,6 @@ export const openAdWidgetSettingsModal = (App) => {
                 enabled: document.getElementById('adw-enabled').checked,
                 type: typeSelect.value,
                 period: periodSelect.value,
-                display: document.getElementById('adw-display').value,
-                column: document.getElementById('adw-column').value,
                 image: document.getElementById('adw-image').value,
                 count: parseInt(document.getElementById('adw-count').value, 10),
                 detail: document.getElementById('adw-detail').checked,
@@ -182,6 +185,7 @@ export const openAdWidgetSettingsModal = (App) => {
                 autorotate: document.getElementById('adw-autorotate').checked,
             };
             saveAdWidgetSettings(newSettings);
+            setMinimized(false); // 設定を保存したら、分かりやすいように展開状態で見せる
             renderAdWidget(App);
             App.showToast("表示設定を保存しました。");
             App.closeModal();

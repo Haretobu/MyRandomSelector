@@ -250,13 +250,18 @@ export const setupAppEventListeners = (App) => {
     ui.openLotterySettingsBtn.addEventListener('click', () => App.openLotterySettingsModal());
     ui.startLotteryBtn.addEventListener('click', App.performLottery);
 
-    // --- おすすめ情報(DLsite)パネル ---
+    // --- おすすめ情報(DLsite)バー ---
     if (ui.adWidgetSettingsBtn) {
-        ui.adWidgetSettingsBtn.addEventListener('click', (e) => {
-            e.preventDefault();  // <summary>内のボタンなので、開閉が誤作動しないように止める
-            e.stopPropagation();
-            App.openAdWidgetSettingsModal();
-        });
+        ui.adWidgetSettingsBtn.addEventListener('click', () => App.openAdWidgetSettingsModal());
+    }
+    if (ui.adWidgetMinimizeBtn) {
+        ui.adWidgetMinimizeBtn.addEventListener('click', () => App.toggleAdWidgetMinimized());
+    }
+    if (ui.adWidgetTab) {
+        ui.adWidgetTab.addEventListener('click', () => App.toggleAdWidgetMinimized());
+    }
+    if (ui.adWidgetFab) {
+        ui.adWidgetFab.addEventListener('click', () => { App.openAdWidgetSettingsModal(); App.closeFabMenu(); });
     }
 
     const lotteryPanel = $('#lottery-panel');

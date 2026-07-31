@@ -134,7 +134,10 @@ const App = {
             slidingFabContainer: $('#fab-menu-content'), 
             slidingFabToggle: $('#fab-main-toggle'),
             reloadWorksBtn: $('#reloadWorksBtn'),
-            adWidgetSettingsBtn: $('#adWidgetSettingsBtn')
+            adWidgetSettingsBtn: $('#adWidgetSettingsBtn'),
+            adWidgetMinimizeBtn: $('#adWidgetMinimizeBtn'),
+            adWidgetTab: $('#adWidgetTab'),
+            adWidgetFab: $('#adWidgetFab')
         };
 
         const sortOptions = App.getSortOptions(); 
@@ -1763,6 +1766,7 @@ const App = {
     openLotteryResultModal: (work, tempState) => Lottery.openLotteryResultModal(work, App, tempState),
     openFeedbackModal: (work, tempState) => Lottery.openFeedbackModal(work, App, tempState),
     openAdWidgetSettingsModal: () => AdWidget.openAdWidgetSettingsModal(App),
+    toggleAdWidgetMinimized: () => AdWidget.toggleAdWidgetMinimized(App),
 
     openBatchRegistrationModal: (keepData) => Batch.openBatchRegistrationModal(App, keepData),
     renderTempWorkList: () => Batch.renderTempWorkList(App),
