@@ -265,17 +265,26 @@ export const openEditModal = (workId, tempState = null) => {
         AppState.tempNewImageFileName = null; 
         AppState.deleteImageFlag = false;
 
+        let ignoreNextOutsideClick = false; // 表示直後の1回目のタップを無視するためのフラグ
+
         workUrlInput.addEventListener('blur', () => {
             const url = workUrlInput.value.trim();
             if (url && url.length > 10 && url.startsWith('http')) {
                 editUrlPreviewBox.classList.remove('hidden');
                 App.fetchLinkPreview(url, editUrlPreviewBox);
+                ignoreNextOutsideClick = true; // 表示させたこのタップでは閉じない
             } else { 
                 editUrlPreviewBox.innerHTML = ''; 
                 editUrlPreviewBox.classList.add('hidden'); 
             }
         });
+
         document.addEventListener('click', (e) => {
+            if (editUrlPreviewBox.classList.contains('hidden')) return;
+            if (ignoreNextOutsideClick) {
+                ignoreNextOutsideClick = false;
+                return;
+            }
             if (!editUrlPreviewBox.contains(e.target) && e.target !== workUrlInput) {
                 editUrlPreviewBox.classList.add('hidden');
             }

@@ -354,6 +354,22 @@ const App = {
         }
     },
 
+    setModalTitleWithMarquee: (title) => {
+        const titleEl = AppState.ui.modalTitle;
+        titleEl.classList.remove('marquee-title');
+        titleEl.textContent = title;
+
+        // 描画後にはみ出しているかどうかを判定
+        requestAnimationFrame(() => {
+            if (titleEl.scrollWidth > titleEl.clientWidth) {
+                const distance = titleEl.scrollWidth - titleEl.clientWidth;
+                const duration = Math.max(4, distance / 30); // 長いタイトルほどゆっくり流す
+                titleEl.classList.add('marquee-title');
+                titleEl.innerHTML = `<span class="marquee-inner" style="animation-duration:${duration}s;">${App.escapeHTML(title)}</span>`;
+            }
+        });
+    },
+
     openModal: (title, contentHtml, onOpen = null, options = {}) => {
         App.closeFabMenu();
         App.toggleBodyScroll(true);
@@ -369,7 +385,7 @@ const App = {
         AppState.ui.modalContainer.classList.add(size);
         
         $('#modal-header-actions').innerHTML = headerActions;
-        AppState.ui.modalTitle.textContent = title;
+        App.setModalTitleWithMarquee(title);
         AppState.ui.modalContentHost.innerHTML = contentHtml;
         App.initializeDateInputs(AppState.ui.modalContentHost); 
         AppState.ui.modalBackdrop.classList.remove('hidden');

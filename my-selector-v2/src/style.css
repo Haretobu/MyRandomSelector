@@ -49,3 +49,20 @@ details[open] > summary .chevron-icon { transform: rotate(180deg); }
 .tag-item-not { background-color: #be123c !important; color: white !important; text-decoration: line-through; }
 .stats-tab-active { background-color: #0f766e; color: white; }
 .site-badge { position: absolute; top: 6px; left: 6px; height: 16px; line-height: 16px; padding: 0 5px; font-size: 10px; font-weight: 800; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.5); pointer-events: none; }
+/* ★追加: モーダルタイトルの横スクロール表示 */
+.marquee-title {
+    overflow: hidden;
+    white-space: nowrap;
+    position: relative;
+}
+.marquee-title .marquee-inner {
+    display: inline-block;
+    padding-left: 100%;
+    animation-name: marquee-scroll;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+}
+@keyframes marquee-scroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+}
