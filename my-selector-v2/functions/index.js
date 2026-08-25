@@ -1,4 +1,5 @@
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
+const { beforeUserCreated } = require("firebase-functions/v2/identity");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const admin = require('firebase-admin');
 const cors = require('cors')({ origin: true });
@@ -13,6 +14,28 @@ if (!admin.apps.length) {
     admin.initializeApp();
 }
 const db = admin.firestore();
+
+// ============================================================================
+// 0. 新規アカウント作成の事前許可制（セキュリティ対応）
+// ここに登録されていないメールアドレスは、新規登録自体が拒否される。
+// 動作にはFirebaseコンソールでIdentity Platformへのアップグレードが必要。
+// 許可するメールアドレスを追加したい場合は、この配列に追記して再デプロイする。
+// ============================================================================
+const ALLOWED_SIGNUP_EMAILS = [
+    "euwoiv@gmail.com",
+    "haretobu2005@gmail.com",
+    "fohareto2005@gmail.com",
+].map(e => e.toLowerCase());
+
+exports.restrictSignup = beforeUserCreated((event) => {
+    const email = event.data.email;
+    if (!email || !ALLOWED_SIGNUP_EMAILS.includes(email.toLowerCase())) {
+        throw new HttpsError(
+            "permission-denied",
+            "このメールアドレスでの新規登録は許可されていません。"
+        );
+    }
+});
 
 // ============================================================================
 // 1. URLからプレビュー情報（OGP）を取得する機能（過去プロジェクトの優秀なコード）
