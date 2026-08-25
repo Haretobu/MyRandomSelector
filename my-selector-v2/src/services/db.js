@@ -23,6 +23,14 @@ db.version(2).stores({
     syncInfo: 'id'
 });
 
+// ▼ 追加: タグをジャンル分けするための「グループ」テーブル
+db.version(3).stores({
+    works: 'id, syncId, name, genre, registeredAt, lastSelectedAt, rating',
+    tags: 'id, syncId, name',
+    groups: 'id, syncId, name',
+    syncInfo: 'id'
+});
+
 // --- API ---
 
 /**
@@ -30,13 +38,15 @@ db.version(2).stores({
  * これにより「ローディング画面」をほぼスキップできます
  */
 export const loadLocalData = async () => {
-    if (!AppState.syncId) return { works: [], tags: new Map() };
+    if (!AppState.syncId) return { works: [], tags: new Map(), groups: new Map() };
 
     const works = await db.works.where('syncId').equals(AppState.syncId).toArray();
     const tagsArray = await db.tags.where('syncId').equals(AppState.syncId).toArray();
     const tags = new Map(tagsArray.map(t => [t.id, t]));
+    const groupsArray = await db.groups.where('syncId').equals(AppState.syncId).toArray();
+    const groups = new Map(groupsArray.map(g => [g.id, g]));
 
-    return { works, tags };
+    return { works, tags, groups };
 };
 
 /**
@@ -78,6 +88,12 @@ export const syncWithFirestore = async () => {
         // 削除されたデータの扱いは難しいですが、簡易的に「全件置き換え」も手です
         // 今回は bulkPut で上書きします
 
+        // 1.5 Groups Sync (タグのグループ分け)
+        const groupsRef = collection(firestoreDb, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/groups`);
+        const groupsSnapshot = await getDocs(groupsRef);
+        const groupsData = groupsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), syncId: AppState.syncId }));
+        await db.groups.bulkPut(groupsData);
+
         // 2. Works Sync
         const worksRef = collection(firestoreDb, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`);
         const worksSnapshot = await getDocs(worksRef);
@@ -93,9 +109,10 @@ export const syncWithFirestore = async () => {
         console.log('✅ Sync Complete');
         
         // 最新データを返す
-        return { 
-            works: worksData, 
-            tags: new Map(tagsData.map(t => [t.id, t])) 
+        return {
+            works: worksData,
+            tags: new Map(tagsData.map(t => [t.id, t])),
+            groups: new Map(groupsData.map(g => [g.id, g]))
         };
 
     } catch (error) {
@@ -126,8 +143,9 @@ export const deleteSyncIdData = async (syncId) => {
 
     const itemsRef = collection(firestoreDb, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${syncId}/items`);
     const tagsRef = collection(firestoreDb, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${syncId}/tags`);
-    const [itemsSnapshot, tagsSnapshot] = await Promise.all([getDocs(itemsRef), getDocs(tagsRef)]);
-    const allDocs = [...itemsSnapshot.docs, ...tagsSnapshot.docs];
+    const groupsRef = collection(firestoreDb, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${syncId}/groups`);
+    const [itemsSnapshot, tagsSnapshot, groupsSnapshot] = await Promise.all([getDocs(itemsRef), getDocs(tagsRef), getDocs(groupsRef)]);
+    const allDocs = [...itemsSnapshot.docs, ...tagsSnapshot.docs, ...groupsSnapshot.docs];
 
     // Firestoreのバッチは1回500件までのため、余裕をみて450件ずつに分割
     const CHUNK_SIZE = 450;
@@ -137,13 +155,14 @@ export const deleteSyncIdData = async (syncId) => {
         await batch.commit();
     }
 
-    // items/tagsを全て消してから、所有者情報ドキュメント本体を削除
+    // items/tags/groupsを全て消してから、所有者情報ドキュメント本体を削除
     const ownerRef = doc(firestoreDb, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${syncId}`);
     await deleteDoc(ownerRef);
 
     // ローカルキャッシュも削除
     await db.works.where('syncId').equals(syncId).delete();
     await db.tags.where('syncId').equals(syncId).delete();
+    await db.groups.where('syncId').equals(syncId).delete();
 };
 
 /**
@@ -152,15 +171,16 @@ export const deleteSyncIdData = async (syncId) => {
  * 450件ずつ順番に（並列にはしない）書き込むことで、通信・描画の負荷を抑える。
  * onProgress({ phase, current, total }) で進捗をUIに伝えられる。
  */
-export const restoreSyncIdData = async (syncId, works, tags, onProgress = () => {}) => {
+export const restoreSyncIdData = async (syncId, works, tags, groups = [], onProgress = () => {}) => {
     if (!syncId) return;
     const CHUNK_SIZE = 450;
 
     // 1. 既存データを削除
     const itemsRef = collection(firestoreDb, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${syncId}/items`);
     const tagsRef = collection(firestoreDb, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${syncId}/tags`);
-    const [itemsSnapshot, tagsSnapshot] = await Promise.all([getDocs(itemsRef), getDocs(tagsRef)]);
-    const existingDocs = [...itemsSnapshot.docs, ...tagsSnapshot.docs];
+    const groupsRef = collection(firestoreDb, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${syncId}/groups`);
+    const [itemsSnapshot, tagsSnapshot, groupsSnapshot] = await Promise.all([getDocs(itemsRef), getDocs(tagsRef), getDocs(groupsRef)]);
+    const existingDocs = [...itemsSnapshot.docs, ...tagsSnapshot.docs, ...groupsSnapshot.docs];
 
     for (let i = 0; i < existingDocs.length; i += CHUNK_SIZE) {
         onProgress({ phase: 'clearing', current: i, total: existingDocs.length });
@@ -173,6 +193,7 @@ export const restoreSyncIdData = async (syncId, works, tags, onProgress = () => 
     const writes = [
         ...works.map(w => { const { id, ...rest } = w; return { ref: doc(itemsRef, id), data: rest }; }),
         ...tags.map(t => { const { id, ...rest } = t; return { ref: doc(tagsRef, id), data: rest }; }),
+        ...groups.map(g => { const { id, ...rest } = g; return { ref: doc(groupsRef, id), data: rest }; }),
     ];
     for (let i = 0; i < writes.length; i += CHUNK_SIZE) {
         onProgress({ phase: 'writing', current: i, total: writes.length });
@@ -185,8 +206,10 @@ export const restoreSyncIdData = async (syncId, works, tags, onProgress = () => 
     onProgress({ phase: 'localCache', current: 0, total: 1 });
     await db.works.where('syncId').equals(syncId).delete();
     await db.tags.where('syncId').equals(syncId).delete();
+    await db.groups.where('syncId').equals(syncId).delete();
     await db.works.bulkPut(works.map(w => ({ ...w, syncId })));
     await db.tags.bulkPut(tags.map(t => ({ ...t, syncId })));
+    await db.groups.bulkPut(groups.map(g => ({ ...g, syncId })));
 
     onProgress({ phase: 'done', current: 1, total: 1 });
 };

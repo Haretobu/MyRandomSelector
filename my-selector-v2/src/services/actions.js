@@ -301,3 +301,170 @@ export const deleteTag = async (tagId) => {
         UI.showToast("タグの削除中にエラーが発生しました。", "error");
      }
 };
+
+// ★ グループ追加ロジック
+export const addGroup = async (name, color) => {
+     if (AppState.isDebugMode) { return UI.showToast("デバッグモード中はグループを作成できません。"); }
+     const trimmedName = name.trim();
+     const normalizedName = trimmedName.toLowerCase();
+     if (!trimmedName) return null;
+     if ([...AppState.groups.values()].some(g => g.name.toLowerCase() === normalizedName)) {
+        UI.showToast("同じ名前のグループが既に存在します。", "error"); return null;
+     }
+     const newGroup = { name: trimmedName, color: color || '#6366f1', createdAt: Timestamp.now() };
+     try {
+        const docRef = doc(collection(db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/groups`));
+        await setDoc(docRef, newGroup);
+
+        const fullGroup = { id: docRef.id, ...newGroup };
+        AppState.groups.set(docRef.id, fullGroup);
+        await DB.db.groups.put({ ...fullGroup, syncId: AppState.syncId });
+
+        if (window.App && window.App.renderAll) window.App.renderAll();
+        UI.showToast(`グループ「${trimmedName}」を作成しました。`);
+        return fullGroup;
+     } catch (error) {
+        if (AppState.isDebugMode) console.error("Error adding group (Debug):", error);
+        else console.error("Error adding group.");
+        UI.showToast("グループの作成に失敗しました。", "error"); return null;
+     }
+};
+
+// ★ グループ削除ロジック（所属していたタグは「未分類」に戻す）
+export const deleteGroup = async (groupId) => {
+     if (AppState.isDebugMode) { return UI.showToast("デバッグモード中はグループを削除できません。"); }
+     const groupToDelete = AppState.groups.get(groupId);
+     if (!groupToDelete || !await UI.showConfirm("グループの削除", `グループ「${Utils.escapeHTML(groupToDelete.name)}」を削除しますか？<br>このグループに属するタグは「未分類」に戻ります。`)) return;
+     try {
+        const batch = writeBatch(db);
+        batch.delete(doc(db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/groups`, groupId));
+
+        const tagsToUpdate = [...AppState.tags.values()].filter(t => t.groupId === groupId);
+        tagsToUpdate.forEach(tag => {
+            batch.update(doc(db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/tags`, tag.id), { groupId: null });
+        });
+
+        await batch.commit();
+
+        AppState.groups.delete(groupId);
+        await DB.db.groups.delete(groupId);
+
+        for (const tag of tagsToUpdate) {
+            tag.groupId = null;
+            await DB.db.tags.put({ ...tag, syncId: AppState.syncId });
+        }
+
+        if (window.App && window.App.renderAll) window.App.renderAll();
+        UI.showToast(`グループ「${groupToDelete.name}」を削除しました。`);
+     } catch (error) {
+        if (AppState.isDebugMode) console.error("Error deleting group (Debug):", error);
+        else console.error("Error deleting group.");
+        UI.showToast("グループの削除中にエラーが発生しました。", "error");
+     }
+};
+
+// ★ タグの所属グループを変更（groupIdにnullを渡すと「未分類」に戻す）
+export const setTagGroup = async (tagId, groupId) => {
+     if (AppState.isDebugMode) { return UI.showToast("デバッグモード中はグループを変更できません。"); }
+     const tag = AppState.tags.get(tagId);
+     if (!tag) return;
+     try {
+        await updateDoc(doc(db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/tags`, tagId), { groupId: groupId || null });
+
+        tag.groupId = groupId || null;
+        await DB.db.tags.put({ ...tag, syncId: AppState.syncId });
+
+        if (window.App && window.App.renderAll) window.App.renderAll();
+     } catch (error) {
+        if (AppState.isDebugMode) console.error("Error setting tag group (Debug):", error);
+        else console.error("Error setting tag group.");
+        UI.showToast("グループの割り当てに失敗しました。", "error");
+     }
+};
+
+// ★ グループ定義＋タグ→グループ対応表のJSONを一括反映する
+// data: { groups: [{ name, color? }], assignments: { [タグ名]: グループ名 } }
+// 戻り値: { createdGroups, assignedTags, unmatchedTags: string[], unmatchedGroups: string[] }
+export const bulkImportGroups = async (data) => {
+     if (AppState.isDebugMode) { UI.showToast("デバッグモード中は一括インポートできません。"); return null; }
+     if (!data || typeof data !== 'object') { UI.showToast("インポートするデータの形式が正しくありません。", "error"); return null; }
+
+     const inputGroups = Array.isArray(data.groups) ? data.groups : [];
+     const assignments = (data.assignments && typeof data.assignments === 'object' && !Array.isArray(data.assignments)) ? data.assignments : {};
+
+     try {
+        const groupsRef = collection(db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/groups`);
+        const tagsRef = collection(db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/tags`);
+
+        // 1. 既存グループ名 -> グループ を引けるようにしておく
+        const groupByName = new Map([...AppState.groups.values()].map(g => [g.name.trim().toLowerCase(), g]));
+        const newGroupDocs = []; // {ref, data, fullGroup}
+
+        for (const g of inputGroups) {
+            const gName = (g && typeof g.name === 'string') ? g.name.trim() : '';
+            if (!gName) continue;
+            const key = gName.toLowerCase();
+            if (groupByName.has(key)) continue; // 既存グループは作り直さない
+            const docRef = doc(groupsRef);
+            const groupData = { name: gName, color: (g && g.color) || '#6366f1', createdAt: Timestamp.now() };
+            newGroupDocs.push({ ref: docRef, data: groupData, fullGroup: { id: docRef.id, ...groupData } });
+            groupByName.set(key, { id: docRef.id, ...groupData });
+        }
+
+        // 2. タグ名 -> タグ を引けるようにしておく（既存のタグ名重複チェックと同じ正規化）
+        const tagByName = new Map([...AppState.tags.values()].map(t => [t.name.trim().toLowerCase(), t]));
+        const tagUpdates = []; // {tagId, groupId}
+        const unmatchedTags = [];
+        const unmatchedGroups = [];
+
+        for (const [tagName, groupName] of Object.entries(assignments)) {
+            const tag = tagByName.get(String(tagName).trim().toLowerCase());
+            if (!tag) { unmatchedTags.push(tagName); continue; }
+            const group = groupByName.get(String(groupName).trim().toLowerCase());
+            if (!group) { unmatchedGroups.push(groupName); continue; }
+            tagUpdates.push({ tagId: tag.id, groupId: group.id });
+        }
+
+        // 3. Firestoreへ書き込み（500件上限を考慮して分割）
+        const writes = [
+            ...newGroupDocs.map(g => ({ ref: g.ref, type: 'set', data: g.data })),
+            ...tagUpdates.map(u => ({ ref: doc(tagsRef, u.tagId), type: 'update', data: { groupId: u.groupId } })),
+        ];
+        const CHUNK_SIZE = 450;
+        for (let i = 0; i < writes.length; i += CHUNK_SIZE) {
+            const batch = writeBatch(db);
+            writes.slice(i, i + CHUNK_SIZE).forEach(w => {
+                if (w.type === 'set') batch.set(w.ref, w.data);
+                else batch.update(w.ref, w.data);
+            });
+            await batch.commit();
+        }
+
+        // 4. ローカル状態も更新
+        for (const g of newGroupDocs) {
+            AppState.groups.set(g.fullGroup.id, g.fullGroup);
+            await DB.db.groups.put({ ...g.fullGroup, syncId: AppState.syncId });
+        }
+        for (const u of tagUpdates) {
+            const tag = AppState.tags.get(u.tagId);
+            if (tag) {
+                tag.groupId = u.groupId;
+                await DB.db.tags.put({ ...tag, syncId: AppState.syncId });
+            }
+        }
+
+        if (window.App && window.App.renderAll) window.App.renderAll();
+
+        return {
+            createdGroups: newGroupDocs.length,
+            assignedTags: tagUpdates.length,
+            unmatchedTags,
+            unmatchedGroups,
+        };
+     } catch (error) {
+        if (AppState.isDebugMode) console.error("Error importing groups (Debug):", error);
+        else console.error("Error importing groups.");
+        UI.showToast("グループの一括インポートに失敗しました。", "error");
+        return null;
+     }
+};

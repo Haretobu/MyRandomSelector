@@ -10,6 +10,38 @@ import { logEvent } from './services/debugLog.js';
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => document.querySelectorAll(selector);
 
+// ★ 外部AIにタグのグループ分けをさせるための汎用プロンプトテンプレート
+// {{TAGS}} の部分に未分類タグ一覧を差し込んで使う。タグの内容自体はここには含まれない。
+const GROUP_CLASSIFICATION_PROMPT_TEMPLATE = `あなたはデータ整理を手伝うアシスタントです。以下のタグ一覧を、内容の傾向にもとづいて
+いくつかのグループ(ジャンル)に分類してください。
+
+# ルール
+- グループ数は目安として5〜15個程度。細かくしすぎず、大きすぎない粒度にする。
+- 1つのタグにつき、最も当てはまるグループを1つだけ選ぶ(複数グループへの重複割り当てはしない)。
+- どのグループにも当てはまらない、または迷うタグは無理に分類せず、assignmentsに含めなくてよい
+  (未分類のまま残る)。
+- グループ名は簡潔な単語・短いフレーズにする。
+- タグ名は入力されたものと完全に同じ表記で出力すること(表記ゆれ・言い換え禁止)。
+
+# 出力形式
+説明文やコードブロックの前置きは付けず、以下のJSON形式のみを出力してください。
+
+{
+  "groups": [
+    { "name": "グループ名", "color": "#rrggbb" }
+  ],
+  "assignments": {
+    "タグ名1": "グループ名",
+    "タグ名2": "グループ名"
+  }
+}
+
+- color は任意の見やすい16進カラーコードでよい(省略も可)。
+- groups に列挙していないグループ名を assignments 側で使わないこと。
+
+# タグ一覧
+{{TAGS}}`;
+
 // ▼ 修正: openEditModalを開くたびにdocumentへclickリスナーが追加され、
 // 一度も削除されず蓄積し続けていた（メモリリーク）。常に最大1つだけになるよう、
 // 新しいリスナーを追加する前に前回のものを必ず外す。
@@ -393,6 +425,7 @@ export const openTagModal = (options) => {
     const content = `
         <div class="flex flex-col h-[70vh]">
             ${['manage', 'assign'].includes(mode) ? `<div class="flex flex-wrap gap-2 mb-4 p-1 bg-gray-900 rounded-lg"><input type="text" id="newTagName" placeholder="新しいタグ名" class="flex-grow min-w-[150px] bg-gray-700 p-2 rounded-lg"><div class="flex gap-2"><input type="color" id="newTagColor" value="#581c87" class="h-11 w-12 p-1 bg-gray-700 rounded-lg cursor-pointer"><button id="addTagBtn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold"><i class="fas fa-plus"></i> 追加</button></div></div>` : ''}
+            ${mode === 'manage' ? `<div class="flex flex-wrap gap-2 mb-4 p-1 bg-gray-900 rounded-lg items-center"><input type="text" id="newGroupName" placeholder="新しいグループ名" class="flex-grow min-w-[150px] bg-gray-700 p-2 rounded-lg"><div class="flex gap-2"><input type="color" id="newGroupColor" value="#6366f1" class="h-11 w-12 p-1 bg-gray-700 rounded-lg cursor-pointer"><button id="addGroupBtn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold whitespace-nowrap"><i class="fas fa-layer-group"></i> グループ追加</button><button id="importGroupsBtn" type="button" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg font-semibold whitespace-nowrap" title="外部AIなどが出力したJSONを貼り付けて一括反映"><i class="fas fa-file-import"></i> 一括インポート</button></div></div>` : ''}
             
             <div class="flex items-center gap-2 mb-2 w-full">
                 <div class="flex-grow relative min-w-0">
@@ -449,7 +482,11 @@ export const openTagModal = (options) => {
             tagPreviewEl.innerHTML = objects.length > 0 ? objects.map(t => `<span class="px-2 py-1 rounded text-xs" style="background-color:${t.color}; color:${Utils.getContrastColor(t.color)}">${Utils.escapeHTML(t.name)}</span>`).join('') : `<span class="text-xs text-gray-500">タグ未選択</span>`;
         };
 
+        const collapsedGroups = new Set(); // グループ見出しの折りたたみ状態 ('__none__' = 未分類)
+        const UNGROUPED_ID = '__none__';
+
         const renderTagList = () => {
+            const isManageMode = mode === 'manage';
             let tagsToRender = [...AppState.tags.values()];
             if(tagSearchQuery) tagsToRender = tagsToRender.filter(t => t.name.toLowerCase().includes(tagSearchQuery.toLowerCase()));
             if(mode === 'assign') {
@@ -457,20 +494,57 @@ export const openTagModal = (options) => {
                 if (tagFilter === 'unassigned') tagsToRender = tagsToRender.filter(t => !tempSelectedTagIds.has(t.id));
             }
             tagsToRender.sort((a, b) => { const o = tagSort.order === 'asc' ? 1 : -1; switch (tagSort.by) { case 'name': return a.name.localeCompare(b.name, 'ja') * o; case 'createdAt': return ((a.createdAt?.toMillis()||0) - (b.createdAt?.toMillis()||0)) * o; case 'useCount': return ((a.useCount||0) - (b.useCount||0)) * o; default: return 0; }});
-            tagListEl.innerHTML = tagsToRender.map(t => {
-                const isManageMode = mode === 'manage';
+
+            const sortedGroups = [...AppState.groups.values()].sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+            const groupOptionsHtml = (selectedId) => `<option value="" ${!selectedId ? 'selected' : ''}>未分類</option>` + sortedGroups.map(g => `<option value="${g.id}" ${g.id === selectedId ? 'selected' : ''}>${Utils.escapeHTML(g.name)}</option>`).join('');
+
+            const renderTagItem = (t) => {
                 const deleteBtnHtml = (isManageMode || mode === 'assign') ? `<button data-action="delete-tag" data-id="${t.id}" class="ml-auto text-gray-400 hover:text-red-500 px-2 shrink-0" title="タグ削除"><i class="fas fa-trash-alt"></i></button>` : '';
                 let selectedClass = '';
                 if (isManageMode && selectedTagForSearch === t.name) selectedClass = 'bg-purple-900 ring-2 ring-purple-500';
                 else if (!isManageMode && tempSelectedTagIds.has(t.id)) selectedClass = 'bg-purple-900 ring-2 ring-purple-500';
                 else selectedClass = 'bg-gray-700';
+                const groupSelectHtml = isManageMode ? `<select data-action="set-tag-group" data-id="${t.id}" class="shrink-0 text-xs bg-gray-800 border border-gray-600 rounded px-1 py-1 max-w-[7rem]" title="グループ" onclick="event.stopPropagation()">${groupOptionsHtml(t.groupId || '')}</select>` : '';
 
                 return `<div class="tag-item flex items-center p-2 rounded-lg ${isManageMode ? 'hover:bg-gray-600' : 'cursor-pointer hover:bg-gray-600'} ${selectedClass}" data-id="${t.id}" data-name="${Utils.escapeHTML(t.name)}">
                             <div class="w-4 h-4 rounded-full mr-3 shrink-0" style="background-color: ${t.color};"></div>
                             <span class="grow font-semibold truncate">${Utils.escapeHTML(t.name)}</span>
+                            ${groupSelectHtml}
                             ${deleteBtnHtml}
                         </div>`;
-            }).join('');
+            };
+
+            const sections = [
+                ...[...AppState.groups.values()].sort((a,b) => a.name.localeCompare(b.name, 'ja')).map(g => ({ id: g.id, name: g.name, color: g.color })),
+                { id: UNGROUPED_ID, name: '未分類', color: '#6b7280' },
+            ];
+
+            tagListEl.innerHTML = sections.map(section => {
+                const items = tagsToRender.filter(t => (section.id === UNGROUPED_ID ? !t.groupId : t.groupId === section.id));
+                // 空のグループは、管理モードで削除操作ができるよう表示だけは残す（検索中は非表示）
+                if (items.length === 0 && (section.id === UNGROUPED_ID || !isManageMode || tagSearchQuery)) return '';
+
+                const isCollapsed = collapsedGroups.has(section.id);
+                const deleteGroupBtnHtml = (isManageMode && section.id !== UNGROUPED_ID) ? `<button data-action="delete-group" data-id="${section.id}" class="ml-auto text-gray-400 hover:text-red-500 px-2 shrink-0" title="グループ削除"><i class="fas fa-trash-alt"></i></button>` : '';
+                const copyBtnsHtml = (isManageMode && section.id === UNGROUPED_ID && items.length > 0) ? `
+                        <div class="ml-auto flex gap-1 shrink-0">
+                            <button data-action="copy-ungrouped-prompt" class="text-gray-400 hover:text-sky-400 px-2" title="プロンプトのみコピー"><i class="fas fa-file-alt"></i></button>
+                            <button data-action="copy-ungrouped-tags" class="text-gray-400 hover:text-sky-400 px-2" title="未分類タグ一覧のみコピー"><i class="fas fa-tags"></i></button>
+                            <button data-action="copy-ungrouped-combined" class="text-gray-400 hover:text-sky-400 px-2" title="プロンプト＋タグ一覧をまとめてコピー"><i class="fas fa-copy"></i></button>
+                        </div>` : '';
+
+                return `<div class="col-span-full">
+                    <div class="group-section-header cursor-pointer w-full flex items-center gap-2 px-2 py-1.5 mt-2 mb-1 rounded bg-gray-800/80 hover:bg-gray-800 text-sm font-semibold" data-group-id="${section.id}">
+                        <i class="fas fa-chevron-${isCollapsed ? 'right' : 'down'} text-xs w-3 text-gray-400"></i>
+                        <div class="w-3 h-3 rounded-full shrink-0" style="background-color: ${section.color};"></div>
+                        <span class="truncate">${Utils.escapeHTML(section.name)}</span>
+                        <span class="text-xs text-gray-400 font-normal">(${items.length})</span>
+                        ${deleteGroupBtnHtml}
+                        ${copyBtnsHtml}
+                    </div>
+                    ${isCollapsed ? '' : `<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${items.map(renderTagItem).join('') || '<div class="text-xs text-gray-500 px-2 py-1 col-span-full">タグなし</div>'}</div>`}
+                </div>`;
+            }).join('') || `<div class="text-xs text-gray-500 px-2 py-4 text-center col-span-full">該当するタグがありません</div>`;
         };
 
         renderTagList();
@@ -541,21 +615,83 @@ export const openTagModal = (options) => {
             if (nameInput.value) {
                 const newTag = await Actions.addTag(nameInput.value, $('#newTagColor').value);
                 if (newTag && mode === 'assign') { tempSelectedTagIds.add(newTag.id); renderTagList(); renderTagPreview(); }
+                if (newTag && mode === 'manage') renderTagList();
                 nameInput.value = '';
             }
         });
 
+        $('#addGroupBtn')?.addEventListener('click', async () => {
+            const nameInput = $('#newGroupName');
+            if (nameInput.value) {
+                const newGroup = await Actions.addGroup(nameInput.value, $('#newGroupColor').value);
+                if (newGroup) { nameInput.value = ''; renderTagList(); }
+            }
+        });
+
+        $('#importGroupsBtn')?.addEventListener('click', () => {
+            AppState.modalStateStack.push(() => openTagModal(options));
+            openGroupImportModal();
+        });
+
+        tagListEl.addEventListener('change', e => {
+            const select = e.target.closest('select[data-action="set-tag-group"]');
+            if (!select) return;
+            Actions.setTagGroup(select.dataset.id, select.value || null).then(() => renderTagList());
+        });
+
+        const getUngroupedTagNames = () => {
+            const list = [...AppState.tags.values()].filter(t => !t.groupId);
+            list.sort((a, b) => { const o = tagSort.order === 'asc' ? 1 : -1; switch (tagSort.by) { case 'name': return a.name.localeCompare(b.name, 'ja') * o; case 'createdAt': return ((a.createdAt?.toMillis()||0) - (b.createdAt?.toMillis()||0)) * o; case 'useCount': return ((a.useCount||0) - (b.useCount||0)) * o; default: return 0; }});
+            return list.map(t => t.name);
+        };
+
         tagListEl.addEventListener('click', e => {
             const tagItem = e.target.closest('.tag-item');
             const deleteBtn = e.target.closest('button[data-action="delete-tag"]');
+            const deleteGroupBtn = e.target.closest('button[data-action="delete-group"]');
+            const copyPromptBtn = e.target.closest('button[data-action="copy-ungrouped-prompt"]');
+            const copyTagsBtn = e.target.closest('button[data-action="copy-ungrouped-tags"]');
+            const copyCombinedBtn = e.target.closest('button[data-action="copy-ungrouped-combined"]');
+            const groupHeader = e.target.closest('.group-section-header');
 
-            if (deleteBtn) { 
-                e.stopPropagation(); 
-                Actions.deleteTag(deleteBtn.dataset.id); 
-                if (mode === 'manage') { selectedTagForSearch = null; if (searchSelectedBtn) searchSelectedBtn.disabled = true; }
-                return; 
+            if (copyPromptBtn) {
+                e.stopPropagation();
+                navigator.clipboard.writeText(GROUP_CLASSIFICATION_PROMPT_TEMPLATE.replace('{{TAGS}}', '')).then(() => UI.showToast("プロンプトをコピーしました。"));
+                return;
             }
-            
+            if (copyTagsBtn) {
+                e.stopPropagation();
+                navigator.clipboard.writeText(getUngroupedTagNames().join('\n')).then(() => UI.showToast("未分類タグ一覧をコピーしました。"));
+                return;
+            }
+            if (copyCombinedBtn) {
+                e.stopPropagation();
+                const combined = GROUP_CLASSIFICATION_PROMPT_TEMPLATE.replace('{{TAGS}}', getUngroupedTagNames().join('\n'));
+                navigator.clipboard.writeText(combined).then(() => UI.showToast("プロンプト＋タグ一覧をコピーしました。"));
+                return;
+            }
+
+            if (deleteGroupBtn) {
+                e.stopPropagation();
+                Actions.deleteGroup(deleteGroupBtn.dataset.id).then(() => renderTagList());
+                return;
+            }
+
+            if (groupHeader) {
+                e.stopPropagation();
+                const groupId = groupHeader.dataset.groupId;
+                if (collapsedGroups.has(groupId)) collapsedGroups.delete(groupId); else collapsedGroups.add(groupId);
+                renderTagList();
+                return;
+            }
+
+            if (deleteBtn) {
+                e.stopPropagation();
+                Actions.deleteTag(deleteBtn.dataset.id);
+                if (mode === 'manage') { selectedTagForSearch = null; if (searchSelectedBtn) searchSelectedBtn.disabled = true; }
+                return;
+            }
+
             if (tagItem) {
                 e.stopPropagation(); 
                 const tagId = tagItem.dataset.id;
@@ -587,6 +723,55 @@ export const openTagModal = (options) => {
         $('#reset-selected-tags-btn')?.addEventListener('click', () => { tempSelectedTagIds.clear(); renderTagPreview(); renderTagList(); });
         $('#tag-modal-confirm')?.addEventListener('click', () => { onConfirm(tempSelectedTagIds); });
         $('#tag-modal-cancel')?.addEventListener('click', () => { onConfirm(null); });
+    }, { autoFocus: false });
+};
+
+// ★ グループ一括インポートモーダル
+// 外部のAI等に分類させたJSON（{ groups: [{name, color?}], assignments: { タグ名: グループ名 } }）を
+// 貼り付けて、タグの内容には一切触れずグループ分けだけを一括反映する
+export const openGroupImportModal = () => {
+    const App = getApp();
+    const content = `
+        <div class="flex flex-col h-[65vh]">
+            <p class="text-sm text-gray-400 mb-2">外部AIなどが出力した、以下の形式のJSONを貼り付けてください。</p>
+            <pre class="text-xs bg-gray-900 rounded-lg p-2 mb-3 overflow-x-auto text-gray-400 whitespace-pre-wrap">{
+  "groups": [ { "name": "グループ名", "color": "#rrggbb" } ],
+  "assignments": { "タグ名": "グループ名" }
+}</pre>
+            <textarea id="groupImportTextarea" class="w-full flex-grow bg-gray-700 p-3 rounded-lg text-xs font-mono" placeholder="ここにJSONを貼り付け"></textarea>
+            <div id="groupImportResult" class="text-sm mt-2"></div>
+            <div class="pt-4 mt-4 border-t border-gray-700 flex justify-end gap-3">
+                <button id="group-import-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">戻る</button>
+                <button id="group-import-confirm" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold">反映する</button>
+            </div>
+        </div>`;
+
+    App.openModal("グループの一括インポート", content, () => {
+        const textarea = $('#groupImportTextarea');
+        const resultEl = $('#groupImportResult');
+        const confirmBtn = $('#group-import-confirm');
+
+        $('#group-import-cancel').addEventListener('click', () => App.closeModal());
+
+        confirmBtn.addEventListener('click', async () => {
+            let data;
+            try {
+                data = JSON.parse(textarea.value);
+            } catch (e) {
+                resultEl.innerHTML = '<span class="text-red-400">JSONの形式が正しくありません。</span>';
+                return;
+            }
+            confirmBtn.disabled = true;
+            const result = await Actions.bulkImportGroups(data);
+            confirmBtn.disabled = false;
+            if (!result) return;
+
+            const parts = [`グループ新規作成: ${result.createdGroups}件`, `タグへの割り当て: ${result.assignedTags}件`];
+            if (result.unmatchedTags.length) parts.push(`<span class="text-yellow-400">未一致のタグ名 (${result.unmatchedTags.length}件): ${result.unmatchedTags.map(Utils.escapeHTML).join(', ')}</span>`);
+            if (result.unmatchedGroups.length) parts.push(`<span class="text-yellow-400">未一致のグループ名 (${result.unmatchedGroups.length}件): ${result.unmatchedGroups.map(Utils.escapeHTML).join(', ')}</span>`);
+            resultEl.innerHTML = parts.join('<br>');
+            UI.showToast("グループを反映しました。");
+        });
     }, { autoFocus: false });
 };
 
@@ -633,6 +818,8 @@ export const openTagFilterModal = (options) => {
     App.openModal("タグの条件を選択", content, () => {
         let tagSearchQuery = '', tagSort = { by: 'createdAt', order: 'desc' };
         const tagListEl = $('#tag-list');
+        const collapsedGroups = new Set();
+        const UNGROUPED_ID = '__none__';
 
         const renderTagList = () => {
             let tagsToRender = [...AppState.tags.values()];
@@ -643,7 +830,7 @@ export const openTagFilterModal = (options) => {
 
             tagsToRender.sort((a, b) => { const o = tagSort.order === 'asc' ? 1 : -1; switch (tagSort.by) { case 'name': return a.name.localeCompare(b.name, 'ja') * o; case 'createdAt': return ((a.createdAt?.toMillis()||0) - (b.createdAt?.toMillis()||0)) * o; case 'useCount': return ((a.useCount||0) - (b.useCount||0)) * o; default: return 0; }});
 
-            tagListEl.innerHTML = tagsToRender.map(t => {
+            const renderTagItem = (t) => {
                 let stateClass = 'bg-gray-700';
                 if (tempAnd.has(t.id)) stateClass = 'tag-item-and';
                 else if (tempOr.has(t.id)) stateClass = 'tag-item-or';
@@ -653,7 +840,28 @@ export const openTagFilterModal = (options) => {
                             <div class="w-4 h-4 rounded-full mr-3 shrink-0" style="background-color: ${t.color};"></div>
                             <span class="grow font-semibold truncate">${Utils.escapeHTML(t.name)}</span>
                         </div>`;
-            }).join('');
+            };
+
+            const sections = [
+                ...[...AppState.groups.values()].sort((a,b) => a.name.localeCompare(b.name, 'ja')).map(g => ({ id: g.id, name: g.name, color: g.color })),
+                { id: UNGROUPED_ID, name: '未分類', color: '#6b7280' },
+            ];
+
+            tagListEl.innerHTML = sections.map(section => {
+                const items = tagsToRender.filter(t => (section.id === UNGROUPED_ID ? !t.groupId : t.groupId === section.id));
+                if (items.length === 0) return '';
+
+                const isCollapsed = collapsedGroups.has(section.id);
+                return `<div>
+                    <div class="group-section-header cursor-pointer flex items-center gap-2 px-2 py-1.5 mt-2 mb-1 rounded bg-gray-800/80 hover:bg-gray-800 text-sm font-semibold" data-group-id="${section.id}">
+                        <i class="fas fa-chevron-${isCollapsed ? 'right' : 'down'} text-xs w-3 text-gray-400"></i>
+                        <div class="w-3 h-3 rounded-full shrink-0" style="background-color: ${section.color};"></div>
+                        <span class="truncate">${Utils.escapeHTML(section.name)}</span>
+                        <span class="text-xs text-gray-400 font-normal">(${items.length})</span>
+                    </div>
+                    ${isCollapsed ? '' : `<div class="space-y-2">${items.map(renderTagItem).join('')}</div>`}
+                </div>`;
+            }).join('') || `<div class="text-xs text-gray-500 px-2 py-4 text-center">該当するタグがありません</div>`;
         };
 
         renderTagList();
@@ -693,12 +901,20 @@ export const openTagFilterModal = (options) => {
         });
 
         tagListEl.addEventListener('click', e => {
+            const groupHeader = e.target.closest('.group-section-header');
+            if (groupHeader) {
+                const groupId = groupHeader.dataset.groupId;
+                if (collapsedGroups.has(groupId)) collapsedGroups.delete(groupId); else collapsedGroups.add(groupId);
+                renderTagList();
+                return;
+            }
+
             const tagItem = e.target.closest('.tag-item');
             if (tagItem) {
                 const tagId = tagItem.dataset.id;
-                if (tempAnd.has(tagId)) { tempAnd.delete(tagId); tempOr.add(tagId); } 
-                else if (tempOr.has(tagId)) { tempOr.delete(tagId); tempNot.add(tagId); } 
-                else if (tempNot.has(tagId)) { tempNot.delete(tagId); } 
+                if (tempAnd.has(tagId)) { tempAnd.delete(tagId); tempOr.add(tagId); }
+                else if (tempOr.has(tagId)) { tempOr.delete(tagId); tempNot.add(tagId); }
+                else if (tempNot.has(tagId)) { tempNot.delete(tagId); }
                 else { tempAnd.add(tagId); }
                 renderTagList();
             }

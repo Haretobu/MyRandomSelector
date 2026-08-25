@@ -15,6 +15,7 @@ export const store = {
     // --- データ本体 ---
     works: [],        // 作品リスト
     tags: new Map(),  // タグリスト (Map形式)
+    groups: new Map(), // タグのグループ一覧 (Map形式)
     
     // --- 読み込み状態 ---
     isLoadComplete: false,

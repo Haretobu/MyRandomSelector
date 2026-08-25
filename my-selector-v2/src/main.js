@@ -886,6 +886,7 @@ const App = {
                     console.log(`Loaded ${localData.works.length} works from Local DB.`);
                     AppState.works = localData.works;
                     AppState.tags = localData.tags;
+                    AppState.groups = localData.groups;
 
                     App.fixWorkDates();
                     
@@ -933,6 +934,7 @@ const App = {
                         console.log("Sync complete. Updating UI.");
                         AppState.works = syncedData.works;
                         AppState.tags = syncedData.tags;
+                        AppState.groups = syncedData.groups;
                         
                         Search.initSearchIndex(AppState.works);
                         AppState.isLoadComplete = true;
@@ -960,6 +962,7 @@ const App = {
                     if (error && error.code === 'permission-denied') {
                         AppState.works = [];
                         AppState.tags = new Map();
+                        AppState.groups = new Map();
                         AppState.isLoadComplete = true;
                         Search.initSearchIndex(AppState.works);
                         App.renderAll();
@@ -1069,6 +1072,7 @@ const App = {
             AppState.syncId = '';
             AppState.works = [];
             AppState.tags = new Map();
+            AppState.groups = new Map();
             AppState.isLoadComplete = true;
             Search.initSearchIndex(AppState.works);
             App.renderAll();
@@ -1184,16 +1188,22 @@ const App = {
                 const tagsSnapshot = await getDocs(tagsRef);
                 tagsSnapshot.forEach(doc => batch.delete(doc.ref));
 
+                const groupsRef = collection(AppState.db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/groups`);
+                const groupsSnapshot = await getDocs(groupsRef);
+                groupsSnapshot.forEach(doc => batch.delete(doc.ref));
+
                 await batch.commit();
-                
+
                 // Clear Local DB
                 await DB.db.works.clear();
                 await DB.db.tags.clear();
+                await DB.db.groups.clear();
 
                 AppState.ui.loadingOverlay.classList.add('hidden');
                 App.showToast("全てのデータを削除しました。");
                 AppState.works = [];
                 AppState.tags = new Map();
+                AppState.groups = new Map();
                 App.renderAll();
             } catch(error) { 
                 AppState.ui.loadingOverlay.classList.add('hidden');
@@ -1943,7 +1953,8 @@ const App = {
             
             AppState.works = works;
             AppState.tags = tags;
-            
+            AppState.groups = new Map();
+
             App.showToast("デバッグモード: データクリア");
             App.renderAll();
         }
@@ -1955,9 +1966,10 @@ const App = {
             exportedAt: new Date().toISOString(),
             syncId: AppState.syncId,
             tags: Array.from(AppState.tags.values()),
+            groups: Array.from(AppState.groups.values()),
             works: AppState.works
         };
-        return JSON.stringify(backupData, null, 2); 
+        return JSON.stringify(backupData, null, 2);
     },
 
     handleExportBackup: () => {
@@ -2066,14 +2078,19 @@ const App = {
             if (!data || !Array.isArray(data.works) || !Array.isArray(data.tags)) {
                 return App.showToast("バックアップファイルの形式が正しくありません。", "error");
             }
+            // ▼ groupsは後から追加した項目のため、古いバックアップファイルには存在しない可能性がある
+            if (data.groups !== undefined && !Array.isArray(data.groups)) {
+                return App.showToast("バックアップファイルの形式が正しくありません。", "error");
+            }
+            const groups = Array.isArray(data.groups) ? data.groups : [];
             const MAX_ENTRIES = 20000; // 極端に巨大なファイルで固まらないための安全弁
-            if (data.works.length + data.tags.length > MAX_ENTRIES) {
+            if (data.works.length + data.tags.length + groups.length > MAX_ENTRIES) {
                 return App.showToast("データ件数が多すぎるため読み込めません。", "error");
             }
 
             const confirmed = await App.showPasswordConfirm(
                 "バックアップの読み込み",
-                `作品 ${data.works.length}件・タグ ${data.tags.length}件を読み込みます。<br><span class="text-red-400 font-semibold">現在の同期ID（${App.escapeHTML(AppState.syncId)}）の既存データは全て削除され、バックアップの内容に置き換わります。この操作は元に戻せません。</span>`
+                `作品 ${data.works.length}件・タグ ${data.tags.length}件・グループ ${groups.length}件を読み込みます。<br><span class="text-red-400 font-semibold">現在の同期ID（${App.escapeHTML(AppState.syncId)}）の既存データは全て削除され、バックアップの内容に置き換わります。この操作は元に戻せません。</span>`
             );
             if (!confirmed) return;
 
@@ -2107,7 +2124,7 @@ const App = {
                 });
 
                 App.showToast("バックアップを読み込んでいます…", "info", 60000);
-                await DB.restoreSyncIdData(AppState.syncId, data.works, data.tags, ({ phase, current, total }) => {
+                await DB.restoreSyncIdData(AppState.syncId, data.works, data.tags, groups, ({ phase, current, total }) => {
                     if (AppState.ui.workListMessage) {
                         AppState.ui.workListMessage.classList.remove('hidden');
                         AppState.ui.workListMessage.innerHTML = `
@@ -2120,6 +2137,7 @@ const App = {
 
                 AppState.works = data.works;
                 AppState.tags = new Map(data.tags.map(t => [t.id, t]));
+                AppState.groups = new Map(groups.map(g => [g.id, g]));
                 Search.initSearchIndex(AppState.works);
                 App.renderAll();
                 App.showToast("バックアップを読み込みました。");
