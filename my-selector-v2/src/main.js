@@ -1288,13 +1288,17 @@ const App = {
     },
     
     renderLotterySummary: () => {
-         const { mood, genres, andTagIds, orTagIds, notTagIds, dateFilter, priority, method, unratedOrUntaggedOnly } = AppState.lotterySettings;
+         const { mood, rating, genres, andTagIds, orTagIds, notTagIds, dateFilter, priority, method, unratedOrUntaggedOnly } = AppState.lotterySettings;
          const moodMap = { default: '問わない', favorite: 'お気に入り', best: '最高評価', hidden_gem: '隠れた名作' };
          const priorityMap = { new: '新しい順', old: '古い順', random: 'ランダム' };
+         const ratingTypeMap = { exact: '', above: '以上', below: '以下' };
          const summaryParts = [];
 
         if (unratedOrUntaggedOnly) summaryParts.push('未評価/未タグ付のみ');
-        else summaryParts.push(`気分: ${moodMap[mood]}`);
+        else {
+            summaryParts.push(`気分: ${moodMap[mood]}`);
+            if (rating && rating.value > 0) summaryParts.push(`評価: ${'★'.repeat(Math.floor(rating.value))}${rating.value % 1 !== 0 ? '半' : ''}${ratingTypeMap[rating.type]}`);
+        }
          if (genres.size > 0) summaryParts.push(`ジャンル: ${[...genres].join(', ')}`);
          if (andTagIds.size > 0) summaryParts.push(`タグ(AND): ${andTagIds.size}件`);
          if (orTagIds.size > 0) summaryParts.push(`タグ(OR): ${orTagIds.size}件`);
@@ -1303,7 +1307,8 @@ const App = {
          if (dateFilter.mode === 'range' && dateFilter.startDate && dateFilter.endDate) summaryParts.push(`期間: ${dateFilter.startDate} ~ ${dateFilter.endDate}`);
          summaryParts.push(`優先度: ${priorityMap[priority]}`);
 
-         AppState.ui.lotterySummaryEl.innerHTML = (mood === 'default' && genres.size === 0 && andTagIds.size === 0 && !unratedOrUntaggedOnly)
+         const hasRatingFilter = !unratedOrUntaggedOnly && rating && rating.value > 0;
+         AppState.ui.lotterySummaryEl.innerHTML = (mood === 'default' && !hasRatingFilter && genres.size === 0 && andTagIds.size === 0 && !unratedOrUntaggedOnly)
              ? `<p class="text-gray-400">設定を開いて条件を選択してください。</p>`
              : summaryParts.map(s => `<span class="inline-block bg-gray-600 px-2 py-1 rounded text-xs mr-1 mb-1">${s}</span>`).join('');
     },
