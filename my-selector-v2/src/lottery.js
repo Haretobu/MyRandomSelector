@@ -1,6 +1,7 @@
 import { store as AppState } from './store/store.js';
 import { Timestamp, arrayUnion } from "firebase/firestore";
 import * as LotteryAnimation from './lotteryAnimation.js';
+import { logEvent } from './services/debugLog.js';
 
 // ヘルパー関数
 const $ = (selector) => document.querySelector(selector);
@@ -602,12 +603,14 @@ export const openLotteryResultModal = (work, App, tempState = null) => {
         });
 
         $('#lottery-reroll').addEventListener('click', () => {
-            AppState.checkModalDirtyState = () => false; 
+            logEvent('ui', 'rerollClicked', { workId: work.id });
+            AppState.checkModalDirtyState = () => false;
             App.updateWork(work.id, { rating: currentRating, tagIds: Array.from(currentTagIds) })
-                .then(() => App.performLottery()); 
+                .then(() => App.performLottery());
         });
 
         $('#result-edit-details-btn').addEventListener('click', async () => {
+            logEvent('ui', 'resultEditDetailsClicked', { workId: work.id });
             if (!AppState.checkModalDirtyState()) {
                 App.closeModal(); setTimeout(() => App.openEditModal(work.id), 300); return;
             }
@@ -619,10 +622,11 @@ export const openLotteryResultModal = (work, App, tempState = null) => {
             }
         });
 
-        $('#result-close-btn').addEventListener('click', App.closeModal); 
+        $('#result-close-btn').addEventListener('click', App.closeModal);
         $('#result-save-btn').addEventListener('click', async () => {
-            AppState.checkModalDirtyState = () => false; 
-            if (await App.updateWork(work.id, { rating: currentRating, tagIds: Array.from(currentTagIds) })) { 
+            logEvent('ui', 'resultSaveClicked', { workId: work.id });
+            AppState.checkModalDirtyState = () => false;
+            if (await App.updateWork(work.id, { rating: currentRating, tagIds: Array.from(currentTagIds) })) {
                 localStorage.removeItem('r18_pending_feedback_work_id'); // ★この1行を追加！
                 App.showToast(`「${work.name}」の情報を更新しました。`); App.closeModal(); 
             }
@@ -735,6 +739,7 @@ export const openFeedbackModal = (work, App, tempState = null) => {
 
         // ▼▼▼ 修正: 保存成功時に保留状態を解除 ▼▼▼
         saveBtn.addEventListener('click', async () => {
+            logEvent('ui', 'feedbackSaveClicked', { workId: work.id });
             AppState.checkModalDirtyState = () => false;
             if (await App.updateWork(work.id, { rating: currentRating, tagIds: Array.from(currentTagIds) })) {
                 localStorage.removeItem('r18_pending_feedback_work_id');

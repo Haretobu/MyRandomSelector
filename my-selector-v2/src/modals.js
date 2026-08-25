@@ -5,6 +5,7 @@ import { store as AppState } from './store/store.js';
 import * as UI from './components/ui.js';
 import * as Utils from './utils/utils.js';
 import * as Actions from './services/actions.js';
+import { logEvent } from './services/debugLog.js';
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => document.querySelectorAll(selector);
@@ -345,6 +346,7 @@ export const openEditModal = (workId, tempState = null) => {
 
         $('#editWorkForm').addEventListener('submit', async e => {
             e.preventDefault();
+            logEvent('ui', 'editWorkFormSubmitClicked', { workId });
             if (!workNameInput.value.trim()) return UI.showToast("作品名は必須です。", "error");
             
             const dateStr = App.getDateInputValue('editWorkRegisteredAt');

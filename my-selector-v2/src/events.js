@@ -152,6 +152,9 @@ export const setupAppEventListeners = (App) => {
     // --- デバッグモード切替 ---
     $('#toggleDebugModeBtn').addEventListener('click', App.toggleDebugMode);
 
+    // --- デバッグログ保存（再現困難な不具合の調査用。作品名・タグ・URL等は記録しない） ---
+    $('#exportDebugLogBtn')?.addEventListener('click', () => App.exportDebugLog?.());
+
     // --- 検索関連 ---
     ui.searchInput.addEventListener('input', App.debounce(() => {
         const query = ui.searchInput.value;

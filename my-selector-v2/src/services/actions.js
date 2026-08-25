@@ -7,6 +7,7 @@ import * as Utils from '../utils/utils.js';
 // ★追加: ローカルDBと検索モジュールをインポート
 import * as DB from './db.js'; // 同じ階層
 import * as Search from '../search.js';
+import { logEvent } from './debugLog.js';
 
 import { 
     collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, 
@@ -116,6 +117,10 @@ export const handleAddWork = async (e) => {
 
 // ★ 作品更新ロジック
 export const updateWork = async (workId, updatedData) => {
+    const updatedFields = Object.keys(updatedData || {});
+    const startedAt = Date.now();
+    logEvent('updateWork', 'start', { workId, fields: updatedFields, debugMode: !!AppState.isDebugMode });
+
     if (AppState.isDebugMode) {
         // デバッグモード用簡易更新
         const workIndex = AppState.works.findIndex(w => w.id === workId);
@@ -123,11 +128,12 @@ export const updateWork = async (workId, updatedData) => {
             AppState.works[workIndex] = { ...AppState.works[workIndex], ...updatedData };
             if (window.App && window.App.renderAll) window.App.renderAll();
         }
+        logEvent('updateWork', 'successDebugMode', { workId, ms: Date.now() - startedAt });
         return true;
     }
     try {
         const workRef = doc(db, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/items`, workId);
-        
+
         // 1. Firebase更新
         await updateDoc(workRef, updatedData);
 
@@ -163,16 +169,27 @@ export const updateWork = async (workId, updatedData) => {
             
             // ローカルDB更新
             await DB.saveWorkLocal(mergedWork);
-            
+
             // 画面更新
             Search.initSearchIndex(AppState.works);
             if (window.App && window.App.renderAll) window.App.renderAll();
+        } else {
+            logEvent('updateWork', 'workNotFoundInLocalState', { workId });
         }
 
+        logEvent('updateWork', 'success', { workId, fields: updatedFields, ms: Date.now() - startedAt });
         return true;
     } catch (error) {
         if (AppState.isDebugMode) console.error("Error updating work (Debug):", error);
         else console.error("Error updating work.");
+        logEvent('updateWork', 'error', {
+            workId,
+            fields: updatedFields,
+            ms: Date.now() - startedAt,
+            code: error?.code || null,
+            name: error?.name || null,
+            message: (error?.message || '').slice(0, 200),
+        });
         UI.showToast("作品の更新に失敗しました。", "error");
         return false;
     }

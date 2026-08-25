@@ -18,6 +18,9 @@ import { render, html } from 'lit-html';
 import * as DB from './services/db.js';
 import * as Search from './search.js';
 
+// 再現困難な不具合の調査用ロガー（実データは記録しない）
+import { logEvent, redactTitle, initDebugLog, exportLogAsFile } from './services/debugLog.js';
+
 import bookmarkletCodeRaw from './bookmarklet.txt?raw';
 
 // Firebase Modules
@@ -445,9 +448,11 @@ const App = {
         // 呼び出し元が直前にセットした checkModalDirtyState（未保存判定）が openModal 呼び出しのたびに
         // () => false で上書きされてしまい、評価・タグを未保存のまま閉じても警告されずデータが消える原因になっていた。
         // モーダルが既に開いている状態での再オープン（内容差し替え）では、呼び出し元が設定した判定関数を維持する。
-        if (AppState.ui.modalWrapper.classList.contains('hidden')) {
+        const wasHidden = AppState.ui.modalWrapper.classList.contains('hidden');
+        if (wasHidden) {
             AppState.checkModalDirtyState = () => false;
         }
+        logEvent('modal', 'open', { title: redactTitle(title), wasHidden });
 
         const { size = 'max-w-2xl', headerActions = '', autoFocus = true } = options;
         Object.values(AppState.activeCharts).forEach(chart => chart.destroy());
@@ -477,16 +482,20 @@ const App = {
     },
 
     closeModal: async () => {
-        if (AppState.checkModalDirtyState()) {
+        const wasDirty = AppState.checkModalDirtyState();
+        logEvent('modal', 'closeRequested', { wasDirty });
+        if (wasDirty) {
             const confirmed = await App.showConfirm("未保存の変更", "変更が保存されていません。本当に閉じますか？");
-            if (!confirmed) return;
+            if (!confirmed) { logEvent('modal', 'closeCancelledByUser'); return; }
         }
         AppState.checkModalDirtyState = () => false;
         if (AppState.modalStateStack.length > 0) {
+            logEvent('modal', 'closePoppedStack');
             const restorePrevious = AppState.modalStateStack.pop();
             restorePrevious();
             return;
         }
+        logEvent('modal', 'closed');
         AppState.ui.modalContainer.classList.add('scale-95', 'opacity-0');
         AppState.ui.modalBackdrop.classList.remove('opacity-100');
         if (AppState.ui.slidingFabToggle) AppState.ui.slidingFabToggle.classList.remove('hidden');
@@ -1420,12 +1429,15 @@ const App = {
             const isInputActive = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
             const isModalOpen = !AppState.ui.modalWrapper.classList.contains('hidden');
             if (e.key === 'Escape') {
+                logEvent('shortcut', 'escape', { isModalOpen });
                 if (isModalOpen) App.closeModal();
                 else if (AppState.ui.slidingFabContainer && !AppState.ui.slidingFabContainer.classList.contains('hidden')) App.closeFabMenu();
                 return;
             }
             if (isInputActive || isModalOpen) return;
-            switch(e.key.toLowerCase()) {
+            const key = e.key.toLowerCase();
+            if (['f', 'l', 'r'].includes(key)) logEvent('shortcut', key, { isInputActive, isModalOpen });
+            switch(key) {
                 case 'f': e.preventDefault(); AppState.ui.searchInput.focus(); break;
                 case 'l': e.preventDefault(); $('#startLotteryBtn')?.click(); break;
                 case 'r': e.preventDefault(); App.loadDataSet(AppState.syncId); break;
@@ -1925,6 +1937,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (e) {}
         AppState.appVersion = version;
         window.App = App; // Global Access
+        initDebugLog();
+        App.exportDebugLog = exportLogAsFile;
         App.init();
     } catch (error) {
         console.error("Init Failed:", error);
