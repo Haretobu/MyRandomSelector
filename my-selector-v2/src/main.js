@@ -693,6 +693,9 @@ const App = {
                     AppState.currentUser = user;
                     AppState.loadingStatus.auth = true;
 
+                    const currentUserEmailEl = $('#currentUserEmail');
+                    if (currentUserEmailEl) currentUserEmailEl.textContent = user.email || '(メールアドレス不明)';
+
                     App.loadUserSettings();
 
                     App.initLauncherSync();
