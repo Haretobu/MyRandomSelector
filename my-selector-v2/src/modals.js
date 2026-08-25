@@ -425,7 +425,12 @@ export const openTagModal = (options) => {
     const content = `
         <div class="flex flex-col h-[70vh]">
             ${['manage', 'assign'].includes(mode) ? `<div class="flex flex-wrap gap-2 mb-4 p-1 bg-gray-900 rounded-lg"><input type="text" id="newTagName" placeholder="新しいタグ名" class="flex-grow min-w-[150px] bg-gray-700 p-2 rounded-lg"><div class="flex gap-2"><input type="color" id="newTagColor" value="#581c87" class="h-11 w-12 p-1 bg-gray-700 rounded-lg cursor-pointer"><button id="addTagBtn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold"><i class="fas fa-plus"></i> 追加</button></div></div>` : ''}
-            ${mode === 'manage' ? `<div class="flex flex-wrap gap-2 mb-4 p-1 bg-gray-900 rounded-lg items-center"><input type="text" id="newGroupName" placeholder="新しいグループ名" class="flex-grow min-w-[150px] bg-gray-700 p-2 rounded-lg"><div class="flex gap-2"><input type="color" id="newGroupColor" value="#6366f1" class="h-11 w-12 p-1 bg-gray-700 rounded-lg cursor-pointer"><button id="addGroupBtn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold whitespace-nowrap"><i class="fas fa-layer-group"></i> グループ追加</button><button id="importGroupsBtn" type="button" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg font-semibold whitespace-nowrap" title="外部AIなどが出力したJSONを貼り付けて一括反映"><i class="fas fa-file-import"></i> 一括インポート</button></div></div>` : ''}
+            ${mode === 'manage' ? `<div class="flex flex-wrap gap-2 mb-4 p-1 bg-gray-900 rounded-lg items-center">
+                <input type="text" id="newGroupName" placeholder="新しいグループ名" class="flex-grow min-w-[120px] bg-gray-700 p-2 rounded-lg">
+                <input type="color" id="newGroupColor" value="#6366f1" class="h-11 w-12 p-1 bg-gray-700 rounded-lg cursor-pointer shrink-0">
+                <button id="addGroupBtn" type="button" class="shrink-0 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold flex items-center gap-1" title="グループ追加"><i class="fas fa-layer-group"></i><span class="hidden sm:inline">グループ追加</span></button>
+                <button id="importGroupsBtn" type="button" class="shrink-0 px-3 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg font-semibold flex items-center gap-1" title="外部AIなどが出力したJSONを貼り付けて一括反映"><i class="fas fa-file-import"></i><span class="hidden sm:inline">一括インポート</span></button>
+            </div>` : ''}
             
             <div class="flex items-center gap-2 mb-2 w-full">
                 <div class="flex-grow relative min-w-0">
