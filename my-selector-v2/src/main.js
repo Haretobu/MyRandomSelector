@@ -1185,13 +1185,18 @@ const App = {
         let tempWorks = [...sourceWorks];
         if (filters.unratedOrUntaggedOnly) {
             tempWorks = tempWorks.filter(w => (w.rating || 0) === 0 || !w.tagIds || w.tagIds.length === 0);
-        } else if (filters.mood) { 
+        } else {
+            // ▼ 修正: 以前は「気分(mood)による絞り込み」と「★評価フィルタ」が
+            // if/else-ifの排他分岐になっており、filters.moodが常にtruthy（例:'default'）な
+            // 抽選設定側では★評価フィルタが実質無視されていた。両方を独立したAND条件として適用する。
             if (filters.mood === 'best') tempWorks = tempWorks.filter(w => (w.rating || 0) >= 4);
-            if (filters.mood === 'hidden_gem') tempWorks = tempWorks.filter(w => (w.rating || 0) <= 2);
-        } else if (filters.rating && filters.rating.value > 0) {
-            if (filters.rating.type === 'exact') tempWorks = tempWorks.filter(w => (w.rating || 0) === filters.rating.value);
-            else if (filters.rating.type === 'above') tempWorks = tempWorks.filter(w => (w.rating || 0) >= filters.rating.value);
-            else if (filters.rating.type === 'below') tempWorks = tempWorks.filter(w => (w.rating || 0) <= filters.rating.value);
+            else if (filters.mood === 'hidden_gem') tempWorks = tempWorks.filter(w => (w.rating || 0) <= 2);
+
+            if (filters.rating && filters.rating.value > 0) {
+                if (filters.rating.type === 'exact') tempWorks = tempWorks.filter(w => (w.rating || 0) === filters.rating.value);
+                else if (filters.rating.type === 'above') tempWorks = tempWorks.filter(w => (w.rating || 0) >= filters.rating.value);
+                else if (filters.rating.type === 'below') tempWorks = tempWorks.filter(w => (w.rating || 0) <= filters.rating.value);
+            }
         }
         if (filters.genres && filters.genres.size > 0) tempWorks = tempWorks.filter(w => filters.genres.has(w.genre));
         if (filters.sites && filters.sites.size > 0) {

@@ -66,7 +66,8 @@ export const openLotterySettingsModal = (App, tempState = null) => {
         andTagIds: new Set(source.andTagIds),
         orTagIds: new Set(source.orTagIds),
         notTagIds: new Set(source.notTagIds),
-        dateFilter: { ...(source.dateFilter || AppState.defaultDateFilter()) }
+        dateFilter: { ...(source.dateFilter || AppState.defaultDateFilter()) },
+        rating: { ...(source.rating || { type: 'exact', value: 0 }) }
     };
     if (!state.dateFilter.date) state.dateFilter.date = App.formatDateForInput(new Date());
     if (!state.dateFilter.startDate) state.dateFilter.startDate = App.formatDateForInput(new Date());
@@ -102,7 +103,19 @@ export const openLotterySettingsModal = (App, tempState = null) => {
             </div>
         </div>
         <div><label for="lottery-mood" class="block text-sm text-gray-400 mb-1">気分</label><select id="lottery-mood" class="w-full bg-gray-700 p-2 rounded-lg disabled:opacity-50" ${state.unratedOrUntaggedOnly ? 'disabled' : ''}><option value="default" ${state.mood==='default'?'selected':''}>問わない</option><option value="favorite" ${state.mood==='favorite'?'selected':''}>お気に入り</option><option value="best" ${state.mood==='best'?'selected':''}>最高評価</option><option value="hidden_gem" ${state.mood==='hidden_gem'?'selected':''}>隠れた名作</option></select></div>
-        
+
+        <div>
+            <h4 class="font-semibold mb-2 text-sm text-gray-400">評価 (★)</h4>
+            <div class="flex items-center space-x-4 mb-2">
+                <select id="lottery-rating-type" class="bg-gray-700 p-2 rounded-lg disabled:opacity-50" ${state.unratedOrUntaggedOnly ? 'disabled' : ''}>
+                    <option value="exact" ${state.rating.type === 'exact' ? 'selected' : ''}>と等しい</option>
+                    <option value="above" ${state.rating.type === 'above' ? 'selected' : ''}>以上</option>
+                    <option value="below" ${state.rating.type === 'below' ? 'selected' : ''}>以下</option>
+                </select>
+                <div id="lottery-rating-stars" class="flex items-center space-x-2 text-3xl ${state.unratedOrUntaggedOnly ? 'opacity-50 pointer-events-none' : ''}"></div>
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
                 <label class="block text-sm text-gray-400 mb-1">ジャンル (選択なし=すべて)</label>
@@ -137,6 +150,7 @@ export const openLotterySettingsModal = (App, tempState = null) => {
         let tempAndTags = new Set(state.andTagIds);
         let tempOrTags = new Set(state.orTagIds);
         let tempNotTags = new Set(state.notTagIds);
+        let currentRating = state.rating.value;
 
         const getSelectedSet = (name) => {
             const checked = [];
@@ -171,6 +185,7 @@ export const openLotterySettingsModal = (App, tempState = null) => {
             const filters = {
                 unratedOrUntaggedOnly: $('#lottery-unrated').checked,
                 mood: $('#lottery-mood').value,
+                rating: { type: $('#lottery-rating-type').value, value: currentRating },
                 genres: getSelectedSet('lottery-genre'),
                 sites: getSelectedSet('lottery-site'),
                 andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
@@ -191,11 +206,44 @@ export const openLotterySettingsModal = (App, tempState = null) => {
 
         const moodSelect = $('#lottery-mood');
         const unratedToggle = $('#lottery-unrated');
+        const ratingTypeSelect = $('#lottery-rating-type');
+        const ratingStarsEl = $('#lottery-rating-stars');
         unratedToggle.addEventListener('change', () => {
             moodSelect.disabled = unratedToggle.checked;
+            ratingTypeSelect.disabled = unratedToggle.checked;
+            ratingStarsEl.classList.toggle('opacity-50', unratedToggle.checked);
+            ratingStarsEl.classList.toggle('pointer-events-none', unratedToggle.checked);
             updatePreview();
         });
         $('#lottery-mood').addEventListener('change', updatePreview);
+        ratingTypeSelect.addEventListener('change', updatePreview);
+
+        const renderRatingStars = r => {
+            if (!ratingStarsEl) return;
+            ratingStarsEl.innerHTML = '';
+            for (let i = 1; i <= 5; i++) {
+                const s = document.createElement('i');
+                s.classList.add('fa-star', 'cursor-pointer');
+                s.dataset.value = i;
+                if (r >= i) s.classList.add('fas', 'text-yellow-400');
+                else if (r === (i - 0.5)) s.classList.add('fas', 'fa-star-half-alt', 'text-yellow-400');
+                else s.classList.add('far', 'text-gray-500');
+                ratingStarsEl.appendChild(s);
+            }
+        };
+        renderRatingStars(currentRating);
+        ratingStarsEl.addEventListener('click', e => {
+            const s = e.target.closest('.fa-star');
+            if (s) {
+                const v = parseInt(s.dataset.value, 10);
+                const h = (e.clientX - s.getBoundingClientRect().left) > (s.getBoundingClientRect().width / 2);
+                let n = h ? v : v - 0.5;
+                if (currentRating === n) n = 0;
+                currentRating = n;
+                renderRatingStars(currentRating);
+                updatePreview();
+            }
+        });
 
         const renderCombinedTags = () => {
             const container = $('#lottery-tags-display');
@@ -273,7 +321,8 @@ export const openLotterySettingsModal = (App, tempState = null) => {
 
         $('#lottery-select-tags').addEventListener('click', () => {
             const capturedState = {
-                mood: $('#lottery-mood').value, 
+                mood: $('#lottery-mood').value,
+                rating: { type: ratingTypeSelect.value, value: currentRating },
                 genres: getSelectedSet('lottery-genre'), sites: getSelectedSet('lottery-site'),
                 priority: $('#lottery-priority').value, method: $('#lottery-method').value,
                 andTagIds: tempAndTags, orTagIds: tempOrTags, notTagIds: tempNotTags,
@@ -300,8 +349,8 @@ export const openLotterySettingsModal = (App, tempState = null) => {
         });
 
         $('#lottery-settings-reset').addEventListener('click', () => {
-            AppState.lotterySettings = { mood: 'default', genres: new Set(), sites: new Set(), andTagIds: new Set(), orTagIds: new Set(), notTagIds: new Set(), dateFilter: AppState.defaultDateFilter(), priority: 'new', method: 'normal', unratedOrUntaggedOnly: false };
-            
+            AppState.lotterySettings = { mood: 'default', rating: { type: 'exact', value: 0 }, genres: new Set(), sites: new Set(), andTagIds: new Set(), orTagIds: new Set(), notTagIds: new Set(), dateFilter: AppState.defaultDateFilter(), priority: 'new', method: 'normal', unratedOrUntaggedOnly: false };
+
             const settingsToSave = {
                 ...AppState.lotterySettings,
                 genres: [], sites: [], andTagIds: [], orTagIds: [], notTagIds: []
@@ -315,6 +364,7 @@ export const openLotterySettingsModal = (App, tempState = null) => {
         const saveSettings = () => {
             AppState.lotterySettings.unratedOrUntaggedOnly = $('#lottery-unrated').checked;
             AppState.lotterySettings.mood = $('#lottery-mood').value;
+            AppState.lotterySettings.rating = { type: ratingTypeSelect.value, value: currentRating };
             AppState.lotterySettings.genres = getSelectedSet('lottery-genre');
             AppState.lotterySettings.sites = getSelectedSet('lottery-site');
             AppState.lotterySettings.priority = $('#lottery-priority').value;
@@ -341,7 +391,11 @@ export const openLotterySettingsModal = (App, tempState = null) => {
 
             AppState.listFilters.rating = { type: 'exact', value: 0 };
             if (!AppState.lotterySettings.unratedOrUntaggedOnly) {
-                    if (AppState.lotterySettings.mood === 'best') AppState.listFilters.rating = { type: 'above', value: 4 };
+                if (AppState.lotterySettings.rating && AppState.lotterySettings.rating.value > 0) {
+                    AppState.listFilters.rating = { ...AppState.lotterySettings.rating };
+                } else if (AppState.lotterySettings.mood === 'best') {
+                    AppState.listFilters.rating = { type: 'above', value: 4 };
+                }
             }
             const filtersToSave = {
                 ...AppState.listFilters,

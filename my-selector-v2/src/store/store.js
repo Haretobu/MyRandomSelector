@@ -80,5 +80,6 @@ export const store = {
         priority: 'new',
         method: 'normal',
         unratedOrUntaggedOnly: false,
+        rating: { type: 'exact', value: 0 },
     }
 };
