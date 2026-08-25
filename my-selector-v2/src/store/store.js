@@ -3,7 +3,8 @@
 // アプリ全体で共有するデータ（状態）をここで管理します
 export const store = {
     // --- 基本情報 ---
-    // package.jsonの"version"がビルド時にvite.config.jsを通じて注入される（唯一の情報源）
+    // public/sw.jsのAPP_VERSIONが唯一の情報源。vite.config.jsがビルド時に読み取って注入する。
+    // バージョンを上げたいときは public/sw.js の APP_VERSION だけを書き換えればよい。
     appVersion: __APP_VERSION__,
     appId: 'r18-random-selector',
     

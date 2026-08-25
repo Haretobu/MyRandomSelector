@@ -258,9 +258,11 @@ const App = {
                     <div class="text-6xl">🚀</div>
                     <p class="text-lg text-white font-bold">アプリが更新されました！</p>
                     <p class="text-gray-300">バージョン: <span class="text-teal-400 font-mono text-xl font-bold">${currentVersion}</span></p>
-                    <div class="bg-gray-700 p-4 rounded-lg text-sm text-left text-gray-300">
-                        <p>✅ 動作パフォーマンスの向上 (IndexedDB)</p>
-                        <p>✅ 検索精度の向上 (Fuzzy Search)</p>
+                    <div class="bg-gray-700 p-4 rounded-lg text-sm text-left text-gray-300 space-y-1">
+                        <p>🔒 セキュリティ強化（データへのアクセス制御を全面的に見直し、新規アカウント登録を許可制に）</p>
+                        <p>🐛 評価・タグを保存したのに消えてしまう不具合を修正</p>
+                        <p>🎲 抽選設定に★評価フィルタを追加</p>
+                        <p>💾 バックアップの読込（インポート）機能を追加</p>
                     </div>
                 </div>
             `;
@@ -1981,17 +1983,24 @@ const App = {
 
             AppState.ui.confirmTitle.textContent = title;
             AppState.ui.confirmMessage.innerHTML = `
-                <div class="space-y-3">
+                <form id="reauth-form" autocomplete="on" class="space-y-3">
                     <div>${message}</div>
-                    <div class="text-left">
-                        <label for="reauth-password-input" class="block text-sm text-gray-400 mb-1">確認のため、ログイン中のアカウント（${App.escapeHTML(AppState.currentUser.email || '')}）のパスワードを入力してください</label>
-                        <input type="password" id="reauth-password-input" class="w-full bg-gray-700 p-2 rounded-lg" autocomplete="current-password">
-                        <p id="reauth-password-error" class="text-red-400 text-sm mt-1 hidden"></p>
+                    <div class="text-left space-y-2">
+                        <div>
+                            <label for="reauth-username-input" class="block text-sm text-gray-400 mb-1">アカウント（本人確認用）</label>
+                            <input type="email" id="reauth-username-input" name="username" autocomplete="username" value="${App.escapeHTML(AppState.currentUser.email || '')}" readonly class="w-full bg-gray-800 text-gray-400 p-2 rounded-lg cursor-not-allowed">
+                        </div>
+                        <div>
+                            <label for="reauth-password-input" class="block text-sm text-gray-400 mb-1">パスワード（本人確認のため再入力してください）</label>
+                            <input type="password" id="reauth-password-input" name="password" autocomplete="current-password" class="w-full bg-gray-700 p-2 rounded-lg">
+                            <p id="reauth-password-error" class="text-red-400 text-sm mt-1 hidden"></p>
+                        </div>
                     </div>
-                </div>
+                </form>
             `;
             AppState.ui.confirmModal.classList.remove('hidden');
 
+            const reauthForm = document.getElementById('reauth-form');
             const pwInput = document.getElementById('reauth-password-input');
             const errorEl = document.getElementById('reauth-password-error');
             const originalOkText = AppState.ui.confirmOkBtn.textContent;
@@ -2025,9 +2034,12 @@ const App = {
                 }
             };
             const cancelHandler = () => { cleanup(); resolve(false); };
+            // パスワード欄でEnterを押した際、フォームの実送信（ページ遷移）を防ぎ、OKボタンと同じ処理を実行する
+            const submitHandler = (e) => { e.preventDefault(); okHandler(); };
 
             AppState.ui.confirmOkBtn.addEventListener('click', okHandler);
             AppState.ui.confirmCancelBtn.addEventListener('click', cancelHandler);
+            reauthForm?.addEventListener('submit', submitHandler);
         });
     },
 
