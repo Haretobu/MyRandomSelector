@@ -24,7 +24,7 @@ import { logEvent, redactTitle, initDebugLog, exportLogAsFile } from './services
 import bookmarkletCodeRaw from './bookmarklet.txt?raw';
 
 // Firebase Modules
-import { signInWithEmailAndPassword, onIdTokenChanged } from "firebase/auth";
+import { signInWithEmailAndPassword, onIdTokenChanged, signOut } from "firebase/auth";
 import { 
     collection, doc, getDoc, setDoc, updateDoc, deleteDoc, 
     onSnapshot, query, writeBatch, Timestamp, serverTimestamp, 
@@ -981,6 +981,21 @@ const App = {
                 }
             }
         });
+    },
+
+    handleLogout: async () => {
+        const confirmed = await App.showConfirm(
+            "ログアウト",
+            "ログアウトします。別のアカウントに切り替える場合などにお使いください。<br>本当にログアウトしますか？"
+        );
+        if (!confirmed) return;
+        try {
+            await signOut(AppState.auth);
+            location.reload();
+        } catch (error) {
+            console.error("Logout failed:", error);
+            App.showToast("ログアウトに失敗しました。", "error");
+        }
     },
 
     updateSyncIdHistory: (newId) => {

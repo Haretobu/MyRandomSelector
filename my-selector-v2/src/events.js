@@ -155,6 +155,9 @@ export const setupAppEventListeners = (App) => {
     // --- デバッグログ保存（再現困難な不具合の調査用。作品名・タグ・URL等は記録しない） ---
     $('#exportDebugLogBtn')?.addEventListener('click', () => App.exportDebugLog?.());
 
+    // --- ログアウト（別アカウントへの切替用。確認ダイアログを挟む） ---
+    $('#logoutBtn')?.addEventListener('click', App.handleLogout);
+
     // --- 検索関連 ---
     ui.searchInput.addEventListener('input', App.debounce(() => {
         const query = ui.searchInput.value;
