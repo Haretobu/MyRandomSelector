@@ -3,7 +3,8 @@
 // アプリ全体で共有するデータ（状態）をここで管理します
 export const store = {
     // --- 基本情報 ---
-    appVersion: 'v5.0.0 (Vite)',
+    // package.jsonの"version"がビルド時にvite.config.jsを通じて注入される（唯一の情報源）
+    appVersion: __APP_VERSION__,
     appId: 'r18-random-selector',
     
     // --- ユーザー & 同期情報 ---

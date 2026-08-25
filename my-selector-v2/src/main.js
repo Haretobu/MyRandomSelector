@@ -24,7 +24,7 @@ import { logEvent, redactTitle, initDebugLog, exportLogAsFile } from './services
 import bookmarkletCodeRaw from './bookmarklet.txt?raw';
 
 // Firebase Modules
-import { signInWithEmailAndPassword, onIdTokenChanged, signOut } from "firebase/auth";
+import { signInWithEmailAndPassword, onIdTokenChanged, signOut, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
 import { 
     collection, doc, getDoc, setDoc, updateDoc, deleteDoc, 
     onSnapshot, query, writeBatch, Timestamp, serverTimestamp, 
@@ -272,16 +272,19 @@ const App = {
     isMobile: UI.isMobile,
     escapeHTML: Utils.escapeHTML,
 
-    encryptData: (data) => {
+    // ▼ 修正: 元は encryptData/decryptData という名前だったが、
+    // 中身は暗号化を行わないJSON変換のみだった（命名が実態と合っていなかったため整理）。
+    // localStorageの"_encrypted"というキー名は既存ユーザーの保存データとの互換性のため変更していない。
+    serializeSettings: (data) => {
         if (!data) return null;
         try { return JSON.stringify(data); } catch (e) { return null; }
     },
 
-    decryptData: (encryptedString) => {
-        if (!encryptedString) return null;
+    parseSettings: (serializedString) => {
+        if (!serializedString) return null;
         try {
-            if (!encryptedString.startsWith('[') && !encryptedString.startsWith('{')) return null;
-            return JSON.parse(encryptedString);
+            if (!serializedString.startsWith('[') && !serializedString.startsWith('{')) return null;
+            return JSON.parse(serializedString);
         } catch (e) { return null; }
     },
 
@@ -780,38 +783,47 @@ const App = {
     },
     
     loadUserSettings: () => {
-        const savedListFilters = App.decryptData(localStorage.getItem('listFilters_encrypted'));
+        // ▼ 修正: 保存済み設定を丸ごと上書きするのではなく、現在のデフォルト値とマージする。
+        // 以前は AppState.listFilters = savedListFilters という完全上書きだったため、
+        // 将来設定項目が増えた際に、古い保存データを持つユーザーだけ新項目が反映されない懸念があった。
+        const savedListFilters = App.parseSettings(localStorage.getItem('listFilters_encrypted'));
         if (savedListFilters) {
-            savedListFilters.genres = new Set(savedListFilters.genres || []);
-            savedListFilters.sites = new Set(savedListFilters.sites || []);
-            savedListFilters.andTagIds = new Set(savedListFilters.andTagIds || []);
-            savedListFilters.orTagIds = new Set(savedListFilters.orTagIds || []);
-            savedListFilters.notTagIds = new Set(savedListFilters.notTagIds || []);
-            savedListFilters.dateFilter = savedListFilters.dateFilter || AppState.defaultDateFilter();
-            AppState.listFilters = savedListFilters;
+            AppState.listFilters = {
+                ...AppState.listFilters,
+                ...savedListFilters,
+                genres: new Set(savedListFilters.genres || []),
+                sites: new Set(savedListFilters.sites || []),
+                andTagIds: new Set(savedListFilters.andTagIds || []),
+                orTagIds: new Set(savedListFilters.orTagIds || []),
+                notTagIds: new Set(savedListFilters.notTagIds || []),
+                dateFilter: savedListFilters.dateFilter || AppState.defaultDateFilter(),
+            };
         }
 
-        const savedSortState = App.decryptData(localStorage.getItem('sortState_encrypted'));
+        const savedSortState = App.parseSettings(localStorage.getItem('sortState_encrypted'));
         if (savedSortState) {
-            AppState.sortState = savedSortState;
+            AppState.sortState = { ...AppState.sortState, ...savedSortState };
             App.updateSortLabel();
         }
 
-        const savedLotterySettings = App.decryptData(localStorage.getItem('lotterySettings_encrypted'));
+        const savedLotterySettings = App.parseSettings(localStorage.getItem('lotterySettings_encrypted'));
         if (savedLotterySettings) {
-            savedLotterySettings.genres = new Set(savedLotterySettings.genres || []);
-            savedLotterySettings.sites = new Set(savedLotterySettings.sites || []);
-            savedLotterySettings.andTagIds = new Set(savedLotterySettings.andTagIds || []);
-            savedLotterySettings.orTagIds = new Set(savedLotterySettings.orTagIds || []);
-            savedLotterySettings.notTagIds = new Set(savedLotterySettings.notTagIds || []);
-            savedLotterySettings.dateFilter = savedLotterySettings.dateFilter || AppState.defaultDateFilter();
-            AppState.lotterySettings = savedLotterySettings;
+            AppState.lotterySettings = {
+                ...AppState.lotterySettings,
+                ...savedLotterySettings,
+                genres: new Set(savedLotterySettings.genres || []),
+                sites: new Set(savedLotterySettings.sites || []),
+                andTagIds: new Set(savedLotterySettings.andTagIds || []),
+                orTagIds: new Set(savedLotterySettings.orTagIds || []),
+                notTagIds: new Set(savedLotterySettings.notTagIds || []),
+                dateFilter: savedLotterySettings.dateFilter || AppState.defaultDateFilter(),
+            };
         }
 
-        const savedHistory = App.decryptData(localStorage.getItem('searchHistory_encrypted'));
+        const savedHistory = App.parseSettings(localStorage.getItem('searchHistory_encrypted'));
         if (Array.isArray(savedHistory)) AppState.searchHistory = savedHistory.slice(0, AppState.maxSearchHistory);
 
-        const savedPresets = App.decryptData(localStorage.getItem('customPresets_encrypted'));
+        const savedPresets = App.parseSettings(localStorage.getItem('customPresets_encrypted'));
         if (savedPresets && Array.isArray(savedPresets)) {
             AppState.customPresets = savedPresets.map(p => ({
                 ...p,
@@ -1034,9 +1046,9 @@ const App = {
     handleDeleteCurrentSyncId: async () => {
         const targetId = AppState.syncId;
         if (!targetId) return;
-        const confirmed = await App.showConfirm(
+        const confirmed = await App.showPasswordConfirm(
             "同期IDの完全削除",
-            `現在の同期ID（${App.escapeHTML(targetId)}）に登録されている作品・タグを含む、全てのデータを完全に削除します。<br><span class="text-red-400 font-semibold">この操作は元に戻せません。</span><br>本当に削除しますか？`
+            `現在の同期ID（${App.escapeHTML(targetId)}）に登録されている作品・タグを含む、全てのデータを完全に削除します。<br><span class="text-red-400 font-semibold">この操作は元に戻せません。</span>`
         );
         if (!confirmed) return;
         try {
@@ -1446,7 +1458,7 @@ const App = {
         AppState.searchHistory = AppState.searchHistory.filter(item => item !== normalizedQuery);
         AppState.searchHistory.unshift(normalizedQuery);
         if (AppState.searchHistory.length > AppState.maxSearchHistory) AppState.searchHistory.pop();
-        const encryptedHistory = App.encryptData(AppState.searchHistory);
+        const encryptedHistory = App.serializeSettings(AppState.searchHistory);
         if (encryptedHistory) localStorage.setItem('searchHistory_encrypted', encryptedHistory);
     },
 
@@ -1806,7 +1818,7 @@ const App = {
                     orTagIds: [...AppState.listFilters.orTagIds],
                     notTagIds: [...AppState.listFilters.notTagIds]
                 };
-                const encryptedFilters = App.encryptData(filtersToSave);
+                const encryptedFilters = App.serializeSettings(filtersToSave);
                 if (encryptedFilters) localStorage.setItem('listFilters_encrypted', encryptedFilters);
 
                 AppState.currentPage = 1;
@@ -1960,6 +1972,157 @@ const App = {
             App.showToast("バックアップ失敗", "error");
         }
     },
+
+    // 破壊的な操作の前に、ログイン中アカウントのパスワード再入力を要求する確認ダイアログ。
+    // 既存のshowConfirm用モーダル要素を流用し、パスワード欄と非同期の再認証チェックを追加する。
+    showPasswordConfirm: (title, message) => {
+        return new Promise((resolve) => {
+            if (!AppState.ui || !AppState.ui.confirmModal || !AppState.currentUser) { resolve(false); return; }
+
+            AppState.ui.confirmTitle.textContent = title;
+            AppState.ui.confirmMessage.innerHTML = `
+                <div class="space-y-3">
+                    <div>${message}</div>
+                    <div class="text-left">
+                        <label for="reauth-password-input" class="block text-sm text-gray-400 mb-1">確認のため、ログイン中のアカウント（${App.escapeHTML(AppState.currentUser.email || '')}）のパスワードを入力してください</label>
+                        <input type="password" id="reauth-password-input" class="w-full bg-gray-700 p-2 rounded-lg" autocomplete="current-password">
+                        <p id="reauth-password-error" class="text-red-400 text-sm mt-1 hidden"></p>
+                    </div>
+                </div>
+            `;
+            AppState.ui.confirmModal.classList.remove('hidden');
+
+            const pwInput = document.getElementById('reauth-password-input');
+            const errorEl = document.getElementById('reauth-password-error');
+            const originalOkText = AppState.ui.confirmOkBtn.textContent;
+            setTimeout(() => pwInput?.focus(), 50);
+
+            const cleanup = () => {
+                AppState.ui.confirmModal.classList.add('hidden');
+                AppState.ui.confirmOkBtn.removeEventListener('click', okHandler);
+                AppState.ui.confirmCancelBtn.removeEventListener('click', cancelHandler);
+                AppState.ui.confirmOkBtn.disabled = false;
+                AppState.ui.confirmOkBtn.textContent = originalOkText;
+            };
+
+            const okHandler = async () => {
+                const password = pwInput ? pwInput.value : '';
+                if (!password) {
+                    if (errorEl) { errorEl.textContent = "パスワードを入力してください。"; errorEl.classList.remove('hidden'); }
+                    return;
+                }
+                AppState.ui.confirmOkBtn.disabled = true;
+                AppState.ui.confirmOkBtn.textContent = "確認中...";
+                try {
+                    const credential = EmailAuthProvider.credential(AppState.currentUser.email, password);
+                    await reauthenticateWithCredential(AppState.currentUser, credential);
+                    cleanup();
+                    resolve(true);
+                } catch (error) {
+                    if (errorEl) { errorEl.textContent = "パスワードが正しくありません。"; errorEl.classList.remove('hidden'); }
+                    AppState.ui.confirmOkBtn.disabled = false;
+                    AppState.ui.confirmOkBtn.textContent = originalOkText;
+                }
+            };
+            const cancelHandler = () => { cleanup(); resolve(false); };
+
+            AppState.ui.confirmOkBtn.addEventListener('click', okHandler);
+            AppState.ui.confirmCancelBtn.addEventListener('click', cancelHandler);
+        });
+    },
+
+    handleImportBackup: () => {
+        if (AppState._isImportingBackup) return; // 二重実行防止
+        if (!AppState.syncId) return App.showToast("同期IDが選択されていません。", "error");
+
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'application/json';
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            let data;
+            try {
+                const text = await file.text();
+                data = JSON.parse(text);
+            } catch (error) {
+                return App.showToast("ファイルの読み込みに失敗しました。JSON形式のバックアップファイルを選択してください。", "error");
+            }
+
+            if (!data || !Array.isArray(data.works) || !Array.isArray(data.tags)) {
+                return App.showToast("バックアップファイルの形式が正しくありません。", "error");
+            }
+            const MAX_ENTRIES = 20000; // 極端に巨大なファイルで固まらないための安全弁
+            if (data.works.length + data.tags.length > MAX_ENTRIES) {
+                return App.showToast("データ件数が多すぎるため読み込めません。", "error");
+            }
+
+            const confirmed = await App.showPasswordConfirm(
+                "バックアップの読み込み",
+                `作品 ${data.works.length}件・タグ ${data.tags.length}件を読み込みます。<br><span class="text-red-400 font-semibold">現在の同期ID（${App.escapeHTML(AppState.syncId)}）の既存データは全て削除され、バックアップの内容に置き換わります。この操作は元に戻せません。</span>`
+            );
+            if (!confirmed) return;
+
+            AppState._isImportingBackup = true;
+            const importBtn = document.getElementById('importBackupBtn');
+            if (importBtn) importBtn.disabled = true;
+
+            try {
+                // Firestoreのタイムスタンプを復元（fixWorkDatesと同様のロジックをworks/tags双方に適用）
+                const fixTimestampField = (obj, field) => {
+                    const v = obj[field];
+                    if (!v || typeof v.toDate === 'function') return;
+                    if (v.seconds !== undefined) obj[field] = new Timestamp(v.seconds, v.nanoseconds || 0);
+                    else if (typeof v === 'string') obj[field] = Timestamp.fromDate(new Date(v));
+                    else obj[field] = null;
+                };
+                data.works.forEach(w => {
+                    fixTimestampField(w, 'registeredAt');
+                    fixTimestampField(w, 'lastSelectedAt');
+                    if (Array.isArray(w.selectionHistory)) {
+                        w.selectionHistory.forEach((entry, i) => {
+                            if (entry && typeof entry.toDate !== 'function' && entry.seconds !== undefined) {
+                                w.selectionHistory[i] = new Timestamp(entry.seconds, entry.nanoseconds || 0);
+                            }
+                        });
+                    }
+                });
+                data.tags.forEach(t => {
+                    fixTimestampField(t, 'createdAt');
+                    fixTimestampField(t, 'lastSelectedAt');
+                });
+
+                App.showToast("バックアップを読み込んでいます…", "info", 60000);
+                await DB.restoreSyncIdData(AppState.syncId, data.works, data.tags, ({ phase, current, total }) => {
+                    if (AppState.ui.workListMessage) {
+                        AppState.ui.workListMessage.classList.remove('hidden');
+                        AppState.ui.workListMessage.innerHTML = `
+                            <div class="text-center py-10">
+                                <i class="fas fa-spinner fa-spin fa-3x text-teal-400"></i>
+                                <p class="mt-4 text-base">バックアップを読み込み中... (${phase})</p>
+                            </div>`;
+                    }
+                });
+
+                AppState.works = data.works;
+                AppState.tags = new Map(data.tags.map(t => [t.id, t]));
+                Search.initSearchIndex(AppState.works);
+                App.renderAll();
+                App.showToast("バックアップを読み込みました。");
+            } catch (error) {
+                console.error("Import failed:", error);
+                App.showToast("バックアップの読み込みに失敗しました。", "error");
+            } finally {
+                AppState._isImportingBackup = false;
+                if (importBtn) importBtn.disabled = false;
+            }
+        });
+
+        fileInput.click();
+    },
+
     initLauncherSync: () => {
         // 1. Pythonから渡されたパス情報をURLから取得する (GETで開かれた場合)
         const urlParams = new URLSearchParams(window.location.search);
@@ -2029,16 +2192,8 @@ const App = {
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        let version = 'v5.0.0';
-        try {
-            const res = await fetch('sw.js?t=' + Date.now());
-            if (res.ok) {
-                const txt = await res.text();
-                const m = txt.match(/const APP_VERSION = '([^']+)';/);
-                if (m) version = m[1];
-            }
-        } catch (e) {}
-        AppState.appVersion = version;
+        // ▼ 修正: 以前はsw.jsを毎回フェッチし正規表現でバージョン文字列を取り出していたが、
+        // ビルド時にpackage.jsonの"version"がAppState.appVersionへ直接注入されるようになったため不要。
         window.App = App; // Global Access
         initDebugLog();
         App.exportDebugLog = exportLogAsFile;

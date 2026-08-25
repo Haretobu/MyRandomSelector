@@ -88,7 +88,7 @@ export const setupAppEventListeners = (App) => {
                 orTagIds: [...AppState.listFilters.orTagIds], 
                 notTagIds: [...AppState.listFilters.notTagIds] 
             };
-            const encrypted = App.encryptData(filtersToSave);
+            const encrypted = App.serializeSettings(filtersToSave);
             if (encrypted) localStorage.setItem('listFilters_encrypted', encrypted);
             
             AppState.currentPage = 1;
@@ -142,7 +142,7 @@ export const setupAppEventListeners = (App) => {
     });
 
     ui.exportBackupBtn.addEventListener('click', App.handleExportBackup);
-    ui.importBackupBtn.addEventListener('click', () => { App.showToast("インポート機能は現在未実装です。", "error"); });
+    ui.importBackupBtn.addEventListener('click', App.handleImportBackup);
     
     App.setupInputClearButton(ui.searchInput, $('#clear-searchInput'));
 
@@ -236,7 +236,7 @@ export const setupAppEventListeners = (App) => {
              if (target) {
                 AppState.sortState.by = target.dataset.by; AppState.sortState.order = target.dataset.order;
                 ui.sortStateLabel.textContent = `並び替え: ${target.textContent}`;
-                const encryptedSortState = App.encryptData(AppState.sortState);
+                const encryptedSortState = App.serializeSettings(AppState.sortState);
                 if (encryptedSortState) localStorage.setItem('sortState_encrypted', encryptedSortState);
                 AppState.currentPage = 1;
                 ui.sortDropdown.classList.add('hidden'); App.renderWorkList();

@@ -10,6 +10,11 @@ import { logEvent } from './services/debugLog.js';
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => document.querySelectorAll(selector);
 
+// ▼ 修正: openEditModalを開くたびにdocumentへclickリスナーが追加され、
+// 一度も削除されず蓄積し続けていた（メモリリーク）。常に最大1つだけになるよう、
+// 新しいリスナーを追加する前に前回のものを必ず外す。
+let activeUrlPreviewOutsideClickHandler = null;
+
 // --- ヘルパー: window.App への参照 ---
 const getApp = () => window.App;
 
@@ -280,7 +285,10 @@ export const openEditModal = (workId, tempState = null) => {
             }
         });
 
-        document.addEventListener('click', (e) => {
+        if (activeUrlPreviewOutsideClickHandler) {
+            document.removeEventListener('click', activeUrlPreviewOutsideClickHandler);
+        }
+        activeUrlPreviewOutsideClickHandler = (e) => {
             if (editUrlPreviewBox.classList.contains('hidden')) return;
             if (ignoreNextOutsideClick) {
                 ignoreNextOutsideClick = false;
@@ -289,7 +297,8 @@ export const openEditModal = (workId, tempState = null) => {
             if (!editUrlPreviewBox.contains(e.target) && e.target !== workUrlInput) {
                 editUrlPreviewBox.classList.add('hidden');
             }
-        });
+        };
+        document.addEventListener('click', activeUrlPreviewOutsideClickHandler);
 
         if (pcMemoTextarea) pcMemoTextarea.addEventListener('input', () => { currentMemo = pcMemoTextarea.value; });
         if (smMemoButton) smMemoButton.addEventListener('click', () => { openMemoModal(workId, currentMemo, currentRating, currentTagIds, (newMemo) => { if (newMemo !== null) { currentMemo = newMemo; openEditModal(workId, { rating: currentRating, tagIds: currentTagIds, memo: currentMemo }); } }); });

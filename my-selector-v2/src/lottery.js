@@ -286,7 +286,7 @@ export const openLotterySettingsModal = (App, tempState = null) => {
                 const target = AppState.customPresets.find(p => p.id === id);
                 if (target && await App.showConfirm("プリセット削除", `プリセット「${target.name}」を削除しますか？`)) {
                     AppState.customPresets = AppState.customPresets.filter(p => p.id !== id);
-                    const encrypted = App.encryptData(AppState.customPresets);
+                    const encrypted = App.serializeSettings(AppState.customPresets);
                     if (encrypted) localStorage.setItem('customPresets_encrypted', encrypted);
                     renderPresets();
                     App.showToast("プリセットを削除しました。");
@@ -312,7 +312,7 @@ export const openLotterySettingsModal = (App, tempState = null) => {
                     }
                 };
                 AppState.customPresets.push(newPreset);
-                const encrypted = App.encryptData(AppState.customPresets);
+                const encrypted = App.serializeSettings(AppState.customPresets);
                 if (encrypted) localStorage.setItem('customPresets_encrypted', encrypted);
                 renderPresets();
                 App.showToast(`プリセット「${name}」を保存しました。`);
@@ -355,7 +355,7 @@ export const openLotterySettingsModal = (App, tempState = null) => {
                 ...AppState.lotterySettings,
                 genres: [], sites: [], andTagIds: [], orTagIds: [], notTagIds: []
             };
-            const encryptedSettings = App.encryptData(settingsToSave);
+            const encryptedSettings = App.serializeSettings(settingsToSave);
             if (encryptedSettings) localStorage.setItem('lotterySettings_encrypted', encryptedSettings);
             App.renderLotterySummary();
             App.openLotterySettingsModal();
@@ -405,7 +405,7 @@ export const openLotterySettingsModal = (App, tempState = null) => {
                 orTagIds: [...AppState.listFilters.orTagIds],
                 notTagIds: [...AppState.listFilters.notTagIds]
             };
-            const encrypted = App.encryptData(filtersToSave);
+            const encrypted = App.serializeSettings(filtersToSave);
             if (encrypted) localStorage.setItem('listFilters_encrypted', encrypted);
 
             App.renderAll();
@@ -424,7 +424,7 @@ export const openLotterySettingsModal = (App, tempState = null) => {
                 orTagIds: [...AppState.lotterySettings.orTagIds],
                 notTagIds: [...AppState.lotterySettings.notTagIds]
             };
-            const encryptedSettings = App.encryptData(settingsToSave);
+            const encryptedSettings = App.serializeSettings(settingsToSave);
             if (encryptedSettings) localStorage.setItem('lotterySettings_encrypted', encryptedSettings);
             App.closeModal();
         });

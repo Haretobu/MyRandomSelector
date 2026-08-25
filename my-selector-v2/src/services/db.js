@@ -145,3 +145,48 @@ export const deleteSyncIdData = async (syncId) => {
     await db.works.where('syncId').equals(syncId).delete();
     await db.tags.where('syncId').equals(syncId).delete();
 };
+
+/**
+ * バックアップ（works・tags）で、指定した同期IDのデータを完全に置き換える。
+ * 大量データでも一度に大きな処理をせず、Firestoreのバッチ上限(500件)を踏まえて
+ * 450件ずつ順番に（並列にはしない）書き込むことで、通信・描画の負荷を抑える。
+ * onProgress({ phase, current, total }) で進捗をUIに伝えられる。
+ */
+export const restoreSyncIdData = async (syncId, works, tags, onProgress = () => {}) => {
+    if (!syncId) return;
+    const CHUNK_SIZE = 450;
+
+    // 1. 既存データを削除
+    const itemsRef = collection(firestoreDb, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${syncId}/items`);
+    const tagsRef = collection(firestoreDb, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${syncId}/tags`);
+    const [itemsSnapshot, tagsSnapshot] = await Promise.all([getDocs(itemsRef), getDocs(tagsRef)]);
+    const existingDocs = [...itemsSnapshot.docs, ...tagsSnapshot.docs];
+
+    for (let i = 0; i < existingDocs.length; i += CHUNK_SIZE) {
+        onProgress({ phase: 'clearing', current: i, total: existingDocs.length });
+        const batch = writeBatch(firestoreDb);
+        existingDocs.slice(i, i + CHUNK_SIZE).forEach(docSnap => batch.delete(docSnap.ref));
+        await batch.commit();
+    }
+
+    // 2. バックアップ内容を書き込み（元のidを維持する）
+    const writes = [
+        ...works.map(w => { const { id, ...rest } = w; return { ref: doc(itemsRef, id), data: rest }; }),
+        ...tags.map(t => { const { id, ...rest } = t; return { ref: doc(tagsRef, id), data: rest }; }),
+    ];
+    for (let i = 0; i < writes.length; i += CHUNK_SIZE) {
+        onProgress({ phase: 'writing', current: i, total: writes.length });
+        const batch = writeBatch(firestoreDb);
+        writes.slice(i, i + CHUNK_SIZE).forEach(w => batch.set(w.ref, w.data));
+        await batch.commit();
+    }
+
+    // 3. ローカルキャッシュも置き換え
+    onProgress({ phase: 'localCache', current: 0, total: 1 });
+    await db.works.where('syncId').equals(syncId).delete();
+    await db.tags.where('syncId').equals(syncId).delete();
+    await db.works.bulkPut(works.map(w => ({ ...w, syncId })));
+    await db.tags.bulkPut(tags.map(t => ({ ...t, syncId })));
+
+    onProgress({ phase: 'done', current: 1, total: 1 });
+};
