@@ -110,6 +110,9 @@ export const setupAppEventListeners = (App) => {
     });
     
     ui.syncIdHistoryEl.addEventListener('change', e => e.target.value && App.loadDataSet(e.target.value));
+
+    $('#createNewSyncIdBtn')?.addEventListener('click', App.handleCreateNewSyncId);
+    $('#deleteSyncIdBtn')?.addEventListener('click', App.handleDeleteCurrentSyncId);
     
     ui.clearHistoryBtn.addEventListener('click', async () => {
         if (await App.showConfirm('履歴のクリア', '本当に同期IDの履歴をクリアしますか？')) {

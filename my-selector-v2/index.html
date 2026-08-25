@@ -70,24 +70,38 @@
                         <i class="fas fa-chevron-down chevron-icon"></i>
                     </summary>
                     <div class="px-6 pb-6">
-                        <div class="space-y-3 pt-2 border-t border-gray-700">
-                            <div class="flex items-center bg-gray-700 rounded-lg p-2">
-                                <input type="text" id="syncIdDisplay" class="bg-transparent w-full text-gray-300 focus:outline-none" readonly>
-                                <button id="copySyncIdBtn" class="ml-2 px-3 py-1 bg-teal-600 hover:bg-teal-700 rounded-md text-sm transition-colors"><i class="fas fa-copy"></i></button>
-                            </div>
-                            
-                            <select id="syncIdHistory" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500"></select>
-                            
-                            <div class="flex items-center">
-                                <input type="text" id="newSyncIdInput" placeholder="新しい同期IDをペースト" class="w-full bg-gray-700 border border-gray-600 rounded-l-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500" autocomplete="off">
-                                <button id="loadSyncIdBtn" class="px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-700 text-white rounded-l-none flex-shrink-0">読込</button>
-                            </div>
-                            
-                            <div class="pt-2 border-t border-gray-700 mt-2 space-y-3">
-                                <div class="grid grid-cols-2 gap-2">
-                                    <button id="clearHistoryBtn" class="w-full text-sm px-2 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors">履歴クリア</button>
-                                    <button id="deleteDataBtn" class="w-full text-sm px-2 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors">全作品削除</button>
+                        <div class="space-y-5 pt-2 border-t border-gray-700">
+
+                            <!-- 同期ID管理 -->
+                            <div class="space-y-3">
+                                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide">同期ID管理</h3>
+                                <div class="flex items-center bg-gray-700 rounded-lg p-2">
+                                    <input type="text" id="syncIdDisplay" class="bg-transparent w-full text-gray-300 focus:outline-none" readonly>
+                                    <button id="copySyncIdBtn" class="ml-2 px-3 py-1 bg-teal-600 hover:bg-teal-700 rounded-md text-sm transition-colors"><i class="fas fa-copy"></i></button>
                                 </div>
+
+                                <select id="syncIdHistory" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500"></select>
+
+                                <div class="flex items-center">
+                                    <input type="text" id="newSyncIdInput" placeholder="新しい同期IDをペースト" class="w-full bg-gray-700 border border-gray-600 rounded-l-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500" autocomplete="off">
+                                    <button id="loadSyncIdBtn" class="px-4 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-700 text-white rounded-l-none flex-shrink-0">読込</button>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button id="createNewSyncIdBtn" class="w-full text-sm px-2 py-2 bg-teal-700 hover:bg-teal-800 rounded-lg transition-colors">
+                                        <i class="fas fa-plus mr-1"></i>新規ID作成
+                                    </button>
+                                    <button id="clearHistoryBtn" class="w-full text-sm px-2 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors">履歴クリア</button>
+                                </div>
+                                <button id="deleteSyncIdBtn" class="w-full text-sm px-2 py-2 bg-red-800 hover:bg-red-900 rounded-lg font-semibold transition-colors">
+                                    <i class="fas fa-trash-alt mr-1"></i>現在の同期IDを完全に削除
+                                </button>
+                            </div>
+
+                            <!-- データ管理 -->
+                            <div class="space-y-3 pt-3 border-t border-gray-700">
+                                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide">データ管理</h3>
+                                <button id="deleteDataBtn" class="w-full text-sm px-2 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors">全作品削除</button>
                                 <div class="grid grid-cols-2 gap-2">
                                     <button id="exportBackupBtn" class="w-full text-sm px-2 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700 text-white">
                                         <i class="fas fa-download mr-1"></i>保存
@@ -96,20 +110,26 @@
                                         <i class="fas fa-upload mr-1"></i>読込(未)
                                     </button>
                                 </div>
-                                <div>
-                                    <button id="toggleDebugModeBtn" class="w-full text-sm px-4 py-2 bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors">デバッグモード開始</button>
-                                </div>
+                            </div>
+
+                            <!-- アカウント -->
+                            <div class="space-y-1 pt-3 border-t border-gray-700">
+                                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">アカウント</h3>
+                                <button id="logoutBtn" class="w-full text-sm px-4 py-2 bg-red-700 hover:bg-red-800 rounded-lg transition-colors">
+                                    <i class="fas fa-sign-out-alt mr-1"></i>ログアウト
+                                </button>
+                                <p class="text-xs text-gray-500 mt-1">別のアカウントに切り替える場合にお使いください。ログアウトすると再度ログインが必要になります。</p>
+                            </div>
+
+                            <!-- 開発者向け -->
+                            <div class="space-y-3 pt-3 border-t border-gray-700">
+                                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide">開発者向け</h3>
+                                <button id="toggleDebugModeBtn" class="w-full text-sm px-4 py-2 bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors">デバッグモード開始</button>
                                 <div>
                                     <button id="exportDebugLogBtn" class="w-full text-sm px-4 py-2 bg-slate-600 hover:bg-slate-700 rounded-lg transition-colors">
                                         <i class="fas fa-bug mr-1"></i>デバッグログを保存
                                     </button>
                                     <p class="text-xs text-gray-500 mt-1">「保存ボタンが反応しない」等の不具合が起きた直後に押すと、原因調査用のログ(作品名・タグ・URL等は含みません)をファイルとして端末に保存します。</p>
-                                </div>
-                                <div>
-                                    <button id="logoutBtn" class="w-full text-sm px-4 py-2 bg-red-700 hover:bg-red-800 rounded-lg transition-colors">
-                                        <i class="fas fa-sign-out-alt mr-1"></i>ログアウト
-                                    </button>
-                                    <p class="text-xs text-gray-500 mt-1">別のアカウントに切り替える場合にお使いください。ログアウトすると再度ログインが必要になります。</p>
                                 </div>
                             </div>
                         </div>

@@ -67,11 +67,13 @@ export const normalizeString = (str) => {
         .trim();
 };
 
-// ランダムID生成
+// ランダムID生成（syncIdなど、実質的なアクセス鍵として使われるため暗号学的に安全な乱数源を使用）
 export const generateRandomId = (length = 16) => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const randomValues = new Uint32Array(length);
+    crypto.getRandomValues(randomValues);
     let result = '';
-    for (let i = 0; i < length; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+    for (let i = 0; i < length; i++) result += chars.charAt(randomValues[i] % chars.length);
     return result;
 };
 

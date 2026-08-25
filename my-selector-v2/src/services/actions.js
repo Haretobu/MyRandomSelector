@@ -251,7 +251,7 @@ export const addTag = async (name, color) => {
         // ★★★ 2. ローカル手動更新 ★★★
         const fullTag = { id: docRef.id, ...newTag };
         AppState.tags.set(docRef.id, fullTag);
-        await DB.db.tags.put(fullTag); // db.jsのインスタンスへアクセス
+        await DB.db.tags.put({ ...fullTag, syncId: AppState.syncId }); // db.jsのインスタンスへアクセス
         
         if (window.App && window.App.renderAll) window.App.renderAll();
 

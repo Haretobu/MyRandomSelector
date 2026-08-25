@@ -1,6 +1,6 @@
 // src/db.js
 import Dexie from 'dexie';
-import { collection, getDocs, query, where, Timestamp, doc, getDoc, setDoc } from "firebase/firestore";
+import { collection, getDocs, query, where, Timestamp, doc, getDoc, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { db as firestoreDb } from './firebaseConfig.js'
 import { store as AppState } from '../store/store.js';
 
@@ -9,27 +9,31 @@ export const db = new Dexie('R18RandomSelectorDB');
 
 // スキーマ定義 (検索に使いたいフィールドをインデックスにする)
 db.version(1).stores({
-    works: 'id, name, genre, registeredAt, lastSelectedAt, rating', 
+    works: 'id, name, genre, registeredAt, lastSelectedAt, rating',
     tags: 'id, name',
     syncInfo: 'id' // 同期日時などを保存
+});
+
+// ▼ 修正: syncIdでキャッシュを絞り込めるよう、syncIdをインデックスに追加。
+// 以前はローカルキャッシュがsyncIdを区別せず全件返しており、
+// 別の同期ID（別アカウント）に切り替えた際に前回のデータがそのまま表示されてしまう原因になっていた。
+db.version(2).stores({
+    works: 'id, syncId, name, genre, registeredAt, lastSelectedAt, rating',
+    tags: 'id, syncId, name',
+    syncInfo: 'id'
 });
 
 // --- API ---
 
 /**
- * アプリ起動時: IndexedDBからデータを全件読み込んで即座に返す
+ * アプリ起動時: IndexedDBから現在のsyncIdに紐づくデータだけを読み込んで即座に返す
  * これにより「ローディング画面」をほぼスキップできます
  */
 export const loadLocalData = async () => {
     if (!AppState.syncId) return { works: [], tags: new Map() };
 
-    // 現在のSyncIdに紐づくデータだけを取得する設計にするか、
-    // あるいはDB自体をSyncIdごとに分けるかですが、
-    // ここではシンプルに「全件取得してJS側でフィルタ」か、
-    // Dexieのwhere句を使う形にします（今回は全件取得例）
-    
-    const works = await db.works.toArray();
-    const tagsArray = await db.tags.toArray();
+    const works = await db.works.where('syncId').equals(AppState.syncId).toArray();
+    const tagsArray = await db.tags.where('syncId').equals(AppState.syncId).toArray();
     const tags = new Map(tagsArray.map(t => [t.id, t]));
 
     return { works, tags };
@@ -66,11 +70,11 @@ export const syncWithFirestore = async () => {
         // 1. Tags Sync
         const tagsRef = collection(firestoreDb, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${AppState.syncId}/tags`);
         const tagsSnapshot = await getDocs(tagsRef);
-        const tagsData = tagsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
+        const tagsData = tagsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), syncId: AppState.syncId }));
+
         // IndexedDBを一括更新 (putは "あれば更新、なければ作成")
         await db.tags.bulkPut(tagsData);
-        
+
         // 削除されたデータの扱いは難しいですが、簡易的に「全件置き換え」も手です
         // 今回は bulkPut で上書きします
 
@@ -81,7 +85,7 @@ export const syncWithFirestore = async () => {
             const data = doc.data();
             // TimestampをIndexedDBで扱える形(Date or Number)にする必要があれば変換
             // DexieはDate型をそのまま保存可能ですが、検索用に数値にするのもあり
-            return { id: doc.id, ...data };
+            return { id: doc.id, ...data, syncId: AppState.syncId };
         });
 
         await db.works.bulkPut(worksData);
@@ -105,9 +109,39 @@ export const syncWithFirestore = async () => {
  * Firestoreへの保存が成功した後にこれを呼んで、ローカルも更新する
  */
 export const saveWorkLocal = async (work) => {
-    await db.works.put(work);
+    await db.works.put({ ...work, syncId: AppState.syncId });
 };
 
 export const deleteWorkLocal = async (id) => {
     await db.works.delete(id);
+};
+
+/**
+ * 指定した同期IDのデータ（items・tags・所有者情報）をFirestoreとローカルキャッシュから完全に削除する。
+ * 呼び出し前に、対象syncIdの所有者が呼び出し本人であることを確認しておくこと
+ * （Firestoreルール側でも所有者以外の削除は拒否される）。
+ */
+export const deleteSyncIdData = async (syncId) => {
+    if (!syncId) return;
+
+    const itemsRef = collection(firestoreDb, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${syncId}/items`);
+    const tagsRef = collection(firestoreDb, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${syncId}/tags`);
+    const [itemsSnapshot, tagsSnapshot] = await Promise.all([getDocs(itemsRef), getDocs(tagsRef)]);
+    const allDocs = [...itemsSnapshot.docs, ...tagsSnapshot.docs];
+
+    // Firestoreのバッチは1回500件までのため、余裕をみて450件ずつに分割
+    const CHUNK_SIZE = 450;
+    for (let i = 0; i < allDocs.length; i += CHUNK_SIZE) {
+        const batch = writeBatch(firestoreDb);
+        allDocs.slice(i, i + CHUNK_SIZE).forEach(docSnap => batch.delete(docSnap.ref));
+        await batch.commit();
+    }
+
+    // items/tagsを全て消してから、所有者情報ドキュメント本体を削除
+    const ownerRef = doc(firestoreDb, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${syncId}`);
+    await deleteDoc(ownerRef);
+
+    // ローカルキャッシュも削除
+    await db.works.where('syncId').equals(syncId).delete();
+    await db.tags.where('syncId').equals(syncId).delete();
 };

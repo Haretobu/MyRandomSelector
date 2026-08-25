@@ -936,7 +936,28 @@ const App = {
                     }
                 } catch (error) {
                     console.error("Sync failed:", error);
-                    if (AppState.works.length === 0) {
+                    // ▼ 修正: 「このアカウントでは同期IDへのアクセス権がない」場合、
+                    // 以前はローカルキャッシュ（別アカウント/別syncIdの残骸）がそのまま画面に残り、
+                    // トーストで警告するだけだったため、権限のないデータが見えてしまっていた。
+                    // アクセス拒否の場合は表示中のデータを明確に消し、専用メッセージを出す。
+                    if (error && error.code === 'permission-denied') {
+                        AppState.works = [];
+                        AppState.tags = new Map();
+                        AppState.isLoadComplete = true;
+                        Search.initSearchIndex(AppState.works);
+                        App.renderAll();
+                        AppState.ui.loadingOverlay.classList.add('hidden');
+                        AppState.ui.appContainer.classList.remove('opacity-0');
+                        AppState.ui.workListEl.classList.add('hidden');
+                        AppState.ui.paginationControls.classList.add('hidden');
+                        AppState.ui.workListMessage.innerHTML = `
+                            <div class="text-center py-10">
+                                <i class="fas fa-lock fa-3x text-red-400"></i>
+                                <p class="mt-4 text-red-300 font-semibold">この同期IDへのアクセス権がありません</p>
+                                <p class="mt-2 text-gray-400 text-sm">ログイン中のアカウントでは、この同期ID（${App.escapeHTML(AppState.syncId)}）のデータを表示できません。</p>
+                            </div>`;
+                        AppState.ui.workListMessage.classList.remove('hidden');
+                    } else if (AppState.works.length === 0) {
                         App.handleDataFetchError(error, '同期');
                     } else {
                         App.showToast("同期に失敗しました。", "warning");
@@ -950,9 +971,6 @@ const App = {
                         AppState.ui.appContainer.classList.remove('opacity-0');
                 }
             }
-            const syncedData = await DB.syncWithFirestore();
-            if (requestId !== AppState._loadDataSetRequestId) return; 
-            if (syncedData) { /* ... */ }
         } finally {
             AppState._loadDataSetInFlight = false;
         }
@@ -998,6 +1016,45 @@ const App = {
         }
     },
 
+    handleCreateNewSyncId: async () => {
+        const confirmed = await App.showConfirm(
+            "新しい同期IDを作成",
+            "新しい同期ID（中身が空の状態）を作成して切り替えます。<br>今の同期IDは履歴に残るので、後でまた読み込み直すこともできます。<br>作成しますか？"
+        );
+        if (!confirmed) return;
+        const newId = App.generateRandomId();
+        await App.loadDataSet(newId);
+        App.updateSyncIdHistory(newId);
+        App.showToast("新しい同期IDを作成しました。");
+    },
+
+    handleDeleteCurrentSyncId: async () => {
+        const targetId = AppState.syncId;
+        if (!targetId) return;
+        const confirmed = await App.showConfirm(
+            "同期IDの完全削除",
+            `現在の同期ID（${App.escapeHTML(targetId)}）に登録されている作品・タグを含む、全てのデータを完全に削除します。<br><span class="text-red-400 font-semibold">この操作は元に戻せません。</span><br>本当に削除しますか？`
+        );
+        if (!confirmed) return;
+        try {
+            await DB.deleteSyncIdData(targetId);
+
+            let history = JSON.parse(localStorage.getItem('r18_sync_id_history') || '[]');
+            history = history.filter(id => id !== targetId);
+            localStorage.setItem('r18_sync_id_history', JSON.stringify(history));
+            App.renderSyncIdHistory();
+
+            // 削除した同期IDはもう使えないため、新しい同期IDへ切り替える
+            const newId = App.generateRandomId();
+            await App.loadDataSet(newId);
+            App.updateSyncIdHistory(newId);
+            App.showToast("同期IDのデータを削除し、新しい同期IDに切り替えました。");
+        } catch (error) {
+            console.error("Delete syncId failed:", error);
+            App.showToast("同期IDの削除に失敗しました。", "error");
+        }
+    },
+
     updateSyncIdHistory: (newId) => {
         let history = JSON.parse(localStorage.getItem('r18_sync_id_history') || '[]');
         if (newId && !history.includes(newId)) {
@@ -1014,12 +1071,7 @@ const App = {
             history.map(id => `<option value="${id}">${id}</option>`).join('');
     },
     
-    generateRandomId: (length = 16) => {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        let result = '';
-        for (let i = 0; i < length; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
-        return result;
-    },
+    generateRandomId: Utils.generateRandomId,
 
     processImage: Utils.processImage,
 
