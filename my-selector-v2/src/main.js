@@ -1047,11 +1047,30 @@ const App = {
             localStorage.setItem('r18_sync_id_history', JSON.stringify(history));
             App.renderSyncIdHistory();
 
-            // 削除した同期IDはもう使えないため、新しい同期IDへ切り替える
-            const newId = App.generateRandomId();
-            await App.loadDataSet(newId);
-            App.updateSyncIdHistory(newId);
-            App.showToast("同期IDのデータを削除し、新しい同期IDに切り替えました。");
+            // ▼ 修正: 削除後に新しい同期IDを自動作成しない。
+            // 以前は自動で新規IDを作成・所有していたため、所有する同期IDを減らしたい場合でも
+            // 削除するたびに別の新しいIDを持つことになり、いつまでも1つに減らせなかった。
+            // 削除後は「未選択」状態にし、次に何をするかはユーザーの明示的な操作に委ねる。
+            localStorage.removeItem('r18_sync_id');
+            AppState.syncId = '';
+            AppState.works = [];
+            AppState.tags = new Map();
+            AppState.isLoadComplete = true;
+            Search.initSearchIndex(AppState.works);
+            App.renderAll();
+
+            AppState.ui.syncIdDisplay.value = '';
+            AppState.ui.workListEl.classList.add('hidden');
+            AppState.ui.paginationControls.classList.add('hidden');
+            AppState.ui.workListMessage.innerHTML = `
+                <div class="text-center py-10">
+                    <i class="fas fa-info-circle fa-3x text-teal-400"></i>
+                    <p class="mt-4 text-gray-300 font-semibold">同期IDが選択されていません</p>
+                    <p class="mt-2 text-gray-400 text-sm">「データ同期」パネルから、既存の同期IDを読み込むか、新しい同期IDを作成してください。</p>
+                </div>`;
+            AppState.ui.workListMessage.classList.remove('hidden');
+
+            App.showToast("同期IDのデータを削除しました。");
         } catch (error) {
             console.error("Delete syncId failed:", error);
             App.showToast("同期IDの削除に失敗しました。", "error");
