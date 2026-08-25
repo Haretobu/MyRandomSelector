@@ -906,6 +906,10 @@ const App = {
                 }
                 
                 try {
+                    // ★セキュリティ対応: FirestoreルールでownerUidを検証できるよう、
+                    // このsyncIdの所有者情報を（未所有なら）先に記録しておく。
+                    await DB.claimSyncId(newSyncId, AppState.currentUser.uid);
+
                     const syncedData = await DB.syncWithFirestore();
                     
                     if (syncedData) {

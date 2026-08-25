@@ -1,6 +1,6 @@
 // src/db.js
 import Dexie from 'dexie';
-import { collection, getDocs, query, where, Timestamp } from "firebase/firestore";
+import { collection, getDocs, query, where, Timestamp, doc, getDoc, setDoc } from "firebase/firestore";
 import { db as firestoreDb } from './firebaseConfig.js'
 import { store as AppState } from '../store/store.js';
 
@@ -33,6 +33,24 @@ export const loadLocalData = async () => {
     const tags = new Map(tagsArray.map(t => [t.id, t]));
 
     return { works, tags };
+};
+
+/**
+ * syncIdの所有者情報を記録する（Firestoreセキュリティルールでの本人確認用）。
+ * 未所有のsyncIdであれば自分のuidで新規作成（＝取得）し、
+ * 既に所有者が記録済みのsyncIdには何もしない（上書き・乗っ取りはルール側でも禁止する）。
+ */
+export const claimSyncId = async (syncId, uid) => {
+    if (!syncId || !uid) return;
+    try {
+        const ref = doc(firestoreDb, `/artifacts/${AppState.appId}/public/data/r18_works_sync/${syncId}`);
+        const snap = await getDoc(ref);
+        if (!snap.exists()) {
+            await setDoc(ref, { ownerUid: uid, createdAt: Timestamp.now() });
+        }
+    } catch (error) {
+        console.error('syncIdの所有者情報の記録に失敗しました:', error);
+    }
 };
 
 /**
