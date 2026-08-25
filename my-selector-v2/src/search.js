@@ -39,30 +39,8 @@ export const searchWorks = (query) => {
     return results.map(result => result.item);
 };
 
-document.addEventListener('keydown', (e) => {
-    // 入力フォームにフォーカスがある時は無効化
-    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
-
-    switch(e.key.toLowerCase()) {
-        case 'f': // Find
-            e.preventDefault();
-            const searchInput = document.getElementById('searchInput');
-            if (searchInput) searchInput.focus();
-            break;
-            
-        case 'l': // Lottery
-            e.preventDefault();
-            const lotteryBtn = document.getElementById('startLotteryBtn');
-            if (lotteryBtn) lotteryBtn.click();
-            break;
-            
-        case 'n': // New (Add Work)
-             // 実装に合わせて
-             break;
-             
-        case 'escape': // Close Modal
-             // window.App が存在する場合のみ実行
-             if (window.App && window.App.closeModal) window.App.closeModal();
-             break;
-    }
-});
+// ▼ 修正: キーボードショートカットの処理は main.js 側（モーダル開閉状態を考慮した実装）に一本化。
+// ここに同じ内容の document.addEventListener('keydown', ...) が重複して存在すると、
+// main.js側が「モーダルが開いているのでショートカット無効」と判断していても、
+// このリスナーはモーダルの状態を見ずに 'l'（抽選）や 'f'（検索）を実行してしまい、
+// 抽選結果モーダルで評価・タグを入力中に未保存のまま次の抽選が走る不具合の原因になっていた。

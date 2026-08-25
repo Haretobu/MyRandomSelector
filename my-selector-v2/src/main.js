@@ -439,10 +439,16 @@ const App = {
     openModal: (title, contentHtml, onOpen = null, options = {}) => {
         App.closeFabMenu();
         App.toggleBodyScroll(true);
-        if (AppState.modalStateStack.length === 0) {
+        // ▼ 修正: 「スタックが空か」ではなく「モーダルが非表示（＝完全な新規オープン）か」で判定する。
+        // 以前は modalStateStack.length===0 の場合、常にリセットしていたため、
+        // 抽選結果/編集モーダルからタグ割り当てモーダルを開いて戻ってくる際（スタックを積まない実装のため）、
+        // 呼び出し元が直前にセットした checkModalDirtyState（未保存判定）が openModal 呼び出しのたびに
+        // () => false で上書きされてしまい、評価・タグを未保存のまま閉じても警告されずデータが消える原因になっていた。
+        // モーダルが既に開いている状態での再オープン（内容差し替え）では、呼び出し元が設定した判定関数を維持する。
+        if (AppState.ui.modalWrapper.classList.contains('hidden')) {
             AppState.checkModalDirtyState = () => false;
         }
-        
+
         const { size = 'max-w-2xl', headerActions = '', autoFocus = true } = options;
         Object.values(AppState.activeCharts).forEach(chart => chart.destroy());
         AppState.activeCharts = {};
