@@ -188,5 +188,25 @@ export const parseBMS = async (file) => {
     }
     const lastObjTime = resolvedObjects.length > 0 ? resolvedObjects[resolvedObjects.length-1].time : 0;
     if (maxLNDuration < 20.0) maxLNDuration = 20.0;
-    return { header, objects: resolvedObjects, backBgaObjects, layerBgaObjects, poorBgaObjects, barLines, timePoints, totalTime: lastObjTime + 2.0, rawLinesByMeasure, totalNotes: resolvedObjects.filter(o=>o.isNote).length, notesPerMeasure, scratchPerMeasure, avgDensity, maxLNDuration, isSupportedMode };
+
+    // BPM レンジ: 最低 ～ 最頻(再生秒数が最長の区間) ～ 最大
+    let bpmMin = header.bpm, bpmMax = header.bpm;
+    const bpmDur = new Map();
+    for (let i = 0; i < timePoints.length - 1; i++) {
+        const tp = timePoints[i];
+        if (!isFinite(tp.bpm) || tp.bpm <= 0) continue;
+        const segEnd = isFinite(timePoints[i + 1].time) ? timePoints[i + 1].time : lastObjTime;
+        bpmDur.set(tp.bpm, (bpmDur.get(tp.bpm) || 0) + Math.max(0, segEnd - tp.time));
+        if (tp.bpm < bpmMin) bpmMin = tp.bpm;
+        if (tp.bpm > bpmMax) bpmMax = tp.bpm;
+    }
+    let bpmMain = header.bpm, bestDur = -1;
+    for (const [b, d] of bpmDur) { if (d > bestDur) { bestDur = d; bpmMain = b; } }
+    const bpmRange = { min: Math.round(bpmMin), max: Math.round(bpmMax), main: Math.round(bpmMain) };
+
+    // 鍵盤モード (現状 SP 5K/7K のみ対応。使用レーンの最大インデックスで判定)
+    const noteCount = resolvedObjects.filter(o => o.isNote).length;
+    const keyMode = maxLaneIndex >= 6 ? '7K' : (noteCount > 0 ? '5K' : '—');
+
+    return { header, objects: resolvedObjects, backBgaObjects, layerBgaObjects, poorBgaObjects, barLines, timePoints, totalTime: lastObjTime + 2.0, rawLinesByMeasure, totalNotes: noteCount, notesPerMeasure, scratchPerMeasure, avgDensity, maxLNDuration, isSupportedMode, bpmRange, keyMode };
   };

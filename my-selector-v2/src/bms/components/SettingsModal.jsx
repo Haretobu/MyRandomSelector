@@ -188,6 +188,20 @@ const SettingsModal = ({
                                      <button onClick={refreshRandom} className="bg-blue-600/20 border border-blue-500/50 p-1 text-blue-300 hover:text-white hover:bg-blue-600/40 active:scale-95 transition rounded"><RotateCw size={20} /></button>
                                    </div>
                              </div>
+                             {(() => {
+                                 let txt = null;
+                                 if (playOption === 'S-RANDOM') txt = '毎ノート乱数（固定配置なし）';
+                                 else if (playOption !== 'OFF' && currentLaneOrder && currentLaneOrder.length === 7) {
+                                     const inv = new Array(7);
+                                     currentLaneOrder.forEach((v, i) => { if (v >= 1 && v <= 7) inv[v - 1] = i + 1; });
+                                     txt = inv.join('');
+                                 }
+                                 return txt ? (
+                                     <div className="text-[11px] font-mono text-blue-200/90 bg-black/30 rounded px-2 py-1 tracking-[0.2em] text-center border border-blue-900/40">
+                                         <span className="text-blue-500/70 tracking-normal mr-1">配置</span>{txt}
+                                     </div>
+                                 ) : null;
+                             })()}
                          </div>
                     </div>
 

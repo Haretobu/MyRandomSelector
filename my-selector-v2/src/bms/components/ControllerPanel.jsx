@@ -62,10 +62,14 @@ const ControllerPanel = forwardRef(({ controllerRefs, keyboardRefs, is2P, parsed
                       <>
                         <div className="text-sm font-bold text-white break-words w-full leading-tight mb-1 drop-shadow-md">{parsedSong.header.title}</div>
                         <div className="text-xs text-blue-300 truncate w-full mb-3 opacity-80">{parsedSong.header.artist}</div>
-                        <div className="flex flex-wrap justify-center gap-2 text-[10px] font-bold w-full">
-                            <div className="bg-black/40 px-2 py-1 rounded border border-blue-500/20 flex-1 min-w-[60px]"><span className="text-blue-400 block text-[8px] leading-none mb-0.5">LEVEL</span><span className="text-white">{parsedSong.header.playlevel}</span></div>
-                            <div className="bg-black/40 px-2 py-1 rounded border border-blue-500/20 flex-1 min-w-[60px]"><span className="text-blue-400 block text-[8px] leading-none mb-0.5">BPM</span><span className="text-white">{parsedSong.header.bpm}</span></div>
+                        <div className="flex justify-center gap-2 text-[10px] font-bold w-full">
+                            <div className="bg-black/40 px-2 py-1 rounded border border-blue-500/20 flex-1 min-w-[50px]"><span className="text-blue-400 block text-[8px] leading-none mb-0.5">KEY</span><span className="text-white">{parsedSong.keyMode || '—'}</span></div>
+                            <div className="bg-black/40 px-2 py-1 rounded border border-blue-500/20 flex-1 min-w-[50px]"><span className="text-blue-400 block text-[8px] leading-none mb-0.5">LEVEL</span><span className="text-white">{parsedSong.header.playlevel || '—'}</span></div>
                          </div>
+                        <div className="bg-black/40 px-2 py-1 rounded border border-blue-500/20 w-full mt-1 text-[10px] font-bold">
+                            <span className="text-blue-400 block text-[8px] leading-none mb-0.5">BPM</span>
+                            <span className="text-white font-mono">{(() => { const r = parsedSong.bpmRange; if (!r) return parsedSong.header.bpm; return r.min === r.max ? `${r.main}` : `${r.min}～${r.main}～${r.max}`; })()}</span>
+                        </div>
                         <div className={`mt-2 w-full text-center text-[10px] font-bold text-white py-0.5 rounded shadow-sm ${difficultyInfo.color}`}>{difficultyInfo.label}</div>
                       </>
                  ) : <span className="text-blue-500/50 text-xs">NO DATA LOADED</span>}
