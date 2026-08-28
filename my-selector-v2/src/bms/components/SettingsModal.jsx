@@ -95,6 +95,7 @@ const SettingsModal = ({
     muteDebugAutoPlay, setMuteDebugAutoPlay,
     keyMaps, setKeyMaps,
     playMode, setPlayMode,
+    judgeOffset, setJudgeOffset, suggestJudgeOffset,
     // ファイル操作
     handleFileSelect, handleZipSelect, bmsList, selectedBmsIndex, setSelectedBmsIndex,
     hiSpeed, setHiSpeed, bgaOpacity, setBgaOpacity,
@@ -390,9 +391,48 @@ const SettingsModal = ({
                                 <input type="checkbox" checked={!!playMode} onChange={e => setPlayMode(e.target.checked)} className="accent-blue-500 w-4 h-4" />
                             </label>
                             <div className="text-[10px] text-blue-500/60 mt-2 leading-relaxed">
-                                キー割り当てで操作。判定・コンボ・FAST/SLOW を表示します（EX SCORE / DJ LEVEL / リザルトは今後の更新で対応）。
-                                皿は割り当てキー（既定 Shift）と Ctrl の2キーを交互に。<br />
+                                キー割り当てで操作。判定・コンボ・EX SCORE・DJ LEVEL・FAST/SLOW を表示。完走でリザルト、途中は Tab 長押しで成績表示。<br />
+                                皿は割り当てキー（既定 Shift）と Ctrl の2キー。CN は最初と逆方向に回して離す。<br />
                                 ※「デバッグ用キー入力」とは別機能です（併用可）。
+                            </div>
+
+                            {/* 判定オフセット (6-2-c) */}
+                            <div className="mt-3 pt-3 border-t border-blue-900/30">
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[12px] font-bold text-blue-300">判定オフセット</span>
+                                    <div className="flex items-center gap-2">
+                                        <input type="number" min={-100} max={100} step={1} value={judgeOffset}
+                                            onChange={e => setJudgeOffset(Math.max(-100, Math.min(100, Math.round(Number(e.target.value) || 0))))}
+                                            className="w-16 bg-black/50 border border-blue-500/30 rounded px-2 py-0.5 text-white text-sm text-center font-mono" />
+                                        <span className="text-[11px] text-blue-500/70">ms</span>
+                                    </div>
+                                </div>
+                                <input type="range" min={-100} max={100} step={1} value={judgeOffset}
+                                    onChange={e => setJudgeOffset(Number(e.target.value))}
+                                    className="w-full accent-blue-500 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
+                                {(() => {
+                                    const s = suggestJudgeOffset ? suggestJudgeOffset() : { n: 0, value: 0 };
+                                    const enough = s.n >= 10;
+                                    return (
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <button
+                                                disabled={!enough}
+                                                onClick={() => setJudgeOffset(Math.max(-100, Math.min(100, s.value)))}
+                                                className={`text-[11px] font-bold px-3 py-1 rounded border transition ${enough
+                                                    ? 'bg-blue-600/30 border-blue-500/50 text-white hover:bg-blue-600/50'
+                                                    : 'bg-black/30 border-gray-700 text-gray-500 cursor-not-allowed'}`}>
+                                                オート調整
+                                            </button>
+                                            <span className="text-[10px] text-blue-500/70 font-mono">
+                                                {enough ? `直近${s.n}件 → 推奨 ${s.value > 0 ? '+' : ''}${s.value}ms` : `データ不足（${s.n}/10）`}
+                                            </span>
+                                            <button onClick={() => setJudgeOffset(0)} className="ml-auto text-[10px] text-blue-400 hover:text-white border border-blue-900/50 rounded px-2 py-1">0に戻す</button>
+                                        </div>
+                                    );
+                                })()}
+                                <div className="text-[10px] text-blue-500/60 mt-1.5 leading-relaxed">
+                                    FAST が多い（早入り）→ マイナス方向 / SLOW が多い（遅入り）→ プラス方向。オート調整は直近の判定タイミングの中央値から算出（ボタンで手動反映）。
+                                </div>
                             </div>
                         </div>
                     )}

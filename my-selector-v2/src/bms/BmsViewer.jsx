@@ -115,6 +115,13 @@ export default function BmsViewer() {
   const [isInputDebugMode, setIsInputDebugMode] = useState(false);
   const [playMode, setPlayMode] = useState(false); // 6-2: プレイモード(自分の入力で判定)
   const [playResult, setPlayResult] = useState(null); // 6-2-b: 完走リザルト(モーダル表示用)
+  const [judgeOffset, setJudgeOffset] = useState(() => { // 6-2-c: 判定オフセット(ms)
+    try { const v = Number(localStorage.getItem('bms_judge_offset')); return Number.isFinite(v) ? v : 0; } catch { return 0; }
+  });
+  useEffect(() => {
+    judgeOffsetRef.current = judgeOffset;
+    try { localStorage.setItem('bms_judge_offset', String(judgeOffset)); } catch { /* privacy mode */ }
+  }, [judgeOffset]);
   // キー割り当て(6-1-d): モード別 lane index -> KeyboardEvent.code。localStorage 永続。
   // ※ 手動プレイの判定入力への接続は P6-2 で実装。現状は表示・保存のみ。
   const [keyMaps, setKeyMaps] = useState(() => {
@@ -211,7 +218,8 @@ export default function BmsViewer() {
   const judgeRef = useRef({ pg: 0, gr: 0, gd: 0, bd: 0, poor: 0, epoor: 0, combo: 0, maxCombo: 0, exScore: 0, fast: 0, slow: 0 });
   const lastJudgeRef = useRef({ kind: '', deltaMs: 0, t: 0 }); // 直近判定(キャンバス表示・フェード用)
   const judgeRankRef = useRef(2);          // JUDGE_WINDOWS の添字(#RANK 由来)
-  const judgeOffsetRef = useRef(0);        // 判定オフセット(ms)。6-2-c でスライダー追加
+  const judgeOffsetRef = useRef(0);        // 判定オフセット(ms)
+  const recentDeltasRef = useRef([]);      // 6-2-c: 直近の生Δms(オフセット非適用)。オート調整の中央値算出用
   const scratchDirRef = useRef({ 0: null, 8: null }); // サイド別・直近の皿入力方向('A'|'B')
   const scratchKeyDirRef = useRef({});     // KeyboardEvent.code -> 'A'(順) | 'B'(逆)
   const scratchImpulseRef = useRef({ 0: { dir: 0, t: 0 }, 8: { dir: 0, t: 0 } }); // プレイモードの皿回転インパルス
@@ -427,6 +435,18 @@ export default function BmsViewer() {
       activeLnRef.current = new Array(MAX_LANES).fill(null);
       comboRef.current = 0;
       notesDoneRef.current = 0;
+      // recentDeltasRef は残す(直近走行のタイミングをオート調整で使えるように。曲ロード時のみクリア)
+  };
+
+  // 6-2-c: 直近の判定タイミングから推奨オフセットを算出(中央値)。設定画面から呼ぶ。
+  const suggestJudgeOffset = () => {
+      const arr = recentDeltasRef.current;
+      if (arr.length < 10) return { n: arr.length, value: 0 };
+      const sorted = [...arr].sort((a, b) => a - b);
+      const m = sorted.length % 2
+          ? sorted[(sorted.length - 1) / 2]
+          : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+      return { n: arr.length, value: Math.round(m) };
   };
 
   // 直近判定を記録し、コンボ / EX SCORE / FAST-SLOW を更新。kind: 'pg'|'gr'|'gd'|'bd'|'poor'|'epoor'
@@ -520,6 +540,13 @@ export default function BmsViewer() {
       noteCountsRef.current[lane]++;
       pushJudge(kind, deltaMs);
 
+      // 6-2-c: オート調整用に生Δ(オフセット非適用)を記録。近い判定だけ(GOOD 以内)採用。
+      if (kind === 'pg' || kind === 'gr' || kind === 'gd') {
+          const arr = recentDeltasRef.current;
+          arr.push(deltaMs + judgeOffsetRef.current);
+          if (arr.length > 60) arr.shift();
+      }
+
       // LN の頭が取れたら「保持中」に(BAD は即終了扱い)
       if (target.type === 'long' && (kind === 'pg' || kind === 'gr' || kind === 'gd')) {
           activeLnRef.current[lane] = target;
@@ -553,6 +580,7 @@ export default function BmsViewer() {
           pg: j.pg, gr: j.gr, gd: j.gd, bd: j.bd, poor: j.poor, epoor: j.epoor,
           maxCombo: j.maxCombo, fast: j.fast, slow: j.slow,
           judged: notesDoneRef.current, total,
+          offset: judgeOffsetRef.current,
       };
   };
 
@@ -1042,7 +1070,7 @@ export default function BmsViewer() {
       lastNotesByLaneRef.current = lasts;
       setDuration(calculatedMaxDuration); setParsedSong(parsed); setTotalNotes(parsed.totalNotes);
       setPlaybackTimeDisplay(0); pauseTimeRef.current = 0; setCombo(0); comboRef.current = 0; hudLastRef.current = {};
-      resetJudge();
+      resetJudge(); recentDeltasRef.current = []; // 曲ロード時はオート調整用データもクリア
       lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(MAX_LANES).fill(0));
       setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsed.avgDensity });
       lastStateUpdateRef.current = 0; // 次の renderLoop フレームで HUD を即更新させる
@@ -1912,6 +1940,7 @@ export default function BmsViewer() {
             });
             ctx.fillStyle = '#94a3b8';
             ctx.fillText(`MAX COMBO ${d.maxCombo}`, px + 16, py + ph - 22);
+            if (d.offset) { ctx.textAlign = 'right'; ctx.fillText(`offset ${d.offset > 0 ? '+' : ''}${d.offset}ms`, px + pw - 16, py + ph - 22); ctx.textAlign = 'left'; }
             ctx.fillStyle = '#60a5fa'; ctx.fillText(`FAST ${d.fast}`, px + 16, py + ph - 8);
             ctx.fillStyle = '#f87171'; ctx.textAlign = 'right'; ctx.fillText(`SLOW ${d.slow}`, px + pw - 16, py + ph - 8);
             ctx.textAlign = 'left';
@@ -1943,6 +1972,7 @@ export default function BmsViewer() {
   const sScratchHitReset = useEvent(handleScratchHitSoundReset);
   // HI-SPEED を手動で変更したらオートHI-SPEEDを OFF にする
   const sHiSpeedChange = useEvent((v) => { setAutoHiSpeed(false); setHiSpeed(v); });
+  const sSuggestJudgeOffset = useEvent(suggestJudgeOffset);
 
   return (
     <div className={`flex flex-col h-screen bg-neutral-950 text-white font-sans overflow-hidden ${isDragOver ? 'ring-4 ring-blue-500' : ''}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
@@ -1965,6 +1995,7 @@ export default function BmsViewer() {
         muteDebugAutoPlay={muteDebugAutoPlay} setMuteDebugAutoPlay={setMuteDebugAutoPlay}
         keyMaps={keyMaps} setKeyMaps={setKeyMaps}
         playMode={playMode} setPlayMode={setPlayMode}
+        judgeOffset={judgeOffset} setJudgeOffset={setJudgeOffset} suggestJudgeOffset={sSuggestJudgeOffset}
         isSeparateHitSound={isSeparateHitSound} setIsSeparateHitSound={setIsSeparateHitSound}
         tempKeySoundName={tempKeySoundName} tempScratchSoundName={tempScratchSoundName}
         // Mobile Controls

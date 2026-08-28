@@ -51,6 +51,8 @@ function ResultModal({ data, onClose, onRetry }) {
                     <div><div className="text-blue-400/70">判定率</div><div className="text-white font-bold text-base font-mono">{clearPct}%</div></div>
                 </div>
 
+                {data.offset ? <div className="text-[10px] text-blue-500/60 text-center font-mono">判定オフセット {data.offset > 0 ? '+' : ''}{data.offset}ms</div> : null}
+
                 <div className="flex gap-2 pt-1">
                     <button onClick={onRetry} className="flex-1 bg-blue-600/30 border border-blue-500/50 hover:bg-blue-600/50 text-white font-bold py-2 rounded flex items-center justify-center gap-2 transition"><RotateCcw size={15} /> もう一度</button>
                     <button onClick={onClose} className="flex-1 bg-white/5 border border-blue-900/50 hover:bg-white/10 text-blue-200 font-bold py-2 rounded transition">閉じる</button>
