@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
 import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS, DEFAULT_KEYMAPS } from './constants';
-import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, generateLaneMap, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
+import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, shuffleLanes, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 
 import SettingsModal from './components/SettingsModal';
@@ -90,8 +90,11 @@ export default function BmsViewer() {
   const [showMissLayer, setShowMissLayer] = useState(false);
   const [currentMeasure, setCurrentMeasure] = useState(0);
   const [playSide, setPlaySide] = useState('1P');
-  const [playOption, setPlayOption] = useState('OFF');
-  const [currentLaneOrder, setCurrentLaneOrder] = useState([1,2,3,4,5,6,7]);
+  const [playOption, setPlayOption] = useState('OFF');    // 1P / 左サイド / 9K 全体
+  const [playOption2, setPlayOption2] = useState('OFF');  // 2P / 右サイド (DP のみ)
+  const [dpFlip, setDpFlip] = useState(false);            // DP: 左右サイドを入れ替え
+  const [currentLaneOrder, setCurrentLaneOrder] = useState([1,2,3,4,5,6,7]); // 左サイド配置(表示用)
+  const [laneOrder2, setLaneOrder2] = useState(null);     // 右サイド配置(表示用, DP のみ / S-RANDOM は 'S')
   const [comboPos, setComboPos] = useState('CENTER');
   const [totalNotes, setTotalNotes] = useState(0);
   const [laneMute, setLaneMute] = useState(() => new Array(MAX_LANES).fill(false)); // レーンごとミュート(0=SC, 1-7=鍵盤)
@@ -377,17 +380,52 @@ export default function BmsViewer() {
       }, 500);
   };
 
-  const applyOptions = (objects, option) => {
-    const map = generateLaneMap(option); // 1P鍵1-7 の並び替えマップ (index 1-7)
-    setCurrentLaneOrder(map.slice(1));
-    // ★6-1: 並び替えは 1P 鍵1-7 のみ。皿(0,8) と 2P鍵(9-15) はそのまま通す。
-    //   (DP のサイド別 RANDOM 等は 6-1-e で対応)
-    return objects.map(o => ({
-        ...o, processed: false,
-        laneIndex: (o.isNote && o.laneIndex >= 1 && o.laneIndex <= 7)
-            ? (option === 'S-RANDOM' ? Math.floor(Math.random() * 7) + 1 : map[o.laneIndex])
-            : o.laneIndex
-    }));
+  // 6-1-e: レーンオプションをモード別に適用。
+  //   opt1 = 1P/左サイド(9K は全体)、opt2 = 2P/右サイド(DP のみ)、flip = 左右サイド入れ替え(DP のみ)。
+  const applyOptions = (objects, opt1, opt2 = 'OFF', flip = false) => {
+    const mode = parsedSong?.mode || 'SP7';
+    const lanes = parsedSong?.lanes || DEFAULT_LANES;
+    const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+    // --- 9K (pop'n): 皿なし・9ボタン(index 0-8)全体に opt1 を適用 (OFF/MIRROR/RANDOM/S-RANDOM) ---
+    if (mode === 'PMS9') {
+        const idx = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+        const map = shuffleLanes(idx, opt1);
+        setCurrentLaneOrder(opt1 === 'S-RANDOM' ? 'S' : idx.map(i => map[i]));
+        setLaneOrder2(null);
+        return objects.map(o => ({
+            ...o, processed: false,
+            laneIndex: o.isNote
+                ? (opt1 === 'S-RANDOM' ? rand(idx) : (map[o.laneIndex] ?? o.laneIndex))
+                : o.laneIndex,
+        }));
+    }
+
+    // --- SP / DP ---
+    const keys1 = lanes.filter(l => l.kind === 'key' && l.side === 0).map(l => l.index).sort((a, b) => a - b);
+    const keys2 = lanes.filter(l => l.kind === 'key' && l.side === 1).map(l => l.index).sort((a, b) => a - b);
+    const isDP = keys2.length > 0;
+    const map1 = shuffleLanes(keys1, opt1);
+    const map2 = isDP ? shuffleLanes(keys2, opt2) : {};
+
+    setCurrentLaneOrder(opt1 === 'S-RANDOM' ? 'S' : keys1.map(i => map1[i]));
+    setLaneOrder2(isDP ? (opt2 === 'S-RANDOM' ? 'S' : keys2.map(i => map2[i])) : null);
+
+    const doFlip = isDP && flip;
+    return objects.map(o => {
+        if (!o.isNote) return { ...o, processed: false };
+        let li = o.laneIndex;
+        // FLIP: サイド全体(鍵+皿)を入れ替えてから、そのサイドのオプションを適用
+        if (doFlip) {
+            if (li === 0) li = 8;
+            else if (li === 8) li = 0;
+            else if (li >= 1 && li <= 7) li += 8;
+            else if (li >= 9 && li <= 15) li -= 8;
+        }
+        if (li >= 1 && li <= 7) li = (opt1 === 'S-RANDOM') ? rand(keys1) : (map1[li] ?? li);
+        else if (li >= 9 && li <= 15) li = (opt2 === 'S-RANDOM') ? rand(keys2) : (map2[li] ?? li);
+        return { ...o, processed: false, laneIndex: li };
+    });
   };
 
   const toggleMute = () => {
@@ -650,8 +688,8 @@ export default function BmsViewer() {
     }
   };
 
-  const refreshRandom = () => { if (!parsedSong) return; stopPlayback(true); setDisplayObjects(applyOptions(parsedSong.objects, playOption)); };
-  useEffect(() => { if (parsedSong) setDisplayObjects(applyOptions(parsedSong.objects, playOption)); }, [parsedSong, playOption]);
+  const refreshRandom = () => { if (!parsedSong) return; stopPlayback(true); setDisplayObjects(applyOptions(parsedSong.objects, playOption, playOption2, dpFlip)); };
+  useEffect(() => { if (parsedSong) setDisplayObjects(applyOptions(parsedSong.objects, playOption, playOption2, dpFlip)); }, [parsedSong, playOption, playOption2, dpFlip]);
 
   // オートHI-SPEED: 主BPM(再生秒数が最長の区間)で目標グリーンナンバーになるよう HI-SPEED を自動設定。
   // ロード時 / 目標green / SUD+・LIFT(白数字) / トグルON で再計算。手動変更時は sHiSpeedChange 側で auto を OFF にする。
@@ -1593,6 +1631,7 @@ export default function BmsViewer() {
         visibilityMode={visibilityMode} setVisibilityMode={setVisibilityMode}
         suddenPlusVal={suddenPlusVal} setSuddenPlusVal={setSuddenPlusVal} hiddenPlusVal={hiddenPlusVal} setHiddenPlusVal={setHiddenPlusVal} liftVal={liftVal} setLiftVal={setLiftVal}
         playSide={playSide} setPlaySide={setPlaySide} playOption={playOption} setPlayOption={setPlayOption} currentLaneOrder={currentLaneOrder} refreshRandom={sRefreshRandom}
+        playOption2={playOption2} setPlayOption2={setPlayOption2} dpFlip={dpFlip} setDpFlip={setDpFlip} laneOrder2={laneOrder2}
         comboPos={comboPos} setComboPos={setComboPos}
         customKeyHitSound={customKeyHitSound} handleKeyHitSoundUpload={sKeyHitUpload} handleKeyHitSoundReset={sKeyHitReset}
         customScratchHitSound={customScratchHitSound} handleScratchHitSoundUpload={sScratchHitUpload} handleScratchHitSoundReset={sScratchHitReset}
@@ -1648,7 +1687,10 @@ export default function BmsViewer() {
                  {/* 中央左: 情報・BGA */}
                  <InfoPanel
                     ref={infoPanelRef}
-                    setShowSettings={setShowSettings} playOption={playOption}
+                    setShowSettings={setShowSettings}
+                    playOption={(parsedSong?.mode === 'DP14' || parsedSong?.mode === 'DP10')
+                        ? `${playOption}/${playOption2}${dpFlip ? ' F' : ''}`
+                        : playOption}
                     currentBackBga={currentBackBga} currentLayerBga={currentLayerBga} currentPoorBga={currentPoorBga}
                     showMissLayer={showMissLayer} isPlaying={isPlaying}
                     playBgaVideo={playBgaVideo} readyAnimState={readyAnimState}

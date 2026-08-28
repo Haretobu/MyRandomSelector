@@ -82,6 +82,7 @@ const SettingsModal = ({
     visibilityMode, setVisibilityMode,
     suddenPlusVal, setSuddenPlusVal, hiddenPlusVal, setHiddenPlusVal, liftVal, setLiftVal,
     playSide, setPlaySide, playOption, setPlayOption, currentLaneOrder, refreshRandom,
+    playOption2, setPlayOption2, dpFlip, setDpFlip, laneOrder2,
     comboPos, setComboPos, 
     customKeyHitSound, handleKeyHitSoundUpload, handleKeyHitSoundReset,
     customScratchHitSound, handleScratchHitSoundUpload, handleScratchHitSoundReset,
@@ -316,36 +317,65 @@ const SettingsModal = ({
                                  </div>
                              );
                          })()}
-                         <div className="w-full md:flex-1 border border-blue-900/50 p-3 bg-[#0f172a] rounded-lg flex flex-col gap-2 relative">
-                             <div className="flex justify-between items-center">
-                                  <span className="font-bold text-sm text-blue-300">レーンオプション</span>
-                                 <div className="flex items-center gap-2">
-                                     <div className="relative bg-blue-600/20 border border-blue-500/50 rounded hover:bg-blue-600/30 transition">
-                                          <select value={playOption} onChange={e => setPlayOption(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
-                                            <option value="OFF" className="bg-black text-white">正規 (OFF)</option><option value="MIRROR" className="bg-black text-white">MIRROR</option>
-                                             <option value="RANDOM" className="bg-black text-white">RANDOM</option><option value="R-RANDOM" className="bg-black text-white">R-RANDOM</option>
-                                            <option value="S-RANDOM" className="bg-black text-white">S-RANDOM</option>
-                                          </select>
-                                         <div className="px-4 py-1 text-blue-100 font-bold flex items-center gap-2 min-w-[140px] justify-between">{playOption}</div>
-                                      </div>
-                                     <button onClick={refreshRandom} className="bg-blue-600/20 border border-blue-500/50 p-1 text-blue-300 hover:text-white hover:bg-blue-600/40 active:scale-95 transition rounded"><RotateCw size={20} /></button>
-                                   </div>
-                             </div>
-                             {(() => {
-                                 let txt = null;
-                                 if (playOption === 'S-RANDOM') txt = '毎ノート乱数（固定配置なし）';
-                                 else if (playOption !== 'OFF' && currentLaneOrder && currentLaneOrder.length === 7) {
-                                     const inv = new Array(7);
-                                     currentLaneOrder.forEach((v, i) => { if (v >= 1 && v <= 7) inv[v - 1] = i + 1; });
-                                     txt = inv.join('');
-                                 }
-                                 return txt ? (
-                                     <div className="text-[11px] font-mono text-blue-200/90 bg-black/30 rounded px-2 py-1 tracking-[0.2em] text-center border border-blue-900/40">
-                                         <span className="text-blue-500/70 tracking-normal mr-1">配置</span>{txt}
+                         {(() => {
+                             const mode = parsedSong?.mode || 'SP7';
+                             const isDP = mode === 'DP14' || mode === 'DP10';
+                             const isPms = mode === 'PMS9';
+                             const OPTS = isPms
+                                 ? ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM']
+                                 : ['OFF', 'MIRROR', 'RANDOM', 'R-RANDOM', 'S-RANDOM'];
+                             const OptSelect = ({ value, onChange }) => (
+                                 <div className="relative bg-blue-600/20 border border-blue-500/50 rounded hover:bg-blue-600/30 transition flex-1">
+                                     <select value={value} onChange={e => onChange(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
+                                         {OPTS.map(o => <option key={o} value={o} className="bg-black text-white">{o === 'OFF' ? '正規 (OFF)' : o}</option>)}
+                                     </select>
+                                     <div className="px-3 py-1 text-blue-100 font-bold text-center">{value}</div>
+                                 </div>
+                             );
+                             const orderText = (order, base) => {
+                                 if (order === 'S') return '毎ノート乱数（固定配置なし）';
+                                 if (!Array.isArray(order) || !order.length) return null;
+                                 const inv = new Array(order.length);
+                                 order.forEach((v, i) => { const p = v - base; if (p >= 0 && p < order.length) inv[p] = i + 1; });
+                                 return inv.join('');
+                             };
+                             const t1 = playOption !== 'OFF' ? orderText(currentLaneOrder, isPms ? 0 : 1) : null;
+                             const t2 = (isDP && playOption2 !== 'OFF') ? orderText(laneOrder2, 9) : null;
+                             return (
+                                 <div className="w-full md:flex-1 border border-blue-900/50 p-3 bg-[#0f172a] rounded-lg flex flex-col gap-2 relative">
+                                     <div className="flex justify-between items-center">
+                                         <span className="font-bold text-sm text-blue-300">レーンオプション</span>
+                                         <button onClick={refreshRandom} title="RANDOM を振り直す" className="bg-blue-600/20 border border-blue-500/50 p-1 text-blue-300 hover:text-white hover:bg-blue-600/40 active:scale-95 transition rounded"><RotateCw size={18} /></button>
                                      </div>
-                                 ) : null;
-                             })()}
-                         </div>
+
+                                     {isDP ? (
+                                         <>
+                                             <div className="flex items-center gap-2">
+                                                 <span className="text-[11px] text-blue-400 w-8 shrink-0 font-bold">1P</span>
+                                                 <OptSelect value={playOption} onChange={setPlayOption} />
+                                             </div>
+                                             <div className="flex items-center gap-2">
+                                                 <span className="text-[11px] text-blue-400 w-8 shrink-0 font-bold">2P</span>
+                                                 <OptSelect value={playOption2} onChange={setPlayOption2} />
+                                             </div>
+                                             <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer border border-transparent hover:border-blue-500/30 mt-1">
+                                                 <span className="text-[12px] text-blue-200">FLIP（1P ⇄ 2P 入れ替え）</span>
+                                                 <input type="checkbox" checked={dpFlip} onChange={e => setDpFlip(e.target.checked)} className="accent-blue-500 w-4 h-4" />
+                                             </label>
+                                         </>
+                                     ) : (
+                                         <OptSelect value={playOption} onChange={setPlayOption} />
+                                     )}
+
+                                     {(t1 || t2) && (
+                                         <div className="text-[11px] font-mono text-blue-200/90 bg-black/30 rounded px-2 py-1 text-center border border-blue-900/40 space-y-0.5">
+                                             {t1 && <div className="tracking-[0.2em]"><span className="text-blue-500/70 tracking-normal mr-1">{isDP ? '1P' : '配置'}</span>{t1}</div>}
+                                             {t2 && <div className="tracking-[0.2em]"><span className="text-blue-500/70 tracking-normal mr-1">2P</span>{t2}</div>}
+                                         </div>
+                                     )}
+                                 </div>
+                             );
+                         })()}
                     </div>
 
                     {/* 詳細設定1 (システム・デバッグ) */}

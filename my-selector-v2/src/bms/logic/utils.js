@@ -85,6 +85,23 @@ export const generateLaneMap = (option) => {
     return [0, ...lanes];
 };
 
+// 6-1-e: 任意のレーン index 集合(1サイド/モード分)に OPTION を適用した「元index → 移動先index」マップ。
+//   laneIndices は左→右の元の並び。S-RANDOM は per-note なので呼び出し側で処理(ここでは identity)。
+export const shuffleLanes = (laneIndices, option) => {
+    const src = laneIndices.slice();
+    const n = src.length;
+    let perm = src.slice();
+    if (option === 'MIRROR') perm = src.slice().reverse();
+    else if (option === 'RANDOM') perm = shuffleArray(src);
+    else if (option === 'R-RANDOM') {
+        const shift = Math.floor(Math.random() * n);
+        for (let i = 0; i < shift; i++) perm.unshift(perm.pop());
+    }
+    const map = {};
+    for (let i = 0; i < n; i++) map[src[i]] = perm[i];
+    return map;
+};
+
 // 拡張子からMIMEタイプを推測する
 const getMimeType = (filename) => {
     const ext = filename.split('.').pop().toLowerCase();
