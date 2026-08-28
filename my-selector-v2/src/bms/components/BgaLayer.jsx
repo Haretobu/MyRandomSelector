@@ -1,5 +1,5 @@
 // src/bms/components/BgaLayer.jsx
-import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, useEffect, forwardRef, useImperativeHandle, memo } from 'react';
 
 const BgaLayer = forwardRef(({ bgaState, zIndex, blendMode = 'normal', opacity = 1, isPlaying, isVideoEnabled = true }, ref) => {
     const videoRef = useRef(null);

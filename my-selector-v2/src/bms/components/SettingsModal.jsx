@@ -1,5 +1,5 @@
 // src/bms/components/SettingsModal.jsx
-import React from 'react';
+import React, { memo } from 'react';
 import { Settings, X, ChevronsUp, RotateCw, Film, Flag, Music, Layers, Speaker, EyeOff, FileX, Keyboard, FolderOpen, FileArchive, ChevronDown, Gamepad2 } from 'lucide-react';
 import { VISIBILITY_MODES } from '../constants';
 

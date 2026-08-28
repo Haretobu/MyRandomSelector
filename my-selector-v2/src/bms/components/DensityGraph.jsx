@@ -1,5 +1,5 @@
 // src/bms/components/DensityGraph.jsx
-import React, { useMemo, useRef, useEffect } from 'react';
+import React, { useMemo, useRef, useEffect, memo } from 'react';
 import { BarChart3 } from 'lucide-react';
 
 const DensityGraph = ({ parsedSong, currentMeasure }) => {
