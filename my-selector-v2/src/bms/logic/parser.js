@@ -17,6 +17,9 @@ export const parseBMS = async (file) => {
     let maxMeasureIndex = 0;
     let maxLaneIndex = 0;
     let isSupportedMode = true;
+    // .pms で PMS_LANE_MAP に無い可視ノーツ/LN チャンネル(11-19,21-29,51-59,61-69 相当)を見つけたら記録
+    const unmappedPmsCh = new Set();
+    const RE_PMS_PLAYFIELD_CH = /^[1256][1-9]$/;
 
     for (const line of lines) {
       if (!line.startsWith('#')) continue;
@@ -59,6 +62,8 @@ export const parseBMS = async (file) => {
                       notesPerMeasure[measure] = (notesPerMeasure[measure] || 0) + 1;
                       if (lane.isScratch) scratchPerMeasure[measure] = (scratchPerMeasure[measure] || 0) + 1;
                   }
+              } else if (isPms && RE_PMS_PLAYFIELD_CH.test(ch)) {
+                  unmappedPmsCh.add(ch); // 未対応チャンネルの可視ノーツ → あとで警告
               }
 
               if (lane || ch === '01' || ch === '04' || ch === '06' || ch === '07' || ch === '03' || ch === '08' || ch === '09') {
@@ -226,6 +231,8 @@ export const parseBMS = async (file) => {
     const keyMode = MODE_LABELS[mode] || '—';
     // SP5 / SP7 / DP14 / DP10 / PMS9(9K) を描画・再生対応。想定外の巨大 index のみ非対応。
     if (maxLaneIndex > 15) isSupportedMode = false;
+    // 9K: 標準チャンネル(11-15/22-25/LN 51-55/62-65)以外を使う .pms は一部ノーツが欠ける
+    const unmappedPmsChannels = [...unmappedPmsCh].sort();
 
-    return { header, objects: resolvedObjects, backBgaObjects, layerBgaObjects, poorBgaObjects, barLines, timePoints, totalTime: lastObjTime + 2.0, rawLinesByMeasure, totalNotes: noteCount, notesPerMeasure, scratchPerMeasure, avgDensity, maxLNDuration, isSupportedMode, bpmRange, keyMode, mode, lanes };
+    return { header, objects: resolvedObjects, backBgaObjects, layerBgaObjects, poorBgaObjects, barLines, timePoints, totalTime: lastObjTime + 2.0, rawLinesByMeasure, totalNotes: noteCount, notesPerMeasure, scratchPerMeasure, avgDensity, maxLNDuration, isSupportedMode, unmappedPmsChannels, bpmRange, keyMode, mode, lanes };
   };

@@ -724,7 +724,11 @@ export default function BmsViewer() {
 
     try {
       const parsed = await parseBMS(bmsFile);
-      setTimeout(() => { if (!parsed.isSupportedMode) alert("警告：この形式（9K/pop'n など）はまだ描画に対応していません。"); }, 100);
+      setTimeout(() => {
+          if (!parsed.isSupportedMode) alert("警告：この形式はまだ描画に対応していません。");
+          else if (parsed.unmappedPmsChannels && parsed.unmappedPmsChannels.length)
+              alert(`警告：この pms は未対応のチャンネル（${parsed.unmappedPmsChannels.join(', ')}）を使用しています。一部のノーツが表示・再生されません。`);
+      }, 100);
       const diffInfo = guessDifficulty(parsed.header, bmsFile.name);
       setDifficultyInfo(diffInfo); setRealtimeBpm(parsed.header.bpm); realtimeBpmRef.current = parsed.header.bpm; setCurrentBpm(parsed.header.bpm);
 
