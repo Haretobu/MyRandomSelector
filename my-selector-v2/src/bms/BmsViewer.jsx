@@ -169,6 +169,11 @@ export default function BmsViewer() {
   const lastScratchTimeRef = useRef(0);
   const lastScratchTypeRef = useRef('REVERSE');
   const scratchDirectionRef = useRef(-1);
+  // DP 2P スクラッチ用 (index 8)
+  const scratchAngle2Ref = useRef(0);
+  const lastScratchTime2Ref = useRef(0);
+  const lastScratchType2Ref = useRef('REVERSE');
+  const scratchDirection2Ref = useRef(-1);
   const isShiftHeldRef = useRef(false);
   const isCtrlHeldRef = useRef(false);
 
@@ -322,18 +327,18 @@ export default function BmsViewer() {
       const col = meta.color;
       const ctrlEl = controllerRefs.current[idx];
       if (ctrlEl) {
+          // 即時反映(transition なし)。密譜面で「光りかけて消える」のを防ぐ。
           if (meta.isScratch) {
-             ctrlEl.style.boxShadow = active ? `0 0 18px ${col}` : 'none';
-             ctrlEl.style.borderColor = active ? col : `${col}66`;
-             ctrlEl.style.background = active ? `${col}33` : '#0b0f1a';
+             ctrlEl.style.boxShadow = active ? `0 0 20px ${col}` : 'none';
+             ctrlEl.style.borderColor = active ? col : '#1e293b';
           } else {
              ctrlEl.style.background = active ? col : '#0b0f1a';
              ctrlEl.style.boxShadow = active ? `0 0 14px ${col}` : 'none';
+             ctrlEl.style.borderColor = active ? col : (meta.color + '88');
           }
       }
       const kbEl = keyboardRefs.current[idx];
       if (kbEl && kbEl !== ctrlEl) {
-          kbEl.style.transition = 'none';
           kbEl.style.background = active ? col : '#0f172a';
           kbEl.style.color = active ? '#0b0f1a' : (meta.isScratch ? '#fca5a5' : '#93a0be');
           kbEl.style.boxShadow = active ? `0 0 8px ${col}` : 'none';
@@ -1395,19 +1400,21 @@ export default function BmsViewer() {
             if (!obj.processed && timeDelta <= 0) {
                 obj.processed = true;
                 comboRef.current++; noteCountsRef.current[obj.laneIndex]++; lastPlayedSoundPerLaneRef.current[obj.laneIndex] = obj.filename;
-                if (obj.laneIndex === 0) {
+                if (obj.laneIndex === 0 || obj.laneIndex === 8) {
+                    const scIdx = obj.laneIndex;
                     let dist = 999;
-                    for(let k = i + 1; k < displayObjects.length; k++) {
+                    for (let k = i + 1; k < displayObjects.length; k++) {
                         const nextObj = displayObjects[k];
-                        if (nextObj.laneIndex === 0) { dist = nextObj.time - obj.time; break; }
+                        if (nextObj.laneIndex === scIdx) { dist = nextObj.time - obj.time; break; }
                         if (nextObj.time - obj.time > 5.0) break;
                     }
-                    if (dist < 0.6) { lastScratchTypeRef.current = 'ACCEL';
-                    scratchDirectionRef.current = scratchDirectionRef.current * -1; }
-                    else { lastScratchTypeRef.current = 'REVERSE';
-                    scratchDirectionRef.current = -1; }
+                    const typeRef = scIdx === 0 ? lastScratchTypeRef : lastScratchType2Ref;
+                    const dirRef = scIdx === 0 ? scratchDirectionRef : scratchDirection2Ref;
+                    const timeRef2 = scIdx === 0 ? lastScratchTimeRef : lastScratchTime2Ref;
+                    if (dist < 0.6) { typeRef.current = 'ACCEL'; dirRef.current = dirRef.current * -1; }
+                    else { typeRef.current = 'REVERSE'; dirRef.current = -1; }
                     // 大きく取りこぼした(過去すぎる)スクラッチでは皿の空転エフェクトを起こさない
-                    if (isPlayingRef.current && timeDelta > -0.12) lastScratchTimeRef.current = now;
+                    if (isPlayingRef.current && timeDelta > -0.12) timeRef2.current = now;
                 }
             }
 
@@ -1489,44 +1496,32 @@ export default function BmsViewer() {
 
     const safeDt = Math.min(dt, 0.1);
     const baseSpeed = ((realtimeBpmRef.current || 130) / 60) * 135;
-    const timeSinceLast = now - lastScratchTimeRef.current;
-    const effectDuration = 200; 
-    let speedMultiplier = 0;
-    const sideFactor = playSideRef.current === '2P' ? -1 : 1;
+    const effectDuration = 200;
 
-    if (isInputDebugModeRef.current && (isShiftHeldRef.current || isCtrlHeldRef.current)) {
-        if (isShiftHeldRef.current) {
-            speedMultiplier = -1.0;
-        } else if (isCtrlHeldRef.current) {
-            speedMultiplier = 2.5;
-        }
-    } 
-    else if (isPlayingRef.current) {
-        if (currentActiveLanes[0]) {
-             speedMultiplier = -1.0;
-        } else if (timeSinceLast < effectDuration) {
-             if (lastScratchTypeRef.current === 'ACCEL') {
-                 speedMultiplier = 1.5 * scratchDirectionRef.current;
-             } else {
-                 speedMultiplier = -1.0;
-             }
-        } else {
-             speedMultiplier = 1.0;
-        }
-    }
-    else {
-        speedMultiplier = 1.0;
-    }
-    
-    if (!scratchRotationEnabledRef.current && Math.abs(speedMultiplier) === 1.0) {
-        if (!currentActiveLanes[0] && timeSinceLast >= effectDuration && !isShiftHeldRef.current) {
-             speedMultiplier = 0;
-        }
-    }
+    // 皿の回転速度倍率 (1P/2P 共通)
+    const scratchSpeed = (active, lastTime, typeRef, dirRef) => {
+        const since = now - lastTime;
+        let m;
+        if (isInputDebugModeRef.current && (isShiftHeldRef.current || isCtrlHeldRef.current)) {
+            m = isShiftHeldRef.current ? -1.0 : 2.5;
+        } else if (isPlayingRef.current) {
+            if (active) m = -1.0;
+            else if (since < effectDuration) m = (typeRef.current === 'ACCEL') ? 1.5 * dirRef.current : -1.0;
+            else m = 1.0;
+        } else m = 1.0;
+        if (!scratchRotationEnabledRef.current && Math.abs(m) === 1.0 && !active && since >= effectDuration && !isShiftHeldRef.current) m = 0;
+        return m;
+    };
 
-    scratchAngleRef.current += baseSpeed * speedMultiplier * sideFactor * safeDt;
+    const sideFactor = ((mode === 'SP7' || mode === 'SP5') && playSideRef.current === '2P') ? -1 : 1;
+    scratchAngleRef.current += baseSpeed * scratchSpeed(currentActiveLanes[0], lastScratchTimeRef.current, lastScratchTypeRef, scratchDirectionRef) * sideFactor * safeDt;
     const scratchCtrl = controllerRefs.current[0];
     if (scratchCtrl) scratchCtrl.style.transform = `rotate(${scratchAngleRef.current}deg)`;
+    const scratchCtrl2 = controllerRefs.current[8]; // DP 2P 皿 (逆回転)
+    if (scratchCtrl2) {
+        scratchAngle2Ref.current += baseSpeed * scratchSpeed(currentActiveLanes[8], lastScratchTime2Ref.current, lastScratchType2Ref, scratchDirection2Ref) * -1 * safeDt;
+        scratchCtrl2.style.transform = `rotate(${scratchAngle2Ref.current}deg)`;
+    }
 
     // ★軽量化: 毎フレーム8レーン分の style 一括書き込みをやめ、状態が変化したレーンだけ書き込む。
     for (let lane = 0; lane < MAX_LANES; lane++) {
