@@ -926,9 +926,27 @@ export default function BmsViewer() {
   };
 
   const handleSeek = (e) => {
-    const val = parseFloat(e.target.value); pauseTimeRef.current = val; setPlaybackTimeDisplay(val); setCombo(0);
-    comboRef.current = 0;
-    const targetObjects = displayObjects; for(const obj of targetObjects) obj.processed = obj.time < val;
+    const val = parseFloat(e.target.value); pauseTimeRef.current = val; setPlaybackTimeDisplay(val);
+    // ★シーク時は在再生中の音源(ロングBGMを含む)を必ず停止する。
+    //   isPlaying の状態に依存せず毎回止めることで、シークを繰り返したときの音の重なりを防ぐ。
+    stopAudioNodes();
+    setBackingTracks([]); activeLongSoundsRef.current = []; activeShortSoundsRef.current = [];
+
+    // ★オートプレイのコンボは「ここまでに通過したノーツ総数」。0クリアせず再計算する。
+    const targetObjects = displayObjects;
+    noteCountsRef.current.fill(0);
+    let passedNotes = 0;
+    for (const obj of targetObjects) {
+        obj.processed = obj.time < val;
+        if (obj.isNote && obj.processed) {
+            passedNotes++;
+            if (obj.laneIndex >= 0 && obj.laneIndex <= 7) noteCountsRef.current[obj.laneIndex]++;
+        }
+    }
+    comboRef.current = passedNotes;
+    setCombo(passedNotes);
+    setNoteCounts([...noteCountsRef.current]);
+
     if (parsedSong) {
         const currentBar = parsedSong.barLines.find(b => b.time > val);
         const newMeasure = currentBar ? currentBar.measure - 1 : parsedSong.barLines.length - 1;
@@ -936,7 +954,6 @@ export default function BmsViewer() {
         const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999;
         const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
         setCurrentMeasureNotes({ processed: processedInMeasure, total: totalInMeasure, average: parsedSong.avgDensity });
-        setBackingTracks([]); activeLongSoundsRef.current = [];
     }
     clearActiveLanes();
     if (isPlaying) startPlayback();
