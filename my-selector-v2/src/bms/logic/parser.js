@@ -189,21 +189,25 @@ export const parseBMS = async (file) => {
     const lastObjTime = resolvedObjects.length > 0 ? resolvedObjects[resolvedObjects.length-1].time : 0;
     if (maxLNDuration < 20.0) maxLNDuration = 20.0;
 
-    // BPM レンジ: 最低 ～ 最頻(再生秒数が最長の区間) ～ 最大
-    let bpmMin = header.bpm, bpmMax = header.bpm;
+    // BPM レンジ: 最低 ～ 最頻(再生秒数が最長の区間) ～ 最大。
+    // ヘッダBPMの 0 秒区間などが混ざらないよう、0.05 秒以上鳴る区間だけで集計する。
     const bpmDur = new Map();
     for (let i = 0; i < timePoints.length - 1; i++) {
         const tp = timePoints[i];
         if (!isFinite(tp.bpm) || tp.bpm <= 0) continue;
         const segEnd = isFinite(timePoints[i + 1].time) ? timePoints[i + 1].time : lastObjTime;
-        bpmDur.set(tp.bpm, (bpmDur.get(tp.bpm) || 0) + Math.max(0, segEnd - tp.time));
-        if (tp.bpm < bpmMin) bpmMin = tp.bpm;
-        if (tp.bpm > bpmMax) bpmMax = tp.bpm;
+        const d = Math.max(0, segEnd - tp.time);
+        if (d > 0.05) bpmDur.set(tp.bpm, (bpmDur.get(tp.bpm) || 0) + d);
     }
-    let bpmMain = header.bpm, bestDur = -1;
-    for (const [b, d] of bpmDur) { if (d > bestDur) { bestDur = d; bpmMain = b; } }
-    // 表示上の丸め値で「異なる BPM が何種類か」を数える (1種:数値のみ / 2種:min～max / 3種以上:min～main～max)
-    const distinctBpm = new Set([...bpmDur.keys()].map(b => Math.round(b))).size || 1;
+    let bpmEntries = [...bpmDur.entries()];
+    if (!bpmEntries.length) bpmEntries = [[header.bpm || 130, 1]];
+    let bpmMin = Infinity, bpmMax = -Infinity, bpmMain = bpmEntries[0][0], bestDur = -1;
+    for (const [b, d] of bpmEntries) {
+        if (b < bpmMin) bpmMin = b;
+        if (b > bpmMax) bpmMax = b;
+        if (d > bestDur) { bestDur = d; bpmMain = b; }
+    }
+    const distinctBpm = new Set(bpmEntries.map(([b]) => Math.round(b))).size || 1;
     const bpmRange = { min: Math.round(bpmMin), max: Math.round(bpmMax), main: Math.round(bpmMain), count: distinctBpm };
 
     // 鍵盤モード (現状 SP 5K/7K のみ対応。使用レーンの最大インデックスで判定)

@@ -72,7 +72,8 @@ const ControllerPanel = forwardRef(({ controllerRefs, keyboardRefs, is2P, parsed
                                 const r = parsedSong.bpmRange;
                                 if (!r) return parsedSong.header.bpm;
                                 if (r.min === r.max || r.count <= 1) return `${r.main}`;
-                                if (r.count === 2) return `${r.min}～${r.max}`;
+                                // BPM 2種、または最頻BPMが最低/最大と一致 → min～max の2値表記
+                                if (r.count === 2 || r.main === r.min || r.main === r.max) return `${r.min}～${r.max}`;
                                 return `${r.min}～${r.main}～${r.max}`;
                             })()}</span>
                         </div>

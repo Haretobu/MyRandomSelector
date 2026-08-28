@@ -46,7 +46,7 @@ export default function BmsViewer() {
   const [playbackTimeDisplay, setPlaybackTimeDisplay] = useState(0); 
   const [duration, setDuration] = useState(0);
   const [hiSpeed, setHiSpeed] = useState(2.0);
-  const [autoHiSpeed, setAutoHiSpeed] = useState(true);   // オートHI-SPEED(主BPMで緑数字を固定)
+  const [autoHiSpeed, setAutoHiSpeed] = useState(false);  // オートHI-SPEED(主BPMで緑数字を固定)。既定OFF
   const [targetGreen, setTargetGreen] = useState(300);    // 目標グリーンナンバー(ms)
   const [volume, setVolume] = useState(0.8);
   const [lastVolume, setLastVolume] = useState(0.8);
