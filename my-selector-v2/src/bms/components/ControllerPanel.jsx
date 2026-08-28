@@ -1,13 +1,14 @@
 // src/bms/components/ControllerPanel.jsx
 import React, { forwardRef, useImperativeHandle, useRef, memo } from 'react';
 import { Gamepad2, Keyboard } from 'lucide-react';
-import { LANE_LAYOUTS, PMS_LANE_COLORS } from '../constants';
+import { LANE_LAYOUTS, PMS_LANE_COLORS, keyCodeLabel } from '../constants';
 import DensityGraph from './DensityGraph';
 
 const SP_KEY_LABEL = { 1: 'Z', 2: 'S', 3: 'X', 4: 'D', 5: 'C', 6: 'F', 7: 'V' };
 const keyNum = (lane) => (lane.side === 0 ? lane.index : lane.index - 8); // 1..7
 
-function keyLabel(lane, mode) {
+function keyLabel(lane, mode, keyMap) {
+    if (keyMap && keyMap[lane.index]) return keyCodeLabel(keyMap[lane.index]);
     if (lane.kind === 'scratch') return lane.side === 1 ? '2SC' : 'SC';
     if (mode === 'SP7' || mode === 'SP5') return SP_KEY_LABEL[lane.index] || String(lane.index);
     if (mode === 'PMS9') return String(lane.index + 1);
@@ -15,7 +16,7 @@ function keyLabel(lane, mode) {
 }
 
 // IIDX 片側: 皿(外側) + 鍵(上段=2,4,6 / 下段=1,3,5,7)。size='s'(DP) / 'l'(SP)。
-function IIDXSide({ lanes, mirror, size, refFn, countRefs, showLabel, showCount, mode, scratchShape = 'disc' }) {
+function IIDXSide({ lanes, mirror, size, refFn, countRefs, showLabel, showCount, mode, keyMap, scratchShape = 'disc' }) {
     const scr = lanes.find(l => l.kind === 'scratch');
     const keys = lanes.filter(l => l.kind === 'key').sort((a, b) => keyNum(a) - keyNum(b));
     const top = keys.filter(k => keyNum(k) % 2 === 0);   // 2,4,6
@@ -30,9 +31,9 @@ function IIDXSide({ lanes, mirror, size, refFn, countRefs, showLabel, showCount,
             {showCount && <div ref={el => (countRefs.current[lane.index] = el)} className="text-[7px] text-blue-400/60 font-mono leading-none mb-px">0</div>}
             {node}
             {showLabel && (
-                <div className="text-[7px] font-bold leading-none mt-px"
+                <div className="text-[7px] font-bold leading-none mt-px whitespace-nowrap"
                     style={{ color: lane.kind === 'scratch' ? '#f87171' : keyNum(lane) % 2 === 0 ? '#60a5fa' : '#cbd5e1' }}>
-                    {keyLabel(lane, mode)}
+                    {keyLabel(lane, mode, keyMap)}
                 </div>
             )}
         </div>
@@ -76,7 +77,7 @@ function IIDXSide({ lanes, mirror, size, refFn, countRefs, showLabel, showCount,
 }
 
 // pop'n 9K: 白青黄緑赤の5色ミラー配置、偶数番(2,4,6,8)を少し上げる。
-function PopnBoard({ lanes, refFn, countRefs, showLabel, showCount }) {
+function PopnBoard({ lanes, refFn, countRefs, showLabel, showCount, keyMap }) {
     return (
         <div className="flex items-end justify-center" style={{ gap: 4 }}>
             {lanes.map(lane => {
@@ -85,8 +86,8 @@ function PopnBoard({ lanes, refFn, countRefs, showLabel, showCount }) {
                     <div key={lane.index} className="flex flex-col items-center" style={{ gap: 1, marginBottom: raised ? 12 : 0 }}>
                         {showCount && <div ref={el => (countRefs.current[lane.index] = el)} className="text-[7px] text-blue-400/60 font-mono leading-none">0</div>}
                         <div ref={el => refFn(lane.index, el)} className="rounded-full"
-                            style={{ width: 18, height: 18, background: '#0b0f1a', border: `2px solid ${PMS_LANE_COLORS[lane.index]}99` }} />
-                        {showLabel && <div className="text-[7px] font-bold leading-none" style={{ color: PMS_LANE_COLORS[lane.index] }}>{lane.index + 1}</div>}
+                            style={{ width: 20, height: 20, background: '#0b0f1a', border: `2px solid ${PMS_LANE_COLORS[lane.index]}99` }} />
+                        {showLabel && <div className="text-[7px] font-bold leading-none whitespace-nowrap" style={{ color: PMS_LANE_COLORS[lane.index] }}>{keyLabel(lane, 'PMS9', keyMap)}</div>}
                     </div>
                 );
             })}
@@ -94,7 +95,7 @@ function PopnBoard({ lanes, refFn, countRefs, showLabel, showCount }) {
     );
 }
 
-const ControllerPanel = forwardRef(({ controllerRefs, keyboardRefs, parsedSong, difficultyInfo, currentMeasure, is2P }, ref) => {
+const ControllerPanel = forwardRef(({ controllerRefs, keyboardRefs, parsedSong, difficultyInfo, currentMeasure, is2P, keyMap }, ref) => {
     const countRefs = useRef([]);
 
     useImperativeHandle(ref, () => ({
@@ -118,9 +119,9 @@ const ControllerPanel = forwardRef(({ controllerRefs, keyboardRefs, parsedSong, 
 
     // showCount=true は CONTROLLER のみ(countRefs が指す要素を一意にするため)
     const board = (refFn, { showLabel = false, showCount = false, scratchShape = 'disc' } = {}) => {
-        const common = { refFn, countRefs, showLabel, showCount, scratchShape, mode };
+        const common = { refFn, countRefs, showLabel, showCount, scratchShape, mode, keyMap };
         return isPms
-            ? <PopnBoard lanes={lanes} refFn={refFn} countRefs={countRefs} showLabel={showLabel} showCount={showCount} />
+            ? <PopnBoard lanes={lanes} refFn={refFn} countRefs={countRefs} showLabel={showLabel} showCount={showCount} keyMap={keyMap} />
             : isDP
                 ? (
                     <div className="flex items-center justify-center gap-1">

@@ -44,6 +44,42 @@ export const PMS_LANE_COLORS = ['#f1f5f9', '#facc15', '#4ade80', '#60a5fa', '#f8
 
 export const MODE_LABELS = { SP7: 'SP 7K', SP5: 'SP 5K', DP14: 'DP 14K', DP10: 'DP 10K', PMS9: '9K (pop\'n)', UNSUPPORTED: '—' };
 
+// レーン index → KeyboardEvent.code。設定で変更可能・localStorage に永続化。
+// SP = KEY MAPPING 準拠 / DP 右サイドは RightShift を皿に、鍵1→7 で「, l . ; / : \」(RightShift から左へ \ : / ; . l ,)。
+// PMS(9K) = SP の拡張(Z S X D C F V + G B)。
+export const DEFAULT_KEYMAPS = {
+  SP7:  { 0: 'ShiftLeft', 1: 'KeyZ', 2: 'KeyS', 3: 'KeyX', 4: 'KeyD', 5: 'KeyC', 6: 'KeyF', 7: 'KeyV' },
+  SP5:  { 0: 'ShiftLeft', 1: 'KeyZ', 2: 'KeyS', 3: 'KeyX', 4: 'KeyD', 5: 'KeyC' },
+  DP14: {
+    0: 'ShiftLeft', 1: 'KeyZ', 2: 'KeyS', 3: 'KeyX', 4: 'KeyD', 5: 'KeyC', 6: 'KeyF', 7: 'KeyV',
+    9: 'Comma', 10: 'KeyL', 11: 'Period', 12: 'Semicolon', 13: 'Slash', 14: 'Quote', 15: 'Backslash', 8: 'ShiftRight',
+  },
+  DP10: {
+    0: 'ShiftLeft', 1: 'KeyZ', 2: 'KeyS', 3: 'KeyX', 4: 'KeyD', 5: 'KeyC',
+    9: 'Comma', 10: 'KeyL', 11: 'Period', 12: 'Semicolon', 13: 'Slash', 8: 'ShiftRight',
+  },
+  PMS9: { 0: 'KeyZ', 1: 'KeyS', 2: 'KeyX', 3: 'KeyD', 4: 'KeyC', 5: 'KeyF', 6: 'KeyV', 7: 'KeyG', 8: 'KeyB' },
+};
+
+const KEYCODE_LABELS = {
+  ShiftLeft: 'L-Shift', ShiftRight: 'R-Shift', ControlLeft: 'L-Ctrl', ControlRight: 'R-Ctrl',
+  AltLeft: 'L-Alt', AltRight: 'R-Alt', Space: 'Space', Enter: 'Enter', Tab: 'Tab', Backspace: 'BS',
+  Semicolon: ';', Quote: ':', Slash: '/', Period: '.', Comma: ',', Backslash: '\\',
+  BracketLeft: '[', BracketRight: ']', Minus: '-', Equal: '=', Backquote: '`',
+  IntlRo: '\\', IntlYen: '¥', CapsLock: 'Caps',
+};
+
+// KeyboardEvent.code → 画面表示用の短いラベル
+export function keyCodeLabel(code) {
+  if (!code) return '—';
+  if (KEYCODE_LABELS[code]) return KEYCODE_LABELS[code];
+  if (code.startsWith('Key')) return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  if (code.startsWith('Numpad')) return 'Num' + code.slice(6);
+  if (code.startsWith('Arrow')) return code.slice(5);
+  return code;
+}
+
 export const KEY_CONFIG_ROWS = [
     [{label:'Shift',keyIndex:0,width:'w-14',isScratch:true},{label:'S',keyIndex:2,width:'w-10'},{label:'D',keyIndex:4,width:'w-10'},{label:'F',keyIndex:6,width:'w-10'}],
     [{label:'',keyIndex:-1,width:'w-14',isSpacer:true},{label:'Z',keyIndex:1,width:'w-10'},{label:'X',keyIndex:3,width:'w-10'},{label:'C',keyIndex:5,width:'w-10'},{label:'V',keyIndex:7,width:'w-10'}]

@@ -1,7 +1,81 @@
 // src/bms/components/SettingsModal.jsx
-import React, { memo } from 'react';
-import { Settings, X, ChevronsUp, RotateCw, Film, Flag, Music, Layers, Speaker, EyeOff, FileX, Keyboard, FolderOpen, FileArchive, ChevronDown, Gamepad2 } from 'lucide-react';
-import { VISIBILITY_MODES } from '../constants';
+import React, { memo, useState, useEffect } from 'react';
+import { Settings, X, ChevronsUp, RotateCw, Film, Flag, Music, Layers, Speaker, EyeOff, FileX, Keyboard, FolderOpen, FileArchive, ChevronDown, Gamepad2, RotateCcw } from 'lucide-react';
+import { VISIBILITY_MODES, LANE_LAYOUTS, MODE_LABELS, DEFAULT_KEYMAPS, keyCodeLabel } from '../constants';
+
+// キー割り当て設定(6-1-d)。表示・保存のみ。手動プレイの判定入力接続は P6-2。
+function KeyMapSection({ mode, keyMaps, setKeyMaps }) {
+    const km = DEFAULT_KEYMAPS[mode] ? mode : 'SP7';
+    const curMap = (keyMaps && keyMaps[km]) || DEFAULT_KEYMAPS[km];
+    const laneList = LANE_LAYOUTS[km] || LANE_LAYOUTS.SP7;
+    const [listeningLane, setListeningLane] = useState(null);
+
+    useEffect(() => {
+        if (listeningLane == null) return;
+        const onKey = (e) => {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            if (e.code === 'Escape') { setListeningLane(null); return; }
+            setKeyMaps(prev => {
+                const next = { ...prev };
+                const m = { ...(next[km] || DEFAULT_KEYMAPS[km]) };
+                const oldCode = m[listeningLane];
+                // 既に他レーンが使っているコードなら入れ替え
+                const dup = Object.keys(m).find(k => m[k] === e.code && Number(k) !== listeningLane);
+                if (dup != null) m[dup] = oldCode;
+                m[listeningLane] = e.code;
+                next[km] = m;
+                return next;
+            });
+            setListeningLane(null);
+        };
+        window.addEventListener('keydown', onKey, true);
+        return () => window.removeEventListener('keydown', onKey, true);
+    }, [listeningLane, km, setKeyMaps]);
+
+    const laneLabel = (lane) => {
+        if (lane.kind === 'scratch') return lane.side === 1 ? '2P SC' : 'SC';
+        if (km === 'PMS9') return `B${lane.index + 1}`;
+        const n = lane.side === 0 ? lane.index : lane.index - 8;
+        return `${lane.side === 1 ? '2P ' : ''}${n}`;
+    };
+
+    return (
+        <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
+            <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2"><Keyboard size={14} /> キー割り当て（{MODE_LABELS[km] || km}）</span>
+                <button
+                    onClick={() => { setListeningLane(null); setKeyMaps(prev => ({ ...prev, [km]: { ...DEFAULT_KEYMAPS[km] } })); }}
+                    className="text-[10px] font-bold text-blue-300 hover:text-white flex items-center gap-1 bg-black/40 border border-blue-900/50 rounded px-2 py-1 transition">
+                    <RotateCcw size={11} /> デフォルトに戻す
+                </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5 justify-center">
+                {laneList.map((lane, i, arr) => {
+                    const brk = i > 0 && arr[i - 1].side !== lane.side;
+                    const listening = listeningLane === lane.index;
+                    return (
+                        <React.Fragment key={lane.index}>
+                            {brk && <div className="basis-full h-0" />}
+                            <button
+                                onClick={() => setListeningLane(listening ? null : lane.index)}
+                                className={`w-[52px] rounded border px-1 py-1 transition-all flex flex-col items-center gap-0.5 ${listening
+                                    ? 'bg-orange-600 border-orange-400 text-white animate-pulse shadow-[0_0_10px_rgba(234,88,12,0.6)]'
+                                    : 'bg-black/40 border-gray-700 text-gray-300 hover:bg-gray-800 hover:border-blue-500/40'}`}>
+                                <span className="text-[8px] opacity-60 leading-none">{laneLabel(lane)}</span>
+                                <span className="font-mono text-[11px] font-bold leading-none whitespace-nowrap">{listening ? '…' : keyCodeLabel(curMap[lane.index])}</span>
+                            </button>
+                        </React.Fragment>
+                    );
+                })}
+            </div>
+            <div className="text-[10px] text-blue-500/60 mt-2 leading-relaxed">
+                ボタンを押してからキーを入力すると割り当てが変わります（Esc でキャンセル）。他のレーンと重複するキーは自動で入れ替わります。<br />
+                ※ 手動プレイの判定入力への接続は今後のアップデート（プレイ機能）で対応します。現在は表示と保存のみです。
+            </div>
+        </div>
+    );
+}
 
 const SettingsModal = ({
     showSettings, setShowSettings, isMobile,
@@ -18,6 +92,7 @@ const SettingsModal = ({
     showAbortedMonitor, setShowAbortedMonitor, scratchRotationEnabled, setScratchRotationEnabled,
     isInputDebugMode, setIsInputDebugMode,
     muteDebugAutoPlay, setMuteDebugAutoPlay,
+    keyMaps, setKeyMaps,
     // ファイル操作
     handleFileSelect, handleZipSelect, bmsList, selectedBmsIndex, setSelectedBmsIndex,
     hiSpeed, setHiSpeed, bgaOpacity, setBgaOpacity,
@@ -219,6 +294,11 @@ const SettingsModal = ({
                         </div>
                         <div className="text-[10px] text-blue-500/60 mt-2 text-center">赤 = ミュート。そのレーンのキー音・打鍵音を鳴らさず、ノーツを薄く表示します。</div>
                     </div>
+
+                    {/* キー割り当て (PC のみ・モード対応) */}
+                    {!isMobile && (
+                        <KeyMapSection mode={parsedSong?.mode || 'SP7'} keyMaps={keyMaps} setKeyMaps={setKeyMaps} />
+                    )}
 
                     {/* PC用設定 */}
                     <div className="flex flex-col md:flex-row gap-4 items-start">

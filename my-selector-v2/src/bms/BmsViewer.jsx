@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
-import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS } from './constants';
+import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS, DEFAULT_KEYMAPS } from './constants';
 import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, generateLaneMap, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 
@@ -109,7 +109,19 @@ export default function BmsViewer() {
   const [playLongAudio, setPlayLongAudio] = useState(true);
   const [scratchRotationEnabled, setScratchRotationEnabled] = useState(true);
   const [isInputDebugMode, setIsInputDebugMode] = useState(false);
-  const [muteDebugAutoPlay, setMuteDebugAutoPlay] = useState(true); 
+  // キー割り当て(6-1-d): モード別 lane index -> KeyboardEvent.code。localStorage 永続。
+  // ※ 手動プレイの判定入力への接続は P6-2 で実装。現状は表示・保存のみ。
+  const [keyMaps, setKeyMaps] = useState(() => {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem('bms_keymaps') || '{}') || {}; } catch { saved = {}; }
+    const merged = {};
+    for (const m of Object.keys(DEFAULT_KEYMAPS)) merged[m] = { ...DEFAULT_KEYMAPS[m], ...(saved[m] || {}) };
+    return merged;
+  });
+  useEffect(() => {
+    try { localStorage.setItem('bms_keymaps', JSON.stringify(keyMaps)); } catch { /* quota / privacy mode */ }
+  }, [keyMaps]);
+  const [muteDebugAutoPlay, setMuteDebugAutoPlay] = useState(true);
   const muteDebugAutoPlayRef = useRef(true);
   const [showSettings, setShowSettings] = useState(false);
   
@@ -1586,6 +1598,7 @@ export default function BmsViewer() {
         showAbortedMonitor={showAbortedMonitor} setShowAbortedMonitor={setShowAbortedMonitor} scratchRotationEnabled={scratchRotationEnabled} setScratchRotationEnabled={setScratchRotationEnabled}
         isInputDebugMode={isInputDebugMode} setIsInputDebugMode={setIsInputDebugMode}
         muteDebugAutoPlay={muteDebugAutoPlay} setMuteDebugAutoPlay={setMuteDebugAutoPlay}
+        keyMaps={keyMaps} setKeyMaps={setKeyMaps}
         isSeparateHitSound={isSeparateHitSound} setIsSeparateHitSound={setIsSeparateHitSound}
         tempKeySoundName={tempKeySoundName} tempScratchSoundName={tempScratchSoundName}
         // Mobile Controls
@@ -1624,6 +1637,7 @@ export default function BmsViewer() {
                     controllerRefs={controllerRefs} keyboardRefs={keyboardRefs}
                     is2P={is2P} parsedSong={parsedSong} difficultyInfo={difficultyInfo}
                     currentMeasure={currentMeasure}
+                    keyMap={keyMaps[parsedSong?.mode] || keyMaps.SP7}
                  />
 
                  {/* 中央左: 情報・BGA */}
