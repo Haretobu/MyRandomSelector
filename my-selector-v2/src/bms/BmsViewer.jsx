@@ -133,6 +133,10 @@ export default function BmsViewer() {
   const gradCacheRef = useRef({ key: '', ln: [], hit: [] }); // レーン単位のグラデーションキャッシュ
   const readyTextCacheRef = useRef(null); // READY/GO 演出をオフスクリーンに1回だけ描画(shadowBlurは最重量級)
   const seekCommitTimerRef = useRef(null); // シークの重い処理を debounce するタイマー
+  const lastBgaKeyRef = useRef({});      // 直近に setState した BGA の識別キー。スクラブ中の無駄な setState を防ぐ
+  const mobileBackBgaRef = useRef(null); // モバイル BGA の syncTime 呼び出し用
+  const mobileLayerBgaRef = useRef(null);
+  const mobilePoorBgaRef = useRef(null);
   const scratchAngleRef = useRef(0);
   const lastFrameTimeRef = useRef(0);
   const lastScratchTimeRef = useRef(0);
@@ -337,6 +341,7 @@ export default function BmsViewer() {
     stopPlayback(true);
     if (audioContextRef.current) activeNodesRef.current.forEach(n => { try { n.node.stop(); n.node.disconnect(); } catch(e){} });
     activeNodesRef.current = []; activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]); releaseImageAssets();
+    lastBgaKeyRef.current = {};
     setParsedSong(null); setDisplayObjects([]); setCurrentBackBga(null); setCurrentLayerBga(null); setCurrentPoorBga(null); setStageFileImage(null);
     setShowMissLayer(false); setNextBpmInfo(null); setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: 0 });
     scratchAngleRef.current = 0; lastFrameTimeRef.current = 0; lastScratchTimeRef.current = 0; lastScratchTypeRef.current = 'REVERSE'; scratchDirectionRef.current = -1;
@@ -599,6 +604,7 @@ export default function BmsViewer() {
 
   const loadBmsAndAudio = async (bmsFile) => {
     if (isPlayingRef.current) stopPlayback(true);
+    lastBgaKeyRef.current = {};
     setParsedSong(null); setDisplayObjects([]); setCurrentBackBga(null); setCurrentLayerBga(null); setCurrentPoorBga(null); setShowMissLayer(false);
     setNextBpmInfo(null); setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: 0 });
     scratchAngleRef.current = 0; lastScratchTimeRef.current = 0; lastScratchTypeRef.current = 'REVERSE'; scratchDirectionRef.current = -1; activeInputLanesRef.current.clear(); isShiftHeldRef.current = false; isCtrlHeldRef.current = false;
@@ -823,6 +829,67 @@ export default function BmsViewer() {
   // setInterval が常に最新の scheduleAudio クロージャを呼ぶようにする(displayObjects/parsedSong の stale 化を防ぐ)
   scheduleAudioRef.current = scheduleAudio;
 
+  // READY/GO の演出テキスト(shadowBlur付き)をオフスクリーンに1回だけ焼く。
+  const buildReadyTextCache = () => {
+    const mk = (text, font, fill, glow, blur) => {
+      const c = document.createElement('canvas');
+      c.width = 480; c.height = 140;
+      const cx = c.getContext('2d');
+      cx.shadowColor = glow; cx.shadowBlur = blur;
+      cx.fillStyle = fill; cx.font = font;
+      cx.textAlign = 'center'; cx.textBaseline = 'middle';
+      cx.fillText(text, 240, 70);
+      return c;
+    };
+    return (readyTextCacheRef.current = {
+      GO: mk('GO!!', 'bold italic 80px sans-serif', '#ff3333', '#ff0000', 30),
+      READY: mk('READY...', 'bold italic 60px sans-serif', '#ffffff', '#00ccff', 20),
+    });
+  };
+  useEffect(() => { buildReadyTextCache(); }, []); // 初回描画時のヒッチを避けるためマウント時に生成
+
+  // 指定時刻(offset 秒)へ「位置」を同期する。startPlayback とシークの軽い処理から共用。
+  //  - startTimeRef(再生中の描画基準時刻)
+  //  - nextNoteIndexRef(スケジューラ開始位置)
+  //  - BGA の各インデックスと、その時点で表示すべき BGA フレーム(変化時のみ setState)
+  const applySeekPosition = (offset) => {
+    if (isPlayingRef.current && audioContextRef.current) {
+      startTimeRef.current = audioContextRef.current.currentTime - offset;
+    }
+    if (!parsedSong) return;
+    nextNoteIndexRef.current = findStartIndex(displayObjects, offset - (parsedSong.maxLNDuration || 20.0));
+
+    const syncBga = (arr, idxRef, setter, keyProp) => {
+      if (!arr) return;
+      let idx = arr.length;
+      let chosenAsset = null;   // null = まだ無し / {..} = 表示すべきアセット / 'CLEAR' = 消灯
+      let chosenStart = 0;
+      for (let i = 0; i < arr.length; i++) {
+        if (arr[i].time >= offset) { idx = i; break; }
+        const obj = arr[i];
+        const fn = parsedSong.header.bmps[obj.value];
+        if (fn) {
+          const asset = imageAssetsRef.current.get(fn.toLowerCase());
+          if (asset) { chosenAsset = asset; chosenStart = obj.time; }
+        } else if (obj.value === 0) {
+          chosenAsset = 'CLEAR'; chosenStart = 0;
+        }
+      }
+      idxRef.current = idx;
+      const key = chosenAsset === null ? 'none'
+        : chosenAsset === 'CLEAR' ? 'clear'
+        : `${chosenAsset.url || chosenAsset.src || 'img'}|${chosenStart}`;
+      if (lastBgaKeyRef.current[keyProp] === key) return; // 表示中の BGA と同じ → setState しない
+      lastBgaKeyRef.current[keyProp] = key;
+      if (chosenAsset === null) return;
+      if (chosenAsset === 'CLEAR') { setter(null); return; }
+      setter(chosenAsset.type === 'video' ? { ...chosenAsset, startTime: chosenStart } : chosenAsset);
+    };
+    syncBga(parsedSong.backBgaObjects, nextBackBgaIndexRef, setCurrentBackBga, 'back');
+    syncBga(parsedSong.layerBgaObjects, nextLayerBgaIndexRef, setCurrentLayerBga, 'layer');
+    syncBga(parsedSong.poorBgaObjects, nextPoorBgaIndexRef, setCurrentPoorBga, 'poor');
+  };
+
   const startPlayback = () => {
     if (!parsedSong || isLoading) return;
     applyHitSounds(tempKeyHitSoundBuffer, tempScratchHitSoundBuffer, isSeparateHitSound, tempKeySoundName, tempScratchSoundName);
@@ -833,11 +900,9 @@ export default function BmsViewer() {
     if (audioContextRef.current.state === 'suspended') audioContextRef.current.resume();
     
     stopAudioNodes(); activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]);
-    const offset = pauseTimeRef.current; startTimeRef.current = audioContextRef.current.currentTime - offset;
+    const offset = pauseTimeRef.current;
     setIsPlaying(true); isPlayingRef.current = true; lastFrameTimeRef.current = performance.now();
-    nextNoteIndexRef.current = findStartIndex(displayObjects, offset - (parsedSong.maxLNDuration || 20.0));
-    nextBackBgaIndexRef.current = 0;
-    nextLayerBgaIndexRef.current = 0; nextPoorBgaIndexRef.current = 0;
+    applySeekPosition(offset); // startTimeRef / nextNoteIndexRef / BGA インデックス・フレームを同期
 
     if (showReady && offset === 0) {
         setReadyAnimState('READY');
@@ -849,56 +914,6 @@ export default function BmsViewer() {
     schedulerTimerRef.current = setInterval(() => { if (scheduleAudioRef.current) scheduleAudioRef.current(); }, SCHEDULE_INTERVAL);
     stopRenderLoop();
     scheduleRenderLoop();
-    
-    if (parsedSong.backBgaObjects) {
-        for (let i=0; i < parsedSong.backBgaObjects.length; i++) {
-            if (parsedSong.backBgaObjects[i].time >= offset) { nextBackBgaIndexRef.current = i; break; }
-            const obj = parsedSong.backBgaObjects[i];
-            if (parsedSong.header.bmps[obj.value]) { 
-                const asset = imageAssetsRef.current.get(parsedSong.header.bmps[obj.value].toLowerCase());
-                if(asset) {
-                    if (asset.type === 'video') {
-                        setCurrentBackBga({ ...asset, startTime: obj.time });
-                    } else {
-                        setCurrentBackBga(asset);
-                    }
-                }
-            }
-        }
-    }
-    if (parsedSong.layerBgaObjects) {
-        for (let i=0; i < parsedSong.layerBgaObjects.length; i++) {
-             if (parsedSong.layerBgaObjects[i].time >= offset) { nextLayerBgaIndexRef.current = i; break; }
-             const obj = parsedSong.layerBgaObjects[i];
-             if (parsedSong.header.bmps[obj.value]) { 
-                 const asset = imageAssetsRef.current.get(parsedSong.header.bmps[obj.value].toLowerCase());
-                 if(asset) {
-                    if (asset.type === 'video') {
-                        setCurrentLayerBga({ ...asset, startTime: obj.time });
-                    } else {
-                        setCurrentLayerBga(asset);
-                    }
-                 }
-             } 
-             else if (obj.value === 0) setCurrentLayerBga(null);
-        }
-    }
-    if (parsedSong.poorBgaObjects) {
-        for (let i=0; i < parsedSong.poorBgaObjects.length; i++) {
-            if (parsedSong.poorBgaObjects[i].time >= offset) { nextPoorBgaIndexRef.current = i; break; }
-            const obj = parsedSong.poorBgaObjects[i];
-            if (parsedSong.header.bmps[obj.value]) { 
-                const asset = imageAssetsRef.current.get(parsedSong.header.bmps[obj.value].toLowerCase());
-                if(asset) {
-                    if (asset.type === 'video') {
-                        setCurrentPoorBga({ ...asset, startTime: obj.time });
-                    } else {
-                        setCurrentPoorBga(asset);
-                    }
-                }
-            }
-        }
-    }
   };
 
   const stopAudioNodes = () => {
@@ -938,7 +953,7 @@ export default function BmsViewer() {
             setBackingTracks([]); activeLongSoundsRef.current = [];
         }
 
-        pauseTimeRef.current = 0; setPlaybackTimeDisplay(0); setCombo(0); comboRef.current = 0; hudLastRef.current = {};
+        pauseTimeRef.current = 0; setPlaybackTimeDisplay(0); setCombo(0); comboRef.current = 0; hudLastRef.current = {}; lastBgaKeyRef.current = {};
         lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(8).fill(0));
         if (parsedSong) displayObjects.forEach(o => o.processed = false);
         setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsedSong?.avgDensity || 0 });
@@ -1004,9 +1019,12 @@ export default function BmsViewer() {
     }
     comboRef.current = passedNotes;
     clearActiveLanes();
+    // 位置の同期(startTimeRef / nextNoteIndexRef / BGA インデックス・フレーム)は必ず同期実行する。
+    // 遅延させると描画の再生位置と processed フラグがズレ、ノーツが消えたり BGA が空回りする。
+    applySeekPosition(val);
     scheduleRenderLoop(); // 停止中でもスクラブ位置を描き直す
 
-    // --- 重い処理: ドラッグが止まってから1回だけ ---
+    // --- 重い処理(setState群・スケジューラ再開): ドラッグが止まってから1回だけ ---
     if (seekCommitTimerRef.current) clearTimeout(seekCommitTimerRef.current);
     seekCommitTimerRef.current = setTimeout(commitSeek, 100);
   };
@@ -1105,6 +1123,12 @@ export default function BmsViewer() {
         if (infoPanelRef.current) {
             // 時間だけでなく、コンボ数なども渡せます
             infoPanelRef.current.updateInfo(currentTime, comboRef.current);
+        }
+        // モバイルは InfoPanel が無いので BGA の syncTime をここで直接呼ぶ(動画BGAの位置合わせ)
+        if (isMobileRef.current) {
+            mobileBackBgaRef.current?.syncTime(currentTime);
+            mobileLayerBgaRef.current?.syncTime(currentTime);
+            mobilePoorBgaRef.current?.syncTime(currentTime);
         }
 
         // 3. その他の重い処理（小節線の計算やログ表示用のリスト更新など）
@@ -1428,24 +1452,8 @@ export default function BmsViewer() {
     //   NOTES(noteCounts) と combo state の反映は下の 100ms ブロックで変化時のみ行う。
 
     if (showReady && readyAnimStateRef.current) {
-        // ★軽量化: shadowBlur 付きテキストは 1 回だけオフスクリーンに焼いて drawImage で貼る。
-        let rc = readyTextCacheRef.current;
-        if (!rc) {
-            const mk = (text, font, fill, glow, blur) => {
-                const c = document.createElement('canvas');
-                c.width = 480; c.height = 140;
-                const cx = c.getContext('2d');
-                cx.shadowColor = glow; cx.shadowBlur = blur;
-                cx.fillStyle = fill; cx.font = font;
-                cx.textAlign = 'center'; cx.textBaseline = 'middle';
-                cx.fillText(text, 240, 70);
-                return c;
-            };
-            rc = readyTextCacheRef.current = {
-                GO: mk('GO!!', 'bold italic 80px sans-serif', '#ff3333', '#ff0000', 30),
-                READY: mk('READY...', 'bold italic 60px sans-serif', '#ffffff', '#00ccff', 20),
-            };
-        }
+        // ★軽量化: shadowBlur 付きテキストはオフスクリーンに焼いた画像を貼るだけ(下の useEffect で事前生成)。
+        const rc = readyTextCacheRef.current || buildReadyTextCache();
         const img = readyAnimStateRef.current === 'GO' ? rc.GO : rc.READY;
         ctx.drawImage(img, (width - img.width) / 2, (height - img.height) / 2);
     }
@@ -1494,11 +1502,11 @@ export default function BmsViewer() {
          {/* スマホ用: 背景BGA */}
          {isMobile && (
              <div className="absolute inset-0 z-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none" style={{ opacity: bgaOpacity }}>
-                <BgaLayer bgaState={currentBackBga} zIndex={0} isPlaying={isPlaying} currentTime={playbackTimeDisplay} isVideoEnabled={playBgaVideo} />
-                <BgaLayer bgaState={currentLayerBga} zIndex={10} blendMode="screen" isPlaying={isPlaying} currentTime={playbackTimeDisplay} isVideoEnabled={playBgaVideo} />
+                <BgaLayer ref={mobileBackBgaRef} bgaState={currentBackBga} zIndex={0} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} />
+                <BgaLayer ref={mobileLayerBgaRef} bgaState={currentLayerBga} zIndex={10} blendMode="screen" isPlaying={isPlaying} isVideoEnabled={playBgaVideo} />
                 {showMissLayer && currentPoorBga && (
                     <div className="absolute inset-0 w-full h-full z-50 bg-black/50 flex items-center justify-center">
-                        <BgaLayer bgaState={currentPoorBga} zIndex={50} isPlaying={isPlaying} currentTime={playbackTimeDisplay} isVideoEnabled={playBgaVideo} />
+                        <BgaLayer ref={mobilePoorBgaRef} bgaState={currentPoorBga} zIndex={50} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} />
                     </div>
                 )}
              </div>
