@@ -14,8 +14,6 @@ import ControlBar from './components/ControlBar';
 import BgaLayer from './components/BgaLayer';
 
 // ★軽量化: renderLoop 毎フレームの割り当てを避けるためのモジュールスコープ定数/再利用バッファ
-const LANE_BG_DARK = 'rgb(15, 23, 42)';    // レーン 1,3,5 (0-indexed) の背景
-const LANE_BG_LIGHT = 'rgb(30, 41, 59)';   // その他レーン
 const IS_DARK_LANE = [false, true, false, true, false, true, false]; // i=0..6
 const IS_BLUE_LANE = [false, false, true, false, true, false, true, false]; // laneIndex=0..7
 const _activeLanesScratch = new Array(8).fill(false); // renderLoop 内でのみ同期利用
@@ -131,6 +129,7 @@ export default function BmsViewer() {
   const canvasRectRef = useRef(null);   // canvas の CSS サイズ(ResizeObserver でキャッシュ、毎フレーム getBoundingClientRect しない)
   const laneVisualRef = useRef(new Array(8).fill(null)); // 各レーンの見た目 active 状態。変化時のみ DOM 書き込み
   const gradCacheRef = useRef({ key: '', ln: [], hit: [] }); // レーン単位のグラデーションキャッシュ
+  const boardLayerRef = useRef({ key: '', canvas: null });   // 静的な板(背景/レーン/区切り線/判定線)のオフスクリーンキャッシュ
   const readyTextCacheRef = useRef(null); // READY/GO 演出をオフスクリーンに1回だけ描画(shadowBlurは最重量級)
   const seekCommitTimerRef = useRef(null); // シークの重い処理を debounce するタイマー
   const lastBgaKeyRef = useRef({});      // 直近に setState した BGA の識別キー。スクラブ中の無駄な setState を防ぐ
@@ -1246,38 +1245,43 @@ export default function BmsViewer() {
         }
     }
 
-    // ★修正: ボード全体の不透明度
     const bOpacity = boardOpacityRef.current;
-    // ★修正: 各レーンの不透明度
     const lOpacity = laneOpacityRef.current;
-    
-    // ボード全体の背景
-    ctx.fillStyle = `rgba(2, 6, 23, ${bOpacity})`; // ★修正: PC/スマホで同じ値だった無意味な三項演算子を削除
-    ctx.fillRect(BOARD_X, 0, BOARD_W, height); 
-    
     const laneHeight = isLiftEnabled ? JUDGE_Y : height;
-    for(let i=0; i<7; i++) {
-        // 各レーンの背景 (★軽量化: 毎回の配列リテラル + includes をやめ、事前テーブル参照に)
-        ctx.fillStyle = IS_DARK_LANE[i] ? `rgba(15, 23, 42, ${lOpacity})` : `rgba(30, 41, 59, ${lOpacity})`;
-        ctx.fillRect(KEYS_X + i * KEY_W, 0, KEY_W, laneHeight);
+
+    // ★軽量化(Part1): フレーム間で変化しない板(背景/レーン/区切り線/スクラッチ/判定線)は
+    //   オフスクリーンに1回だけ描き、毎フレームは drawImage で貼るだけにする。
+    //   特に HiDPI ノートPC では毎フレームの塗り面積が支配的なので効果が大きい。
+    const boardKey = `${width}|${height}|${dpr}|${KEY_W}|${BOARD_X}|${SCRATCH_X}|${KEYS_X}|${JUDGE_Y}|${isLiftEnabled}|${is2P}|${bOpacity}|${lOpacity}|${isMobileRef.current}|${showSettings}|${!!parsedSong}`;
+    const bl = boardLayerRef.current;
+    if (bl.key !== boardKey) {
+        bl.key = boardKey;
+        const oc = bl.canvas || (bl.canvas = document.createElement('canvas'));
+        oc.width = Math.max(1, Math.round(width * dpr));
+        oc.height = Math.max(1, Math.round(height * dpr));
+        const bx = oc.getContext('2d');
+        bx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        bx.clearRect(0, 0, width, height);
+        bx.fillStyle = `rgba(2, 6, 23, ${bOpacity})`;
+        bx.fillRect(BOARD_X, 0, BOARD_W, height);
+        for (let i = 0; i < 7; i++) {
+            bx.fillStyle = IS_DARK_LANE[i] ? `rgba(15, 23, 42, ${lOpacity})` : `rgba(30, 41, 59, ${lOpacity})`;
+            bx.fillRect(KEYS_X + i * KEY_W, 0, KEY_W, laneHeight);
+        }
+        bx.strokeStyle = isMobileRef.current ? `rgba(51, 65, 85, ${lOpacity})` : '#334155';
+        bx.lineWidth = 1; bx.beginPath();
+        for (let i = 0; i <= 7; i++) { const lx = KEYS_X + i * KEY_W; bx.moveTo(lx, 0); bx.lineTo(lx, laneHeight); }
+        bx.fillStyle = isMobileRef.current ? `rgba(15, 23, 42, ${lOpacity})` : '#0f172a';
+        bx.fillRect(SCRATCH_X, 0, SCRATCH_W, laneHeight);
+        bx.moveTo(SCRATCH_X, 0); bx.lineTo(SCRATCH_X, laneHeight);
+        bx.moveTo(SCRATCH_X + SCRATCH_W, 0); bx.lineTo(SCRATCH_X + SCRATCH_W, laneHeight);
+        bx.stroke();
+        if (!showSettings && parsedSong) {
+            bx.strokeStyle = '#ef4444';
+            bx.lineWidth = 2; bx.beginPath(); bx.moveTo(BOARD_X, JUDGE_Y); bx.lineTo(BOARD_X + BOARD_W, JUDGE_Y); bx.stroke();
+        }
     }
-    
-    ctx.strokeStyle = isMobileRef.current ? `rgba(51, 65, 85, ${lOpacity})` : '#334155';
-    ctx.lineWidth = 1; ctx.beginPath();
-    for(let i=0; i<=7; i++) { const x = KEYS_X + i * KEY_W; ctx.moveTo(x, 0); ctx.lineTo(x, isLiftEnabled ? JUDGE_Y : height); }
-    
-    // スクラッチレーンも
-    ctx.fillStyle = isMobileRef.current ? `rgba(15, 23, 42, ${lOpacity})` : '#0f172a';
-    ctx.fillRect(SCRATCH_X, 0, SCRATCH_W, isLiftEnabled ? JUDGE_Y : height);
-    
-    ctx.moveTo(SCRATCH_X, 0);
-    ctx.lineTo(SCRATCH_X, isLiftEnabled ? JUDGE_Y : height); 
-    ctx.moveTo(SCRATCH_X + SCRATCH_W, 0); ctx.lineTo(SCRATCH_X + SCRATCH_W, isLiftEnabled ? JUDGE_Y : height);
-    ctx.stroke();
-    if (!showSettings && parsedSong) {
-        ctx.strokeStyle = '#ef4444';
-        ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(BOARD_X, JUDGE_Y); ctx.lineTo(BOARD_X + BOARD_W, JUDGE_Y); ctx.stroke();
-    }
+    ctx.drawImage(bl.canvas, 0, 0, width, height);
 
     const currentActiveLanes = _activeLanesScratch; currentActiveLanes.fill(false); // ★軽量化: 毎フレームの配列割り当てを排除
 
