@@ -27,9 +27,13 @@ export const VISIBILITY_MODES = {
     LIFT_SUD_PLUS: 'LIFT & SUD+'
 };
 
-export const LOOKAHEAD = 0.1; 
-export const SCHEDULE_INTERVAL = 25; 
+export const LOOKAHEAD = 0.1;
+export const SCHEDULE_INTERVAL = 25;
 export const MAX_SHORT_POLYPHONY = 256;
+
+// この秒数以上のノーツ以外の音源を「BGM(著しく長い音源)」とみなす。
+// これ未満のノーツ以外の音源は「バックサウンド」。長いインパクト系SEを BGM と誤分類しないための閾値。
+export const BGM_MIN_DURATION = 20.0;
 
 // モバイル判定の境界線 (px)
 export const MOBILE_BREAKPOINT = 768;

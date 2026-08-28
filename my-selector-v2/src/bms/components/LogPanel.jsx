@@ -5,7 +5,20 @@ const LogPanel = forwardRef(({ backingTracks, activeShortSoundsRef, lastPlayedSo
     const polyRef = useRef(null);      // POLY 数値の span
     const maxPolyRef = useRef(null);   // M POLY 数値の span
     const avgRef = useRef(0);          // 直近の平均(POLYの色分けに使う)
+    const monitorListRef = useRef(null); // SOUND MONITOR のリスト領域(高さ実測用)
+    const [listH, setListH] = useState(0);
     const [, force] = useState(0);
+
+    // SOUND MONITOR の表示行数はコンテナの高さに合わせる(上端で行が途中クリップされないように)
+    useEffect(() => {
+        const el = monitorListRef.current;
+        if (!el || typeof ResizeObserver === 'undefined') return;
+        const ro = new ResizeObserver(() => setListH(el.clientHeight));
+        ro.observe(el);
+        setListH(el.clientHeight);
+        return () => ro.disconnect();
+    }, []);
+    const maxRows = listH ? Math.max(4, Math.floor(listH / 15)) : 18;
 
     useImperativeHandle(ref, () => ({
         updatePoly: (poly, maxPoly, avg) => {
@@ -25,7 +38,7 @@ const LogPanel = forwardRef(({ backingTracks, activeShortSoundsRef, lastPlayedSo
         return () => clearInterval(id);
     }, [isPlaying]);
 
-    const shorts = (activeShortSoundsRef.current || []).slice(-25);
+    const shorts = (activeShortSoundsRef.current || []).slice(-maxRows);
     const laneLog = lastPlayedSoundPerLaneRef.current || [];
 
     return (
@@ -56,7 +69,7 @@ const LogPanel = forwardRef(({ backingTracks, activeShortSoundsRef, lastPlayedSo
                         <span className="text-blue-500/70">POLY: <span ref={polyRef} className="text-white">0</span></span>
                     </div>
                  </div>
-                 <div className="flex-1 overflow-hidden flex flex-col justify-end text-[9px] space-y-0.5 font-mono">
+                 <div ref={monitorListRef} className="flex-1 overflow-hidden flex flex-col justify-end text-[9px] space-y-0.5 font-mono">
                     {shorts.map(s => (
                          <div key={s.id} className={`truncate flex items-center gap-1 leading-none py-[1px] opacity-80 ${s.isMuted ? 'text-gray-600' : 'text-blue-100'}`}>
                             <span className={`w-1 h-1 rounded-full ${s.isSkipped ? 'bg-cyan-400' : (s.isMuted ? 'bg-gray-600' : 'bg-green-400')} shrink-0 shadow-[0_0_4px_currentColor]`}/>{s.name}

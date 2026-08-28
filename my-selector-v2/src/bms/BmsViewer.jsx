@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
-import { LANE_MAP, VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY } from './constants';
+import { LANE_MAP, VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION } from './constants';
 import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, generateLaneMap, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 
@@ -762,32 +762,32 @@ export default function BmsViewer() {
           if (parsedSong.header.wavs[obj.value]) {
               const buffer = audioBuffersRef.current.get(parsedSong.header.wavs[obj.value].toLowerCase());
               if (buffer) {
-                const isLong = buffer.duration > 10.0;
+                // ★P2: 音源を「キー音 / BGM(著しく長い) / バックサウンド」の排他3カテゴリに分類。
+                //   各カテゴリを別々のトグルで制御し、判定の重複をなくす。
+                const category = obj.isNote ? 'key'
+                    : (buffer.duration >= BGM_MIN_DURATION ? 'bgm' : 'back');
                 let shouldPlay = true;
-                if (obj.isNote && !playKeySoundsRef.current) shouldPlay = false;
-                if (obj.isNote) {
-                    // ノーツの場合
+                if (category === 'key') {
                     if (!playKeySoundsRef.current) shouldPlay = false;
-                    if (isInputDebugModeRef.current && muteDebugAutoPlayRef.current) {
-                        shouldPlay = false;
-                    }
+                    if (isInputDebugModeRef.current && muteDebugAutoPlayRef.current) shouldPlay = false;
+                } else if (category === 'bgm') {
+                    if (!playLongAudioRef.current) shouldPlay = false;   // 「BGMを再生」トグル
                 } else {
-                    // ノーツ以外（BGMなど）の場合
-                    if (!playBgSoundsRef.current) shouldPlay = false;
+                    if (!playBgSoundsRef.current) shouldPlay = false;    // 「バックサウンドを再生」トグル
                 }
-                if (isLong && !playLongAudioRef.current) shouldPlay = false;
-                
-                const isBgmMonitor = buffer.duration > 5.0 && !obj.isNote;
-                const item = { 
+
+                const isBgm = category === 'bgm';        // BACKING TRACK パネルに載せるか
+                const isLong = buffer.duration > 10.0;   // ポリフォニー上限の対象外にするか(既存挙動を維持)
+                const item = {
                     id: nextSoundIdRef.current++,
-                    name: obj.filename, 
-                    startTime: obj.time, 
-                    endTime: obj.time + buffer.duration, 
-                    displayDuration: buffer.duration, 
-                    isLong: isBgmMonitor, 
-                    isMissing: false, 
+                    name: obj.filename,
+                    startTime: obj.time,
+                    endTime: obj.time + buffer.duration,
+                    displayDuration: buffer.duration,
+                    isLong: isBgm,
+                    isMissing: false,
                     isSkipped: false,
-                    isMuted: !shouldPlay 
+                    isMuted: !shouldPlay
                 };
                 if (shouldPlay) {
                     const src = ctx.createBufferSource();
@@ -802,9 +802,9 @@ export default function BmsViewer() {
                 }
 
                 if (shouldPlay || showMutedMonitorRef.current) {
-                    if (isBgmMonitor) { 
+                    if (isBgm) {
                         activeLongSoundsRef.current.push(item);
-                        setBackingTracks(prev => [...prev, item]); 
+                        setBackingTracks(prev => [...prev, item]);
                     }
                     else { 
                         // ★軽量化: LogPanelはslice(-25)しか使わないのに、これまで曲の最初から最後まで無制限に配列が伸び続けていた
