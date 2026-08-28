@@ -15,15 +15,15 @@ function keyLabel(lane, mode) {
 }
 
 // IIDX 片側: 皿(外側) + 鍵(上段=2,4,6 / 下段=1,3,5,7)。size='s'(DP) / 'l'(SP)。
-function IIDXSide({ lanes, mirror, size, refFn, countRefs, showLabel, showCount, mode }) {
+function IIDXSide({ lanes, mirror, size, refFn, countRefs, showLabel, showCount, mode, scratchShape = 'disc' }) {
     const scr = lanes.find(l => l.kind === 'scratch');
     const keys = lanes.filter(l => l.kind === 'key').sort((a, b) => keyNum(a) - keyNum(b));
     const top = keys.filter(k => keyNum(k) % 2 === 0);   // 2,4,6
     const bot = keys.filter(k => keyNum(k) % 2 === 1);    // 1,3,5,7,(9)
-    const tt = size === 's' ? 32 : 54;
-    const kw = size === 's' ? 11 : 17;
-    const kh = size === 's' ? 14 : 20;
-    const gap = size === 's' ? 2 : 3;
+    const tt = size === 's' ? 40 : 64;
+    const kw = size === 's' ? 12 : 21;
+    const kh = size === 's' ? 17 : 27;
+    const gap = size === 's' ? 2 : 4;
 
     const wrap = (lane, node) => (
         <div key={lane.index} className="flex flex-col items-center">
@@ -43,18 +43,23 @@ function IIDXSide({ lanes, mirror, size, refFn, countRefs, showLabel, showCount,
             style={{ width: kw, height: kh, background: '#0b0f1a', borderRadius: 3, border: `1px solid ${(keyNum(lane) % 2 === 0 ? '#3b82f6' : '#e2e8f0')}66` }} />
     ));
 
-    const Turntable = scr && wrap(scr, (
-        <div ref={el => refFn(scr.index, el)}
-            className="rounded-full border-[3px] border-[#1e293b] bg-neutral-900 relative overflow-hidden shrink-0"
-            style={{ width: tt, height: tt, willChange: 'transform' }}>
-            <div className="absolute inset-0 flex items-center justify-center">
-                <div className="absolute w-full h-px bg-gray-600/40" />
-                <div className="absolute w-full h-px bg-gray-600/40 rotate-45" />
-                <div className="absolute w-full h-px bg-gray-600/40 rotate-90" />
-                <div className="absolute w-full h-px bg-gray-600/40 -rotate-45" />
+    const Scratch = scr && wrap(scr, scratchShape === 'bar'
+        ? (
+            <div ref={el => refFn(scr.index, el)}
+                style={{ width: kw * 2 + gap, height: kh, background: '#0b0f1a', borderRadius: 3, border: '1px solid #f8717188' }} />
+        )
+        : (
+            <div ref={el => refFn(scr.index, el)}
+                className="rounded-full border-[3px] border-[#1e293b] bg-neutral-900 relative overflow-hidden shrink-0"
+                style={{ width: tt, height: tt, willChange: 'transform' }}>
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="absolute w-full h-px bg-gray-600/40" />
+                    <div className="absolute w-full h-px bg-gray-600/40 rotate-45" />
+                    <div className="absolute w-full h-px bg-gray-600/40 rotate-90" />
+                    <div className="absolute w-full h-px bg-gray-600/40 -rotate-45" />
+                </div>
             </div>
-        </div>
-    ));
+        ));
 
     const Keys = (
         <div className="flex flex-col items-center" style={{ gap }}>
@@ -65,7 +70,7 @@ function IIDXSide({ lanes, mirror, size, refFn, countRefs, showLabel, showCount,
 
     return (
         <div className="flex items-center" style={{ gap: gap + 2 }}>
-            {!mirror && Turntable}{Keys}{mirror && Turntable}
+            {!mirror && Scratch}{Keys}{mirror && Scratch}
         </div>
     );
 }
@@ -112,19 +117,20 @@ const ControllerPanel = forwardRef(({ controllerRefs, keyboardRefs, parsedSong, 
     const setKb = (i, el) => { keyboardRefs.current[i] = el; };
 
     // showCount=true は CONTROLLER のみ(countRefs が指す要素を一意にするため)
-    const board = (refFn, { showLabel = false, showCount = false } = {}) => (
-        isPms
+    const board = (refFn, { showLabel = false, showCount = false, scratchShape = 'disc' } = {}) => {
+        const common = { refFn, countRefs, showLabel, showCount, scratchShape, mode };
+        return isPms
             ? <PopnBoard lanes={lanes} refFn={refFn} countRefs={countRefs} showLabel={showLabel} showCount={showCount} />
             : isDP
                 ? (
                     <div className="flex items-center justify-center gap-1">
-                        <IIDXSide lanes={s1} mirror={false} size="s" refFn={refFn} countRefs={countRefs} showLabel={showLabel} showCount={showCount} mode={mode} />
+                        <IIDXSide lanes={s1} mirror={false} size="s" {...common} />
                         <div className="w-px self-stretch bg-blue-900/40 mx-0.5" />
-                        <IIDXSide lanes={s2} mirror size="s" refFn={refFn} countRefs={countRefs} showLabel={showLabel} showCount={showCount} mode={mode} />
+                        <IIDXSide lanes={s2} mirror size="s" {...common} />
                     </div>
                 )
-                : <div className="flex justify-center"><IIDXSide lanes={s1} mirror={!!is2P} size="l" refFn={refFn} countRefs={countRefs} showLabel={showLabel} showCount={showCount} mode={mode} /></div>
-    );
+                : <div className="flex justify-center"><IIDXSide lanes={s1} mirror={!!is2P} size="l" {...common} /></div>;
+    };
 
     return (
         <div className="w-64 flex flex-col border-r border-blue-900/30 bg-[#080808] p-2 gap-2 shrink-0 overflow-y-auto scrollbar-hide text-blue-100">
@@ -143,7 +149,7 @@ const ControllerPanel = forwardRef(({ controllerRefs, keyboardRefs, parsedSong, 
             <div className="bg-[#112233]/50 rounded p-2 border border-blue-900/30">
                 <div className="text-[10px] text-blue-400 font-bold mb-1.5 flex items-center gap-1"><Keyboard size={10} /> KEY MAPPING</div>
                 <div className="bg-black/40 rounded py-2 px-1 flex items-center justify-center">
-                    {board(setKb, { showLabel: true })}
+                    {board(setKb, { showLabel: true, scratchShape: 'bar' })}
                 </div>
                 {(isDP || isPms) && <div className="text-[9px] text-blue-500/50 mt-1 text-center">キー割り当ての変更は今後対応</div>}
             </div>
