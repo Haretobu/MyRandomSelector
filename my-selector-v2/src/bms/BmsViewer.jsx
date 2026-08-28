@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
-import { LANE_MAP, VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION } from './constants';
+import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS } from './constants';
 import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, generateLaneMap, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 
@@ -14,7 +14,10 @@ import ControlBar from './components/ControlBar';
 import BgaLayer from './components/BgaLayer';
 
 // ★軽量化: renderLoop 毎フレームの割り当てを避けるためのモジュールスコープ定数/再利用バッファ
-const IS_DARK_LANE = [false, true, false, true, false, true, false]; // i=0..6
+const MAX_LANES = 16;                // 0=1P皿,1-7=1P鍵 / 8=2P皿,9-15=2P鍵 (PMS は 0-8)
+const SIDE_GAP_UNITS = 0.7;          // DP の 1P/2P 間の隙間 (KEY_W 単位)
+const LANE_GAP_UNITS = 0.05;
+const SCRATCH_UNITS = 1.5;
 
 // 参照が安定した関数を返す(常に最新の実装を呼ぶ)。子の React.memo を効かせるために使う。
 function useEvent(fn) {
@@ -22,8 +25,24 @@ function useEvent(fn) {
   ref.current = fn;
   return useRef((...a) => ref.current(...a)).current;
 }
-const IS_BLUE_LANE = [false, false, true, false, true, false, true, false]; // laneIndex=0..7
-const _activeLanesScratch = new Array(8).fill(false); // renderLoop 内でのみ同期利用
+const _activeLanesScratch = new Array(MAX_LANES).fill(false); // renderLoop 内でのみ同期利用
+const _laneXScratch = new Array(MAX_LANES).fill(0);   // laneX[index] = 板内での左端X (BOARD_X相対)
+const _laneWScratch = new Array(MAX_LANES).fill(0);   // laneW[index] = レーン幅
+const DEFAULT_LANES = LANE_LAYOUTS.SP7;
+
+// レーンの見た目の色を返す。lane = { index, kind, side }
+function laneKeyNum(lane) { return lane.side === 0 ? lane.index : lane.index - 8; } // 1..7
+function laneNoteColor(lane, pmsColors) {
+  if (pmsColors) return pmsColors[lane.index] || '#f1f5f9';
+  if (lane.kind === 'scratch') return '#ef4444';
+  return (laneKeyNum(lane) % 2 === 0) ? '#3b82f6' : '#f1f5f9';
+}
+function laneBgColor(lane, lOpacity, isMobile, pms) {
+  if (pms) return isMobile ? `rgba(20, 20, 28, ${lOpacity})` : '#12121c';
+  if (lane.kind === 'scratch') return isMobile ? `rgba(15, 23, 42, ${lOpacity})` : '#0f172a';
+  const dark = laneKeyNum(lane) % 2 === 0;
+  return dark ? `rgba(15, 23, 42, ${lOpacity})` : `rgba(30, 41, 59, ${lOpacity})`;
+}
 
 export default function BmsViewer() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
@@ -75,7 +94,7 @@ export default function BmsViewer() {
   const [currentLaneOrder, setCurrentLaneOrder] = useState([1,2,3,4,5,6,7]);
   const [comboPos, setComboPos] = useState('CENTER');
   const [totalNotes, setTotalNotes] = useState(0);
-  const [laneMute, setLaneMute] = useState(() => new Array(8).fill(false)); // レーンごとミュート(0=SC, 1-7=鍵盤)
+  const [laneMute, setLaneMute] = useState(() => new Array(MAX_LANES).fill(false)); // レーンごとミュート(0=SC, 1-7=鍵盤)
   const laneMuteRef = useRef(laneMute);
   useEffect(() => { laneMuteRef.current = laneMute; }, [laneMute]);
   // ↓ P1-e で imperative 更新へ移行。値は未使用、setter は互換のため no-op で残す。
@@ -123,9 +142,9 @@ export default function BmsViewer() {
   const nextBackBgaIndexRef = useRef(0);
   const nextLayerBgaIndexRef = useRef(0);
   const nextPoorBgaIndexRef = useRef(0);
-  const lastPlayedSoundPerLaneRef = useRef(new Array(8).fill(null));
+  const lastPlayedSoundPerLaneRef = useRef(new Array(MAX_LANES).fill(null));
   const comboRef = useRef(0);
-  const noteCountsRef = useRef(new Array(8).fill(0)); 
+  const noteCountsRef = useRef(new Array(MAX_LANES).fill(0)); 
   const lastStateUpdateRef = useRef(0);
   const currentMeasureRef = useRef(-1);
   const longAudioProgressRefs = useRef(new Map());
@@ -136,7 +155,7 @@ export default function BmsViewer() {
   const polyphonyRef = useRef(0);   // 現在の同時発音数(scheduleAudioが毎tick更新、表示は100msブロックで間引き)
   const hudLastRef = useRef({});    // HUDに最後に push した値。変化時のみ setState するための比較用
   const canvasRectRef = useRef(null);   // canvas の CSS サイズ(ResizeObserver でキャッシュ、毎フレーム getBoundingClientRect しない)
-  const laneVisualRef = useRef(new Array(8).fill(null)); // 各レーンの見た目 active 状態。変化時のみ DOM 書き込み
+  const laneVisualRef = useRef(new Array(MAX_LANES).fill(null)); // 各レーンの見た目 active 状態。変化時のみ DOM 書き込み
   const gradCacheRef = useRef({ key: '', ln: [], hit: [] }); // レーン単位のグラデーションキャッシュ
   const boardLayerRef = useRef({ key: '', canvas: null });   // 静的な板(背景/レーン/区切り線/判定線)のオフスクリーンキャッシュ
   const readyTextCacheRef = useRef(null); // READY/GO 演出をオフスクリーンに1回だけ描画(shadowBlurは最重量級)
@@ -173,7 +192,7 @@ export default function BmsViewer() {
   const hiddenPlusValRef = useRef(hiddenPlusVal);
   const liftValRef = useRef(liftVal);
   const isMobileRef = useRef(isMobile);
-  const lastNotesByLaneRef = useRef(new Array(8).fill(null)); 
+  const lastNotesByLaneRef = useRef(new Array(MAX_LANES).fill(null)); 
   
   const boardOpacityRef = useRef(boardOpacity);
   const laneOpacityRef = useRef(laneOpacity);
@@ -323,7 +342,7 @@ export default function BmsViewer() {
           }
       }
   };
-  const clearActiveLanes = () => { for(let i=0; i<8; i++) { if (laneVisualRef.current[i] !== false) { laneVisualRef.current[i] = false; setLaneActive(i, false); } } };
+  const clearActiveLanes = () => { for(let i=0; i<MAX_LANES; i++) { if (laneVisualRef.current[i] !== false) { laneVisualRef.current[i] = false; setLaneActive(i, false); } } };
 
   const triggerMiss = () => {
       comboRef.current = 0;
@@ -644,7 +663,7 @@ export default function BmsViewer() {
 
     try {
       const parsed = await parseBMS(bmsFile);
-      setTimeout(() => { if (!parsed.isSupportedMode) alert("警告：このBMSファイルは5鍵/7鍵盤以外のモード（DPやPMSなど）を含んでいる可能性があります。\n正しく再生されない、または未実装の形式です。"); }, 100);
+      setTimeout(() => { if (!parsed.isSupportedMode) alert("警告：この形式（9K/pop'n など）はまだ描画に対応していません。"); }, 100);
       const diffInfo = guessDifficulty(parsed.header, bmsFile.name);
       setDifficultyInfo(diffInfo); setRealtimeBpm(parsed.header.bpm); realtimeBpmRef.current = parsed.header.bpm; setCurrentBpm(parsed.header.bpm);
 
@@ -733,7 +752,7 @@ export default function BmsViewer() {
               if (buffer) { const endTime = obj.time + buffer.duration; if (endTime > calculatedMaxDuration) calculatedMaxDuration = endTime; }
           }
       });
-      const lasts = new Array(8).fill(null);
+      const lasts = new Array(MAX_LANES).fill(null);
       parsed.objects.forEach(obj => {
           if (obj.isNote && obj.laneIndex >= 0 && obj.laneIndex <= 7) {
               // より後ろの時間にあるノーツを更新していく
@@ -745,7 +764,7 @@ export default function BmsViewer() {
       lastNotesByLaneRef.current = lasts;
       setDuration(calculatedMaxDuration); setParsedSong(parsed); setTotalNotes(parsed.totalNotes);
       setPlaybackTimeDisplay(0); pauseTimeRef.current = 0; setCombo(0); comboRef.current = 0; hudLastRef.current = {};
-      lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(8).fill(0));
+      lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(MAX_LANES).fill(0));
       setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsed.avgDensity });
       lastStateUpdateRef.current = 0; // 次の renderLoop フレームで HUD を即更新させる
       setLoadingMessage('準備完了'); setIsLoading(false);
@@ -838,10 +857,10 @@ export default function BmsViewer() {
                 }
               }
           }
-          if (obj.isNote) {
+          if (obj.isNote && !laneMuteRef.current[obj.laneIndex]) { // ★P5-2 ミュートレーンは打鍵音も鳴らさない
                const hitTime = Math.max(currentTime, absolutePlayTime);
                const buffer = obj.laneIndex === 0 ? scratchHitSoundBufferRef.current : keyHitSoundBufferRef.current;
-               
+
                if (buffer) {
                    const src = ctx.createBufferSource();
                    src.buffer = buffer;
@@ -924,7 +943,7 @@ export default function BmsViewer() {
     if (!parsedSong || isLoading) return;
     applyHitSounds(tempKeyHitSoundBuffer, tempScratchHitSoundBuffer, isSeparateHitSound, tempKeySoundName, tempScratchSoundName);
     if (!parsedSong.isSupportedMode) {
-        setTimeout(() => alert("未実装：この形式（5/7鍵盤以外）のBMS再生はサポートされていません。"), 10);
+        setTimeout(() => alert("未実装：この形式（9K/pop'n など）の再生はまだサポートされていません。"), 10);
         return;
     }
     if (audioContextRef.current.state === 'suspended') audioContextRef.current.resume();
@@ -984,7 +1003,7 @@ export default function BmsViewer() {
         }
 
         pauseTimeRef.current = 0; setPlaybackTimeDisplay(0); setCombo(0); comboRef.current = 0; hudLastRef.current = {}; lastBgaKeyRef.current = {};
-        lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(8).fill(0));
+        lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(MAX_LANES).fill(0));
         if (parsedSong) displayObjects.forEach(o => o.processed = false);
         setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsedSong?.avgDensity || 0 });
         currentMeasureRef.current = -1; lastStateUpdateRef.current = 0; setRealtimeBpm(parsedSong?.header.bpm || 130); realtimeBpmRef.current = parsedSong?.header.bpm || 130; setReadyAnimState(null);
@@ -1246,37 +1265,58 @@ export default function BmsViewer() {
     const height = rect.height;
     ctx.clearRect(0, 0, width, height);
 
-    const KEY_W = Math.min(40, width / 12);
-    const SCRATCH_W = KEY_W * 1.5;
-    const BOARD_W = SCRATCH_W + (KEY_W * 7) + 10;
-    const BOARD_X = (width - BOARD_W) / 2;
-    
     const visMode = visibilityModeRef.current;
     const isLiftEnabled = visMode === VISIBILITY_MODES.LIFT || visMode === VISIBILITY_MODES.LIFT_SUD_PLUS;
-    const liftOffset = isLiftEnabled ? liftValRef.current : 0; 
-    // ★修正: スマホの判定ラインをさらに上げる (ナビゲーションバー対策)
-    const BASE_JUDGE_Y = height - (isMobileRef.current ? 180 : 100); 
+    const liftOffset = isLiftEnabled ? liftValRef.current : 0;
+    const BASE_JUDGE_Y = height - (isMobileRef.current ? 180 : 100);
     const JUDGE_Y = BASE_JUDGE_Y - liftOffset;
     const is2P = playSideRef.current === '2P';
-    const SCRATCH_X = is2P ? BOARD_X + (KEY_W * 7) + 10 : BOARD_X; const KEYS_X = is2P ? BOARD_X : BOARD_X + SCRATCH_W + 10;
+    const mode = parsedSong?.mode || 'SP7';
+    const isPmsMode = mode === 'PMS9';
 
-    // ★軽量化: ノーツ演出のグラデーションはレーン単位で使い回す。ジオメトリが変わったときだけ再構築。
-    //   フェードは createLinearGradient を作り直さず ctx.globalAlpha で行う。
-    const gradKey = `${JUDGE_Y}|${KEY_W}|${SCRATCH_X}|${KEYS_X}`;
+    // --- レーンレイアウト (モード可変) ---
+    let lanesArr = parsedSong?.lanes || DEFAULT_LANES;
+    if (is2P && (mode === 'SP7' || mode === 'SP5')) {
+        // SP 2P: 鍵は左→右のまま、皿だけ右側へ
+        const keys = lanesArr.filter(l => l.kind === 'key');
+        const scr = lanesArr.find(l => l.kind === 'scratch');
+        lanesArr = scr ? [...keys, scr] : keys;
+    }
+    let totalU = 0;
+    for (let i = 0; i < lanesArr.length; i++) {
+        if (i > 0) totalU += (lanesArr[i].side !== lanesArr[i - 1].side ? SIDE_GAP_UNITS : LANE_GAP_UNITS);
+        totalU += (lanesArr[i].kind === 'scratch' ? SCRATCH_UNITS : 1.0);
+    }
+    const KEY_W = Math.max(7, Math.min(40, (width - 24) / totalU));
+    const laneX = _laneXScratch, laneW = _laneWScratch;
+    laneW.fill(0);
+    let cx = 0;
+    for (let i = 0; i < lanesArr.length; i++) {
+        if (i > 0) cx += KEY_W * (lanesArr[i].side !== lanesArr[i - 1].side ? SIDE_GAP_UNITS : LANE_GAP_UNITS);
+        const w = KEY_W * (lanesArr[i].kind === 'scratch' ? SCRATCH_UNITS : 1.0);
+        laneX[lanesArr[i].index] = cx; laneW[lanesArr[i].index] = w;
+        cx += w;
+    }
+    const BOARD_W = cx;
+    const BOARD_X = (width - BOARD_W) / 2;
+
+    // ★軽量化: ノーツ演出のグラデーション/色はレーン単位で使い回す。ジオメトリが変わったときだけ再構築。
+    const gradKey = `${JUDGE_Y}|${KEY_W}|${Math.round(BOARD_X)}|${mode}|${is2P}`;
     const gc = gradCacheRef.current;
     if (gc.key !== gradKey) {
-        gc.key = gradKey; gc.ln = []; gc.hitRed = []; gc.hitBlue = [];
-        for (let li = 0; li < 8; li++) {
-            const gx = li === 0 ? SCRATCH_X : KEYS_X + (li - 1) * KEY_W;
+        gc.key = gradKey;
+        gc.ln = new Array(MAX_LANES); gc.hit = new Array(MAX_LANES); gc.color = new Array(MAX_LANES); gc.isScr = new Array(MAX_LANES).fill(false);
+        for (const lane of lanesArr) {
+            const gx = BOARD_X + laneX[lane.index];
             const ln = ctx.createLinearGradient(gx, JUDGE_Y, gx, JUDGE_Y - 300);
             ln.addColorStop(0, 'rgba(100, 200, 255, 0.3)'); ln.addColorStop(1, 'rgba(0,0,0,0)');
-            gc.ln[li] = ln;
-            const hr = ctx.createLinearGradient(gx, JUDGE_Y, gx, JUDGE_Y - 200);
-            hr.addColorStop(0, 'rgba(239, 68, 68, 1)'); hr.addColorStop(1, 'rgba(0,0,0,0)');
-            gc.hitRed[li] = hr;
-            const hb = ctx.createLinearGradient(gx, JUDGE_Y, gx, JUDGE_Y - 200);
-            hb.addColorStop(0, 'rgba(59, 130, 246, 1)'); hb.addColorStop(1, 'rgba(0,0,0,0)');
-            gc.hitBlue[li] = hb;
+            gc.ln[lane.index] = ln;
+            const col = laneNoteColor(lane, isPmsMode ? PMS_LANE_COLORS : null);
+            gc.color[lane.index] = col;
+            gc.isScr[lane.index] = lane.kind === 'scratch';
+            const hit = ctx.createLinearGradient(gx, JUDGE_Y, gx, JUDGE_Y - 200);
+            hit.addColorStop(0, col); hit.addColorStop(1, 'rgba(0,0,0,0)');
+            gc.hit[lane.index] = hit;
         }
     }
 
@@ -1284,10 +1324,8 @@ export default function BmsViewer() {
     const lOpacity = laneOpacityRef.current;
     const laneHeight = isLiftEnabled ? JUDGE_Y : height;
 
-    // ★軽量化(Part1): フレーム間で変化しない板(背景/レーン/区切り線/スクラッチ/判定線)は
-    //   オフスクリーンに1回だけ描き、毎フレームは drawImage で貼るだけにする。
-    //   特に HiDPI ノートPC では毎フレームの塗り面積が支配的なので効果が大きい。
-    const boardKey = `${width}|${height}|${dpr}|${KEY_W}|${BOARD_X}|${SCRATCH_X}|${KEYS_X}|${JUDGE_Y}|${isLiftEnabled}|${is2P}|${bOpacity}|${lOpacity}|${isMobileRef.current}|${showSettings}|${!!parsedSong}`;
+    // ★軽量化(Part1): 静的な板はオフスクリーンに1回だけ描き、毎フレームは drawImage。
+    const boardKey = `${width}|${height}|${dpr}|${KEY_W}|${Math.round(BOARD_X)}|${Math.round(BOARD_W)}|${JUDGE_Y}|${isLiftEnabled}|${mode}|${is2P}|${bOpacity}|${lOpacity}|${isMobileRef.current}|${showSettings}|${!!parsedSong}`;
     const bl = boardLayerRef.current;
     if (bl.key !== boardKey) {
         bl.key = boardKey;
@@ -1299,17 +1337,17 @@ export default function BmsViewer() {
         bx.clearRect(0, 0, width, height);
         bx.fillStyle = `rgba(2, 6, 23, ${bOpacity})`;
         bx.fillRect(BOARD_X, 0, BOARD_W, height);
-        for (let i = 0; i < 7; i++) {
-            bx.fillStyle = IS_DARK_LANE[i] ? `rgba(15, 23, 42, ${lOpacity})` : `rgba(30, 41, 59, ${lOpacity})`;
-            bx.fillRect(KEYS_X + i * KEY_W, 0, KEY_W, laneHeight);
+        for (const lane of lanesArr) {
+            bx.fillStyle = laneBgColor(lane, lOpacity, isMobileRef.current, isPmsMode);
+            bx.fillRect(BOARD_X + laneX[lane.index], 0, laneW[lane.index], laneHeight);
         }
         bx.strokeStyle = isMobileRef.current ? `rgba(51, 65, 85, ${lOpacity})` : '#334155';
         bx.lineWidth = 1; bx.beginPath();
-        for (let i = 0; i <= 7; i++) { const lx = KEYS_X + i * KEY_W; bx.moveTo(lx, 0); bx.lineTo(lx, laneHeight); }
-        bx.fillStyle = isMobileRef.current ? `rgba(15, 23, 42, ${lOpacity})` : '#0f172a';
-        bx.fillRect(SCRATCH_X, 0, SCRATCH_W, laneHeight);
-        bx.moveTo(SCRATCH_X, 0); bx.lineTo(SCRATCH_X, laneHeight);
-        bx.moveTo(SCRATCH_X + SCRATCH_W, 0); bx.lineTo(SCRATCH_X + SCRATCH_W, laneHeight);
+        for (const lane of lanesArr) {
+            const lx = BOARD_X + laneX[lane.index];
+            bx.moveTo(lx, 0); bx.lineTo(lx, laneHeight);
+            bx.moveTo(lx + laneW[lane.index], 0); bx.lineTo(lx + laneW[lane.index], laneHeight);
+        }
         bx.stroke();
         if (!showSettings && parsedSong) {
             bx.strokeStyle = '#ef4444';
@@ -1345,9 +1383,9 @@ export default function BmsViewer() {
         for (let i = startIndex; i < displayObjects.length; i++) {
             const obj = displayObjects[i];
             if (obj.beat > visibleEndBeat) break; if (!obj.isNote) continue;
-            let x, w; if (obj.laneIndex === 0) { x = SCRATCH_X;
-            w = SCRATCH_W; } else { x = KEYS_X + (obj.laneIndex - 1) * KEY_W; w = KEY_W;
-            }
+            const w = laneW[obj.laneIndex];
+            if (!w) continue; // このモードで使わないレーン
+            const x = BOARD_X + laneX[obj.laneIndex];
             const mAlpha = laneMuteRef.current[obj.laneIndex] ? 0.28 : 1; // ★P5-2 ミュートレーンは薄く
             const beatDelta = obj.beat - currentBeat;
             const timeDelta = obj.time - currentTime;
@@ -1392,7 +1430,7 @@ export default function BmsViewer() {
                     const h = drawBottom - drawTop;
                     if (h > 0 && drawBottom > -50) {
                         if (mAlpha !== 1) ctx.globalAlpha = mAlpha;
-                        ctx.fillStyle = obj.laneIndex === 0 ? '#ef4444' : '#f59e0b';
+                        ctx.fillStyle = gc.isScr[obj.laneIndex] ? '#ef4444' : '#f59e0b';
                         ctx.fillRect(x + 1, drawTop, w - 2, h);
                         if (mAlpha !== 1) ctx.globalAlpha = 1;
                     }
@@ -1406,7 +1444,7 @@ export default function BmsViewer() {
                         ctx.globalAlpha = alpha;
                         ctx.fillStyle = '#ffffff'; ctx.fillRect(x, JUDGE_Y - 5, w, 10);
                         ctx.globalAlpha = alpha * 0.6;
-                        ctx.fillStyle = obj.laneIndex === 0 ? gc.hitRed[obj.laneIndex] : gc.hitBlue[obj.laneIndex];
+                        ctx.fillStyle = gc.hit[obj.laneIndex];
                         ctx.fillRect(x, JUDGE_Y - 200, w, 200);
                         ctx.globalAlpha = 1;
                     }
@@ -1414,7 +1452,7 @@ export default function BmsViewer() {
                 }
                 const y = yBase;
                 if (mAlpha !== 1) ctx.globalAlpha = mAlpha;
-                ctx.fillStyle = obj.laneIndex === 0 ? '#ef4444' : (IS_BLUE_LANE[obj.laneIndex] ? '#3b82f6' : '#f1f5f9');
+                ctx.fillStyle = gc.color[obj.laneIndex] || '#f1f5f9';
                 ctx.fillRect(x + 1, y - 6, w - 2, 12);
                 if (mAlpha !== 1) ctx.globalAlpha = 1;
             }
@@ -1488,7 +1526,7 @@ export default function BmsViewer() {
     if (scratchCtrl) scratchCtrl.style.transform = `rotate(${scratchAngleRef.current}deg)`;
 
     // ★軽量化: 毎フレーム8レーン分の style 一括書き込みをやめ、状態が変化したレーンだけ書き込む。
-    for (let lane = 0; lane < 8; lane++) {
+    for (let lane = 0; lane < MAX_LANES; lane++) {
         const active = currentActiveLanes[lane] || activeInputLanesRef.current.has(lane);
         if (laneVisualRef.current[lane] !== active) {
             laneVisualRef.current[lane] = active;

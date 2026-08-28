@@ -1,13 +1,14 @@
 // src/bms/logic/parser.js
-import { LANE_MAP } from '../constants';
+import { LANE_MAP, PMS_LANE_MAP, LANE_LAYOUTS, MODE_LABELS } from '../constants';
 import { decodeBmsText, parseInt36 } from './utils';
 
 // ★軽量化: 正規表現はループ内で毎回リテラル評価せず、モジュール定数として1回だけ生成する
 const RE_MEASURE_LEN = /^#\d{3}02$/;      // 小節長変更チャンネル (#xxx02)
 const RE_CHANNEL_LINE = /^#\d{5}$/;       // 小節データ行 (#mmmcc)
-const RE_UNSUPPORTED_CH = /^(2[1-9]|6[1-9])$/; // 2P側チャンネル(未対応)
 
 export const parseBMS = async (file) => {
+    const isPms = /\.pms$/i.test(file.name);
+    const laneMap = isPms ? PMS_LANE_MAP : LANE_MAP;
     const text = await decodeBmsText(file);
     const lines = text.split(/\r?\n/);
     const header = { bpm: 130, wavs: {}, bmps: {}, bpms: {}, stops: {}, title: 'Unknown', artist: 'Unknown', genre: '', playlevel: '', rank: null, difficulty: null, stagefile: null, lnObj: null, player: 1 };
@@ -51,7 +52,7 @@ export const parseBMS = async (file) => {
           for (let i = 0; i < total; i++) {
             const val = parseInt36(value.substring(i * 2, i * 2 + 2));
             if (val !== 0) {
-              const lane = LANE_MAP[ch];
+              const lane = laneMap[ch];
               if (lane) {
                   if (lane.index > maxLaneIndex) maxLaneIndex = lane.index;
                   if (!lane.isBg) {
@@ -59,8 +60,7 @@ export const parseBMS = async (file) => {
                       if (lane.isScratch) scratchPerMeasure[measure] = (scratchPerMeasure[measure] || 0) + 1;
                   }
               }
-              
-              if (RE_UNSUPPORTED_CH.test(ch)) isSupportedMode = false;
+
               if (lane || ch === '01' || ch === '04' || ch === '06' || ch === '07' || ch === '03' || ch === '08' || ch === '09') {
                 rawObjects.push({
                     measure, channel: ch, position: i / total, value: val,
@@ -78,10 +78,6 @@ export const parseBMS = async (file) => {
       }
     }
     
-    if(file.name.toLowerCase().endsWith('.pms')) isSupportedMode = false;
-    if (maxLaneIndex > 7) isSupportedMode = false;
-    if (header.player === 3) isSupportedMode = false;
-
     let totalNotesCount = 0;
     Object.values(notesPerMeasure).forEach(c => totalNotesCount += c);
     const avgDensity = maxMeasureIndex > 0 ? totalNotesCount / (maxMeasureIndex + 1) : 0;
@@ -155,7 +151,7 @@ export const parseBMS = async (file) => {
     layerBgaObjects.sort((a, b) => a.time - b.time); poorBgaObjects.sort((a, b) => a.time - b.time);
 
     const resolvedObjects = [];
-    const pendingLN = new Array(8).fill(null); const lastNoteByLane = new Array(8).fill(null);
+    const pendingLN = new Array(16).fill(null); const lastNoteByLane = new Array(16).fill(null);
     let maxLNDuration = 0;
     for (const obj of finalObjects) {
         if (!obj.isNote) { resolvedObjects.push(obj); continue; } 
@@ -210,9 +206,27 @@ export const parseBMS = async (file) => {
     const distinctBpm = new Set(bpmEntries.map(([b]) => Math.round(b))).size || 1;
     const bpmRange = { min: Math.round(bpmMin), max: Math.round(bpmMax), main: Math.round(bpmMain), count: distinctBpm };
 
-    // 鍵盤モード (現状 SP 5K/7K のみ対応。使用レーンの最大インデックスで判定)
+    // 鍵盤モード判定
     const noteCount = resolvedObjects.filter(o => o.isNote).length;
-    const keyMode = maxLaneIndex >= 6 ? '7K' : (noteCount > 0 ? '5K' : '—');
+    let hasSide2 = false, has1P67 = false, has2P67 = false;
+    for (const o of resolvedObjects) {
+        if (!o.isNote) continue;
+        const li = o.laneIndex;
+        if (li >= 8) hasSide2 = true;
+        if (li === 6 || li === 7) has1P67 = true;
+        if (li === 14 || li === 15) has2P67 = true;
+    }
+    let mode;
+    if (isPms) mode = 'PMS9';
+    else if (noteCount === 0) mode = 'SP7';
+    else if (hasSide2 || header.player === 2 || header.player === 3) mode = (has1P67 || has2P67) ? 'DP14' : 'DP10';
+    else mode = has1P67 ? 'SP7' : 'SP5';
 
-    return { header, objects: resolvedObjects, backBgaObjects, layerBgaObjects, poorBgaObjects, barLines, timePoints, totalTime: lastObjTime + 2.0, rawLinesByMeasure, totalNotes: noteCount, notesPerMeasure, scratchPerMeasure, avgDensity, maxLNDuration, isSupportedMode, bpmRange, keyMode };
+    const lanes = LANE_LAYOUTS[mode] || LANE_LAYOUTS.SP7;
+    const keyMode = MODE_LABELS[mode] || '—';
+    // SP5 / SP7 / DP14 / DP10 は描画対応。PMS(9K) はチャンネル対応が未確定なので暫定で警告を出す。
+    if (mode === 'PMS9') isSupportedMode = false;
+    if (maxLaneIndex > 15) isSupportedMode = false;
+
+    return { header, objects: resolvedObjects, backBgaObjects, layerBgaObjects, poorBgaObjects, barLines, timePoints, totalTime: lastObjTime + 2.0, rawLinesByMeasure, totalNotes: noteCount, notesPerMeasure, scratchPerMeasure, avgDensity, maxLNDuration, isSupportedMode, bpmRange, keyMode, mode, lanes };
   };
