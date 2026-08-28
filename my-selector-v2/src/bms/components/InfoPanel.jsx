@@ -17,6 +17,7 @@ const InfoPanel = forwardRef(({
     const layerBgaRef = useRef(null);
     const poorBgaRef = useRef(null);
     const lastComboRef = useRef(null);
+    const lastNotesRef = useRef(null);
 
     // updateStats で imperative 更新する要素 (再生中は再レンダリングせずここだけ書き換える)
     const measProcRef = useRef(null);
@@ -28,11 +29,14 @@ const InfoPanel = forwardRef(({
 
     useImperativeHandle(ref, () => ({
         // 毎フレーム: コンボ表示 + BGA の位置合わせ
-        updateInfo: (time, currentCombo) => {
+        updateInfo: (time, currentCombo, notesDone) => {
             if (currentCombo !== lastComboRef.current) {
                 lastComboRef.current = currentCombo;
                 if (comboTextRef.current) comboTextRef.current.innerText = currentCombo;
-                if (notesTextRef.current) notesTextRef.current.innerText = currentCombo;
+            }
+            if (notesDone !== undefined && notesDone !== lastNotesRef.current) {
+                lastNotesRef.current = notesDone;
+                if (notesTextRef.current) notesTextRef.current.innerText = notesDone;
             }
             if (backBgaRef.current) backBgaRef.current.syncTime(time);
             if (layerBgaRef.current) layerBgaRef.current.syncTime(time);

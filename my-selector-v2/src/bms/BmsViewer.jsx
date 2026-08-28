@@ -215,6 +215,7 @@ export default function BmsViewer() {
   const scratchImpulseRef = useRef({ 0: { dir: 0, t: 0 }, 8: { dir: 0, t: 0 } }); // プレイモードの皿回転インパルス
   const activeLnRef = useRef(new Array(MAX_LANES).fill(null)); // プレイモード: 判定成立中の LN
   const lastGameKeyTimeRef = useRef(0);    // プレイモード: 直近のゲームキー入力時刻(Space誤爆抑制用)
+  const notesDoneRef = useRef(0);          // 通過/判定済みノーツ数(NOTES 表示。コンボとは別)
   const playSideRef = useRef(playSide);
   const showMutedMonitorRef = useRef(showMutedMonitor);
   const showAbortedMonitorRef = useRef(showAbortedMonitor);
@@ -421,12 +422,14 @@ export default function BmsViewer() {
       scratchDirRef.current = { 0: null, 8: null };
       activeLnRef.current = new Array(MAX_LANES).fill(null);
       comboRef.current = 0;
+      notesDoneRef.current = 0;
   };
 
   // 直近判定を記録し、コンボ / EX SCORE / FAST-SLOW を更新。kind: 'pg'|'gr'|'gd'|'bd'|'poor'|'epoor'
   const pushJudge = (kind, deltaMs) => {
       const j = judgeRef.current;
       j[kind] = (j[kind] || 0) + 1;
+      if (kind !== 'epoor') notesDoneRef.current++; // 空POOR はノーツを消費しない
       if (kind === 'pg' || kind === 'gr' || kind === 'gd') {
           comboRef.current++;
           if (comboRef.current > j.maxCombo) j.maxCombo = comboRef.current;
@@ -486,19 +489,24 @@ export default function BmsViewer() {
           }
       }
 
-      // 最寄りの未処理ノーツ(|Δ| 最小、bd 窓内)
-      let target = null, best = Infinity;
-      const c = findStartIndex(objs, t - bd - 0.05);
+      // このレーンの最寄りノーツ(処理済み含む)を探す。EPOOR_RANGE 内にノーツが居るかで空POORを判定する。
+      const EPOOR_RANGE = 0.5;
+      let target = null, best = Infinity;      // bd 窓内の未処理ノーツ(=判定対象)
+      let nearAny = null, nearBest = Infinity; // EPOOR_RANGE 内の最寄り(処理済み可)
+      const c = findStartIndex(objs, t - EPOOR_RANGE - 0.05);
       for (let i = Math.max(0, c - 4); i < objs.length; i++) {
           const o = objs[i];
-          if (o.time > t + bd + 0.05) break;
-          if (!o.isNote || o.processed || o.laneIndex !== lane) continue;
+          if (o.time > t + EPOOR_RANGE + 0.05) break;
+          if (!o.isNote || o.laneIndex !== lane) continue;
           const d = Math.abs(o.time - t);
-          if (d < best) { best = d; target = o; }
+          if (d < nearBest) { nearBest = d; nearAny = o; }
+          if (!o.processed && d <= bd && d < best) { best = d; target = o; }
       }
 
-      if (!target || best > bd) {
-          pushJudge('epoor', 0); // 空打ち → 空POOR(コンボ非切断)
+      if (!target) {
+          // 判定対象なし。近くにノーツが居る(=二度押し / BAD より外した)場合のみ空POOR。
+          //   完全な空白(近くにノーツなし)は無反応。
+          if (nearAny && nearBest <= EPOOR_RANGE) pushJudge('epoor', 0);
           return;
       }
 
@@ -595,10 +603,13 @@ export default function BmsViewer() {
     if (!isInputDebugMode && !playMode) { activeInputLanesRef.current.clear(); clearActiveLanes(); return; }
     const handleKeyDown = (e) => {
         if (e.repeat) return;
-        // プレイモード中: 直近2秒以内にゲームキーを叩いていたら Space の誤爆(再生/停止ボタン発火)を抑制
-        if (playModeRef.current && (e.code === 'Space' || e.code === 'Enter')
-            && performance.now() - lastGameKeyTimeRef.current < 2000) {
+        // プレイモード中: Space はブラウザ既定のボタン発火を止めて自前でトグル。
+        //   直近2秒以内にゲームキーを叩いていたら無効(誤爆防止)、2秒アイドルで一時停止/再開が効く。
+        if (playModeRef.current && (e.code === 'Space' || e.code === 'Enter')) {
             e.preventDefault();
+            if (performance.now() - lastGameKeyTimeRef.current >= 2000) {
+                if (isPlayingRef.current) pausePlayback(); else startPlayback();
+            }
             return;
         }
         const rev = debugKeyLaneRef.current;
@@ -703,12 +714,7 @@ export default function BmsViewer() {
         scheduleRenderLoop();
     };
     const handleKeyUp = (e) => {
-        // Space/Enter によるボタン発火は keyup で起きるため、抑制中は keyup も止める
-        if (playModeRef.current && (e.code === 'Space' || e.code === 'Enter')
-            && performance.now() - lastGameKeyTimeRef.current < 2000) {
-            e.preventDefault();
-            return;
-        }
+        if (playModeRef.current && (e.code === 'Space' || e.code === 'Enter')) { e.preventDefault(); return; }
         if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') isShiftHeldRef.current = false;
         else if (e.code === 'ControlLeft' || e.code === 'ControlRight') isCtrlHeldRef.current = false;
         const lane = debugKeyLaneRef.current[e.code];
@@ -1302,7 +1308,8 @@ export default function BmsViewer() {
         }
     }
     comboRef.current = passedNotes;
-    if (playModeRef.current) { resetJudge(); comboRef.current = 0; } // シーク = その地点から仕切り直し
+    notesDoneRef.current = passedNotes;
+    if (playModeRef.current) { resetJudge(); comboRef.current = 0; notesDoneRef.current = 0; } // シーク = その地点から仕切り直し
     hudLastRef.current = {}; lastStateUpdateRef.current = 0; // スクラブ中も HUD(imperative)を追従させる
     clearActiveLanes();
     // 位置の同期(startTimeRef / nextNoteIndexRef / BGA インデックス・フレーム)は必ず同期実行する。
@@ -1407,8 +1414,7 @@ export default function BmsViewer() {
             pcControlBarRef.current.updateTime(currentTime);
         }
         if (infoPanelRef.current) {
-            // 時間だけでなく、コンボ数なども渡せます
-            infoPanelRef.current.updateInfo(currentTime, comboRef.current);
+            infoPanelRef.current.updateInfo(currentTime, comboRef.current, notesDoneRef.current);
         }
         // モバイルは InfoPanel が無いので BGA の syncTime をここで直接呼ぶ(動画BGAの位置合わせ)
         if (isMobileRef.current) {
@@ -1435,8 +1441,8 @@ export default function BmsViewer() {
                 logPanelRef.current?.updatePoly(H.poly, H.maxPoly, H.avgPoly);
             }
             // レーン別ノーツ数 → ControllerPanel(imperative)。comboRef を dirty シグナルに。
-            if (comboRef.current !== H.combo) {
-                H.combo = comboRef.current;
+            if (comboRef.current !== H.combo || notesDoneRef.current !== H.notes) {
+                H.combo = comboRef.current; H.notes = notesDoneRef.current;
                 controllerPanelRef.current?.updateCounts(noteCountsRef.current);
             }
             if (parsedSong) {
@@ -1654,7 +1660,7 @@ export default function BmsViewer() {
                 }
             } else if (!obj.processed && timeDelta <= 0) {
                 obj.processed = true;
-                comboRef.current++; noteCountsRef.current[obj.laneIndex]++; lastPlayedSoundPerLaneRef.current[obj.laneIndex] = obj.filename;
+                comboRef.current++; notesDoneRef.current++; noteCountsRef.current[obj.laneIndex]++; lastPlayedSoundPerLaneRef.current[obj.laneIndex] = obj.filename;
                 if (gc.isScr[obj.laneIndex]) {
                     const scIdx = obj.laneIndex;
                     let dist = 999;
