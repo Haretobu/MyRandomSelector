@@ -355,11 +355,15 @@ export default function BmsViewer() {
   };
 
   const applyOptions = (objects, option) => {
-    const map = generateLaneMap(option);
+    const map = generateLaneMap(option); // 1P鍵1-7 の並び替えマップ (index 1-7)
     setCurrentLaneOrder(map.slice(1));
+    // ★6-1: 並び替えは 1P 鍵1-7 のみ。皿(0,8) と 2P鍵(9-15) はそのまま通す。
+    //   (DP のサイド別 RANDOM 等は 6-1-e で対応)
     return objects.map(o => ({
         ...o, processed: false,
-        laneIndex: (o.isNote && o.laneIndex !== 0) ? (option === 'S-RANDOM' ? Math.floor(Math.random() * 7) + 1 : map[o.laneIndex]) : o.laneIndex
+        laneIndex: (o.isNote && o.laneIndex >= 1 && o.laneIndex <= 7)
+            ? (option === 'S-RANDOM' ? Math.floor(Math.random() * 7) + 1 : map[o.laneIndex])
+            : o.laneIndex
     }));
   };
 
@@ -859,7 +863,7 @@ export default function BmsViewer() {
           }
           if (obj.isNote && !laneMuteRef.current[obj.laneIndex]) { // ★P5-2 ミュートレーンは打鍵音も鳴らさない
                const hitTime = Math.max(currentTime, absolutePlayTime);
-               const buffer = obj.laneIndex === 0 ? scratchHitSoundBufferRef.current : keyHitSoundBufferRef.current;
+               const buffer = (obj.laneIndex === 0 || obj.laneIndex === 8) ? scratchHitSoundBufferRef.current : keyHitSoundBufferRef.current;
 
                if (buffer) {
                    const src = ctx.createBufferSource();
@@ -1383,9 +1387,6 @@ export default function BmsViewer() {
         for (let i = startIndex; i < displayObjects.length; i++) {
             const obj = displayObjects[i];
             if (obj.beat > visibleEndBeat) break; if (!obj.isNote) continue;
-            const w = laneW[obj.laneIndex];
-            if (!w) continue; // このモードで使わないレーン
-            const x = BOARD_X + laneX[obj.laneIndex];
             const mAlpha = laneMuteRef.current[obj.laneIndex] ? 0.28 : 1; // ★P5-2 ミュートレーンは薄く
             const beatDelta = obj.beat - currentBeat;
             const timeDelta = obj.time - currentTime;
@@ -1412,6 +1413,11 @@ export default function BmsViewer() {
                     if (isPlayingRef.current && timeDelta > -0.12) lastScratchTimeRef.current = now;
                 }
             }
+
+            // 描画はレーン幅が確定しているものだけ(コンボ加算は上で済ませてある)
+            const w = laneW[obj.laneIndex];
+            if (!w) continue;
+            const x = BOARD_X + laneX[obj.laneIndex];
 
             const yBase = JUDGE_Y - (beatDelta / visibleDuration * BASE_JUDGE_Y);
             if (obj.type === 'long') {
