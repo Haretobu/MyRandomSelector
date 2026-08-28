@@ -202,7 +202,9 @@ export const parseBMS = async (file) => {
     }
     let bpmMain = header.bpm, bestDur = -1;
     for (const [b, d] of bpmDur) { if (d > bestDur) { bestDur = d; bpmMain = b; } }
-    const bpmRange = { min: Math.round(bpmMin), max: Math.round(bpmMax), main: Math.round(bpmMain) };
+    // 表示上の丸め値で「異なる BPM が何種類か」を数える (1種:数値のみ / 2種:min～max / 3種以上:min～main～max)
+    const distinctBpm = new Set([...bpmDur.keys()].map(b => Math.round(b))).size || 1;
+    const bpmRange = { min: Math.round(bpmMin), max: Math.round(bpmMax), main: Math.round(bpmMain), count: distinctBpm };
 
     // 鍵盤モード (現状 SP 5K/7K のみ対応。使用レーンの最大インデックスで判定)
     const noteCount = resolvedObjects.filter(o => o.isNote).length;

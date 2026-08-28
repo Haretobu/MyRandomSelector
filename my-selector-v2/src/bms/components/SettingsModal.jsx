@@ -21,6 +21,7 @@ const SettingsModal = ({
     // ファイル操作
     handleFileSelect, handleZipSelect, bmsList, selectedBmsIndex, setSelectedBmsIndex,
     hiSpeed, setHiSpeed, bgaOpacity, setBgaOpacity,
+    autoHiSpeed, setAutoHiSpeed, targetGreen, setTargetGreen,
     boardOpacity, setBoardOpacity,
     laneOpacity, setLaneOpacity,
     parsedSong,
@@ -164,6 +165,28 @@ const SettingsModal = ({
                                      </div>
                                 )}
                              </div>
+                        </div>
+                    </div>
+
+                    {/* オートHI-SPEED / グリーンナンバー固定 (共通) */}
+                    <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
+                        <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center gap-2">
+                            <ChevronsUp size={14} /> HI-SPEED (グリーンナンバー固定)
+                        </div>
+                        <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer border border-transparent hover:border-blue-500/30">
+                            <span className="text-sm">オートHI-SPEED（主BPMで緑数字を固定）</span>
+                            <input type="checkbox" checked={autoHiSpeed} onChange={e => setAutoHiSpeed(e.target.checked)} className="accent-blue-500 w-4 h-4"/>
+                        </label>
+                        <div className={`flex items-center gap-2 mt-2 ${autoHiSpeed ? '' : 'opacity-40 pointer-events-none'}`}>
+                            <span className="text-[11px] text-blue-300 w-32 shrink-0">目標グリーンナンバー</span>
+                            <input type="number" min="60" max="1500" step="5" value={targetGreen}
+                                onChange={e => setTargetGreen(Math.max(60, Math.min(1500, Number(e.target.value) || 300)))}
+                                className="w-20 bg-black/50 border border-blue-500/30 rounded px-2 py-1 text-white text-sm text-center font-mono"/>
+                            <span className="text-[11px] text-blue-500/70">ms</span>
+                        </div>
+                        <div className="text-[10px] text-blue-500/60 mt-2 leading-relaxed">
+                            現在 HI-SPEED: <span className="text-blue-300 font-mono">{hiSpeed}</span>（{autoHiSpeed ? '自動' : '手動'}）。
+                            HI-SPEED を手動で変えるとオートは OFF になります。
                         </div>
                     </div>
 

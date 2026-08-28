@@ -68,7 +68,13 @@ const ControllerPanel = forwardRef(({ controllerRefs, keyboardRefs, is2P, parsed
                          </div>
                         <div className="bg-black/40 px-2 py-1 rounded border border-blue-500/20 w-full mt-1 text-[10px] font-bold">
                             <span className="text-blue-400 block text-[8px] leading-none mb-0.5">BPM</span>
-                            <span className="text-white font-mono">{(() => { const r = parsedSong.bpmRange; if (!r) return parsedSong.header.bpm; return r.min === r.max ? `${r.main}` : `${r.min}～${r.main}～${r.max}`; })()}</span>
+                            <span className="text-white font-mono">{(() => {
+                                const r = parsedSong.bpmRange;
+                                if (!r) return parsedSong.header.bpm;
+                                if (r.min === r.max || r.count <= 1) return `${r.main}`;
+                                if (r.count === 2) return `${r.min}～${r.max}`;
+                                return `${r.min}～${r.main}～${r.max}`;
+                            })()}</span>
                         </div>
                         <div className={`mt-2 w-full text-center text-[10px] font-bold text-white py-0.5 rounded shadow-sm ${difficultyInfo.color}`}>{difficultyInfo.label}</div>
                       </>

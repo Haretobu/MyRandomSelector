@@ -46,6 +46,8 @@ export default function BmsViewer() {
   const [playbackTimeDisplay, setPlaybackTimeDisplay] = useState(0); 
   const [duration, setDuration] = useState(0);
   const [hiSpeed, setHiSpeed] = useState(2.0);
+  const [autoHiSpeed, setAutoHiSpeed] = useState(true);   // オートHI-SPEED(主BPMで緑数字を固定)
+  const [targetGreen, setTargetGreen] = useState(300);    // 目標グリーンナンバー(ms)
   const [volume, setVolume] = useState(0.8);
   const [lastVolume, setLastVolume] = useState(0.8);
   const [hitSoundVolume, setHitSoundVolume] = useState(1.0);
@@ -605,6 +607,23 @@ export default function BmsViewer() {
 
   const refreshRandom = () => { if (!parsedSong) return; stopPlayback(true); setDisplayObjects(applyOptions(parsedSong.objects, playOption)); };
   useEffect(() => { if (parsedSong) setDisplayObjects(applyOptions(parsedSong.objects, playOption)); }, [parsedSong, playOption]);
+
+  // オートHI-SPEED: 主BPM(再生秒数が最長の区間)で目標グリーンナンバーになるよう HI-SPEED を自動設定。
+  // ロード時 / 目標green / SUD+・LIFT(白数字) / トグルON で再計算。手動変更時は sHiSpeedChange 側で auto を OFF にする。
+  useEffect(() => {
+    if (!autoHiSpeed || !parsedSong) return;
+    const mainBpm = parsedSong.bpmRange?.main || parsedSong.header.bpm || 130;
+    let white = 0;
+    if (visibilityMode === VISIBILITY_MODES.SUDDEN_PLUS || visibilityMode === VISIBILITY_MODES.SUD_HID_PLUS) white += suddenPlusVal;
+    if (visibilityMode === VISIBILITY_MODES.LIFT || visibilityMode === VISIBILITY_MODES.LIFT_SUD_PLUS) {
+      white += liftVal;
+      if (visibilityMode === VISIBILITY_MODES.LIFT_SUD_PLUS) white += suddenPlusVal;
+    }
+    white = Math.min(1000, Math.max(0, white));
+    const hs = (240000 * ((1000 - white) / 1000)) / (mainBpm * (targetGreen || 300));
+    const rounded = Math.max(0.1, Math.round(hs / 0.05) * 0.05);
+    setHiSpeed(Number(rounded.toFixed(2)));
+  }, [autoHiSpeed, targetGreen, parsedSong, visibilityMode, suddenPlusVal, liftVal]);
   
   useEffect(() => { if (selectedBmsIndex >= 0 && bmsList[selectedBmsIndex]) loadBmsAndAudio(bmsList[selectedBmsIndex].file); }, [selectedBmsIndex, bmsList]);
 
@@ -1497,6 +1516,8 @@ export default function BmsViewer() {
   const sKeyHitReset = useEvent(handleKeyHitSoundReset);
   const sScratchHitUpload = useEvent(handleScratchHitSoundUpload);
   const sScratchHitReset = useEvent(handleScratchHitSoundReset);
+  // HI-SPEED を手動で変更したらオートHI-SPEEDを OFF にする
+  const sHiSpeedChange = useEvent((v) => { setAutoHiSpeed(false); setHiSpeed(v); });
 
   return (
     <div className={`flex flex-col h-screen bg-neutral-950 text-white font-sans overflow-hidden ${isDragOver ? 'ring-4 ring-blue-500' : ''}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
@@ -1521,7 +1542,8 @@ export default function BmsViewer() {
         // Mobile Controls
         handleFileSelect={sHandleFileSelect} handleZipSelect={sHandleZipSelect} bmsList={bmsList} selectedBmsIndex={selectedBmsIndex} setSelectedBmsIndex={setSelectedBmsIndex}
         isPlaying={isPlaying} startPlayback={sStartPlayback} pausePlayback={sPausePlayback} stopPlayback={sStopPlayback}
-        hiSpeed={hiSpeed} setHiSpeed={setHiSpeed} bgaOpacity={bgaOpacity} setBgaOpacity={setBgaOpacity}
+        hiSpeed={hiSpeed} setHiSpeed={sHiSpeedChange} bgaOpacity={bgaOpacity} setBgaOpacity={setBgaOpacity}
+        autoHiSpeed={autoHiSpeed} setAutoHiSpeed={setAutoHiSpeed} targetGreen={targetGreen} setTargetGreen={setTargetGreen}
         laneOpacity={laneOpacity} setLaneOpacity={setLaneOpacity}
         boardOpacity={boardOpacity} setBoardOpacity={setBoardOpacity}
         parsedSong={parsedSong}
@@ -1641,7 +1663,7 @@ export default function BmsViewer() {
             handleFileSelect={sHandleFileSelect} selectedBmsIndex={selectedBmsIndex} setSelectedBmsIndex={setSelectedBmsIndex} bmsList={bmsList}
             stopPlayback={sStopPlayback} isPlaying={isPlaying} pausePlayback={sPausePlayback} startPlayback={sStartPlayback}
             duration={duration} handleSeek={sHandleSeek}
-            hiSpeed={hiSpeed} setHiSpeed={setHiSpeed} volume={volume} setVolume={setVolume} toggleMute={sToggleMute}
+            hiSpeed={hiSpeed} setHiSpeed={sHiSpeedChange} volume={volume} setVolume={setVolume} toggleMute={sToggleMute}
           />
       )}
     </div>
