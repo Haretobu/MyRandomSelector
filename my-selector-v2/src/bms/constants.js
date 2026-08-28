@@ -80,6 +80,38 @@ export function keyCodeLabel(code) {
   return code;
 }
 
+// 皿の逆方向キー(6-2-a)。keyMap の皿キー(既定 Shift)=一方向、こちら(Ctrl)=もう一方向。
+// beatoraja のキーボードプレイに倣い、皿は2キーを交互に押して回す。
+export const DEFAULT_SCRATCH_ALT = { 0: 'ControlLeft', 8: 'ControlRight' };
+
+// 判定ウィンドウ(6-2-a)。#RANK 0..3 別、片側 ms。beatoraja 準拠の近似値。
+// pg=PGREAT, gr=GREAT, gd=GOOD, bd=BAD(これを超えて遅れると見逃しPOOR / 空打ちは空POOR)。
+export const JUDGE_WINDOWS = [
+    { pg: 15, gr: 33, gd: 53,  bd: 120 }, // RANK 0 VERY HARD
+    { pg: 18, gr: 40, gd: 70,  bd: 120 }, // RANK 1 HARD
+    { pg: 21, gr: 60, gd: 120, bd: 200 }, // RANK 2 NORMAL (既定)
+    { pg: 25, gr: 75, gd: 150, bd: 250 }, // RANK 3 EASY
+];
+// #RANK ヘッダ値 → JUDGE_WINDOWS の添字(0..3)。未指定は NORMAL(2)。
+export const judgeRankIndex = (rank) => {
+    const r = Number(rank);
+    if (!Number.isFinite(r)) return 2;
+    return Math.max(0, Math.min(3, r));
+};
+
+// DJ LEVEL: EX SCORE 率 → ランク(6-2-b で表示)。
+export const DJ_LEVEL_TABLE = [
+    { min: 8 / 9, label: 'AAA' },
+    { min: 7 / 9, label: 'AA' },
+    { min: 6 / 9, label: 'A' },
+    { min: 5 / 9, label: 'B' },
+    { min: 4 / 9, label: 'C' },
+    { min: 3 / 9, label: 'D' },
+    { min: 2 / 9, label: 'E' },
+    { min: 0,     label: 'F' },
+];
+export const djLevel = (rate) => (DJ_LEVEL_TABLE.find(d => rate >= d.min) || DJ_LEVEL_TABLE[DJ_LEVEL_TABLE.length - 1]).label;
+
 export const KEY_CONFIG_ROWS = [
     [{label:'Shift',keyIndex:0,width:'w-14',isScratch:true},{label:'S',keyIndex:2,width:'w-10'},{label:'D',keyIndex:4,width:'w-10'},{label:'F',keyIndex:6,width:'w-10'}],
     [{label:'',keyIndex:-1,width:'w-14',isSpacer:true},{label:'Z',keyIndex:1,width:'w-10'},{label:'X',keyIndex:3,width:'w-10'},{label:'C',keyIndex:5,width:'w-10'},{label:'V',keyIndex:7,width:'w-10'}]

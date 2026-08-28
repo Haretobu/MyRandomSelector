@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
-import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS, DEFAULT_KEYMAPS } from './constants';
+import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, JUDGE_WINDOWS, judgeRankIndex } from './constants';
 import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, shuffleLanes, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 
@@ -112,6 +112,7 @@ export default function BmsViewer() {
   const [playLongAudio, setPlayLongAudio] = useState(true);
   const [scratchRotationEnabled, setScratchRotationEnabled] = useState(true);
   const [isInputDebugMode, setIsInputDebugMode] = useState(false);
+  const [playMode, setPlayMode] = useState(false); // 6-2: プレイモード(自分の入力で判定)
   // キー割り当て(6-1-d): モード別 lane index -> KeyboardEvent.code。localStorage 永続。
   // ※ 手動プレイの判定入力への接続は P6-2 で実装。現状は表示・保存のみ。
   const [keyMaps, setKeyMaps] = useState(() => {
@@ -203,6 +204,15 @@ export default function BmsViewer() {
   const hitSoundVolumeRef = useRef(hitSoundVolume);
   const readyAnimStateRef = useRef(null); 
   const isInputDebugModeRef = useRef(isInputDebugMode);
+  const playModeRef = useRef(playMode);
+  // 6-2 判定用
+  const judgeRef = useRef({ pg: 0, gr: 0, gd: 0, bd: 0, poor: 0, epoor: 0, combo: 0, maxCombo: 0, exScore: 0, fast: 0, slow: 0 });
+  const lastJudgeRef = useRef({ kind: '', deltaMs: 0, t: 0 }); // 直近判定(キャンバス表示・フェード用)
+  const judgeRankRef = useRef(2);          // JUDGE_WINDOWS の添字(#RANK 由来)
+  const judgeOffsetRef = useRef(0);        // 判定オフセット(ms)。6-2-c でスライダー追加
+  const scratchDirRef = useRef({ 0: null, 8: null }); // サイド別・直近に有効だった皿方向('A'|'B')
+  const scratchKeyDirRef = useRef({});     // KeyboardEvent.code -> 'A'(順) | 'B'(逆)
+  const activeLnRef = useRef(new Array(MAX_LANES).fill(null)); // プレイモード: 判定成立中の LN
   const playSideRef = useRef(playSide);
   const showMutedMonitorRef = useRef(showMutedMonitor);
   const showAbortedMonitorRef = useRef(showAbortedMonitor);
@@ -326,15 +336,37 @@ export default function BmsViewer() {
       if (isInputDebugMode) scheduleRenderLoop();
   }, [isInputDebugMode]);
   useEffect(() => { muteDebugAutoPlayRef.current = muteDebugAutoPlay; }, [muteDebugAutoPlay]);
+  useEffect(() => {
+      playModeRef.current = playMode;
+      if (playMode) { resetJudge(); scheduleRenderLoop(); }
+  }, [playMode]);
+  useEffect(() => { judgeRankRef.current = judgeRankIndex(parsedSong?.header?.rank); }, [parsedSong]);
 
-  // デバッグ用キー入力の「KeyboardEvent.code → laneIndex」逆引き表(現在モードのキー割り当てに追従)
+  // キー入力の「KeyboardEvent.code → laneIndex」逆引き表(現在モードのキー割り当てに追従)。
+  // 皿は既定キー(Shift)='A' 方向、DEFAULT_SCRATCH_ALT(Ctrl)='B' 方向として交互押し判定に使う。
   const debugKeyLaneRef = useRef({});
   useEffect(() => {
     const m = keyMaps[parsedSong?.mode] || keyMaps.SP7 || {};
     const rev = {};
-    for (const idx of Object.keys(m)) rev[m[idx]] = Number(idx);
+    const dir = {};
+    for (const idx of Object.keys(m)) {
+      const li = Number(idx);
+      rev[m[idx]] = li;
+      if (li === 0 || li === 8) dir[m[idx]] = 'A';
+    }
+    for (const idx of Object.keys(DEFAULT_SCRATCH_ALT)) {
+      const li = Number(idx);
+      if (m[li] === undefined) continue; // そのモードに該当サイドの皿が無い(SP/9K)
+      const code = DEFAULT_SCRATCH_ALT[idx];
+      if (rev[code] === undefined) rev[code] = li;
+      dir[code] = 'B';
+    }
     debugKeyLaneRef.current = rev;
+    scratchKeyDirRef.current = dir;
   }, [keyMaps, parsedSong]);
+
+  const displayObjectsRef = useRef([]); // window イベントハンドラから最新の displayObjects を読むため
+  useEffect(() => { displayObjectsRef.current = displayObjects; }, [displayObjects]);
 
   const laneMetaRef = useRef([]); // [index] = { isScratch, color } (parsedSong.lanes から)
   useEffect(() => {
@@ -378,6 +410,106 @@ export default function BmsViewer() {
       missLayerTimerRef.current = setTimeout(() => {
           setShowMissLayer(false);
       }, 500);
+  };
+
+  // ===== 6-2 判定 =====
+  const resetJudge = () => {
+      judgeRef.current = { pg: 0, gr: 0, gd: 0, bd: 0, poor: 0, epoor: 0, combo: 0, maxCombo: 0, exScore: 0, fast: 0, slow: 0 };
+      lastJudgeRef.current = { kind: '', deltaMs: 0, t: 0 };
+      scratchDirRef.current = { 0: null, 8: null };
+      activeLnRef.current = new Array(MAX_LANES).fill(null);
+      comboRef.current = 0;
+  };
+
+  // 直近判定を記録し、コンボ / EX SCORE / FAST-SLOW を更新。kind: 'pg'|'gr'|'gd'|'bd'|'poor'|'epoor'
+  const pushJudge = (kind, deltaMs) => {
+      const j = judgeRef.current;
+      j[kind] = (j[kind] || 0) + 1;
+      if (kind === 'pg' || kind === 'gr' || kind === 'gd') {
+          comboRef.current++;
+          if (comboRef.current > j.maxCombo) j.maxCombo = comboRef.current;
+          if (kind === 'pg') j.exScore += 2;
+          else if (kind === 'gr') j.exScore += 1;
+      } else if (kind === 'bd' || kind === 'poor') {
+          comboRef.current = 0;
+      } // epoor(空POOR) はコンボ非切断
+      j.combo = comboRef.current;
+      if ((kind === 'gr' || kind === 'gd' || kind === 'bd') && deltaMs !== 0) {
+          if (deltaMs < 0) j.fast++; else j.slow++;
+      }
+      lastJudgeRef.current = { kind, deltaMs: Math.round(deltaMs), t: performance.now() };
+  };
+
+  // |Δ|(ms) と #RANK から判定種別を返す。bd を超えたら null(範囲外)。
+  const classifyDelta = (absMs) => {
+      const w = JUDGE_WINDOWS[judgeRankRef.current] || JUDGE_WINDOWS[2];
+      if (absMs <= w.pg) return 'pg';
+      if (absMs <= w.gr) return 'gr';
+      if (absMs <= w.gd) return 'gd';
+      if (absMs <= w.bd) return 'bd';
+      return null;
+  };
+
+  // プレイモード: 1回のキー入力を判定。lane に対応する未処理ノーツを探す。
+  // scDir: 皿キーの方向('A'|'B')。皿は前回と逆方向のときだけ有効(交互押し)。
+  const judgeLaneInput = (lane, bmsTime, isScratch, scDir) => {
+      const objs = displayObjectsRef.current;
+      if (!playModeRef.current || !isPlayingRef.current || !objs.length) return;
+      const w = JUDGE_WINDOWS[judgeRankRef.current] || JUDGE_WINDOWS[2];
+      const bd = w.bd / 1000;
+      const t = bmsTime - judgeOffsetRef.current / 1000;
+
+      if (isScratch && scDir && scratchDirRef.current[lane] === scDir) return; // 同方向の連打 = 回していない
+
+      // 最寄りの未処理ノーツ(|Δ| 最小、bd 窓内)
+      let target = null, best = Infinity;
+      const c = findStartIndex(objs, t - bd - 0.05);
+      for (let i = Math.max(0, c - 4); i < objs.length; i++) {
+          const o = objs[i];
+          if (o.time > t + bd + 0.05) break;
+          if (!o.isNote || o.processed || o.laneIndex !== lane) continue;
+          const d = Math.abs(o.time - t);
+          if (d < best) { best = d; target = o; }
+      }
+
+      if (isScratch && scDir) scratchDirRef.current[lane] = scDir;
+
+      if (!target || best > bd) {
+          // 空打ち → 空POOR(コンボ非切断)
+          pushJudge('epoor', 0);
+          return;
+      }
+
+      const deltaMs = (t - target.time) * 1000; // 負=FAST(早い) / 正=SLOW(遅い)
+      const kind = classifyDelta(Math.abs(deltaMs)) || 'bd';
+      target.processed = true;
+      noteCountsRef.current[lane]++;
+      pushJudge(kind, deltaMs);
+
+      // LN: 頭が PGREAT/GREAT/GOOD で取れたら「保持中」に。BAD は即終了扱い。
+      if (target.type === 'long' && (kind === 'pg' || kind === 'gr' || kind === 'gd')) {
+          activeLnRef.current[lane] = target;
+      }
+
+      // 皿の回転エフェクト(既存のオートと同じ ref を使う)
+      if (isScratch) {
+          const typeRef = lane === 0 ? lastScratchTypeRef : lastScratchType2Ref;
+          const dirRef = lane === 0 ? scratchDirectionRef : scratchDirection2Ref;
+          const timeRef = lane === 0 ? lastScratchTimeRef : lastScratchTime2Ref;
+          typeRef.current = 'ACCEL';
+          dirRef.current = (scDir === 'B') ? 1 : -1;
+          timeRef.current = performance.now();
+      }
+  };
+
+  // 見逃し(ノーツが BAD 窓の遅れ側を未処理で通過) / LN 途中離し → POOR
+  const judgeMissNote = (obj, kind = 'poor') => {
+      obj.processed = true;
+      if (obj.type === 'long') {
+          const lane = obj.laneIndex;
+          if (activeLnRef.current[lane] === obj) activeLnRef.current[lane] = null;
+      }
+      pushJudge(kind, 0);
   };
 
   // 6-1-e: レーンオプションをモード別に適用。
@@ -447,25 +579,30 @@ export default function BmsViewer() {
   const resetAllState = () => { resetGameStatus(); audioBuffersRef.current.clear(); setBmsList([]); };
 
   useEffect(() => {
-    if (!isInputDebugMode) { activeInputLanesRef.current.clear(); clearActiveLanes(); return; }
+    if (!isInputDebugMode && !playMode) { activeInputLanesRef.current.clear(); clearActiveLanes(); return; }
     const handleKeyDown = (e) => {
         if (e.repeat) return;
         const rev = debugKeyLaneRef.current;
         // 皿の手動回転用フラグ(Shift=逆回転 / Ctrl=高速)。キー割り当てで皿=Shift のときは lane も付く。
         if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') isShiftHeldRef.current = true;
         else if (e.code === 'ControlLeft' || e.code === 'ControlRight') isCtrlHeldRef.current = true;
-        else if (e.code === 'KeyM' && rev['KeyM'] === undefined) { triggerMiss(); }
+        else if (e.code === 'KeyM' && rev['KeyM'] === undefined && !playModeRef.current) { triggerMiss(); }
         let lane = rev[e.code];
         if (lane === undefined) lane = -1;
         if (lane !== -1) {
-            activeInputLanesRef.current.add(lane); 
-            setLaneActive(lane, true); 
+            activeInputLanesRef.current.add(lane);
+            setLaneActive(lane, true);
 
-            if (isInputDebugModeRef.current && parsedSong && audioContextRef.current) {
+            const isScr = (lane === 0 || lane === 8);
+            const scDir = scratchKeyDirRef.current[e.code];
+
+            if ((isInputDebugModeRef.current || playModeRef.current) && parsedSong && audioContextRef.current) {
                 const ctxTime = audioContextRef.current.currentTime;
-                const bmsTime = isPlayingRef.current 
-                    ? (ctxTime - startTimeRef.current) 
+                const bmsTime = isPlayingRef.current
+                    ? (ctxTime - startTimeRef.current)
                     : pauseTimeRef.current;
+
+                if (playModeRef.current) judgeLaneInput(lane, bmsTime, isScr, scDir);
 
                 // ■ 設定に基づいた判定幅 (beatoraja BAD判定基準)
                 // Early(早入り/未来): -0.28s まで (280ms)
@@ -549,12 +686,25 @@ export default function BmsViewer() {
         if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') isShiftHeldRef.current = false;
         else if (e.code === 'ControlLeft' || e.code === 'ControlRight') isCtrlHeldRef.current = false;
         const lane = debugKeyLaneRef.current[e.code];
-        if (lane !== undefined) { activeInputLanesRef.current.delete(lane); setLaneActive(lane, false); }
+        if (lane === undefined) return;
+        activeInputLanesRef.current.delete(lane);
+        setLaneActive(lane, false);
+        // プレイモード: LN 保持中に離したら、終点まで達していなければ POOR
+        if (playModeRef.current) {
+            const ln = activeLnRef.current[lane];
+            if (ln) {
+                const cur = isPlayingRef.current && audioContextRef.current
+                    ? audioContextRef.current.currentTime - startTimeRef.current : pauseTimeRef.current;
+                const w = JUDGE_WINDOWS[judgeRankRef.current] || JUDGE_WINDOWS[2];
+                if (cur < (ln.endTime || ln.time) - w.gd / 1000) judgeMissNote(ln, 'poor');
+                activeLnRef.current[lane] = null;
+            }
+        }
     };
     window.addEventListener('keydown', handleKeyDown); window.addEventListener('keyup', handleKeyUp);
     scheduleRenderLoop();
     return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); };
-  }, [isInputDebugMode, playSide]);
+  }, [isInputDebugMode, playMode, playSide]);
 
   useEffect(() => {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -819,7 +969,7 @@ export default function BmsViewer() {
       });
       const lasts = new Array(MAX_LANES).fill(null);
       parsed.objects.forEach(obj => {
-          if (obj.isNote && obj.laneIndex >= 0 && obj.laneIndex <= 7) {
+          if (obj.isNote && obj.laneIndex >= 0 && obj.laneIndex < MAX_LANES) {
               // より後ろの時間にあるノーツを更新していく
               if (!lasts[obj.laneIndex] || obj.time > lasts[obj.laneIndex].time) {
                   lasts[obj.laneIndex] = obj;
@@ -829,6 +979,7 @@ export default function BmsViewer() {
       lastNotesByLaneRef.current = lasts;
       setDuration(calculatedMaxDuration); setParsedSong(parsed); setTotalNotes(parsed.totalNotes);
       setPlaybackTimeDisplay(0); pauseTimeRef.current = 0; setCombo(0); comboRef.current = 0; hudLastRef.current = {};
+      resetJudge();
       lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(MAX_LANES).fill(0));
       setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsed.avgDensity });
       lastStateUpdateRef.current = 0; // 次の renderLoop フレームで HUD を即更新させる
@@ -877,6 +1028,7 @@ export default function BmsViewer() {
                     if (!playKeySoundsRef.current) shouldPlay = false;
                     if (laneMuteRef.current[obj.laneIndex]) shouldPlay = false; // ★P5-2 レーンミュート
                     if (isInputDebugModeRef.current && muteDebugAutoPlayRef.current) shouldPlay = false;
+                    if (playModeRef.current) shouldPlay = false; // 6-2 プレイモード: キー音はプレイヤー入力で鳴らす
                 } else if (category === 'bgm') {
                     if (!playLongAudioRef.current) shouldPlay = false;   // 「BGMを再生」トグル
                 } else {
@@ -922,7 +1074,7 @@ export default function BmsViewer() {
                 }
               }
           }
-          if (obj.isNote && !laneMuteRef.current[obj.laneIndex]) { // ★P5-2 ミュートレーンは打鍵音も鳴らさない
+          if (obj.isNote && !laneMuteRef.current[obj.laneIndex] && !playModeRef.current) { // ★P5-2 ミュート / 6-2 プレイモードは打鍵音を鳴らさない
                const hitTime = Math.max(currentTime, absolutePlayTime);
                const hitMeta = laneMetaRef.current[obj.laneIndex];
                const buffer = (hitMeta && hitMeta.isScratch) ? scratchHitSoundBufferRef.current : keyHitSoundBufferRef.current;
@@ -1016,6 +1168,7 @@ export default function BmsViewer() {
     
     stopAudioNodes(); activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]);
     const offset = pauseTimeRef.current;
+    if (offset === 0) resetJudge(); // 頭からのプレイは判定リセット(途中再開はスコア維持)
     setIsPlaying(true); isPlayingRef.current = true; lastFrameTimeRef.current = performance.now();
     applySeekPosition(offset); // startTimeRef / nextNoteIndexRef / BGA インデックス・フレームを同期
 
@@ -1049,7 +1202,7 @@ export default function BmsViewer() {
     pauseTimeRef.current = audioContextRef.current.currentTime - startTimeRef.current;
     setReadyAnimState(null);
     stopRenderLoop();
-    if (isInputDebugModeRef.current) scheduleRenderLoop();
+    if (isInputDebugModeRef.current || playModeRef.current) scheduleRenderLoop();
   };
 
   const stopPlayback = (reset = true) => {
@@ -1069,6 +1222,7 @@ export default function BmsViewer() {
         }
 
         pauseTimeRef.current = 0; setPlaybackTimeDisplay(0); setCombo(0); comboRef.current = 0; hudLastRef.current = {}; lastBgaKeyRef.current = {};
+        resetJudge();
         lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(MAX_LANES).fill(0));
         if (parsedSong) displayObjects.forEach(o => o.processed = false);
         setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsedSong?.avgDensity || 0 });
@@ -1122,6 +1276,7 @@ export default function BmsViewer() {
         }
     }
     comboRef.current = passedNotes;
+    if (playModeRef.current) { resetJudge(); comboRef.current = 0; } // シーク = その地点から仕切り直し
     hudLastRef.current = {}; lastStateUpdateRef.current = 0; // スクラブ中も HUD(imperative)を追従させる
     clearActiveLanes();
     // 位置の同期(startTimeRef / nextNoteIndexRef / BGA インデックス・フレーム)は必ず同期実行する。
@@ -1457,7 +1612,15 @@ export default function BmsViewer() {
             //   フレーム落ちしても timeDelta<=0 のノーツはすべて「取りこぼしキャッチアップ」で処理する。
             //   以前は 30ms(-0.03s)の窓を外すとコンボが加算されず、-0.2s を超えると triggerMiss() が誤発火していた。
             //   timeline 由来の triggerMiss は廃止 (MISS は入力プレイ時のみ)。
-            if (!obj.processed && timeDelta <= 0) {
+            // プレイモード: 見逃し(BAD窓の遅れ側を越えて未処理)→ POOR。LN の後始末もここで。
+            if (playModeRef.current) {
+                if (!obj.processed) {
+                    const bdSec = (JUDGE_WINDOWS[judgeRankRef.current] || JUDGE_WINDOWS[2]).bd / 1000;
+                    if (isPlayingRef.current && timeDelta < -bdSec) judgeMissNote(obj, 'poor');
+                } else if (obj.type === 'long' && activeLnRef.current[obj.laneIndex] === obj && currentTime > (obj.endTime || obj.time)) {
+                    activeLnRef.current[obj.laneIndex] = null; // LN 完走
+                }
+            } else if (!obj.processed && timeDelta <= 0) {
                 obj.processed = true;
                 comboRef.current++; noteCountsRef.current[obj.laneIndex]++; lastPlayedSoundPerLaneRef.current[obj.laneIndex] = obj.filename;
                 if (gc.isScr[obj.laneIndex]) {
@@ -1525,6 +1688,33 @@ export default function BmsViewer() {
                 ctx.fillStyle = gc.color[obj.laneIndex] || '#f1f5f9';
                 ctx.fillRect(x + 1, y - 6, w - 2, 12);
                 if (mAlpha !== 1) ctx.globalAlpha = 1;
+            }
+        }
+
+        // ===== 6-2 プレイモード: 判定文字 + FAST/SLOW =====
+        if (playModeRef.current) {
+            const lj = lastJudgeRef.current;
+            const age = now - lj.t;
+            if (lj.kind && age < 500) {
+                const JT = {
+                    pg: ['PGREAT', '#22d3ee'], gr: ['GREAT', '#fde047'], gd: ['GOOD', '#4ade80'],
+                    bd: ['BAD', '#fb923c'], poor: ['POOR', '#94a3b8'], epoor: ['空POOR', '#64748b'],
+                };
+                const [label, color] = JT[lj.kind] || ['', '#fff'];
+                const cxp = BOARD_X + BOARD_W / 2;
+                const cyp = JUDGE_Y - 140;
+                ctx.globalAlpha = age < 350 ? 1 : 1 - (age - 350) / 150;
+                ctx.textAlign = 'center';
+                ctx.font = 'bold 22px Arial';
+                ctx.fillStyle = color;
+                ctx.fillText(label, cxp, cyp);
+                if ((lj.kind === 'gr' || lj.kind === 'gd' || lj.kind === 'bd') && lj.deltaMs !== 0) {
+                    const fast = lj.deltaMs < 0;
+                    ctx.font = 'bold 13px Arial';
+                    ctx.fillStyle = fast ? '#60a5fa' : '#f87171';
+                    ctx.fillText(`${fast ? 'FAST' : 'SLOW'} ${Math.abs(lj.deltaMs)}ms`, cxp, cyp + 18);
+                }
+                ctx.globalAlpha = 1;
             }
         }
     }
@@ -1606,7 +1796,7 @@ export default function BmsViewer() {
     }
 
     // 描画継続の判定。多重生成しないよう再スケジュールは scheduleRenderLoop() 経由に統一。
-    if (isPlayingRef.current || showReady || isInputDebugModeRef.current) {
+    if (isPlayingRef.current || showReady || isInputDebugModeRef.current || playModeRef.current) {
         scheduleRenderLoop();
     }
   };
@@ -1651,6 +1841,7 @@ export default function BmsViewer() {
         isInputDebugMode={isInputDebugMode} setIsInputDebugMode={setIsInputDebugMode}
         muteDebugAutoPlay={muteDebugAutoPlay} setMuteDebugAutoPlay={setMuteDebugAutoPlay}
         keyMaps={keyMaps} setKeyMaps={setKeyMaps}
+        playMode={playMode} setPlayMode={setPlayMode}
         isSeparateHitSound={isSeparateHitSound} setIsSeparateHitSound={setIsSeparateHitSound}
         tempKeySoundName={tempKeySoundName} tempScratchSoundName={tempScratchSoundName}
         // Mobile Controls

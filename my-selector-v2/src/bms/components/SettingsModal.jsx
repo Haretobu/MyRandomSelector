@@ -94,6 +94,7 @@ const SettingsModal = ({
     isInputDebugMode, setIsInputDebugMode,
     muteDebugAutoPlay, setMuteDebugAutoPlay,
     keyMaps, setKeyMaps,
+    playMode, setPlayMode,
     // ファイル操作
     handleFileSelect, handleZipSelect, bmsList, selectedBmsIndex, setSelectedBmsIndex,
     hiSpeed, setHiSpeed, bgaOpacity, setBgaOpacity,
@@ -377,6 +378,24 @@ const SettingsModal = ({
                              );
                          })()}
                     </div>
+
+                    {/* プレイモード (PC のみ・6-2) */}
+                    {!isMobile && (
+                        <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
+                            <div className="text-xs text-blue-400 mb-2 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center gap-2">
+                                <Gamepad2 size={14} /> プレイモード
+                            </div>
+                            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer border border-transparent hover:border-blue-500/30">
+                                <span className="text-sm">自分の入力で判定する（オートプレイ判定を止める）</span>
+                                <input type="checkbox" checked={!!playMode} onChange={e => setPlayMode(e.target.checked)} className="accent-blue-500 w-4 h-4" />
+                            </label>
+                            <div className="text-[10px] text-blue-500/60 mt-2 leading-relaxed">
+                                キー割り当てで操作。判定・コンボ・FAST/SLOW を表示します（EX SCORE / DJ LEVEL / リザルトは今後の更新で対応）。
+                                皿は割り当てキー（既定 Shift）と Ctrl の2キーを交互に。<br />
+                                ※「デバッグ用キー入力」とは別機能です（併用可）。
+                            </div>
+                        </div>
+                    )}
 
                     {/* 詳細設定1 (システム・デバッグ) */}
                     <details className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50 mt-2 group" open={!isMobile}>
