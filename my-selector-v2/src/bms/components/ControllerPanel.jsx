@@ -5,73 +5,83 @@ import { LANE_LAYOUTS, PMS_LANE_COLORS } from '../constants';
 import DensityGraph from './DensityGraph';
 
 const SP_KEY_LABEL = { 1: 'Z', 2: 'S', 3: 'X', 4: 'D', 5: 'C', 6: 'F', 7: 'V' };
-
 const keyNum = (lane) => (lane.side === 0 ? lane.index : lane.index - 8); // 1..7
 
 function keyLabel(lane, mode) {
     if (lane.kind === 'scratch') return lane.side === 1 ? '2SC' : 'SC';
     if (mode === 'SP7' || mode === 'SP5') return SP_KEY_LABEL[lane.index] || String(lane.index);
     if (mode === 'PMS9') return String(lane.index + 1);
-    return String(keyNum(lane)); // DP: 1-7
+    return String(keyNum(lane));
 }
 
-// IIDX 片側 (皿 + 鍵)。IIDX 実機準拠のスタッガード配置(偶数鍵=黒鍵を上げる)。
-function IIDXSide({ lanes, mirror, compact, controllerRefs, countRefs }) {
+// IIDX 片側: 皿(外側) + 鍵(上段=2,4,6 / 下段=1,3,5,7)。size='s'(DP) / 'l'(SP)。
+function IIDXSide({ lanes, mirror, size, refFn, countRefs, showLabel, showCount, mode }) {
     const scr = lanes.find(l => l.kind === 'scratch');
     const keys = lanes.filter(l => l.kind === 'key').sort((a, b) => keyNum(a) - keyNum(b));
-    const tt = compact ? 40 : 68;
-    const bkW = compact ? 9 : 15, wkW = compact ? 13 : 22;
-    const bkH = compact ? 50 : 72, wkH = compact ? 42 : 60;
-    const raise = compact ? 12 : 18;
+    const top = keys.filter(k => keyNum(k) % 2 === 0);   // 2,4,6
+    const bot = keys.filter(k => keyNum(k) % 2 === 1);    // 1,3,5,7,(9)
+    const tt = size === 's' ? 32 : 54;
+    const kw = size === 's' ? 11 : 17;
+    const kh = size === 's' ? 14 : 20;
+    const gap = size === 's' ? 2 : 3;
 
-    const KeyBar = (lane) => {
-        const black = keyNum(lane) % 2 === 0;
-        return (
-            <div key={lane.index} className="flex flex-col items-center" style={{ gap: 2, marginBottom: black ? raise : 0 }}>
-                <div ref={el => (countRefs.current[lane.index] = el)} className="text-[7px] text-blue-400/70 font-mono leading-none">0</div>
-                <div ref={el => (controllerRefs.current[lane.index] = el)}
-                    style={{
-                        width: black ? bkW : wkW, height: black ? bkH : wkH,
-                        background: '#0b0f1a', borderRadius: 3,
-                        border: `1px solid ${black ? '#3b82f688' : '#e2e8f088'}`,
-                    }} />
-            </div>
-        );
-    };
-
-    const TT = scr && (
-        <div key="tt" className="flex flex-col items-center" style={{ gap: 2 }}>
-            <div ref={el => (countRefs.current[scr.index] = el)} className="text-[7px] text-blue-400/70 font-mono leading-none">0</div>
-            <div ref={el => (controllerRefs.current[scr.index] = el)}
-                className="rounded-full border-[3px] border-[#1e293b] bg-neutral-900 flex items-center justify-center relative overflow-hidden"
-                style={{ width: tt, height: tt, willChange: 'transform' }}>
-                <div className="absolute w-full h-[2px] bg-gray-600/40" />
-                <div className="absolute w-full h-[2px] bg-gray-600/40 rotate-45" />
-                <div className="absolute w-full h-[2px] bg-gray-600/40 rotate-90" />
-                <div className="absolute w-full h-[2px] bg-gray-600/40 -rotate-45" />
-                <span className="text-[7px] text-blue-500/50 font-bold z-10">SC</span>
-            </div>
+    const wrap = (lane, node) => (
+        <div key={lane.index} className="flex flex-col items-center">
+            {showCount && <div ref={el => (countRefs.current[lane.index] = el)} className="text-[7px] text-blue-400/60 font-mono leading-none mb-px">0</div>}
+            {node}
+            {showLabel && (
+                <div className="text-[7px] font-bold leading-none mt-px"
+                    style={{ color: lane.kind === 'scratch' ? '#f87171' : keyNum(lane) % 2 === 0 ? '#60a5fa' : '#cbd5e1' }}>
+                    {keyLabel(lane, mode)}
+                </div>
+            )}
         </div>
     );
 
-    // 2P(mirror)は「鍵1-7 → 皿」の順(皿が右)。鍵の並びは反転しない。
-    const kids = mirror ? [...keys.map(KeyBar), TT] : [TT, ...keys.map(KeyBar)];
-    return <div className="flex items-end" style={{ gap: compact ? 1 : 2 }}>{kids}</div>;
+    const Btn = (lane) => wrap(lane, (
+        <div ref={el => refFn(lane.index, el)}
+            style={{ width: kw, height: kh, background: '#0b0f1a', borderRadius: 3, border: `1px solid ${(keyNum(lane) % 2 === 0 ? '#3b82f6' : '#e2e8f0')}66` }} />
+    ));
+
+    const Turntable = scr && wrap(scr, (
+        <div ref={el => refFn(scr.index, el)}
+            className="rounded-full border-[3px] border-[#1e293b] bg-neutral-900 relative overflow-hidden shrink-0"
+            style={{ width: tt, height: tt, willChange: 'transform' }}>
+            <div className="absolute inset-0 flex items-center justify-center">
+                <div className="absolute w-full h-px bg-gray-600/40" />
+                <div className="absolute w-full h-px bg-gray-600/40 rotate-45" />
+                <div className="absolute w-full h-px bg-gray-600/40 rotate-90" />
+                <div className="absolute w-full h-px bg-gray-600/40 -rotate-45" />
+            </div>
+        </div>
+    ));
+
+    const Keys = (
+        <div className="flex flex-col items-center" style={{ gap }}>
+            <div className="flex" style={{ gap, paddingLeft: (kw + gap) / 2 }}>{top.map(Btn)}</div>
+            <div className="flex" style={{ gap }}>{bot.map(Btn)}</div>
+        </div>
+    );
+
+    return (
+        <div className="flex items-center" style={{ gap: gap + 2 }}>
+            {!mirror && Turntable}{Keys}{mirror && Turntable}
+        </div>
+    );
 }
 
-// pop'n 9ボタン。1,3,5,7,9 が下段、2,4,6,8 が上段(実機準拠)。
-function PopnBoard({ lanes, controllerRefs, countRefs }) {
+// pop'n 9K: 白青黄緑赤の5色ミラー配置、偶数番(2,4,6,8)を少し上げる。
+function PopnBoard({ lanes, refFn, countRefs, showLabel, showCount }) {
     return (
-        <div className="flex items-end justify-center gap-1.5">
+        <div className="flex items-end justify-center" style={{ gap: 4 }}>
             {lanes.map(lane => {
-                const raised = (lane.index % 2 === 1); // ボタン2,4,6,8 (0-index の 1,3,5,7)
+                const raised = lane.index % 2 === 1;
                 return (
-                    <div key={lane.index} className="flex flex-col items-center" style={{ gap: 2, marginBottom: raised ? 16 : 0 }}>
-                        <div ref={el => (countRefs.current[lane.index] = el)} className="text-[7px] text-blue-400/70 font-mono leading-none">0</div>
-                        <div ref={el => (controllerRefs.current[lane.index] = el)}
-                            className="rounded-full"
-                            style={{ width: 20, height: 20, background: '#0b0f1a', border: `2px solid ${PMS_LANE_COLORS[lane.index]}99` }} />
-                        <div className="text-[7px] font-bold leading-none" style={{ color: PMS_LANE_COLORS[lane.index] }}>{lane.index + 1}</div>
+                    <div key={lane.index} className="flex flex-col items-center" style={{ gap: 1, marginBottom: raised ? 12 : 0 }}>
+                        {showCount && <div ref={el => (countRefs.current[lane.index] = el)} className="text-[7px] text-blue-400/60 font-mono leading-none">0</div>}
+                        <div ref={el => refFn(lane.index, el)} className="rounded-full"
+                            style={{ width: 18, height: 18, background: '#0b0f1a', border: `2px solid ${PMS_LANE_COLORS[lane.index]}99` }} />
+                        {showLabel && <div className="text-[7px] font-bold leading-none" style={{ color: PMS_LANE_COLORS[lane.index] }}>{lane.index + 1}</div>}
                     </div>
                 );
             })}
@@ -79,7 +89,7 @@ function PopnBoard({ lanes, controllerRefs, countRefs }) {
     );
 }
 
-const ControllerPanel = forwardRef(({ controllerRefs, keyboardRefs, parsedSong, difficultyInfo, currentMeasure }, ref) => {
+const ControllerPanel = forwardRef(({ controllerRefs, keyboardRefs, parsedSong, difficultyInfo, currentMeasure, is2P }, ref) => {
     const countRefs = useRef([]);
 
     useImperativeHandle(ref, () => ({
@@ -95,51 +105,47 @@ const ControllerPanel = forwardRef(({ controllerRefs, keyboardRefs, parsedSong, 
     const mode = parsedSong?.mode || 'SP7';
     const lanes = parsedSong?.lanes || LANE_LAYOUTS.SP7;
     const isDP = mode === 'DP14' || mode === 'DP10';
-    const side1 = lanes.filter(l => l.side === 0);
-    const side2 = lanes.filter(l => l.side === 1);
+    const isPms = mode === 'PMS9';
+    const s1 = lanes.filter(l => l.side === 0);
+    const s2 = lanes.filter(l => l.side === 1);
+    const setCtrl = (i, el) => { controllerRefs.current[i] = el; };
+    const setKb = (i, el) => { keyboardRefs.current[i] = el; };
+
+    // showCount=true は CONTROLLER のみ(countRefs が指す要素を一意にするため)
+    const board = (refFn, { showLabel = false, showCount = false } = {}) => (
+        isPms
+            ? <PopnBoard lanes={lanes} refFn={refFn} countRefs={countRefs} showLabel={showLabel} showCount={showCount} />
+            : isDP
+                ? (
+                    <div className="flex items-center justify-center gap-1">
+                        <IIDXSide lanes={s1} mirror={false} size="s" refFn={refFn} countRefs={countRefs} showLabel={showLabel} showCount={showCount} mode={mode} />
+                        <div className="w-px self-stretch bg-blue-900/40 mx-0.5" />
+                        <IIDXSide lanes={s2} mirror size="s" refFn={refFn} countRefs={countRefs} showLabel={showLabel} showCount={showCount} mode={mode} />
+                    </div>
+                )
+                : <div className="flex justify-center"><IIDXSide lanes={s1} mirror={!!is2P} size="l" refFn={refFn} countRefs={countRefs} showLabel={showLabel} showCount={showCount} mode={mode} /></div>
+    );
 
     return (
         <div className="w-64 flex flex-col border-r border-blue-900/30 bg-[#080808] p-2 gap-2 shrink-0 overflow-y-auto scrollbar-hide text-blue-100">
             {/* CONTROLLER */}
             <div className="bg-[#112233]/50 rounded p-2 border border-blue-900/30">
-                <div className="text-[10px] text-blue-400 font-bold mb-2 flex items-center justify-between gap-1">
+                <div className="text-[10px] text-blue-400 font-bold mb-1.5 flex items-center justify-between gap-1">
                     <span className="flex items-center gap-1"><Gamepad2 size={10} /> CONTROLLER</span>
                     <span className="text-[9px] text-blue-500/60">{parsedSong?.keyMode || '—'}</span>
                 </div>
-                <div className="flex items-end justify-center gap-3 min-h-[110px] bg-black/60 rounded border border-blue-900/30 px-2 pt-2 pb-1 overflow-x-auto scrollbar-hide">
-                    {mode === 'PMS9'
-                        ? <PopnBoard lanes={lanes} controllerRefs={controllerRefs} countRefs={countRefs} />
-                        : isDP
-                            ? (<>
-                                <IIDXSide lanes={side1} mirror={false} compact controllerRefs={controllerRefs} countRefs={countRefs} />
-                                <div className="w-px self-stretch bg-blue-900/40" />
-                                <IIDXSide lanes={side2} mirror compact controllerRefs={controllerRefs} countRefs={countRefs} />
-                            </>)
-                            : <IIDXSide lanes={side1} mirror={false} compact={false} controllerRefs={controllerRefs} countRefs={countRefs} />}
+                <div className="bg-black/60 rounded border border-blue-900/30 py-2 px-1 flex items-center justify-center">
+                    {board(setCtrl, { showCount: true })}
                 </div>
             </div>
 
-            {/* KEY MAPPING */}
+            {/* KEY MAPPING (同じ配置でラベル表示) */}
             <div className="bg-[#112233]/50 rounded p-2 border border-blue-900/30">
-                <div className="text-[10px] text-blue-400 font-bold mb-2 flex items-center gap-1"><Keyboard size={10} /> KEY MAPPING</div>
-                <div className="flex flex-wrap gap-1 justify-center">
-                    {lanes.map((lane, i) => {
-                        const gap = i > 0 && lanes[i - 1].side !== lane.side;
-                        return (
-                            <React.Fragment key={lane.index}>
-                                {gap && <div className="basis-full h-0" />}
-                                <div ref={el => (keyboardRefs.current[lane.index] = el)}
-                                    className="w-7 h-7 rounded text-[9px] font-bold flex items-center justify-center border border-blue-900/40"
-                                    style={{ background: '#0f172a', color: lane.kind === 'scratch' ? '#fca5a5' : '#93a0be' }}>
-                                    {keyLabel(lane, mode)}
-                                </div>
-                            </React.Fragment>
-                        );
-                    })}
+                <div className="text-[10px] text-blue-400 font-bold mb-1.5 flex items-center gap-1"><Keyboard size={10} /> KEY MAPPING</div>
+                <div className="bg-black/40 rounded py-2 px-1 flex items-center justify-center">
+                    {board(setKb, { showLabel: true })}
                 </div>
-                {(isDP || mode === 'PMS9') && (
-                    <div className="text-[9px] text-blue-500/50 mt-1.5 text-center">キー割り当ての変更は今後対応</div>
-                )}
+                {(isDP || isPms) && <div className="text-[9px] text-blue-500/50 mt-1 text-center">キー割り当ての変更は今後対応</div>}
             </div>
 
             <DensityGraph parsedSong={parsedSong} currentMeasure={currentMeasure} />
