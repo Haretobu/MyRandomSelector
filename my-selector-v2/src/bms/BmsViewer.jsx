@@ -977,7 +977,12 @@ export default function BmsViewer() {
     const bgaTime = currentTime + 0.05;
 
     if (parsedSong) {
-        activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime);
+        // ★重大バグ修正: ここで activeNodesRef をフィルタしていたが、
+        //   n.endTime は「AudioContext の絶対時刻」なのに currentTime は「曲の相対時刻」で、時間軸が不一致だった。
+        //   セッション開始直後や長い曲の後半へシークして startTimeRef が小さい/負になると、
+        //   まだ鳴っている音源(ロングBGM含む)が activeNodesRef から誤って除去され、
+        //   stopAudioNodes() が止められなくなって「シークのたびにロング音源が重なる」原因になっていた。
+        //   activeNodesRef の掃除は scheduleAudio() 側(絶対時刻で正しく比較)に一本化する。
         if (parsedSong.backBgaObjects && nextBackBgaIndexRef.current < parsedSong.backBgaObjects.length) {
             const bgaObj = parsedSong.backBgaObjects[nextBackBgaIndexRef.current];
             if (bgaObj.time <= bgaTime) {
