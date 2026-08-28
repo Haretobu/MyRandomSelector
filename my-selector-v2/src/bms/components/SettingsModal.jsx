@@ -191,31 +191,51 @@ const SettingsModal = ({
                         </div>
                     </div>
 
-                    {/* レーンミュート (共通) */}
+                    {/* レーンミュート (共通・モード対応) */}
                     <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
                         <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center gap-2">
                             <Speaker size={14} /> レーンミュート
                         </div>
-                        <div className="flex gap-1.5 justify-center flex-wrap">
-                            {['SC', '1', '2', '3', '4', '5', '6', '7'].map((lbl, i) => (
-                                <button key={i}
-                                    onClick={() => setLaneMute((laneMute || new Array(8).fill(false)).map((v, idx) => idx === i ? !v : v))}
-                                    className={`w-10 h-10 rounded font-bold text-xs border transition-all ${(laneMute && laneMute[i])
-                                        ? 'bg-red-600/80 border-red-400 text-white shadow-[0_0_8px_rgba(220,38,38,0.5)]'
-                                        : 'bg-black/40 border-gray-700 text-gray-400 hover:bg-gray-800'}`}>
-                                    {lbl}
-                                </button>
-                            ))}
+                        <div className="flex gap-1 justify-center flex-wrap">
+                            {(parsedSong?.lanes || [{index:0,kind:'scratch',side:0},{index:1,kind:'key',side:0},{index:2,kind:'key',side:0},{index:3,kind:'key',side:0},{index:4,kind:'key',side:0},{index:5,kind:'key',side:0},{index:6,kind:'key',side:0},{index:7,kind:'key',side:0}]).map((lane, i, arr) => {
+                                const lbl = lane.kind === 'scratch' ? 'SC'
+                                    : parsedSong?.mode === 'PMS9' ? String(lane.index + 1)
+                                    : String(lane.side === 0 ? lane.index : lane.index - 8);
+                                const brk = i > 0 && arr[i - 1].side !== lane.side;
+                                const muted = laneMute && laneMute[lane.index];
+                                return (
+                                    <React.Fragment key={lane.index}>
+                                        {brk && <div className="basis-full h-0" />}
+                                        <button
+                                            onClick={() => setLaneMute((laneMute || new Array(16).fill(false)).map((v, idx) => idx === lane.index ? !v : v))}
+                                            className={`w-8 h-8 rounded font-bold text-[10px] border transition-all ${muted
+                                                ? 'bg-red-600/80 border-red-400 text-white shadow-[0_0_8px_rgba(220,38,38,0.5)]'
+                                                : 'bg-black/40 border-gray-700 text-gray-400 hover:bg-gray-800'}`}>
+                                            {lbl}
+                                        </button>
+                                    </React.Fragment>
+                                );
+                            })}
                         </div>
-                        <div className="text-[10px] text-blue-500/60 mt-2 text-center">赤 = ミュート。そのレーンのキー音を鳴らさず、ノーツを薄く表示します。</div>
+                        <div className="text-[10px] text-blue-500/60 mt-2 text-center">赤 = ミュート。そのレーンのキー音・打鍵音を鳴らさず、ノーツを薄く表示します。</div>
                     </div>
 
                     {/* PC用設定 */}
                     <div className="flex flex-col md:flex-row gap-4 items-start">
-                         <div className="w-full md:flex-1 border border-blue-900/50 p-3 bg-[#0f172a] rounded-lg flex justify-between items-center">
-                             <span className="font-bold text-sm text-blue-300">プレイサイド</span>
-                             <button onClick={() => setPlaySide(p => p==='1P'?'2P':'1P')} className="bg-blue-600/20 border border-blue-500/50 px-6 py-1 text-blue-100 hover:bg-blue-600/40 transition rounded w-32 font-mono">{playSide}</button>
-                          </div>
+                         {(() => {
+                             const sideLocked = parsedSong && parsedSong.mode !== 'SP7' && parsedSong.mode !== 'SP5';
+                             return (
+                                 <div className={`w-full md:flex-1 border border-blue-900/50 p-3 bg-[#0f172a] rounded-lg flex justify-between items-center ${sideLocked ? 'opacity-40' : ''}`}>
+                                     <span className="font-bold text-sm text-blue-300">プレイサイド</span>
+                                     <button
+                                         disabled={sideLocked}
+                                         onClick={() => setPlaySide(p => p === '1P' ? '2P' : '1P')}
+                                         className="bg-blue-600/20 border border-blue-500/50 px-6 py-1 text-blue-100 hover:bg-blue-600/40 disabled:cursor-not-allowed transition rounded w-32 font-mono">
+                                         {sideLocked ? '—' : playSide}
+                                     </button>
+                                 </div>
+                             );
+                         })()}
                          <div className="w-full md:flex-1 border border-blue-900/50 p-3 bg-[#0f172a] rounded-lg flex flex-col gap-2 relative">
                              <div className="flex justify-between items-center">
                                   <span className="font-bold text-sm text-blue-300">レーンオプション</span>

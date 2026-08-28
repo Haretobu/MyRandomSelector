@@ -1,7 +1,9 @@
 // src/bms/components/LogPanel.jsx
 import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect, memo } from 'react';
 
-const LogPanel = forwardRef(({ backingTracks, activeShortSoundsRef, lastPlayedSoundPerLaneRef, longAudioProgressRefs, isPlaying }, ref) => {
+const DEFAULT_LANES = [{index:0,kind:'scratch',side:0},{index:1,kind:'key',side:0},{index:2,kind:'key',side:0},{index:3,kind:'key',side:0},{index:4,kind:'key',side:0},{index:5,kind:'key',side:0},{index:6,kind:'key',side:0},{index:7,kind:'key',side:0}];
+
+const LogPanel = forwardRef(({ backingTracks, activeShortSoundsRef, lastPlayedSoundPerLaneRef, longAudioProgressRefs, isPlaying, lanes, mode }, ref) => {
     const polyRef = useRef(null);      // POLY 数値の span
     const maxPolyRef = useRef(null);   // M POLY 数値の span
     const avgRef = useRef(0);          // 直近の平均(POLYの色分けに使う)
@@ -78,10 +80,23 @@ const LogPanel = forwardRef(({ backingTracks, activeShortSoundsRef, lastPlayedSo
                  </div>
              </div>
 
-             {/* LANE LOG (各レーンの最新音) */}
-             <div className="bg-[#0f172a] text-blue-100 p-2 h-48 shrink-0 text-[10px] font-mono border border-blue-900/50 flex flex-col justify-center rounded-sm shadow-lg">
-                 <div className="border-b border-blue-900/30 mb-2 pb-1 text-center text-blue-400 font-bold text-[9px] tracking-widest">LANE LOG</div>
-                 <div className="grid grid-cols-[20px_1fr] gap-x-2 gap-y-1">{[0,1,2,3,4,5,6,7].map(i => (<React.Fragment key={i}><div className="text-blue-500 text-right font-bold opacity-70">{i===0?'SC':`K${i}`}</div><div className="truncate text-yellow-100 leading-tight opacity-90">{laneLog[i] || '-'}</div></React.Fragment>))}</div>
+             {/* LANE LOG (各レーンの最新音・モード対応) */}
+             <div className="bg-[#0f172a] text-blue-100 p-2 max-h-48 shrink-0 overflow-y-auto scrollbar-hide text-[10px] font-mono border border-blue-900/50 flex flex-col rounded-sm shadow-lg">
+                 <div className="border-b border-blue-900/30 mb-2 pb-1 text-center text-blue-400 font-bold text-[9px] tracking-widest shrink-0">LANE LOG</div>
+                 <div className="grid grid-cols-[34px_1fr] gap-x-2 gap-y-0.5">
+                    {(lanes && lanes.length ? lanes : DEFAULT_LANES).map(lane => {
+                        const lbl = lane.kind === 'scratch'
+                            ? (lane.side === 1 ? '2SC' : 'SC')
+                            : mode === 'PMS9' ? `B${lane.index + 1}`
+                            : `${lane.side === 1 ? '2P' : ''}K${lane.side === 0 ? lane.index : lane.index - 8}`;
+                        return (
+                            <React.Fragment key={lane.index}>
+                                <div className="text-blue-500 text-right font-bold opacity-70">{lbl}</div>
+                                <div className="truncate text-yellow-100 leading-tight opacity-90">{laneLog[lane.index] || '-'}</div>
+                            </React.Fragment>
+                        );
+                    })}
+                 </div>
              </div>
          </div>
     );

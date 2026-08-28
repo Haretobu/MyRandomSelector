@@ -307,39 +307,36 @@ export default function BmsViewer() {
   }, [isInputDebugMode]);
   useEffect(() => { muteDebugAutoPlayRef.current = muteDebugAutoPlay; }, [muteDebugAutoPlay]);
 
+  const laneMetaRef = useRef([]); // [index] = { isScratch, color } (parsedSong.lanes から)
+  useEffect(() => {
+    const meta = new Array(MAX_LANES);
+    const lns = parsedSong?.lanes || DEFAULT_LANES;
+    const pms = parsedSong?.mode === 'PMS9' ? PMS_LANE_COLORS : null;
+    for (const lane of lns) meta[lane.index] = { isScratch: lane.kind === 'scratch', color: laneNoteColor(lane, pms) };
+    laneMetaRef.current = meta;
+  }, [parsedSong]);
+
   const setLaneActive = (idx, active) => {
+      const meta = laneMetaRef.current[idx];
+      if (!meta) return;
+      const col = meta.color;
       const ctrlEl = controllerRefs.current[idx];
       if (ctrlEl) {
-          if (idx === 0) { 
-             ctrlEl.style.boxShadow = active ? '0 0 25px #ff3333' : 'none';
-             ctrlEl.style.borderColor = active ? '#ff3333' : '#333';
-          } else { 
-             const isBlue = [2, 4, 6].includes(idx);
-             const activeColor = isBlue ? '#3b82f6' : '#ffffff';
-             ctrlEl.style.backgroundColor = active ? activeColor : (isBlue ? '#111' : '#222');
-             ctrlEl.style.boxShadow = active ? `0 0 20px ${activeColor}` : 'none';
+          if (meta.isScratch) {
+             ctrlEl.style.boxShadow = active ? `0 0 18px ${col}` : 'none';
+             ctrlEl.style.borderColor = active ? col : `${col}66`;
+             ctrlEl.style.background = active ? `${col}33` : '#0b0f1a';
+          } else {
+             ctrlEl.style.background = active ? col : '#0b0f1a';
+             ctrlEl.style.boxShadow = active ? `0 0 14px ${col}` : 'none';
           }
       }
       const kbEl = keyboardRefs.current[idx];
-      if (kbEl) {
-          const isScratch = idx === 0;
-          if (active) {
-            
-              kbEl.style.transition = 'none';
-
-              kbEl.style.backgroundColor = isScratch ? '#ef4444' : '#3b82f6';
-              kbEl.style.color = '#ffffff';
-              kbEl.style.borderColor = isScratch ? '#f87171' : '#60a5fa';
-              kbEl.style.boxShadow = isScratch ? '0 0 10px #ef4444' : '0 0 10px #3b82f6';
-          } else {
-
-              kbEl.style.transition = 'none';
-
-              kbEl.style.backgroundColor = '#0f172a';
-              kbEl.style.color = isScratch ? '#fca5a5' : '#475569';
-              kbEl.style.borderColor = isScratch ? '#7f1d1d' : '#1e293b';
-              kbEl.style.boxShadow = 'none';
-          }
+      if (kbEl && kbEl !== ctrlEl) {
+          kbEl.style.transition = 'none';
+          kbEl.style.background = active ? col : '#0f172a';
+          kbEl.style.color = active ? '#0b0f1a' : (meta.isScratch ? '#fca5a5' : '#93a0be');
+          kbEl.style.boxShadow = active ? `0 0 8px ${col}` : 'none';
       }
   };
   const clearActiveLanes = () => { for(let i=0; i<MAX_LANES; i++) { if (laneVisualRef.current[i] !== false) { laneVisualRef.current[i] = false; setLaneActive(i, false); } } };
@@ -1659,6 +1656,8 @@ export default function BmsViewer() {
                     lastPlayedSoundPerLaneRef={lastPlayedSoundPerLaneRef}
                     longAudioProgressRefs={longAudioProgressRefs}
                     isPlaying={isPlaying}
+                    lanes={parsedSong?.lanes}
+                    mode={parsedSong?.mode}
                  />
              </div>
          )}

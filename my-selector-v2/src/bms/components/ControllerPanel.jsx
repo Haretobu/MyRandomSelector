@@ -1,56 +1,95 @@
 // src/bms/components/ControllerPanel.jsx
 import React, { forwardRef, useImperativeHandle, useRef, memo } from 'react';
 import { Gamepad2, Keyboard } from 'lucide-react';
-import { KEY_CONFIG_ROWS } from '../constants';
+import { LANE_LAYOUTS, PMS_LANE_COLORS } from '../constants';
 import DensityGraph from './DensityGraph';
 
-const ControllerPanel = forwardRef(({ controllerRefs, keyboardRefs, is2P, parsedSong, difficultyInfo, currentMeasure }, ref) => {
-    // レーン別ノーツ数(8個)の表示要素。再生中は再レンダリングせず textContent だけ書き換える。
+const SP_KEY_LABEL = { 0: 'Sft', 1: 'Z', 2: 'S', 3: 'X', 4: 'D', 5: 'C', 6: 'F', 7: 'V' };
+
+function laneColor(lane, pms) {
+    if (pms) return PMS_LANE_COLORS[lane.index] || '#f1f5f9';
+    if (lane.kind === 'scratch') return '#ef4444';
+    const k = lane.side === 0 ? lane.index : lane.index - 8;
+    return (k % 2 === 0) ? '#3b82f6' : '#e2e8f0';
+}
+function laneLabel(lane, mode) {
+    if (lane.kind === 'scratch') return 'SC';
+    if (mode === 'SP7' || mode === 'SP5') return SP_KEY_LABEL[lane.index] || '';
+    if (mode === 'PMS9') return String(lane.index + 1);
+    return String(lane.side === 0 ? lane.index : lane.index - 8); // DP: 1-7
+}
+
+const ControllerPanel = forwardRef(({ controllerRefs, keyboardRefs, parsedSong, difficultyInfo, currentMeasure }, ref) => {
     const countRefs = useRef([]);
 
     useImperativeHandle(ref, () => ({
         updateCounts: (arr) => {
-            for (let i = 0; i < 8; i++) {
+            for (let i = 0; i < 16; i++) {
                 const el = countRefs.current[i];
-                if (el && el.textContent !== String(arr[i])) el.textContent = arr[i];
+                const v = String(arr[i] || 0);
+                if (el && el.textContent !== v) el.textContent = v;
             }
         },
     }));
 
+    const mode = parsedSong?.mode || 'SP7';
+    const lanes = parsedSong?.lanes || LANE_LAYOUTS.SP7;
+    const isPms = mode === 'PMS9';
+
     return (
         <div className="w-64 flex flex-col border-r border-blue-900/30 bg-[#080808] p-2 gap-2 shrink-0 overflow-y-auto scrollbar-hide text-blue-100">
-            {/* コントローラー (ターンテーブル等) */}
+            {/* CONTROLLER: 板と同じレーン並び */}
             <div className="bg-[#112233]/50 rounded p-2 border border-blue-900/30">
-                <div className="text-[10px] text-blue-400 font-bold mb-2 flex items-center gap-1"><Gamepad2 size={10}/> CONTROLLER</div>
-                <div className={`relative h-48 bg-black rounded border border-blue-900/30 shadow-inner transform transition-transform`}>
-                    <div ref={el => controllerRefs.current[0] = el} className={`absolute top-2 ${is2P ? 'right-2' : 'left-2'} w-20 h-20 rounded-full border-4 border-[#1e293b] bg-neutral-900 shadow flex items-center justify-center z-20 overflow-hidden`}>
-                         <div className="absolute w-full h-0.5 bg-gray-700/50 rotate-0"></div><div className="absolute w-full h-0.5 bg-gray-700/50 rotate-45"></div>
-                         <div className="absolute w-full h-0.5 bg-gray-700/50 rotate-90"></div><div className="absolute w-full h-0.5 bg-gray-700/50 rotate-135"></div>
-                          <div className="absolute w-16 h-16 rounded-full border border-gray-600/30"></div><span className="text-[9px] text-blue-500/50 font-bold relative z-10">SCR</span>
-                    </div>
-                    <div className={`absolute top-4 ${is2P ? 'left-4' : 'left-28'} flex gap-2 transition-all`}>
-                        {[2,4,6].map(i => (<div key={i} className="flex flex-col items-center"><div ref={el => (countRefs.current[i] = el)} className="text-[9px] text-blue-400/70 mb-1 font-mono">0</div><div ref={el => controllerRefs.current[i] = el} className="w-5 h-16 bg-black border border-blue-900/50 rounded-sm transition-transform duration-75 shadow-[0_0_10px_rgba(0,0,0,0.5)]" /></div>))}
-                    </div>
-                    <div className={`absolute top-24 ${is2P ? 'left-0' : 'left-24'} flex gap-2 transition-all`}>
-                         {[1,3,5,7].map(i => (<div key={i} className="flex flex-col items-center"><div ref={el => controllerRefs.current[i] = el} className="w-6 h-14 bg-[#e2e8f0] border-b-4 border-[#94a3b8] rounded-sm transition-transform duration-75 shadow-[0_0_10px_rgba(255,255,255,0.1)]" /><div ref={el => (countRefs.current[i] = el)} className="text-[9px] text-blue-400/70 mt-1 font-mono">0</div></div>))}
-                    </div>
-                    <div className={`absolute top-24 ${is2P ? 'right-4' : 'left-4'} text-center w-16`}><div ref={el => (countRefs.current[0] = el)} className="text-[9px] text-blue-400/70 mt-1 font-mono">0</div></div>
+                <div className="text-[10px] text-blue-400 font-bold mb-2 flex items-center justify-between gap-1">
+                    <span className="flex items-center gap-1"><Gamepad2 size={10}/> CONTROLLER</span>
+                    <span className="text-[9px] text-blue-500/60">{parsedSong?.keyMode || '—'}</span>
+                </div>
+                <div className="flex items-end justify-center gap-[2px] h-36 bg-black/60 rounded border border-blue-900/30 px-1 py-2 overflow-hidden">
+                    {lanes.map((lane, i) => {
+                        const col = laneColor(lane, isPms);
+                        const gap = i > 0 && lanes[i - 1].side !== lane.side;
+                        const scr = lane.kind === 'scratch';
+                        return (
+                            <React.Fragment key={lane.index}>
+                                {gap && <div className="w-1.5 shrink-0" />}
+                                <div className="flex flex-col items-center gap-0.5 shrink-0" style={{ marginBottom: i % 2 === 0 ? 0 : 8 }}>
+                                    <div ref={el => (countRefs.current[lane.index] = el)} className="text-[7px] text-blue-400/70 font-mono leading-none">0</div>
+                                    <div
+                                        ref={el => { controllerRefs.current[lane.index] = el; }}
+                                        className="rounded-sm transition-all duration-75"
+                                        style={{ width: scr ? 15 : 10, height: scr ? 84 : 96, background: '#0b0f1a', border: `1px solid ${col}66` }}
+                                    />
+                                    <div className="text-[7px] font-bold leading-none" style={{ color: col }}>{laneLabel(lane, mode)}</div>
+                                </div>
+                            </React.Fragment>
+                        );
+                    })}
                 </div>
             </div>
 
-            {/* キーマッピング */}
+            {/* KEY MAPPING: レーンごとのキーチップ (点灯表示) */}
             <div className="bg-[#112233]/50 rounded p-2 border border-blue-900/30">
                 <div className="text-[10px] text-blue-400 font-bold mb-2 flex items-center gap-1"><Keyboard size={10}/> KEY MAPPING</div>
-                <div className="flex flex-col gap-1 items-center">
-                     <div className="flex gap-1 w-full justify-center">
-                        <div ref={el=> keyboardRefs.current[KEY_CONFIG_ROWS[0][0].isScratch ? 0 : -1]=el} className={`${KEY_CONFIG_ROWS[0][0].width} h-8 bg-[#0f172a] border border-blue-900/40 rounded text-[10px] flex items-center justify-center text-blue-300 transition-all duration-75 shadow-sm border-red-900/50 text-red-300`}>{KEY_CONFIG_ROWS[0][0].label}</div>
-                        {KEY_CONFIG_ROWS[0].slice(1).map((k, i) => (<div key={i} ref={el=> keyboardRefs.current[k.keyIndex]=el} className={`${k.width} h-8 bg-[#0f172a] border border-blue-900/40 rounded text-[10px] flex items-center justify-center text-blue-300 transition-all duration-75 shadow-sm`}>{k.label}</div>))}
-                    </div>
-                    <div className="flex gap-1 w-full justify-center">
-                        <div className="w-14 h-8 invisible"></div>
-                        {KEY_CONFIG_ROWS[1].slice(1).map((k, i) => (<div key={i} ref={el=> keyboardRefs.current[k.keyIndex]=el} className={`${k.width} h-8 bg-[#0f172a] border border-blue-900/40 rounded text-[10px] flex items-center justify-center text-blue-300 transition-all duration-75 shadow-sm`}>{k.label}</div>))}
-                    </div>
+                <div className="flex flex-wrap gap-1 justify-center">
+                    {lanes.map((lane, i) => {
+                        const gap = i > 0 && lanes[i - 1].side !== lane.side;
+                        return (
+                            <React.Fragment key={lane.index}>
+                                {gap && <div className="basis-full h-0" />}
+                                <div
+                                    ref={el => { keyboardRefs.current[lane.index] = el; }}
+                                    className="w-7 h-7 rounded text-[9px] font-bold flex items-center justify-center border border-blue-900/40 transition-all duration-75"
+                                    style={{ background: '#0f172a', color: lane.kind === 'scratch' ? '#fca5a5' : '#93a0be' }}
+                                >
+                                    {laneLabel(lane, mode)}
+                                </div>
+                            </React.Fragment>
+                        );
+                    })}
                 </div>
+                {(mode === 'DP14' || mode === 'DP10' || mode === 'PMS9') && (
+                    <div className="text-[9px] text-blue-500/50 mt-1.5 text-center">キー割り当ての変更は今後対応</div>
+                )}
             </div>
 
             <DensityGraph parsedSong={parsedSong} currentMeasure={currentMeasure} />
@@ -72,7 +111,6 @@ const ControllerPanel = forwardRef(({ controllerRefs, keyboardRefs, is2P, parsed
                                 const r = parsedSong.bpmRange;
                                 if (!r) return parsedSong.header.bpm;
                                 if (r.min === r.max || r.count <= 1) return `${r.main}`;
-                                // BPM 2種、または最頻BPMが最低/最大と一致 → min～max の2値表記
                                 if (r.count === 2 || r.main === r.min || r.main === r.max) return `${r.min}～${r.max}`;
                                 return `${r.min}～${r.main}～${r.max}`;
                             })()}</span>
