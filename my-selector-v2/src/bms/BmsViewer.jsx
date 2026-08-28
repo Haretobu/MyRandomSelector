@@ -75,6 +75,9 @@ export default function BmsViewer() {
   const [currentLaneOrder, setCurrentLaneOrder] = useState([1,2,3,4,5,6,7]);
   const [comboPos, setComboPos] = useState('CENTER');
   const [totalNotes, setTotalNotes] = useState(0);
+  const [laneMute, setLaneMute] = useState(() => new Array(8).fill(false)); // レーンごとミュート(0=SC, 1-7=鍵盤)
+  const laneMuteRef = useRef(laneMute);
+  useEffect(() => { laneMuteRef.current = laneMute; }, [laneMute]);
   // ↓ P1-e で imperative 更新へ移行。値は未使用、setter は互換のため no-op で残す。
   const setPolyphonyCount = () => {}, setMaxPolyphonyCount = () => {}, setAveragePolyphony = () => {};
   const setRealtimeBpm = () => {}, setNextBpmInfo = () => {}, setCombo = () => {}, setNoteCounts = () => {};
@@ -788,6 +791,7 @@ export default function BmsViewer() {
                 let shouldPlay = true;
                 if (category === 'key') {
                     if (!playKeySoundsRef.current) shouldPlay = false;
+                    if (laneMuteRef.current[obj.laneIndex]) shouldPlay = false; // ★P5-2 レーンミュート
                     if (isInputDebugModeRef.current && muteDebugAutoPlayRef.current) shouldPlay = false;
                 } else if (category === 'bgm') {
                     if (!playLongAudioRef.current) shouldPlay = false;   // 「BGMを再生」トグル
@@ -1344,6 +1348,7 @@ export default function BmsViewer() {
             let x, w; if (obj.laneIndex === 0) { x = SCRATCH_X;
             w = SCRATCH_W; } else { x = KEYS_X + (obj.laneIndex - 1) * KEY_W; w = KEY_W;
             }
+            const mAlpha = laneMuteRef.current[obj.laneIndex] ? 0.28 : 1; // ★P5-2 ミュートレーンは薄く
             const beatDelta = obj.beat - currentBeat;
             const timeDelta = obj.time - currentTime;
             
@@ -1376,21 +1381,27 @@ export default function BmsViewer() {
                 const yEnd = JUDGE_Y - (endBeatDelta / visibleDuration * BASE_JUDGE_Y);
                 if (beatDelta <= 0 && endBeatDelta > 0) {
                     currentActiveLanes[obj.laneIndex] = true;
+                    if (mAlpha !== 1) ctx.globalAlpha = mAlpha;
                     ctx.fillStyle = gc.ln[obj.laneIndex];   // ★キャッシュ済みグラデーション
                     ctx.fillRect(x, JUDGE_Y - 300, w, 300);
+                    if (mAlpha !== 1) ctx.globalAlpha = 1;
                 }
                 const drawBottom = Math.min(JUDGE_Y, yBase);
                 const drawTop = yEnd;
                 if (drawTop <= height) {
                     const h = drawBottom - drawTop;
-                    if (h > 0 && drawBottom > -50) { ctx.fillStyle = obj.laneIndex === 0 ? '#ef4444' : '#f59e0b';
-                    ctx.fillRect(x + 1, drawTop, w - 2, h); }
+                    if (h > 0 && drawBottom > -50) {
+                        if (mAlpha !== 1) ctx.globalAlpha = mAlpha;
+                        ctx.fillStyle = obj.laneIndex === 0 ? '#ef4444' : '#f59e0b';
+                        ctx.fillRect(x + 1, drawTop, w - 2, h);
+                        if (mAlpha !== 1) ctx.globalAlpha = 1;
+                    }
                 }
             } else {
                 if (obj.processed) {
                     if (timeDelta > -0.05 && timeDelta > -0.2) {
                         currentActiveLanes[obj.laneIndex] = true;
-                        const alpha = 1.0 - (timeDelta / -0.05);
+                        const alpha = (1.0 - (timeDelta / -0.05)) * mAlpha;
                         // ★軽量化: グラデーションはレーン単位でキャッシュ済み。フェードは globalAlpha で。
                         ctx.globalAlpha = alpha;
                         ctx.fillStyle = '#ffffff'; ctx.fillRect(x, JUDGE_Y - 5, w, 10);
@@ -1402,8 +1413,10 @@ export default function BmsViewer() {
                     continue;
                 }
                 const y = yBase;
+                if (mAlpha !== 1) ctx.globalAlpha = mAlpha;
                 ctx.fillStyle = obj.laneIndex === 0 ? '#ef4444' : (IS_BLUE_LANE[obj.laneIndex] ? '#3b82f6' : '#f1f5f9');
                 ctx.fillRect(x + 1, y - 6, w - 2, 12);
+                if (mAlpha !== 1) ctx.globalAlpha = 1;
             }
         }
     }
@@ -1544,6 +1557,7 @@ export default function BmsViewer() {
         isPlaying={isPlaying} startPlayback={sStartPlayback} pausePlayback={sPausePlayback} stopPlayback={sStopPlayback}
         hiSpeed={hiSpeed} setHiSpeed={sHiSpeedChange} bgaOpacity={bgaOpacity} setBgaOpacity={setBgaOpacity}
         autoHiSpeed={autoHiSpeed} setAutoHiSpeed={setAutoHiSpeed} targetGreen={targetGreen} setTargetGreen={setTargetGreen}
+        laneMute={laneMute} setLaneMute={setLaneMute}
         laneOpacity={laneOpacity} setLaneOpacity={setLaneOpacity}
         boardOpacity={boardOpacity} setBoardOpacity={setBoardOpacity}
         parsedSong={parsedSong}

@@ -22,6 +22,7 @@ const SettingsModal = ({
     handleFileSelect, handleZipSelect, bmsList, selectedBmsIndex, setSelectedBmsIndex,
     hiSpeed, setHiSpeed, bgaOpacity, setBgaOpacity,
     autoHiSpeed, setAutoHiSpeed, targetGreen, setTargetGreen,
+    laneMute, setLaneMute,
     boardOpacity, setBoardOpacity,
     laneOpacity, setLaneOpacity,
     parsedSong,
@@ -188,6 +189,25 @@ const SettingsModal = ({
                             現在 HI-SPEED: <span className="text-blue-300 font-mono">{hiSpeed}</span>（{autoHiSpeed ? '自動' : '手動'}）。
                             HI-SPEED を手動で変えるとオートは OFF になります。
                         </div>
+                    </div>
+
+                    {/* レーンミュート (共通) */}
+                    <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
+                        <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center gap-2">
+                            <Speaker size={14} /> レーンミュート
+                        </div>
+                        <div className="flex gap-1.5 justify-center flex-wrap">
+                            {['SC', '1', '2', '3', '4', '5', '6', '7'].map((lbl, i) => (
+                                <button key={i}
+                                    onClick={() => setLaneMute((laneMute || new Array(8).fill(false)).map((v, idx) => idx === i ? !v : v))}
+                                    className={`w-10 h-10 rounded font-bold text-xs border transition-all ${(laneMute && laneMute[i])
+                                        ? 'bg-red-600/80 border-red-400 text-white shadow-[0_0_8px_rgba(220,38,38,0.5)]'
+                                        : 'bg-black/40 border-gray-700 text-gray-400 hover:bg-gray-800'}`}>
+                                    {lbl}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="text-[10px] text-blue-500/60 mt-2 text-center">赤 = ミュート。そのレーンのキー音を鳴らさず、ノーツを薄く表示します。</div>
                     </div>
 
                     {/* PC用設定 */}
