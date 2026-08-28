@@ -920,7 +920,8 @@ export default function BmsViewer() {
           }
           if (obj.isNote && !laneMuteRef.current[obj.laneIndex]) { // ★P5-2 ミュートレーンは打鍵音も鳴らさない
                const hitTime = Math.max(currentTime, absolutePlayTime);
-               const buffer = (obj.laneIndex === 0 || obj.laneIndex === 8) ? scratchHitSoundBufferRef.current : keyHitSoundBufferRef.current;
+               const hitMeta = laneMetaRef.current[obj.laneIndex];
+               const buffer = (hitMeta && hitMeta.isScratch) ? scratchHitSoundBufferRef.current : keyHitSoundBufferRef.current;
 
                if (buffer) {
                    const src = ctx.createBufferSource();
@@ -1455,7 +1456,7 @@ export default function BmsViewer() {
             if (!obj.processed && timeDelta <= 0) {
                 obj.processed = true;
                 comboRef.current++; noteCountsRef.current[obj.laneIndex]++; lastPlayedSoundPerLaneRef.current[obj.laneIndex] = obj.filename;
-                if (obj.laneIndex === 0 || obj.laneIndex === 8) {
+                if (gc.isScr[obj.laneIndex]) {
                     const scIdx = obj.laneIndex;
                     let dist = 999;
                     for (let k = i + 1; k < displayObjects.length; k++) {
@@ -1568,14 +1569,17 @@ export default function BmsViewer() {
         return m;
     };
 
-    const sideFactor = ((mode === 'SP7' || mode === 'SP5') && playSideRef.current === '2P') ? -1 : 1;
-    scratchAngleRef.current += baseSpeed * scratchSpeed(currentActiveLanes[0], lastScratchTimeRef.current, lastScratchTypeRef, scratchDirectionRef) * sideFactor * safeDt;
-    const scratchCtrl = controllerRefs.current[0];
-    if (scratchCtrl) scratchCtrl.style.transform = `rotate(${scratchAngleRef.current}deg)`;
-    const scratchCtrl2 = controllerRefs.current[8]; // DP 2P 皿 (逆回転)
-    if (scratchCtrl2) {
-        scratchAngle2Ref.current += baseSpeed * scratchSpeed(currentActiveLanes[8], lastScratchTime2Ref.current, lastScratchType2Ref, scratchDirection2Ref) * -1 * safeDt;
-        scratchCtrl2.style.transform = `rotate(${scratchAngle2Ref.current}deg)`;
+    // 9K(pop'n) は皿がないので回転処理をスキップ(controllerRefs[0] はボタン0)
+    if (!isPmsMode) {
+        const sideFactor = ((mode === 'SP7' || mode === 'SP5') && playSideRef.current === '2P') ? -1 : 1;
+        scratchAngleRef.current += baseSpeed * scratchSpeed(currentActiveLanes[0], lastScratchTimeRef.current, lastScratchTypeRef, scratchDirectionRef) * sideFactor * safeDt;
+        const scratchCtrl = controllerRefs.current[0];
+        if (scratchCtrl) scratchCtrl.style.transform = `rotate(${scratchAngleRef.current}deg)`;
+        const scratchCtrl2 = controllerRefs.current[8]; // DP 2P 皿 (逆回転)
+        if (scratchCtrl2) {
+            scratchAngle2Ref.current += baseSpeed * scratchSpeed(currentActiveLanes[8], lastScratchTime2Ref.current, lastScratchType2Ref, scratchDirection2Ref) * -1 * safeDt;
+            scratchCtrl2.style.transform = `rotate(${scratchAngle2Ref.current}deg)`;
+        }
     }
 
     // ★軽量化: 毎フレーム8レーン分の style 一括書き込みをやめ、状態が変化したレーンだけ書き込む。

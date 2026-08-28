@@ -224,8 +224,7 @@ export const parseBMS = async (file) => {
 
     const lanes = LANE_LAYOUTS[mode] || LANE_LAYOUTS.SP7;
     const keyMode = MODE_LABELS[mode] || '—';
-    // SP5 / SP7 / DP14 / DP10 は描画対応。PMS(9K) はチャンネル対応が未確定なので暫定で警告を出す。
-    if (mode === 'PMS9') isSupportedMode = false;
+    // SP5 / SP7 / DP14 / DP10 / PMS9(9K) を描画・再生対応。想定外の巨大 index のみ非対応。
     if (maxLaneIndex > 15) isSupportedMode = false;
 
     return { header, objects: resolvedObjects, backBgaObjects, layerBgaObjects, poorBgaObjects, barLines, timePoints, totalTime: lastObjTime + 2.0, rawLinesByMeasure, totalNotes: noteCount, notesPerMeasure, scratchPerMeasure, avgDensity, maxLNDuration, isSupportedMode, bpmRange, keyMode, mode, lanes };
