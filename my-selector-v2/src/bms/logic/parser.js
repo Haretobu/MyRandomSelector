@@ -12,7 +12,7 @@ export const parseBMS = async (file) => {
     const lines = text.split(/\r?\n/);
     const header = { bpm: 130, wavs: {}, bmps: {}, bpms: {}, stops: {}, title: 'Unknown', artist: 'Unknown', genre: '', playlevel: '', rank: null, difficulty: null, stagefile: null, lnObj: null, player: 1 };
     let rawObjects = [];
-    const measureLen = {}; const rawLinesByMeasure = {}; const notesPerMeasure = {}; 
+    const measureLen = {}; const rawLinesByMeasure = {}; const notesPerMeasure = {}; const scratchPerMeasure = {};
     let maxMeasureIndex = 0;
     let maxLaneIndex = 0;
     let isSupportedMode = true;
@@ -54,7 +54,10 @@ export const parseBMS = async (file) => {
               const lane = LANE_MAP[ch];
               if (lane) {
                   if (lane.index > maxLaneIndex) maxLaneIndex = lane.index;
-                  if (!lane.isBg) notesPerMeasure[measure] = (notesPerMeasure[measure] || 0) + 1;
+                  if (!lane.isBg) {
+                      notesPerMeasure[measure] = (notesPerMeasure[measure] || 0) + 1;
+                      if (lane.isScratch) scratchPerMeasure[measure] = (scratchPerMeasure[measure] || 0) + 1;
+                  }
               }
               
               if (RE_UNSUPPORTED_CH.test(ch)) isSupportedMode = false;
@@ -185,5 +188,5 @@ export const parseBMS = async (file) => {
     }
     const lastObjTime = resolvedObjects.length > 0 ? resolvedObjects[resolvedObjects.length-1].time : 0;
     if (maxLNDuration < 20.0) maxLNDuration = 20.0;
-    return { header, objects: resolvedObjects, backBgaObjects, layerBgaObjects, poorBgaObjects, barLines, timePoints, totalTime: lastObjTime + 2.0, rawLinesByMeasure, totalNotes: resolvedObjects.filter(o=>o.isNote).length, notesPerMeasure, avgDensity, maxLNDuration, isSupportedMode };
+    return { header, objects: resolvedObjects, backBgaObjects, layerBgaObjects, poorBgaObjects, barLines, timePoints, totalTime: lastObjTime + 2.0, rawLinesByMeasure, totalNotes: resolvedObjects.filter(o=>o.isNote).length, notesPerMeasure, scratchPerMeasure, avgDensity, maxLNDuration, isSupportedMode };
   };
