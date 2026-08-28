@@ -634,7 +634,8 @@ export default function BmsViewer() {
     setNextBpmInfo(null); setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: 0 });
     scratchAngleRef.current = 0; lastScratchTimeRef.current = 0; lastScratchTypeRef.current = 'REVERSE'; scratchDirectionRef.current = -1; activeInputLanesRef.current.clear(); isShiftHeldRef.current = false; isCtrlHeldRef.current = false;
     if (audioContextRef.current) activeNodesRef.current.forEach(n => { try { n.node.stop(); n.node.disconnect(); } catch(e){} });
-    activeNodesRef.current = []; activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]); releaseImageAssets(); audioBuffersRef.current.clear();
+    activeNodesRef.current = []; activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]);
+    // ★P4: デコード済み WAV / 画像はフォルダ内で使い回す(キャッシュのクリアは processFiles = 新フォルダ時のみ)
 
     setIsLoading(true); setLoadingProgress(0); setLoadingMessage('BMSファイルを解析中...');
 
@@ -674,20 +675,17 @@ export default function BmsViewer() {
 
       for (const item of imageQueue) {
           try {
-              const url = URL.createObjectURL(item.file);
-              const isVideo = /\.(mp4|webm|mov)$/i.test(item.file.name);
-              
-              if (isVideo) {
-                  imageAssetsRef.current.set(item.key, { type: 'video', url: url });
-                  videoDetected = true;
-              } else {
-                  const img = new Image();
-                  img.src = url;
-                  imageAssetsRef.current.set(item.key, img);
+              let asset = imageAssetsRef.current.get(item.key);
+              const isVideo = asset ? asset.type === 'video' : /\.(mp4|webm|mov)$/i.test(item.file.name);
+              if (!asset) { // ★P4: 未キャッシュのものだけ生成
+                  const url = URL.createObjectURL(item.file);
+                  if (isVideo) asset = { type: 'video', url };
+                  else { asset = new Image(); asset.src = url; }
+                  imageAssetsRef.current.set(item.key, asset);
               }
-              
+              if (isVideo) videoDetected = true;
               if (parsed.header.stagefile && item.key === parsed.header.stagefile.toLowerCase()) {
-                  if (!isVideo) { setCurrentBackBga(imageAssetsRef.current.get(item.key)); stageFileAssigned = true; }
+                  if (!isVideo) { setCurrentBackBga(asset); stageFileAssigned = true; }
               }
           } catch(e) { console.warn("Asset load failed", item.key); }
       }
@@ -702,16 +700,18 @@ export default function BmsViewer() {
 
       const queue = [];
       neededAudio.forEach(raw => {
+        const key = raw.toLowerCase();
+        if (audioBuffersRef.current.has(key)) return; // ★P4: デコード済みはスキップ
         const base = getBaseName(raw).toLowerCase(); const candidates = fileMap[base];
         if (candidates?.length) {
-          let best = candidates[0]; const exact = candidates.find(c => c.name.toLowerCase() === raw.toLowerCase());
+          let best = candidates[0]; const exact = candidates.find(c => c.name.toLowerCase() === key);
           if (exact) best = exact;
-          queue.push({ key: raw.toLowerCase(), file: best });
+          queue.push({ key, file: best });
         }
       });
       queue.sort((a, b) => b.file.size - a.file.size);
 
-      if (queue.length > 0) setLoadingMessage(`音声ファイルを読み込み中... (${queue.length}個)`);
+      if (queue.length > 0) setLoadingMessage(`音声ファイルを読み込み中... (新規 ${queue.length}個)`);
       const CONCURRENCY = 6;
       for (let i = 0; i < queue.length; i += CONCURRENCY) {
         await Promise.all(queue.slice(i, i + CONCURRENCY).map(async (item) => {
