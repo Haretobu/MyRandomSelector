@@ -324,6 +324,15 @@ export default function BmsViewer() {
   }, [isInputDebugMode]);
   useEffect(() => { muteDebugAutoPlayRef.current = muteDebugAutoPlay; }, [muteDebugAutoPlay]);
 
+  // デバッグ用キー入力の「KeyboardEvent.code → laneIndex」逆引き表(現在モードのキー割り当てに追従)
+  const debugKeyLaneRef = useRef({});
+  useEffect(() => {
+    const m = keyMaps[parsedSong?.mode] || keyMaps.SP7 || {};
+    const rev = {};
+    for (const idx of Object.keys(m)) rev[m[idx]] = Number(idx);
+    debugKeyLaneRef.current = rev;
+  }, [keyMaps, parsedSong]);
+
   const laneMetaRef = useRef([]); // [index] = { isScratch, color } (parsedSong.lanes から)
   useEffect(() => {
     const meta = new Array(MAX_LANES);
@@ -403,12 +412,14 @@ export default function BmsViewer() {
     if (!isInputDebugMode) { activeInputLanesRef.current.clear(); clearActiveLanes(); return; }
     const handleKeyDown = (e) => {
         if (e.repeat) return;
-        let lane = -1;
-        if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { isShiftHeldRef.current = true; lane = 0; } 
-        else if (e.code === 'ControlLeft' || e.code === 'ControlRight') { isCtrlHeldRef.current = true; lane = 0; }
-        else if (e.code === 'KeyM') { triggerMiss(); } 
-        switch(e.code) { case 'KeyZ': lane = 1; break; case 'KeyS': lane = 2; break; case 'KeyX': lane = 3; break; case 'KeyD': lane = 4; break; case 'KeyC': lane = 5; break; case 'KeyF': lane = 6; break; case 'KeyV': lane = 7; break; }
-        if (lane !== -1) { 
+        const rev = debugKeyLaneRef.current;
+        // 皿の手動回転用フラグ(Shift=逆回転 / Ctrl=高速)。キー割り当てで皿=Shift のときは lane も付く。
+        if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') isShiftHeldRef.current = true;
+        else if (e.code === 'ControlLeft' || e.code === 'ControlRight') isCtrlHeldRef.current = true;
+        else if (e.code === 'KeyM' && rev['KeyM'] === undefined) { triggerMiss(); }
+        let lane = rev[e.code];
+        if (lane === undefined) lane = -1;
+        if (lane !== -1) {
             activeInputLanesRef.current.add(lane); 
             setLaneActive(lane, true); 
 
@@ -497,16 +508,10 @@ export default function BmsViewer() {
         scheduleRenderLoop();
     };
     const handleKeyUp = (e) => {
-        let lane = -1;
-        if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { isShiftHeldRef.current = false; lane = 0; } 
-        else if (e.code === 'ControlLeft' || e.code === 'ControlRight') { isCtrlHeldRef.current = false; lane = 0; }
-        switch(e.code) {
-            case 'KeyZ': lane = 1; break; case 'KeyS': lane = 2; break; case 'KeyX': lane = 3; break; case 'KeyD': lane = 4; break;
-            case 'KeyC': lane = 5; break; case 'KeyF': lane = 6; break; case 'KeyV': lane = 7; break;
-        }
-        if (lane === 0) {
-            if (!isShiftHeldRef.current && !isCtrlHeldRef.current) { activeInputLanesRef.current.delete(0); setLaneActive(0, false); }
-        } else if (lane !== -1) { activeInputLanesRef.current.delete(lane); setLaneActive(lane, false); }
+        if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') isShiftHeldRef.current = false;
+        else if (e.code === 'ControlLeft' || e.code === 'ControlRight') isCtrlHeldRef.current = false;
+        const lane = debugKeyLaneRef.current[e.code];
+        if (lane !== undefined) { activeInputLanesRef.current.delete(lane); setLaneActive(lane, false); }
     };
     window.addEventListener('keydown', handleKeyDown); window.addEventListener('keyup', handleKeyUp);
     scheduleRenderLoop();

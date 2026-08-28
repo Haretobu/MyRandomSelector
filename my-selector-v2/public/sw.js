@@ -3,7 +3,7 @@
 // 1. キャッシュのバージョン管理
 // index.htmlのappVersionと連動させます。
 // アプリを更新するたびに、このバージョンも変更する必要があります。
-const APP_VERSION = 'v3.1.6';
+const APP_VERSION = 'v3.1.7';
 const CACHE_NAME = `r18-selector-shell-${APP_VERSION}`;
 
 // 2. キャッシュするファイルの厳密な指定 (方針7準拠)
