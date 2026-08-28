@@ -118,6 +118,7 @@ export default function BmsViewer() {
   const missLayerTimerRef = useRef(null); 
   const polyphonyHistoryRef = useRef([]);
   const maxPolyRef = useRef(0);
+  const nextSoundIdRef = useRef(1); // 音源ログ/ノードの一意ID(React key・killedIds Set用)。Math.random()の衝突を避ける
   const scratchAngleRef = useRef(0);
   const lastFrameTimeRef = useRef(0);
   const lastScratchTimeRef = useRef(0);
@@ -730,7 +731,7 @@ export default function BmsViewer() {
                 
                 const isBgmMonitor = buffer.duration > 5.0 && !obj.isNote;
                 const item = { 
-                    id: Math.random(), 
+                    id: nextSoundIdRef.current++,
                     name: obj.filename, 
                     startTime: obj.time, 
                     endTime: obj.time + buffer.duration, 

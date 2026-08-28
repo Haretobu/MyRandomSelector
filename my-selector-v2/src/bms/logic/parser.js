@@ -2,6 +2,11 @@
 import { LANE_MAP } from '../constants';
 import { decodeBmsText, parseInt36 } from './utils';
 
+// ★軽量化: 正規表現はループ内で毎回リテラル評価せず、モジュール定数として1回だけ生成する
+const RE_MEASURE_LEN = /^#\d{3}02$/;      // 小節長変更チャンネル (#xxx02)
+const RE_CHANNEL_LINE = /^#\d{5}$/;       // 小節データ行 (#mmmcc)
+const RE_UNSUPPORTED_CH = /^(2[1-9]|6[1-9])$/; // 2P側チャンネル(未対応)
+
 export const parseBMS = async (file) => {
     const text = await decodeBmsText(file);
     const lines = text.split(/\r?\n/);
@@ -34,8 +39,8 @@ export const parseBMS = async (file) => {
       else if (key.startsWith('#WAV')) header.wavs[parseInt36(key.substring(4))] = value;
       else if (key.startsWith('#BMP')) header.bmps[parseInt36(key.substring(4))] = value;
       else if (key.startsWith('#BPM') && key.length > 4) header.bpms[parseInt36(key.substring(4))] = parseFloat(value); 
-      else if (key.match(/^#\d{3}02$/)) measureLen[parseInt(key.substring(1, 4))] = parseFloat(value);
-      else if (key.match(/^#\d{5}$/)) {
+      else if (RE_MEASURE_LEN.test(key)) measureLen[parseInt(key.substring(1, 4))] = parseFloat(value);
+      else if (RE_CHANNEL_LINE.test(key)) {
         const measure = parseInt(key.substring(1, 4));
         if (measure > maxMeasureIndex) maxMeasureIndex = measure;
         const ch = key.substring(4, 6);
@@ -52,7 +57,7 @@ export const parseBMS = async (file) => {
                   if (!lane.isBg) notesPerMeasure[measure] = (notesPerMeasure[measure] || 0) + 1;
               }
               
-              if (ch.match(/^(2[1-9]|6[1-9])$/)) isSupportedMode = false;
+              if (RE_UNSUPPORTED_CH.test(ch)) isSupportedMode = false;
               if (lane || ch === '01' || ch === '04' || ch === '06' || ch === '07' || ch === '03' || ch === '08' || ch === '09') {
                 rawObjects.push({
                     measure, channel: ch, position: i / total, value: val,
@@ -131,12 +136,18 @@ export const parseBMS = async (file) => {
         }
     }
     timePoints.push({ time: Infinity, beat: Infinity, bpm: currentBpmHeader });
-    const applyTime = (obj) => {
-        let tp = timePoints[0];
-        for (let i = 0; i < timePoints.length - 1; i++) { if (obj.beat >= timePoints[i].beat && obj.beat < timePoints[i+1].beat) { tp = timePoints[i]; break; } }
-        obj.time = tp.time + (obj.beat - tp.beat) * (60.0 / tp.bpm);
+    // ★軽量化: 旧 applyTime は「各オブジェクト × 全 timePoints」の線形走査で O(objects * timePoints) だった。
+    //   finalObjects / backBgaObjects / ... はいずれも beat 昇順、timePoints も beat 昇順なので、
+    //   ポインタを前進させるマージ歩行で O(objects + timePoints) にする（算出される time は従来と完全に同一）。
+    const applyTimeSorted = (objs) => {
+        let ti = 0;
+        for (const obj of objs) {
+            while (ti < timePoints.length - 1 && timePoints[ti + 1].beat <= obj.beat) ti++;
+            const tp = timePoints[ti];
+            obj.time = tp.time + (obj.beat - tp.beat) * (60.0 / tp.bpm);
+        }
     };
-    finalObjects.forEach(applyTime); backBgaObjects.forEach(applyTime); layerBgaObjects.forEach(applyTime); poorBgaObjects.forEach(applyTime);
+    applyTimeSorted(finalObjects); applyTimeSorted(backBgaObjects); applyTimeSorted(layerBgaObjects); applyTimeSorted(poorBgaObjects);
     finalObjects.sort((a, b) => a.time - b.time); backBgaObjects.sort((a, b) => a.time - b.time);
     layerBgaObjects.sort((a, b) => a.time - b.time); poorBgaObjects.sort((a, b) => a.time - b.time);
 
@@ -163,13 +174,14 @@ export const parseBMS = async (file) => {
         } else { resolvedObjects.push(obj); lastNoteByLane[lane] = obj; }
     }
     resolvedObjects.sort((a, b) => a.time - b.time);
+    // ★軽量化: barLines も measureStartBeats(昇順) × timePoints(昇順) のマージ歩行で O(measures + timePoints)
     const barLines = [];
+    let bti = 0;
     for (let m = 0; m <= maxMeasure; m++) {
         const beat = measureStartBeats[m];
-        let tp = timePoints[0];
-        for (let i = 0; i < timePoints.length - 1; i++) { if (beat >= timePoints[i].beat && beat < timePoints[i+1].beat) { tp = timePoints[i]; break; } }
-        const time = tp.time + (beat - tp.beat) * (60.0 / tp.bpm);
-        barLines.push({ measure: m, beat: beat, time: time });
+        while (bti < timePoints.length - 1 && timePoints[bti + 1].beat <= beat) bti++;
+        const tp = timePoints[bti];
+        barLines.push({ measure: m, beat: beat, time: tp.time + (beat - tp.beat) * (60.0 / tp.bpm) });
     }
     const lastObjTime = resolvedObjects.length > 0 ? resolvedObjects[resolvedObjects.length-1].time : 0;
     if (maxLNDuration < 20.0) maxLNDuration = 20.0;
