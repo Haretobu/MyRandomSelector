@@ -26,6 +26,12 @@ const InfoPanel = forwardRef(({
     const nextBpmRef = useRef(null);
     const whiteRef = useRef(null);
     const greenRef = useRef(null);
+    // 6-2-b: プレイモードのスコア表示
+    const scoreBlockRef = useRef(null);
+    const exRef = useRef(null);
+    const djRef = useRef(null);
+    const jbRef = useRef({}); // { pg, gr, gd, bd, poor, epoor } の span
+    const fsRef = useRef(null);
 
     useImperativeHandle(ref, () => ({
         // 毎フレーム: コンボ表示 + BGA の位置合わせ
@@ -59,6 +65,18 @@ const InfoPanel = forwardRef(({
             }
             if (whiteRef.current) whiteRef.current.textContent = Math.round(s.white);
             if (greenRef.current) greenRef.current.textContent = s.green;
+        },
+        // 6-2-b: プレイモードのスコア。d=null で非表示。
+        updateScore: (d) => {
+            const el = scoreBlockRef.current;
+            if (!el) return;
+            if (!d) { el.style.display = 'none'; return; }
+            el.style.display = '';
+            if (exRef.current) exRef.current.textContent = `${d.exScore} / ${d.maxEx}  ${(d.rate * 100).toFixed(2)}%`;
+            if (djRef.current) djRef.current.textContent = d.djLevel;
+            const jb = jbRef.current;
+            ['pg', 'gr', 'gd', 'bd', 'poor', 'epoor'].forEach(k => { if (jb[k]) jb[k].textContent = d[k]; });
+            if (fsRef.current) fsRef.current.textContent = `${d.fast} / ${d.slow}`;
         },
     }));
 
@@ -124,6 +142,31 @@ const InfoPanel = forwardRef(({
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {/* 6-2-b: プレイモードのスコア (updateScore で表示切替) */}
+            <div ref={scoreBlockRef} style={{ display: 'none' }} className="bg-[#112233]/30 border border-blue-900/30 p-2 text-xs shrink-0 text-blue-200 font-mono rounded-sm space-y-1.5">
+                <div className="flex justify-between items-baseline border-b border-blue-900/30 pb-1">
+                    <span className="text-[10px] text-blue-400">DJ LEVEL</span>
+                    <span ref={djRef} className="text-xl font-black text-white">F</span>
+                </div>
+                <div className="flex justify-between items-baseline">
+                    <span className="text-[10px] text-blue-400">EX</span>
+                    <span ref={exRef} className="text-white text-[11px]">0 / 0  0.00%</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 pt-1 text-[11px]">
+                    <div className="flex justify-between"><span className="text-[#22d3ee]">PG</span><span ref={el => (jbRef.current.pg = el)} className="text-white">0</span></div>
+                    <div className="flex justify-between"><span className="text-[#fde047]">GR</span><span ref={el => (jbRef.current.gr = el)} className="text-white">0</span></div>
+                    <div className="flex justify-between"><span className="text-[#4ade80]">GD</span><span ref={el => (jbRef.current.gd = el)} className="text-white">0</span></div>
+                    <div className="flex justify-between"><span className="text-[#fb923c]">BD</span><span ref={el => (jbRef.current.bd = el)} className="text-white">0</span></div>
+                    <div className="flex justify-between"><span className="text-[#f87171]">PR</span><span ref={el => (jbRef.current.poor = el)} className="text-white">0</span></div>
+                    <div className="flex justify-between"><span className="text-[#94a3b8]">空PR</span><span ref={el => (jbRef.current.epoor = el)} className="text-white">0</span></div>
+                </div>
+                <div className="flex justify-between items-baseline pt-1 border-t border-blue-900/30">
+                    <span className="text-[10px] text-blue-400">FAST / SLOW</span>
+                    <span ref={fsRef} className="text-[11px]"><span className="text-blue-400">0</span> / <span className="text-red-400">0</span></span>
+                </div>
+                <div className="text-[9px] text-blue-500/50 text-center pt-0.5">Tab: リザルト表示</div>
             </div>
          </div>
     );

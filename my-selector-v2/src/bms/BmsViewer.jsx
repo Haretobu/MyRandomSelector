@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
-import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, JUDGE_WINDOWS, judgeRankIndex } from './constants';
+import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, JUDGE_WINDOWS, judgeRankIndex, djLevel } from './constants';
 import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, shuffleLanes, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 
@@ -12,6 +12,7 @@ import InfoPanel from './components/InfoPanel';
 import LogPanel from './components/LogPanel';
 import ControlBar from './components/ControlBar';
 import BgaLayer from './components/BgaLayer';
+import ResultModal from './components/ResultModal';
 
 // ★軽量化: renderLoop 毎フレームの割り当てを避けるためのモジュールスコープ定数/再利用バッファ
 const MAX_LANES = 16;                // 0=1P皿,1-7=1P鍵 / 8=2P皿,9-15=2P鍵 (PMS は 0-8)
@@ -113,6 +114,7 @@ export default function BmsViewer() {
   const [scratchRotationEnabled, setScratchRotationEnabled] = useState(true);
   const [isInputDebugMode, setIsInputDebugMode] = useState(false);
   const [playMode, setPlayMode] = useState(false); // 6-2: プレイモード(自分の入力で判定)
+  const [playResult, setPlayResult] = useState(null); // 6-2-b: 完走リザルト(モーダル表示用)
   // キー割り当て(6-1-d): モード別 lane index -> KeyboardEvent.code。localStorage 永続。
   // ※ 手動プレイの判定入力への接続は P6-2 で実装。現状は表示・保存のみ。
   const [keyMaps, setKeyMaps] = useState(() => {
@@ -216,6 +218,8 @@ export default function BmsViewer() {
   const activeLnRef = useRef(new Array(MAX_LANES).fill(null)); // プレイモード: 判定成立中の LN
   const lastGameKeyTimeRef = useRef(0);    // プレイモード: 直近のゲームキー入力時刻(Space誤爆抑制用)
   const notesDoneRef = useRef(0);          // 通過/判定済みノーツ数(NOTES 表示。コンボとは別)
+  const showLiveResultRef = useRef(false); // 6-2-b: Tab 押下中の成績オーバーレイ
+  const lastRunRef = useRef(null);         // 6-2-b: 直近の走行スナップショット(停止後の Tab 表示用)
   const playSideRef = useRef(playSide);
   const showMutedMonitorRef = useRef(showMutedMonitor);
   const showAbortedMonitorRef = useRef(showAbortedMonitor);
@@ -533,6 +537,25 @@ export default function BmsViewer() {
       pushJudge(kind, 0);
   };
 
+  // 6-2-b: 現在の judgeRef から成績データを作る(リザルト / Tab オーバーレイ / InfoPanel 共通)
+  const buildResultData = (finished) => {
+      const j = judgeRef.current;
+      const total = parsedSong?.totalNotes || 0;
+      const maxEx = total * 2;
+      const rate = maxEx ? j.exScore / maxEx : 0;
+      return {
+          finished,
+          title: parsedSong?.header?.title || '',
+          keyMode: parsedSong?.keyMode || '—',
+          level: parsedSong?.header?.playlevel || '—',
+          exScore: j.exScore, maxEx,
+          djLevel: djLevel(rate), rate,
+          pg: j.pg, gr: j.gr, gd: j.gd, bd: j.bd, poor: j.poor, epoor: j.epoor,
+          maxCombo: j.maxCombo, fast: j.fast, slow: j.slow,
+          judged: notesDoneRef.current, total,
+      };
+  };
+
   // 6-1-e: レーンオプションをモード別に適用。
   //   opt1 = 1P/左サイド(9K は全体)、opt2 = 2P/右サイド(DP のみ)、flip = 左右サイド入れ替え(DP のみ)。
   const applyOptions = (objects, opt1, opt2 = 'OFF', flip = false) => {
@@ -610,6 +633,13 @@ export default function BmsViewer() {
             if (performance.now() - lastGameKeyTimeRef.current >= 2000) {
                 if (isPlayingRef.current) pausePlayback(); else startPlayback();
             }
+            return;
+        }
+        // Tab 押下中: 成績オーバーレイを表示(フォーカス移動は無効化)
+        if (playModeRef.current && e.code === 'Tab') {
+            e.preventDefault();
+            showLiveResultRef.current = true;
+            scheduleRenderLoop();
             return;
         }
         const rev = debugKeyLaneRef.current;
@@ -715,6 +745,7 @@ export default function BmsViewer() {
     };
     const handleKeyUp = (e) => {
         if (playModeRef.current && (e.code === 'Space' || e.code === 'Enter')) { e.preventDefault(); return; }
+        if (e.code === 'Tab') { showLiveResultRef.current = false; e.preventDefault(); return; }
         if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') isShiftHeldRef.current = false;
         else if (e.code === 'ControlLeft' || e.code === 'ControlRight') isCtrlHeldRef.current = false;
         const lane = debugKeyLaneRef.current[e.code];
@@ -1241,6 +1272,8 @@ export default function BmsViewer() {
     const wasPlaying = isPlayingRef.current;
     setIsPlaying(false); isPlayingRef.current = false;
     stopAudioNodes();
+    // 6-2-b: プレイモードで判定が発生していれば、停止後の Tab 表示用にスナップショット
+    if (reset && playModeRef.current && notesDoneRef.current > 0) lastRunRef.current = buildResultData(false);
     if (reset) {
         if (wasPlaying && showAbortedMonitorRef.current) {
             const currentTime = pauseTimeRef.current > 0 ? pauseTimeRef.current : playbackTimeDisplay;
@@ -1427,6 +1460,9 @@ export default function BmsViewer() {
         // これらは毎フレームやる必要がないので、ここだけ間引いて軽量化します
         if (now - lastStateUpdateRef.current > 100) { // 100ms(秒間10回)程度に設定
             const H = hudLastRef.current;
+            // 6-2-b: プレイモードのスコア(EX/DJ LEVEL/内訳)→ InfoPanel(imperative)
+            if (playModeRef.current) infoPanelRef.current?.updateScore(buildResultData(false));
+            else if (!H.scoreHidden) { H.scoreHidden = true; infoPanelRef.current?.updateScore(null); }
             // ★軽量化(Part2): 高頻度で変わる HUD 値は setState せず、memo 化した子へ imperative 更新する。
             //   これで定BPM再生中の BmsViewer 本体の再レンダリングは「小節が変わったとき(〜0.5Hz)」だけになる。
 
@@ -1511,7 +1547,11 @@ export default function BmsViewer() {
         }
 
         const isFinished = currentTime > duration + 0.5 && activeNodesRef.current.length === 0;
-        if (isFinished && isPlayingRef.current) { stopPlayback(true); return; }
+        if (isFinished && isPlayingRef.current) {
+            if (playModeRef.current) setPlayResult(buildResultData(true)); // 完走リザルト(stopPlayback の resetJudge 前に確定)
+            stopPlayback(true);
+            return;
+        }
     }
 
     const width = rect.width;
@@ -1844,6 +1884,40 @@ export default function BmsViewer() {
         ctx.drawImage(img, (width - img.width) / 2, (height - img.height) / 2);
     }
 
+    // 6-2-b: Tab 押下中の成績オーバーレイ
+    if (showLiveResultRef.current && playModeRef.current) {
+        const d = (isPlayingRef.current || pauseTimeRef.current > 0) ? buildResultData(false) : lastRunRef.current;
+        if (d) {
+            const pw = Math.min(280, width - 20), ph = 200;
+            const px = (width - pw) / 2, py = Math.max(20, (height - ph) / 2 - 40);
+            ctx.fillStyle = 'rgba(3, 7, 18, 0.92)'; ctx.strokeStyle = '#1e3a8a';
+            ctx.lineWidth = 1; ctx.fillRect(px, py, pw, ph); ctx.strokeRect(px, py, pw, ph);
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#60a5fa'; ctx.font = 'bold 10px Arial';
+            ctx.fillText('RESULT (hold Tab)', px + 12, py + 18);
+            ctx.fillStyle = '#e2e8f0'; ctx.font = 'bold 30px Arial'; ctx.textAlign = 'center';
+            ctx.fillText(d.djLevel, px + pw / 2, py + 52);
+            ctx.font = 'bold 13px Arial';
+            ctx.fillText(`EX ${d.exScore} / ${d.maxEx}  (${(d.rate * 100).toFixed(2)}%)`, px + pw / 2, py + 72);
+            ctx.textAlign = 'left'; ctx.font = '11px monospace';
+            const rows = [
+                ['PGREAT', d.pg, '#22d3ee'], ['GREAT', d.gr, '#fde047'], ['GOOD', d.gd, '#4ade80'],
+                ['BAD', d.bd, '#fb923c'], ['POOR', d.poor, '#f87171'], ['空POOR', d.epoor, '#94a3b8'],
+            ];
+            rows.forEach(([lbl, v, col], i) => {
+                const ry = py + 92 + i * 15;
+                ctx.fillStyle = col; ctx.fillText(lbl, px + 16, ry);
+                ctx.fillStyle = '#e2e8f0'; ctx.textAlign = 'right';
+                ctx.fillText(String(v), px + pw - 16, ry); ctx.textAlign = 'left';
+            });
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillText(`MAX COMBO ${d.maxCombo}`, px + 16, py + ph - 22);
+            ctx.fillStyle = '#60a5fa'; ctx.fillText(`FAST ${d.fast}`, px + 16, py + ph - 8);
+            ctx.fillStyle = '#f87171'; ctx.textAlign = 'right'; ctx.fillText(`SLOW ${d.slow}`, px + pw - 16, py + ph - 8);
+            ctx.textAlign = 'left';
+        }
+    }
+
     // 描画継続の判定。多重生成しないよう再スケジュールは scheduleRenderLoop() 経由に統一。
     if (isPlayingRef.current || showReady || isInputDebugModeRef.current || playModeRef.current) {
         scheduleRenderLoop();
@@ -1903,6 +1977,14 @@ export default function BmsViewer() {
         boardOpacity={boardOpacity} setBoardOpacity={setBoardOpacity}
         parsedSong={parsedSong}
       />
+
+      {playResult && (
+        <ResultModal
+          data={playResult}
+          onClose={() => setPlayResult(null)}
+          onRetry={() => { setPlayResult(null); pauseTimeRef.current = 0; startPlayback(); }}
+        />
+      )}
 
       {/* メインエリア: PCとスマホで構造を分ける */}
       <div className="flex-1 relative min-h-0 overflow-hidden flex justify-center">
