@@ -15,6 +15,13 @@ import BgaLayer from './components/BgaLayer';
 
 // ★軽量化: renderLoop 毎フレームの割り当てを避けるためのモジュールスコープ定数/再利用バッファ
 const IS_DARK_LANE = [false, true, false, true, false, true, false]; // i=0..6
+
+// 参照が安定した関数を返す(常に最新の実装を呼ぶ)。子の React.memo を効かせるために使う。
+function useEvent(fn) {
+  const ref = useRef(fn);
+  ref.current = fn;
+  return useRef((...a) => ref.current(...a)).current;
+}
 const IS_BLUE_LANE = [false, false, true, false, true, false, true, false]; // laneIndex=0..7
 const _activeLanesScratch = new Array(8).fill(false); // renderLoop 内でのみ同期利用
 
@@ -33,7 +40,8 @@ export default function BmsViewer() {
   const [parsedSong, setParsedSong] = useState(null);
   const [displayObjects, setDisplayObjects] = useState([]);
   const [currentMeasureLines, setCurrentMeasureLines] = useState([]);
-  const [currentMeasureNotes, setCurrentMeasureNotes] = useState({ processed: 0, total: 0, average: 0 });
+  // ↓ P1-e で imperative 更新に移行。値は未使用、setter は互換のため no-op で残す。
+  const setCurrentMeasureNotes = () => {};
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackTimeDisplay, setPlaybackTimeDisplay] = useState(0); 
   const [duration, setDuration] = useState(0);
@@ -58,20 +66,16 @@ export default function BmsViewer() {
   const [currentPoorBga, setCurrentPoorBga] = useState(null); 
   const [stageFileImage, setStageFileImage] = useState(null);
 
-  const [showMissLayer, setShowMissLayer] = useState(false); 
-  const [polyphonyCount, setPolyphonyCount] = useState(0);
-  const [maxPolyphonyCount, setMaxPolyphonyCount] = useState(0);
-  const [averagePolyphony, setAveragePolyphony] = useState(0); 
-  const [realtimeBpm, setRealtimeBpm] = useState(0); 
+  const [showMissLayer, setShowMissLayer] = useState(false);
   const [currentMeasure, setCurrentMeasure] = useState(0);
-  const [nextBpmInfo, setNextBpmInfo] = useState(null);
-  const [playSide, setPlaySide] = useState('1P'); 
-  const [playOption, setPlayOption] = useState('OFF'); 
+  const [playSide, setPlaySide] = useState('1P');
+  const [playOption, setPlayOption] = useState('OFF');
   const [currentLaneOrder, setCurrentLaneOrder] = useState([1,2,3,4,5,6,7]);
-  const [combo, setCombo] = useState(0);
-  const [comboPos, setComboPos] = useState('CENTER'); 
-  const [noteCounts, setNoteCounts] = useState(new Array(8).fill(0)); 
+  const [comboPos, setComboPos] = useState('CENTER');
   const [totalNotes, setTotalNotes] = useState(0);
+  // ↓ P1-e で imperative 更新へ移行。値は未使用、setter は互換のため no-op で残す。
+  const setPolyphonyCount = () => {}, setMaxPolyphonyCount = () => {}, setAveragePolyphony = () => {};
+  const setRealtimeBpm = () => {}, setNextBpmInfo = () => {}, setCombo = () => {}, setNoteCounts = () => {};
   const [currentBpm, setCurrentBpm] = useState(130); 
   const [showReady, setShowReady] = useState(true);
   const [readyAnimState, setReadyAnimState] = useState(null); 
@@ -171,8 +175,11 @@ export default function BmsViewer() {
 
   const timeSliderRef = useRef(null);
 
-  const pcControlBarRef = useRef(null); 
+  const pcControlBarRef = useRef(null);
   const infoPanelRef = useRef(null);
+  const controllerPanelRef = useRef(null); // ControllerPanel の updateCounts 呼び出し用
+  const logPanelRef = useRef(null);        // LogPanel の updatePoly 呼び出し用
+  const realtimeBpmRef = useRef(130);      // renderLoop の皿回転速度が最新BPMを読むための ref
 
   const [isSeparateHitSound, setIsSeparateHitSound] = useState(false);
   const [tempKeyHitSoundBuffer, setTempKeyHitSoundBuffer] = useState(null);
@@ -616,7 +623,7 @@ export default function BmsViewer() {
       const parsed = await parseBMS(bmsFile);
       setTimeout(() => { if (!parsed.isSupportedMode) alert("警告：このBMSファイルは5鍵/7鍵盤以外のモード（DPやPMSなど）を含んでいる可能性があります。\n正しく再生されない、または未実装の形式です。"); }, 100);
       const diffInfo = guessDifficulty(parsed.header, bmsFile.name);
-      setDifficultyInfo(diffInfo); setRealtimeBpm(parsed.header.bpm); setCurrentBpm(parsed.header.bpm); 
+      setDifficultyInfo(diffInfo); setRealtimeBpm(parsed.header.bpm); realtimeBpmRef.current = parsed.header.bpm; setCurrentBpm(parsed.header.bpm);
 
       const neededAudio = new Set(); const neededImages = new Set();
       parsed.objects.forEach(o => { if (parsed.header.wavs[o.value]) neededAudio.add(parsed.header.wavs[o.value]); });
@@ -718,6 +725,7 @@ export default function BmsViewer() {
       setPlaybackTimeDisplay(0); pauseTimeRef.current = 0; setCombo(0); comboRef.current = 0; hudLastRef.current = {};
       lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(8).fill(0));
       setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsed.avgDensity });
+      lastStateUpdateRef.current = 0; // 次の renderLoop フレームで HUD を即更新させる
       setLoadingMessage('準備完了'); setIsLoading(false);
     } catch (e) { console.error(e); setIsLoading(false); }
   };
@@ -956,7 +964,7 @@ export default function BmsViewer() {
         lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(8).fill(0));
         if (parsedSong) displayObjects.forEach(o => o.processed = false);
         setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsedSong?.avgDensity || 0 });
-        currentMeasureRef.current = -1; setRealtimeBpm(parsedSong?.header.bpm || 130); setReadyAnimState(null);
+        currentMeasureRef.current = -1; lastStateUpdateRef.current = 0; setRealtimeBpm(parsedSong?.header.bpm || 130); realtimeBpmRef.current = parsedSong?.header.bpm || 130; setReadyAnimState(null);
         setCurrentLayerBga(null); setCurrentPoorBga(null); setShowMissLayer(false); setNextBpmInfo(null);
         scratchAngleRef.current = 0; lastScratchTimeRef.current = 0; lastScratchTypeRef.current = 'REVERSE';
         scratchDirectionRef.current = -1;
@@ -980,20 +988,9 @@ export default function BmsViewer() {
   // シーク確定(重い処理): setState 群と startPlayback。ドラッグ中は debounce し、止まった時に1回だけ実行。
   const commitSeek = () => {
     seekCommitTimerRef.current = null;
-    const val = pauseTimeRef.current;
-    setPlaybackTimeDisplay(val);
+    setPlaybackTimeDisplay(pauseTimeRef.current);
     setBackingTracks([]); activeLongSoundsRef.current = []; activeShortSoundsRef.current = [];
-    setCombo(comboRef.current);
-    setNoteCounts(noteCountsRef.current.slice());
-    hudLastRef.current = {}; // 次の100msブロックでHUD各値を強制再評価
-    if (parsedSong) {
-        const currentBar = parsedSong.barLines.find(b => b.time > val);
-        const newMeasure = currentBar ? currentBar.measure - 1 : parsedSong.barLines.length - 1;
-        const totalInMeasure = parsedSong.notesPerMeasure[newMeasure] || 0;
-        const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999;
-        const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
-        setCurrentMeasureNotes({ processed: processedInMeasure, total: totalInMeasure, average: parsedSong.avgDensity });
-    }
+    hudLastRef.current = {}; lastStateUpdateRef.current = 0; // 次フレームで HUD(imperative)を即再評価
     if (isPlayingRef.current) startPlayback();
     else scheduleRenderLoop();
   };
@@ -1017,6 +1014,7 @@ export default function BmsViewer() {
         }
     }
     comboRef.current = passedNotes;
+    hudLastRef.current = {}; lastStateUpdateRef.current = 0; // スクラブ中も HUD(imperative)を追従させる
     clearActiveLanes();
     // 位置の同期(startTimeRef / nextNoteIndexRef / BGA インデックス・フレーム)は必ず同期実行する。
     // 遅延させると描画の再生位置と processed フラグがズレ、ノーツが消えたり BGA が空回りする。
@@ -1134,54 +1132,68 @@ export default function BmsViewer() {
         // これらは毎フレームやる必要がないので、ここだけ間引いて軽量化します
         if (now - lastStateUpdateRef.current > 100) { // 100ms(秒間10回)程度に設定
             const H = hudLastRef.current;
-            // ★軽量化: 各 HUD 値は「前回と変わったときだけ」setState して不要な再レンダリングを抑える。
-            if (polyphonyRef.current !== H.poly) { H.poly = polyphonyRef.current; setPolyphonyCount(polyphonyRef.current); }
-            if (maxPolyRef.current !== H.maxPoly) { H.maxPoly = maxPolyRef.current; setMaxPolyphonyCount(maxPolyRef.current); }
+            // ★軽量化(Part2): 高頻度で変わる HUD 値は setState せず、memo 化した子へ imperative 更新する。
+            //   これで定BPM再生中の BmsViewer 本体の再レンダリングは「小節が変わったとき(〜0.5Hz)」だけになる。
+
+            // POLY / M POLY / AVG POLY → LogPanel(imperative)
+            let avgPoly = H.avgPoly || 0;
             if (polyphonyHistoryRef.current.length > 0) {
                 const sum = polyphonyHistoryRef.current.reduce((a, b) => a + b, 0);
-                const avg = Math.round(sum / polyphonyHistoryRef.current.length);
-                if (avg !== H.avgPoly) { H.avgPoly = avg; setAveragePolyphony(avg); }
+                avgPoly = Math.round(sum / polyphonyHistoryRef.current.length);
             }
-            // comboRef.current(= 通過ノーツ総数) を noteCounts / combo の dirty シグナルに使う
+            if (polyphonyRef.current !== H.poly || maxPolyRef.current !== H.maxPoly || avgPoly !== H.avgPoly) {
+                H.poly = polyphonyRef.current; H.maxPoly = maxPolyRef.current; H.avgPoly = avgPoly;
+                logPanelRef.current?.updatePoly(H.poly, H.maxPoly, H.avgPoly);
+            }
+            // レーン別ノーツ数 → ControllerPanel(imperative)。comboRef を dirty シグナルに。
             if (comboRef.current !== H.combo) {
                 H.combo = comboRef.current;
-                setCombo(comboRef.current);
-                setNoteCounts(noteCountsRef.current.slice());
+                controllerPanelRef.current?.updateCounts(noteCountsRef.current);
             }
             if (parsedSong) {
-                 // 小節情報の更新などはここで行う
                 const currentBar = parsedSong.barLines.find(b => b.time > currentTime);
                 const newMeasure = currentBar ? currentBar.measure - 1 : parsedSong.barLines.length - 1;
+                const mStart = parsedSong.barLines[newMeasure]?.time || 0;
+                const mEnd = parsedSong.barLines[newMeasure + 1]?.time || 99999;
+                const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
+                const totalInMeasure = parsedSong.notesPerMeasure[newMeasure] || 0;
 
                 if (newMeasure !== currentMeasureRef.current) {
+                    // ここだけ setState(〜0.5Hz)。currentMeasure は DensityGraph のオートスクロール、
+                    // currentMeasureLines は BMS MONITOR の表示に使う。
                     currentMeasureRef.current = newMeasure;
                     setCurrentMeasure(newMeasure);
                     if (parsedSong.rawLinesByMeasure[newMeasure]) setCurrentMeasureLines(parsedSong.rawLinesByMeasure[newMeasure].map(l => ({ text: l, isCurrent: true })));
                     else setCurrentMeasureLines([]);
-                    const totalInMeasure = parsedSong.notesPerMeasure[newMeasure] || 0;
-                    const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999;
-                    const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
-                    H.measProcessed = processedInMeasure;
-                    setCurrentMeasureNotes({ processed: processedInMeasure, total: totalInMeasure, average: parsedSong.avgDensity });
-                } else {
-                    const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999;
-                    const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
-                    if (processedInMeasure !== H.measProcessed) {
-                        H.measProcessed = processedInMeasure;
-                        setCurrentMeasureNotes(prev => ({ ...prev, processed: processedInMeasure }));
-                    }
                 }
 
                 const currentBpmVal = getBpmFromTime(parsedSong.timePoints, currentTime);
-                if (currentBpmVal !== H.bpm) { H.bpm = currentBpmVal; setRealtimeBpm(currentBpmVal); }
+                realtimeBpmRef.current = currentBpmVal; // 皿回転速度が最新BPMを読めるように
                 const futureTime = currentTime + 2.0;
                 const nextTp = parsedSong.timePoints.find(tp => tp.time > currentTime && tp.time <= futureTime && tp.bpm !== currentBpmVal);
                 const nextBpmKey = nextTp ? `${nextTp.bpm}_${currentBpmVal}` : null;
-                if (nextBpmKey !== H.nextBpmKey) {
-                    H.nextBpmKey = nextBpmKey;
-                    setNextBpmInfo(nextTp ? { value: nextTp.bpm, direction: nextTp.bpm > currentBpmVal ? 'up' : 'down', old: currentBpmVal } : null);
+
+                // MEASURE / BPM / 次BPM / WHT・GRN → InfoPanel(imperative)
+                if (processedInMeasure !== H.measProc || totalInMeasure !== H.measTotal || currentBpmVal !== H.bpm || nextBpmKey !== H.nextBpmKey) {
+                    H.measProc = processedInMeasure; H.measTotal = totalInMeasure; H.bpm = currentBpmVal; H.nextBpmKey = nextBpmKey;
+                    const vm = visibilityModeRef.current;
+                    let white = 0;
+                    if (vm === VISIBILITY_MODES.SUDDEN_PLUS || vm === VISIBILITY_MODES.SUD_HID_PLUS) white += suddenPlusValRef.current;
+                    if (vm === VISIBILITY_MODES.LIFT || vm === VISIBILITY_MODES.LIFT_SUD_PLUS) {
+                        white += liftValRef.current;
+                        if (vm === VISIBILITY_MODES.LIFT_SUD_PLUS) white += suddenPlusValRef.current;
+                    }
+                    white = Math.min(1000, Math.max(0, white));
+                    const green = Math.round((240000 / ((currentBpmVal || 1) * (hiSpeedRef.current || 1))) * ((1000 - white) / 1000));
+                    infoPanelRef.current?.updateStats({
+                        measProc: processedInMeasure, measTotal: totalInMeasure,
+                        dense: totalInMeasure >= parsedSong.avgDensity + 5,
+                        bpm: Math.round(currentBpmVal),
+                        nextBpm: nextTp ? { value: nextTp.bpm, dir: nextTp.bpm > currentBpmVal ? 'up' : 'down', old: Math.round(currentBpmVal) } : null,
+                        white: Math.round(white), green,
+                    });
                 }
-                
+
                 activeLongSoundsRef.current = activeLongSoundsRef.current.filter(s => {
                     if (s.isAborted) return true; 
                     return currentTime < s.endTime;
@@ -1402,8 +1414,8 @@ export default function BmsViewer() {
         ctx.fillText(`HIDDEN+ (${h})`, BOARD_X + BOARD_W/2, yPos + 15);
     }
 
-    const safeDt = Math.min(dt, 0.1); 
-    const baseSpeed = ((realtimeBpm || 130) / 60) * 135;
+    const safeDt = Math.min(dt, 0.1);
+    const baseSpeed = ((realtimeBpmRef.current || 130) / 60) * 135;
     const timeSinceLast = now - lastScratchTimeRef.current;
     const effectDuration = 200; 
     let speedMultiplier = 0;
@@ -1471,6 +1483,21 @@ export default function BmsViewer() {
   renderLoopRef.current = renderLoop;
 
   const is2P = playSide === '2P';
+
+  // 子(ControlBar / SettingsModal)の React.memo を効かせるための、参照が安定したハンドラ群
+  const sHandleFileSelect = useEvent(handleFileSelect);
+  const sHandleZipSelect = useEvent(handleZipSelect);
+  const sStopPlayback = useEvent(stopPlayback);
+  const sPausePlayback = useEvent(pausePlayback);
+  const sStartPlayback = useEvent(startPlayback);
+  const sHandleSeek = useEvent(handleSeek);
+  const sToggleMute = useEvent(toggleMute);
+  const sRefreshRandom = useEvent(refreshRandom);
+  const sKeyHitUpload = useEvent(handleKeyHitSoundUpload);
+  const sKeyHitReset = useEvent(handleKeyHitSoundReset);
+  const sScratchHitUpload = useEvent(handleScratchHitSoundUpload);
+  const sScratchHitReset = useEvent(handleScratchHitSoundReset);
+
   return (
     <div className={`flex flex-col h-screen bg-neutral-950 text-white font-sans overflow-hidden ${isDragOver ? 'ring-4 ring-blue-500' : ''}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
       
@@ -1478,10 +1505,10 @@ export default function BmsViewer() {
         showSettings={showSettings} setShowSettings={setShowSettings} isMobile={isMobile}
         visibilityMode={visibilityMode} setVisibilityMode={setVisibilityMode}
         suddenPlusVal={suddenPlusVal} setSuddenPlusVal={setSuddenPlusVal} hiddenPlusVal={hiddenPlusVal} setHiddenPlusVal={setHiddenPlusVal} liftVal={liftVal} setLiftVal={setLiftVal}
-        playSide={playSide} setPlaySide={setPlaySide} playOption={playOption} setPlayOption={setPlayOption} currentLaneOrder={currentLaneOrder} refreshRandom={refreshRandom}
-        comboPos={comboPos} setComboPos={setComboPos} 
-        customKeyHitSound={customKeyHitSound} handleKeyHitSoundUpload={handleKeyHitSoundUpload} handleKeyHitSoundReset={handleKeyHitSoundReset}
-        customScratchHitSound={customScratchHitSound} handleScratchHitSoundUpload={handleScratchHitSoundUpload} handleScratchHitSoundReset={handleScratchHitSoundReset}
+        playSide={playSide} setPlaySide={setPlaySide} playOption={playOption} setPlayOption={setPlayOption} currentLaneOrder={currentLaneOrder} refreshRandom={sRefreshRandom}
+        comboPos={comboPos} setComboPos={setComboPos}
+        customKeyHitSound={customKeyHitSound} handleKeyHitSoundUpload={sKeyHitUpload} handleKeyHitSoundReset={sKeyHitReset}
+        customScratchHitSound={customScratchHitSound} handleScratchHitSoundUpload={sScratchHitUpload} handleScratchHitSoundReset={sScratchHitReset}
         volume={volume} setVolume={setVolume} monitorUpdateInterval={monitorUpdateInterval} setMonitorUpdateInterval={setMonitorUpdateInterval}
         hasVideo={hasVideo} playBgaVideo={playBgaVideo} setPlayBgaVideo={setPlayBgaVideo} hitSoundVolume={hitSoundVolume} setHitSoundVolume={setHitSoundVolume}
         showReady={showReady} setShowReady={setShowReady} playKeySounds={playKeySounds} setPlayKeySounds={setPlayKeySounds} playLongAudio={playLongAudio} setPlayLongAudio={setPlayLongAudio}
@@ -1492,8 +1519,8 @@ export default function BmsViewer() {
         isSeparateHitSound={isSeparateHitSound} setIsSeparateHitSound={setIsSeparateHitSound}
         tempKeySoundName={tempKeySoundName} tempScratchSoundName={tempScratchSoundName}
         // Mobile Controls
-        handleFileSelect={handleFileSelect} handleZipSelect={handleZipSelect} bmsList={bmsList} selectedBmsIndex={selectedBmsIndex} setSelectedBmsIndex={setSelectedBmsIndex}
-        isPlaying={isPlaying} startPlayback={startPlayback} pausePlayback={pausePlayback} stopPlayback={stopPlayback}
+        handleFileSelect={sHandleFileSelect} handleZipSelect={sHandleZipSelect} bmsList={bmsList} selectedBmsIndex={selectedBmsIndex} setSelectedBmsIndex={setSelectedBmsIndex}
+        isPlaying={isPlaying} startPlayback={sStartPlayback} pausePlayback={sPausePlayback} stopPlayback={sStopPlayback}
         hiSpeed={hiSpeed} setHiSpeed={setHiSpeed} bgaOpacity={bgaOpacity} setBgaOpacity={setBgaOpacity}
         laneOpacity={laneOpacity} setLaneOpacity={setLaneOpacity}
         boardOpacity={boardOpacity} setBoardOpacity={setBoardOpacity}
@@ -1521,23 +1548,20 @@ export default function BmsViewer() {
              <div className="flex w-full h-full">
                  {/* 左: コントローラー */}
                  <ControllerPanel
-                    controllerRefs={controllerRefs} keyboardRefs={keyboardRefs} noteCounts={noteCounts}
+                    ref={controllerPanelRef}
+                    controllerRefs={controllerRefs} keyboardRefs={keyboardRefs}
                     is2P={is2P} parsedSong={parsedSong} difficultyInfo={difficultyInfo}
                     currentMeasure={currentMeasure}
                  />
-                 
+
                  {/* 中央左: 情報・BGA */}
                  <InfoPanel
                     ref={infoPanelRef}
                     setShowSettings={setShowSettings} playOption={playOption}
                     currentBackBga={currentBackBga} currentLayerBga={currentLayerBga} currentPoorBga={currentPoorBga}
-                    showMissLayer={showMissLayer} isPlaying={isPlaying} //playbackTimeDisplay={playbackTimeDisplay}
+                    showMissLayer={showMissLayer} isPlaying={isPlaying}
                     playBgaVideo={playBgaVideo} readyAnimState={readyAnimState}
-                    currentMeasureLines={currentMeasureLines} combo={combo} totalNotes={totalNotes}
-                    currentMeasureNotes={currentMeasureNotes} realtimeBpm={realtimeBpm} nextBpmInfo={nextBpmInfo} hiSpeed={hiSpeed}
-                    suddenPlusVal={suddenPlusVal}
-                    liftVal={liftVal}
-                    visibilityMode={visibilityMode}
+                    currentMeasureLines={currentMeasureLines} totalNotes={totalNotes}
                  />
 
                  {/* 中央右: レーン (Canvas) */}
@@ -1548,14 +1572,13 @@ export default function BmsViewer() {
                  </div>
 
                  {/* 右: ログパネル */}
-                 <LogPanel 
-                    backingTracks={backingTracks} 
-                    activeShortSounds={activeShortSoundsRef.current} 
-                    lastPlayedSoundPerLane={lastPlayedSoundPerLaneRef.current}
+                 <LogPanel
+                    ref={logPanelRef}
+                    backingTracks={backingTracks}
+                    activeShortSoundsRef={activeShortSoundsRef}
+                    lastPlayedSoundPerLaneRef={lastPlayedSoundPerLaneRef}
                     longAudioProgressRefs={longAudioProgressRefs}
-                    maxPolyphonyCount={maxPolyphonyCount}
-                    polyphonyCount={polyphonyCount}
-                    averagePolyphony={averagePolyphony}
+                    isPlaying={isPlaying}
                  />
              </div>
          )}
@@ -1615,10 +1638,10 @@ export default function BmsViewer() {
       {!isMobile && (
           <ControlBar
             ref={pcControlBarRef}
-            handleFileSelect={handleFileSelect} selectedBmsIndex={selectedBmsIndex} setSelectedBmsIndex={setSelectedBmsIndex} bmsList={bmsList}
-            stopPlayback={stopPlayback} isPlaying={isPlaying} pausePlayback={pausePlayback} startPlayback={startPlayback}
-            duration={duration} playbackTimeDisplay={playbackTimeDisplay} handleSeek={handleSeek}
-            hiSpeed={hiSpeed} setHiSpeed={setHiSpeed} volume={volume} setVolume={setVolume} toggleMute={toggleMute}
+            handleFileSelect={sHandleFileSelect} selectedBmsIndex={selectedBmsIndex} setSelectedBmsIndex={setSelectedBmsIndex} bmsList={bmsList}
+            stopPlayback={sStopPlayback} isPlaying={isPlaying} pausePlayback={sPausePlayback} startPlayback={sStartPlayback}
+            duration={duration} handleSeek={sHandleSeek}
+            hiSpeed={hiSpeed} setHiSpeed={setHiSpeed} volume={volume} setVolume={setVolume} toggleMute={sToggleMute}
           />
       )}
     </div>

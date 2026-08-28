@@ -322,4 +322,4 @@ const SettingsModal = ({
     );
 };
 
-export default SettingsModal;
+export default memo(SettingsModal);

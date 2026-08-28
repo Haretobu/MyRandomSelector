@@ -1,5 +1,5 @@
 // src/bms/components/ControlBar.jsx
-import React, { forwardRef, useImperativeHandle, useRef } from 'react';
+import React, { forwardRef, useImperativeHandle, useRef, memo } from 'react';
 import { FolderOpen, ChevronFirst, Pause, Play, VolumeX, Volume2 } from 'lucide-react';
 
 const ControlBar = forwardRef(({
@@ -78,4 +78,4 @@ const ControlBar = forwardRef(({
     );
 });
 
-export default ControlBar;
+export default memo(ControlBar);

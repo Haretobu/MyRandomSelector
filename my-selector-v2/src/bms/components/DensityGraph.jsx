@@ -76,4 +76,4 @@ const DensityGraph = ({ parsedSong, currentMeasure }) => {
     );
 };
 
-export default DensityGraph;
+export default memo(DensityGraph);

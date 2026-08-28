@@ -1,10 +1,22 @@
 // src/bms/components/ControllerPanel.jsx
-import React from 'react';
+import React, { forwardRef, useImperativeHandle, useRef, memo } from 'react';
 import { Gamepad2, Keyboard } from 'lucide-react';
 import { KEY_CONFIG_ROWS } from '../constants';
 import DensityGraph from './DensityGraph';
 
-const ControllerPanel = ({ controllerRefs, keyboardRefs, noteCounts, is2P, parsedSong, difficultyInfo, currentMeasure }) => {
+const ControllerPanel = forwardRef(({ controllerRefs, keyboardRefs, is2P, parsedSong, difficultyInfo, currentMeasure }, ref) => {
+    // レーン別ノーツ数(8個)の表示要素。再生中は再レンダリングせず textContent だけ書き換える。
+    const countRefs = useRef([]);
+
+    useImperativeHandle(ref, () => ({
+        updateCounts: (arr) => {
+            for (let i = 0; i < 8; i++) {
+                const el = countRefs.current[i];
+                if (el && el.textContent !== String(arr[i])) el.textContent = arr[i];
+            }
+        },
+    }));
+
     return (
         <div className="w-64 flex flex-col border-r border-blue-900/30 bg-[#080808] p-2 gap-2 shrink-0 overflow-y-auto scrollbar-hide text-blue-100">
             {/* コントローラー (ターンテーブル等) */}
@@ -17,16 +29,16 @@ const ControllerPanel = ({ controllerRefs, keyboardRefs, noteCounts, is2P, parse
                           <div className="absolute w-16 h-16 rounded-full border border-gray-600/30"></div><span className="text-[9px] text-blue-500/50 font-bold relative z-10">SCR</span>
                     </div>
                     <div className={`absolute top-4 ${is2P ? 'left-4' : 'left-28'} flex gap-2 transition-all`}>
-                        {[2,4,6].map(i => (<div key={i} className="flex flex-col items-center"><div className="text-[9px] text-blue-400/70 mb-1 font-mono">{noteCounts[i]}</div><div ref={el => controllerRefs.current[i] = el} className="w-5 h-16 bg-black border border-blue-900/50 rounded-sm transition-transform duration-75 shadow-[0_0_10px_rgba(0,0,0,0.5)]" /></div>))}
+                        {[2,4,6].map(i => (<div key={i} className="flex flex-col items-center"><div ref={el => (countRefs.current[i] = el)} className="text-[9px] text-blue-400/70 mb-1 font-mono">0</div><div ref={el => controllerRefs.current[i] = el} className="w-5 h-16 bg-black border border-blue-900/50 rounded-sm transition-transform duration-75 shadow-[0_0_10px_rgba(0,0,0,0.5)]" /></div>))}
                     </div>
                     <div className={`absolute top-24 ${is2P ? 'left-0' : 'left-24'} flex gap-2 transition-all`}>
-                         {[1,3,5,7].map(i => (<div key={i} className="flex flex-col items-center"><div ref={el => controllerRefs.current[i] = el} className="w-6 h-14 bg-[#e2e8f0] border-b-4 border-[#94a3b8] rounded-sm transition-transform duration-75 shadow-[0_0_10px_rgba(255,255,255,0.1)]" /><div className="text-[9px] text-blue-400/70 mt-1 font-mono">{noteCounts[i]}</div></div>))}
+                         {[1,3,5,7].map(i => (<div key={i} className="flex flex-col items-center"><div ref={el => controllerRefs.current[i] = el} className="w-6 h-14 bg-[#e2e8f0] border-b-4 border-[#94a3b8] rounded-sm transition-transform duration-75 shadow-[0_0_10px_rgba(255,255,255,0.1)]" /><div ref={el => (countRefs.current[i] = el)} className="text-[9px] text-blue-400/70 mt-1 font-mono">0</div></div>))}
                     </div>
-                    <div className={`absolute top-24 ${is2P ? 'right-4' : 'left-4'} text-center w-16`}><div className="text-[9px] text-blue-400/70 mt-1 font-mono">{noteCounts[0]}</div></div>
+                    <div className={`absolute top-24 ${is2P ? 'right-4' : 'left-4'} text-center w-16`}><div ref={el => (countRefs.current[0] = el)} className="text-[9px] text-blue-400/70 mt-1 font-mono">0</div></div>
                 </div>
             </div>
 
-            {/* キーマッピング (★光り方を強化) */}
+            {/* キーマッピング */}
             <div className="bg-[#112233]/50 rounded p-2 border border-blue-900/30">
                 <div className="text-[10px] text-blue-400 font-bold mb-2 flex items-center gap-1"><Keyboard size={10}/> KEY MAPPING</div>
                 <div className="flex flex-col gap-1 items-center">
@@ -60,6 +72,6 @@ const ControllerPanel = ({ controllerRefs, keyboardRefs, noteCounts, is2P, parse
             </div>
          </div>
     );
-};
+});
 
-export default ControllerPanel;
+export default memo(ControllerPanel);

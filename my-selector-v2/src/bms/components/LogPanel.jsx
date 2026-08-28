@@ -1,7 +1,33 @@
 // src/bms/components/LogPanel.jsx
-import React from 'react';
+import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect, memo } from 'react';
 
-const LogPanel = ({ backingTracks, activeShortSounds, lastPlayedSoundPerLane, longAudioProgressRefs, maxPolyphonyCount, polyphonyCount, averagePolyphony }) => {
+const LogPanel = forwardRef(({ backingTracks, activeShortSoundsRef, lastPlayedSoundPerLaneRef, longAudioProgressRefs, isPlaying }, ref) => {
+    const polyRef = useRef(null);      // POLY 数値の span
+    const maxPolyRef = useRef(null);   // M POLY 数値の span
+    const avgRef = useRef(0);          // 直近の平均(POLYの色分けに使う)
+    const [, force] = useState(0);
+
+    useImperativeHandle(ref, () => ({
+        updatePoly: (poly, maxPoly, avg) => {
+            avgRef.current = avg;
+            if (maxPolyRef.current) maxPolyRef.current.textContent = maxPoly;
+            if (polyRef.current) {
+                polyRef.current.textContent = poly;
+                polyRef.current.style.color = poly > avg + 10 ? '#ef4444' : '#ffffff';
+            }
+        },
+    }));
+
+    // 流れるログ(SOUND MONITOR / LANE LOG)を ~8Hz で再描画。memo により親の再レンダリングとは独立。
+    useEffect(() => {
+        if (!isPlaying) return;
+        const id = setInterval(() => force(n => (n + 1) & 1023), 120);
+        return () => clearInterval(id);
+    }, [isPlaying]);
+
+    const shorts = (activeShortSoundsRef.current || []).slice(-25);
+    const laneLog = lastPlayedSoundPerLaneRef.current || [];
+
     return (
        <div className="w-60 flex flex-col bg-[#080808] p-2 gap-2 shrink-0 overflow-y-auto scrollbar-hide border-l border-blue-900/30">
              {/* BACKING TRACK (BGMモニター) */}
@@ -26,12 +52,12 @@ const LogPanel = ({ backingTracks, activeShortSounds, lastPlayedSoundPerLane, lo
                  <div className="text-[10px] font-bold mb-1 border-b border-blue-900/30 flex justify-between items-center text-blue-300 shrink-0">
                     <span>SOUND MONITOR</span>
                     <div className="flex gap-2">
-                         <span className="text-blue-500/70 text-[8px]">M POLY: <span className="text-white">{maxPolyphonyCount}</span></span>
-                        <span className="text-blue-500/70">POLY: <span className={`${polyphonyCount > averagePolyphony + 10 ? 'text-red-500' : 'text-white'}`}>{polyphonyCount}</span></span>
+                         <span className="text-blue-500/70 text-[8px]">M POLY: <span ref={maxPolyRef} className="text-white">0</span></span>
+                        <span className="text-blue-500/70">POLY: <span ref={polyRef} className="text-white">0</span></span>
                     </div>
                  </div>
                  <div className="flex-1 overflow-hidden flex flex-col justify-end text-[9px] space-y-0.5 font-mono">
-                    {activeShortSounds.slice(-25).map(s => (
+                    {shorts.map(s => (
                          <div key={s.id} className={`truncate flex items-center gap-1 leading-none py-[1px] opacity-80 ${s.isMuted ? 'text-gray-600' : 'text-blue-100'}`}>
                             <span className={`w-1 h-1 rounded-full ${s.isSkipped ? 'bg-cyan-400' : (s.isMuted ? 'bg-gray-600' : 'bg-green-400')} shrink-0 shadow-[0_0_4px_currentColor]`}/>{s.name}
                         </div>
@@ -42,10 +68,10 @@ const LogPanel = ({ backingTracks, activeShortSounds, lastPlayedSoundPerLane, lo
              {/* LANE LOG (各レーンの最新音) */}
              <div className="bg-[#0f172a] text-blue-100 p-2 h-48 shrink-0 text-[10px] font-mono border border-blue-900/50 flex flex-col justify-center rounded-sm shadow-lg">
                  <div className="border-b border-blue-900/30 mb-2 pb-1 text-center text-blue-400 font-bold text-[9px] tracking-widest">LANE LOG</div>
-                 <div className="grid grid-cols-[20px_1fr] gap-x-2 gap-y-1">{[0,1,2,3,4,5,6,7].map(i => (<React.Fragment key={i}><div className="text-blue-500 text-right font-bold opacity-70">{i===0?'SC':`K${i}`}</div><div className="truncate text-yellow-100 leading-tight opacity-90">{lastPlayedSoundPerLane[i] || '-'}</div></React.Fragment>))}</div>
+                 <div className="grid grid-cols-[20px_1fr] gap-x-2 gap-y-1">{[0,1,2,3,4,5,6,7].map(i => (<React.Fragment key={i}><div className="text-blue-500 text-right font-bold opacity-70">{i===0?'SC':`K${i}`}</div><div className="truncate text-yellow-100 leading-tight opacity-90">{laneLog[i] || '-'}</div></React.Fragment>))}</div>
              </div>
          </div>
     );
-};
+});
 
-export default LogPanel;
+export default memo(LogPanel);

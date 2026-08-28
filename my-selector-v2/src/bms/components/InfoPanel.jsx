@@ -1,27 +1,33 @@
 // src/bms/components/InfoPanel.jsx
-import React, { forwardRef, useImperativeHandle, useRef } from 'react';
+import React, { forwardRef, useImperativeHandle, useRef, memo } from 'react';
 import { Settings, Image as ImageIcon } from 'lucide-react';
-import { VISIBILITY_MODES } from '../constants'; // 定数読み込みが必要
 import BgaLayer from './BgaLayer';
 
 const InfoPanel = forwardRef(({
-    setShowSettings, playOption, 
+    setShowSettings, playOption,
     currentBackBga, currentLayerBga, currentPoorBga,
-    showMissLayer, isPlaying, 
+    showMissLayer, isPlaying,
     playBgaVideo, readyAnimState,
-    currentMeasureLines, totalNotes, currentMeasureNotes, realtimeBpm, nextBpmInfo, hiSpeed,
-    // ★追加: 白数字・緑数字計算に必要なprops
-    suddenPlusVal, liftVal, visibilityMode
+    currentMeasureLines, totalNotes,
 }, ref) => {
-    
+
     const comboTextRef = useRef(null);
     const notesTextRef = useRef(null);
     const backBgaRef = useRef(null);
     const layerBgaRef = useRef(null);
     const poorBgaRef = useRef(null);
-    const lastComboRef = useRef(null); // ★軽量化: 変化時のみ innerText を書く
+    const lastComboRef = useRef(null);
+
+    // updateStats で imperative 更新する要素 (再生中は再レンダリングせずここだけ書き換える)
+    const measProcRef = useRef(null);
+    const measTotalRef = useRef(null);
+    const bpmRef = useRef(null);
+    const nextBpmRef = useRef(null);
+    const whiteRef = useRef(null);
+    const greenRef = useRef(null);
 
     useImperativeHandle(ref, () => ({
+        // 毎フレーム: コンボ表示 + BGA の位置合わせ
         updateInfo: (time, currentCombo) => {
             if (currentCombo !== lastComboRef.current) {
                 lastComboRef.current = currentCombo;
@@ -31,40 +37,26 @@ const InfoPanel = forwardRef(({
             if (backBgaRef.current) backBgaRef.current.syncTime(time);
             if (layerBgaRef.current) layerBgaRef.current.syncTime(time);
             if (showMissLayer && poorBgaRef.current) poorBgaRef.current.syncTime(time);
-        }
+        },
+        // 〜10Hz: MEASURE / BPM / 次BPM / WHT・GRN
+        updateStats: (s) => {
+            const denseColor = s.dense ? '#f87171' : '#ffffff';
+            if (measProcRef.current) { measProcRef.current.textContent = s.measProc; measProcRef.current.style.color = denseColor; }
+            if (measTotalRef.current) { measTotalRef.current.textContent = s.measTotal; measTotalRef.current.style.color = denseColor; }
+            if (bpmRef.current) bpmRef.current.textContent = s.bpm;
+            if (nextBpmRef.current) {
+                if (s.nextBpm) {
+                    nextBpmRef.current.style.display = '';
+                    nextBpmRef.current.style.color = s.nextBpm.dir === 'up' ? '#f87171' : '#60a5fa';
+                    nextBpmRef.current.textContent = `${s.nextBpm.dir === 'up' ? '↑' : '↓'} ${s.nextBpm.value} | ${s.nextBpm.old}`;
+                } else {
+                    nextBpmRef.current.style.display = 'none';
+                }
+            }
+            if (whiteRef.current) whiteRef.current.textContent = Math.round(s.white);
+            if (greenRef.current) greenRef.current.textContent = s.green;
+        },
     }));
-
-    // --- 緑数字・白数字の計算ロジック ---
-    
-    // 1. 白数字 (White Number): SUD+とLIFTの合計
-    let whiteNumber = 0;
-    if (visibilityMode === VISIBILITY_MODES.SUDDEN_PLUS || visibilityMode === VISIBILITY_MODES.SUD_HID_PLUS) {
-        whiteNumber += suddenPlusVal;
-    }
-    if (visibilityMode === VISIBILITY_MODES.LIFT || visibilityMode === VISIBILITY_MODES.LIFT_SUD_PLUS) {
-        whiteNumber += liftVal;
-        if (visibilityMode === VISIBILITY_MODES.LIFT_SUD_PLUS) {
-            whiteNumber += suddenPlusVal;
-        }
-    }
-    // IIDX仕様に合わせて最大1000クリップ（通常はありえないが念のため）
-    whiteNumber = Math.min(1000, Math.max(0, whiteNumber));
-
-    // 2. 緑数字 (Green Number): ノーツ視認時間(ms)
-    // 基本計算式: (174000 * (1 - 白/1000)) / (BPM * HS) 近似値
-    // 正確には: 1小節の表示時間(秒) = 240 / BPM
-    // 画面上に表示される小節数 = HiSpeed
-    // 全体表示時間(秒) = 240 / (BPM * HiSpeed)
-    // 有効表示領域率 = (1000 - 白数字) / 1000
-    // 緑数字(ms) = (240 / (BPM * HiSpeed)) * 有効表示領域率 * 1000
-    
-    // ゼロ除算防止
-    const safeBpm = realtimeBpm || 1;
-    const safeHiSpeed = hiSpeed || 1;
-    
-    const visibleRate = (1000 - whiteNumber) / 1000;
-    const rawGreenNumber = (240000 / (safeBpm * safeHiSpeed)) * visibleRate;
-    const greenNumber = Math.round(rawGreenNumber);
 
     return (
         <div className="w-64 flex flex-col border-r border-blue-900/30 bg-[#0a0a0a] p-2 gap-2 shrink-0">
@@ -105,17 +97,26 @@ const InfoPanel = forwardRef(({
                     <span className="text-[10px] text-blue-400">NOTES</span>
                     <span><span ref={notesTextRef} className="text-white">0</span> <span className="text-blue-500"> / </span> {totalNotes}</span>
                 </div>
-                <div className="flex justify-between items-baseline"><span className="text-[10px] text-blue-400">MEASURE</span><span><span className={`font-bold ${currentMeasureNotes.total >= currentMeasureNotes.average + 5 ? 'text-red-400' : 'text-white'}`}>{currentMeasureNotes.processed}</span><span className="text-blue-500/50 mx-1">/</span><span className={`font-bold ${currentMeasureNotes.total >= currentMeasureNotes.average + 5 ? 'text-red-400' : 'text-white'}`}>{currentMeasureNotes.total}</span></span></div>
-                <div className="flex justify-between items-baseline"><span className="text-[10px] text-blue-400">BPM</span><div className="flex items-baseline gap-2">{nextBpmInfo && (<span className={`text-[10px] font-bold ${nextBpmInfo.direction === 'up' ? 'text-red-400' : 'text-blue-400'} animate-pulse`}>{nextBpmInfo.direction === 'up' ? '↑' : '↓'} {nextBpmInfo.value} <span className="text-gray-500">|</span> {nextBpmInfo.old}</span>)}<span className="text-red-400 font-bold text-lg">{Math.round(safeBpm)}</span></div></div>
-                
-                {/* ★修正: 白数字 / 緑数字 表示 */}
+                <div className="flex justify-between items-baseline">
+                    <span className="text-[10px] text-blue-400">MEASURE</span>
+                    <span><span ref={measProcRef} className="font-bold text-white">0</span><span className="text-blue-500/50 mx-1">/</span><span ref={measTotalRef} className="font-bold text-white">0</span></span>
+                </div>
+                <div className="flex justify-between items-baseline">
+                    <span className="text-[10px] text-blue-400">BPM</span>
+                    <div className="flex items-baseline gap-2">
+                        <span ref={nextBpmRef} className="text-[10px] font-bold animate-pulse" style={{ display: 'none' }}></span>
+                        <span ref={bpmRef} className="text-red-400 font-bold text-lg">0</span>
+                    </div>
+                </div>
+
+                {/* 白数字 / 緑数字 */}
                 <div className="mt-2 pt-2 border-t border-blue-900/30 flex justify-between items-center">
                     <div className="flex flex-col">
                         <span className="text-[9px] text-blue-400 leading-none mb-0.5">WHT / GRN</span>
                         <div className="flex items-baseline gap-1">
-                            <span className="text-white font-bold text-base">{Math.round(whiteNumber)}</span>
+                            <span ref={whiteRef} className="text-white font-bold text-base">0</span>
                             <span className="text-blue-500/50 text-xs">/</span>
-                            <span className="text-[#00ff00] font-bold text-lg shadow-[0_0_8px_rgba(0,255,0,0.4)]">{greenNumber}</span>
+                            <span ref={greenRef} className="text-[#00ff00] font-bold text-lg shadow-[0_0_8px_rgba(0,255,0,0.4)]">0</span>
                         </div>
                     </div>
                 </div>
@@ -124,4 +125,4 @@ const InfoPanel = forwardRef(({
     );
 });
 
-export default InfoPanel;
+export default memo(InfoPanel);

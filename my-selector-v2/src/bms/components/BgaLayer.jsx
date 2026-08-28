@@ -83,4 +83,4 @@ const BgaLayer = forwardRef(({ bgaState, zIndex, blendMode = 'normal', opacity =
     );
 });
 
-export default BgaLayer;
+export default memo(BgaLayer);
