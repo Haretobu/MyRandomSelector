@@ -19,11 +19,15 @@ const InfoPanel = forwardRef(({
     const backBgaRef = useRef(null);
     const layerBgaRef = useRef(null);
     const poorBgaRef = useRef(null);
+    const lastComboRef = useRef(null); // ★軽量化: 変化時のみ innerText を書く
 
     useImperativeHandle(ref, () => ({
         updateInfo: (time, currentCombo) => {
-            if (comboTextRef.current) comboTextRef.current.innerText = currentCombo;
-            if (notesTextRef.current) notesTextRef.current.innerText = currentCombo;
+            if (currentCombo !== lastComboRef.current) {
+                lastComboRef.current = currentCombo;
+                if (comboTextRef.current) comboTextRef.current.innerText = currentCombo;
+                if (notesTextRef.current) notesTextRef.current.innerText = currentCombo;
+            }
             if (backBgaRef.current) backBgaRef.current.syncTime(time);
             if (layerBgaRef.current) layerBgaRef.current.syncTime(time);
             if (showMissLayer && poorBgaRef.current) poorBgaRef.current.syncTime(time);

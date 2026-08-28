@@ -13,6 +13,13 @@ import LogPanel from './components/LogPanel';
 import ControlBar from './components/ControlBar';
 import BgaLayer from './components/BgaLayer';
 
+// ★軽量化: renderLoop 毎フレームの割り当てを避けるためのモジュールスコープ定数/再利用バッファ
+const LANE_BG_DARK = 'rgb(15, 23, 42)';    // レーン 1,3,5 (0-indexed) の背景
+const LANE_BG_LIGHT = 'rgb(30, 41, 59)';   // その他レーン
+const IS_DARK_LANE = [false, true, false, true, false, true, false]; // i=0..6
+const IS_BLUE_LANE = [false, false, true, false, true, false, true, false]; // laneIndex=0..7
+const _activeLanesScratch = new Array(8).fill(false); // renderLoop 内でのみ同期利用
+
 export default function BmsViewer() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
   const [bgaOpacity, setBgaOpacity] = useState(DEFAULT_BGA_OPACITY);
@@ -121,6 +128,11 @@ export default function BmsViewer() {
   const nextSoundIdRef = useRef(1); // 音源ログ/ノードの一意ID(React key・killedIds Set用)。Math.random()の衝突を避ける
   const polyphonyRef = useRef(0);   // 現在の同時発音数(scheduleAudioが毎tick更新、表示は100msブロックで間引き)
   const hudLastRef = useRef({});    // HUDに最後に push した値。変化時のみ setState するための比較用
+  const canvasRectRef = useRef(null);   // canvas の CSS サイズ(ResizeObserver でキャッシュ、毎フレーム getBoundingClientRect しない)
+  const laneVisualRef = useRef(new Array(8).fill(null)); // 各レーンの見た目 active 状態。変化時のみ DOM 書き込み
+  const gradCacheRef = useRef({ key: '', ln: [], hit: [] }); // レーン単位のグラデーションキャッシュ
+  const readyTextCacheRef = useRef(null); // READY/GO 演出をオフスクリーンに1回だけ描画(shadowBlurは最重量級)
+  const seekCommitTimerRef = useRef(null); // シークの重い処理を debounce するタイマー
   const scratchAngleRef = useRef(0);
   const lastFrameTimeRef = useRef(0);
   const lastScratchTimeRef = useRef(0);
@@ -215,6 +227,26 @@ export default function BmsViewer() {
       return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // ★軽量化: canvas の CSS サイズは ResizeObserver で監視してキャッシュし、renderLoop で毎フレーム
+  //   getBoundingClientRect()(レイアウト強制)を呼ばないようにする。canvas 要素は PC/モバイルで差し替わるので isMobile を依存に。
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    // canvas 要素は PC/モバイルで差し替わる。古い 2D コンテキスト/キャッシュを破棄して次フレームで取り直させる。
+    ctxRef.current = null;
+    canvasRectRef.current = null;
+    gradCacheRef.current = { key: '', ln: [], hitRed: [], hitBlue: [] };
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) canvasRectRef.current = { width: r.width, height: r.height };
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener('resize', update);
+    return () => { ro.disconnect(); window.removeEventListener('resize', update); };
+  }, [isMobile]);
+
   useEffect(() => { hiSpeedRef.current = hiSpeed; }, [hiSpeed]);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
   useEffect(() => { playKeySoundsRef.current = playKeySounds; }, [playKeySounds]);
@@ -276,7 +308,7 @@ export default function BmsViewer() {
           }
       }
   };
-  const clearActiveLanes = () => { for(let i=0; i<8; i++) setLaneActive(i, false); };
+  const clearActiveLanes = () => { for(let i=0; i<8; i++) { if (laneVisualRef.current[i] !== false) { laneVisualRef.current[i] = false; setLaneActive(i, false); } } };
 
   const triggerMiss = () => {
       comboRef.current = 0;
@@ -931,14 +963,35 @@ export default function BmsViewer() {
     setTimeout(() => { scheduleRenderLoop(); }, 0);
   };
 
-  const handleSeek = (e) => {
-    const val = parseFloat(e.target.value); pauseTimeRef.current = val; setPlaybackTimeDisplay(val);
-    // ★シーク時は在再生中の音源(ロングBGMを含む)を必ず停止する。
-    //   isPlaying の状態に依存せず毎回止めることで、シークを繰り返したときの音の重なりを防ぐ。
-    stopAudioNodes();
+  // シーク確定(重い処理): setState 群と startPlayback。ドラッグ中は debounce し、止まった時に1回だけ実行。
+  const commitSeek = () => {
+    seekCommitTimerRef.current = null;
+    const val = pauseTimeRef.current;
+    setPlaybackTimeDisplay(val);
     setBackingTracks([]); activeLongSoundsRef.current = []; activeShortSoundsRef.current = [];
+    setCombo(comboRef.current);
+    setNoteCounts(noteCountsRef.current.slice());
+    hudLastRef.current = {}; // 次の100msブロックでHUD各値を強制再評価
+    if (parsedSong) {
+        const currentBar = parsedSong.barLines.find(b => b.time > val);
+        const newMeasure = currentBar ? currentBar.measure - 1 : parsedSong.barLines.length - 1;
+        const totalInMeasure = parsedSong.notesPerMeasure[newMeasure] || 0;
+        const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999;
+        const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
+        setCurrentMeasureNotes({ processed: processedInMeasure, total: totalInMeasure, average: parsedSong.avgDensity });
+    }
+    if (isPlayingRef.current) startPlayback();
+    else scheduleRenderLoop();
+  };
 
-    // ★オートプレイのコンボは「ここまでに通過したノーツ総数」。0クリアせず再計算する。
+  const handleSeek = (e) => {
+    const val = parseFloat(e.target.value);
+    pauseTimeRef.current = val;
+    // ★シーク時は在再生中の音源(ロングBGMを含む)を必ず停止する。isPlaying に依存せず毎回止めて音の重なりを防ぐ。
+    stopAudioNodes();
+
+    // --- 軽い処理: 毎 onChange 実行(描画が毎フレーム参照するため) ---
+    // オートプレイのコンボ = ここまでに通過したノーツ総数。0クリアせず再計算する。
     const targetObjects = displayObjects;
     noteCountsRef.current.fill(0);
     let passedNotes = 0;
@@ -950,21 +1003,12 @@ export default function BmsViewer() {
         }
     }
     comboRef.current = passedNotes;
-    setCombo(passedNotes);
-    setNoteCounts([...noteCountsRef.current]);
-    hudLastRef.current = {}; // シーク後、次の100msブロックでHUD各値を強制的に再評価させる
-
-    if (parsedSong) {
-        const currentBar = parsedSong.barLines.find(b => b.time > val);
-        const newMeasure = currentBar ? currentBar.measure - 1 : parsedSong.barLines.length - 1;
-        const totalInMeasure = parsedSong.notesPerMeasure[newMeasure] || 0;
-        const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999;
-        const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
-        setCurrentMeasureNotes({ processed: processedInMeasure, total: totalInMeasure, average: parsedSong.avgDensity });
-    }
     clearActiveLanes();
-    if (isPlaying) startPlayback();
-    else scheduleRenderLoop();
+    scheduleRenderLoop(); // 停止中でもスクラブ位置を描き直す
+
+    // --- 重い処理: ドラッグが止まってから1回だけ ---
+    if (seekCommitTimerRef.current) clearTimeout(seekCommitTimerRef.current);
+    seekCommitTimerRef.current = setTimeout(commitSeek, 100);
   };
 
   const renderLoop = () => {
@@ -975,9 +1019,17 @@ export default function BmsViewer() {
     // ★BGA修正: alpha:trueにして、canvasの透明部分から背面のBGAレイヤーが透けるようにする
     if (!ctxRef.current) ctxRef.current = canvas.getContext('2d', { alpha: true });
     const ctx = ctxRef.current;
-    const dpr = window.devicePixelRatio || 1; const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    // ★軽量化: getBoundingClientRect() はレイアウト強制。ResizeObserver のキャッシュを使い、
+    //   未取得の初回のみ実測する。
+    const rect = canvasRectRef.current || (() => {
+      const r = canvas.getBoundingClientRect();
+      const v = { width: r.width, height: r.height };
+      if (v.width > 0 && v.height > 0) canvasRectRef.current = v; // 0 サイズはキャッシュせず次フレーム再測定
+      return v;
+    })();
     if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) { canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr; ctx.scale(dpr, dpr); } 
+    canvas.height = rect.height * dpr; ctx.scale(dpr, dpr); }
     else ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const currentTime = isPlayingRef.current && audioContextRef.current ? audioContextRef.current.currentTime - startTimeRef.current : pauseTimeRef.current;
 
@@ -1147,8 +1199,28 @@ export default function BmsViewer() {
     // ★修正: スマホの判定ラインをさらに上げる (ナビゲーションバー対策)
     const BASE_JUDGE_Y = height - (isMobileRef.current ? 180 : 100); 
     const JUDGE_Y = BASE_JUDGE_Y - liftOffset;
-    const is2P = playSide === '2P';
+    const is2P = playSideRef.current === '2P';
     const SCRATCH_X = is2P ? BOARD_X + (KEY_W * 7) + 10 : BOARD_X; const KEYS_X = is2P ? BOARD_X : BOARD_X + SCRATCH_W + 10;
+
+    // ★軽量化: ノーツ演出のグラデーションはレーン単位で使い回す。ジオメトリが変わったときだけ再構築。
+    //   フェードは createLinearGradient を作り直さず ctx.globalAlpha で行う。
+    const gradKey = `${JUDGE_Y}|${KEY_W}|${SCRATCH_X}|${KEYS_X}`;
+    const gc = gradCacheRef.current;
+    if (gc.key !== gradKey) {
+        gc.key = gradKey; gc.ln = []; gc.hitRed = []; gc.hitBlue = [];
+        for (let li = 0; li < 8; li++) {
+            const gx = li === 0 ? SCRATCH_X : KEYS_X + (li - 1) * KEY_W;
+            const ln = ctx.createLinearGradient(gx, JUDGE_Y, gx, JUDGE_Y - 300);
+            ln.addColorStop(0, 'rgba(100, 200, 255, 0.3)'); ln.addColorStop(1, 'rgba(0,0,0,0)');
+            gc.ln[li] = ln;
+            const hr = ctx.createLinearGradient(gx, JUDGE_Y, gx, JUDGE_Y - 200);
+            hr.addColorStop(0, 'rgba(239, 68, 68, 1)'); hr.addColorStop(1, 'rgba(0,0,0,0)');
+            gc.hitRed[li] = hr;
+            const hb = ctx.createLinearGradient(gx, JUDGE_Y, gx, JUDGE_Y - 200);
+            hb.addColorStop(0, 'rgba(59, 130, 246, 1)'); hb.addColorStop(1, 'rgba(0,0,0,0)');
+            gc.hitBlue[li] = hb;
+        }
+    }
 
     // ★修正: ボード全体の不透明度
     const bOpacity = boardOpacityRef.current;
@@ -1159,11 +1231,10 @@ export default function BmsViewer() {
     ctx.fillStyle = `rgba(2, 6, 23, ${bOpacity})`; // ★修正: PC/スマホで同じ値だった無意味な三項演算子を削除
     ctx.fillRect(BOARD_X, 0, BOARD_W, height); 
     
-    for(let i=0; i<7; i++) { 
-        const laneHeight = isLiftEnabled ? JUDGE_Y : height;
-        // 各レーンの背景
-        const baseColor = [1,3,5].includes(i) ? [15, 23, 42] : [30, 41, 59];
-        ctx.fillStyle = `rgba(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]}, ${lOpacity})`; // ★修正: 無意味な三項演算子を削除
+    const laneHeight = isLiftEnabled ? JUDGE_Y : height;
+    for(let i=0; i<7; i++) {
+        // 各レーンの背景 (★軽量化: 毎回の配列リテラル + includes をやめ、事前テーブル参照に)
+        ctx.fillStyle = IS_DARK_LANE[i] ? `rgba(15, 23, 42, ${lOpacity})` : `rgba(30, 41, 59, ${lOpacity})`;
         ctx.fillRect(KEYS_X + i * KEY_W, 0, KEY_W, laneHeight);
     }
     
@@ -1184,7 +1255,7 @@ export default function BmsViewer() {
         ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(BOARD_X, JUDGE_Y); ctx.lineTo(BOARD_X + BOARD_W, JUDGE_Y); ctx.stroke();
     }
 
-    const currentActiveLanes = new Array(8).fill(false);
+    const currentActiveLanes = _activeLanesScratch; currentActiveLanes.fill(false); // ★軽量化: 毎フレームの配列割り当てを排除
 
     if (parsedSong) {
         const currentBeat = getBeatFromTime(parsedSong.timePoints, currentTime);
@@ -1192,8 +1263,13 @@ export default function BmsViewer() {
 
         ctx.strokeStyle = '#64748b'; ctx.textAlign = 'left';
         ctx.font = '10px Arial';
-        for(const bar of parsedSong.barLines) {
-            if (bar.beat < currentBeat - 0.5) continue;
+        // ★軽量化: 毎フレーム先頭から continue で走査していた(曲後半で数百回)。可視開始を二分探索する。
+        const bars = parsedSong.barLines;
+        const beatFloor = currentBeat - 0.5;
+        let blo = 0, bhi = bars.length - 1, bStart = bars.length;
+        while (blo <= bhi) { const mid = (blo + bhi) >> 1; if (bars[mid].beat < beatFloor) blo = mid + 1; else { bStart = mid; bhi = mid - 1; } }
+        for (let bi = bStart; bi < bars.length; bi++) {
+            const bar = bars[bi];
             if (bar.beat > visibleEndBeat) break;
             const y = JUDGE_Y - ((bar.beat - currentBeat) / visibleDuration * BASE_JUDGE_Y);
             if (y < -10) continue;
@@ -1241,13 +1317,8 @@ export default function BmsViewer() {
                 const yEnd = JUDGE_Y - (endBeatDelta / visibleDuration * BASE_JUDGE_Y);
                 if (beatDelta <= 0 && endBeatDelta > 0) {
                     currentActiveLanes[obj.laneIndex] = true;
-                    const effectHeight = 300; // エフェクトの高さを固定
-                    const topY = JUDGE_Y - effectHeight; // 上端のY座標を計算
-                    const grad = ctx.createLinearGradient(x, JUDGE_Y, x, topY);
-                    grad.addColorStop(0, `rgba(100, 200, 255, 0.3)`); 
-                    grad.addColorStop(1, `rgba(0,0,0,0)`);
-                    ctx.fillStyle = grad;
-                    ctx.fillRect(x, topY, w, effectHeight);
+                    ctx.fillStyle = gc.ln[obj.laneIndex];   // ★キャッシュ済みグラデーション
+                    ctx.fillRect(x, JUDGE_Y - 300, w, 300);
                 }
                 const drawBottom = Math.min(JUDGE_Y, yBase);
                 const drawTop = yEnd;
@@ -1258,22 +1329,22 @@ export default function BmsViewer() {
                 }
             } else {
                 if (obj.processed) {
-                    if (timeDelta > -0.05 && timeDelta > -0.2) { 
+                    if (timeDelta > -0.05 && timeDelta > -0.2) {
                         currentActiveLanes[obj.laneIndex] = true;
                         const alpha = 1.0 - (timeDelta / -0.05);
-                        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`; ctx.fillRect(x, JUDGE_Y - 5, w, 10);
-                        const grad = ctx.createLinearGradient(x, JUDGE_Y, x, JUDGE_Y - 200);
-                        const color = obj.laneIndex === 0 ? '239, 68, 68' : '59, 130, 246'; 
-                        grad.addColorStop(0, `rgba(${color}, ${alpha * 0.6})`); 
-                        grad.addColorStop(1, `rgba(0,0,0,0)`);
-                        ctx.fillStyle = grad;
+                        // ★軽量化: グラデーションはレーン単位でキャッシュ済み。フェードは globalAlpha で。
+                        ctx.globalAlpha = alpha;
+                        ctx.fillStyle = '#ffffff'; ctx.fillRect(x, JUDGE_Y - 5, w, 10);
+                        ctx.globalAlpha = alpha * 0.6;
+                        ctx.fillStyle = obj.laneIndex === 0 ? gc.hitRed[obj.laneIndex] : gc.hitBlue[obj.laneIndex];
                         ctx.fillRect(x, JUDGE_Y - 200, w, 200);
+                        ctx.globalAlpha = 1;
                     }
                     continue;
                 }
                 const y = yBase;
-                const isScratch = obj.laneIndex === 0; const isBlue = [2,4,6].includes(obj.laneIndex);
-                ctx.fillStyle = isScratch ? '#ef4444' : (isBlue ? '#3b82f6' : '#f1f5f9'); ctx.fillRect(x + 1, y - 6, w - 2, 12);
+                ctx.fillStyle = obj.laneIndex === 0 ? '#ef4444' : (IS_BLUE_LANE[obj.laneIndex] ? '#3b82f6' : '#f1f5f9');
+                ctx.fillRect(x + 1, y - 6, w - 2, 12);
             }
         }
     }
@@ -1344,26 +1415,39 @@ export default function BmsViewer() {
     const scratchCtrl = controllerRefs.current[0];
     if (scratchCtrl) scratchCtrl.style.transform = `rotate(${scratchAngleRef.current}deg)`;
 
-    for(let lane=0; lane<8; lane++) { setLaneActive(lane, currentActiveLanes[lane] || activeInputLanesRef.current.has(lane));
+    // ★軽量化: 毎フレーム8レーン分の style 一括書き込みをやめ、状態が変化したレーンだけ書き込む。
+    for (let lane = 0; lane < 8; lane++) {
+        const active = currentActiveLanes[lane] || activeInputLanesRef.current.has(lane);
+        if (laneVisualRef.current[lane] !== active) {
+            laneVisualRef.current[lane] = active;
+            setLaneActive(lane, active);
+        }
     }
     // ★軽量化: COMBO/NOTES の毎フレーム setState を撤廃。
     //   COMBO は infoPanelRef.updateInfo() で innerText を毎フレーム更新済み。
     //   NOTES(noteCounts) と combo state の反映は下の 100ms ブロックで変化時のみ行う。
 
     if (showReady && readyAnimStateRef.current) {
-        ctx.save(); ctx.translate(width/2, height/2);
-        if (readyAnimStateRef.current === 'GO') {
-             ctx.shadowColor = '#ff0000';
-             ctx.shadowBlur = 30; ctx.fillStyle = '#ff3333'; ctx.font = 'bold italic 80px sans-serif';
-             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-             ctx.fillText("GO!!", 0, 0);
-        } else {
-             ctx.shadowColor = '#00ccff';
-             ctx.shadowBlur = 20; ctx.fillStyle = '#ffffff'; ctx.font = 'bold italic 60px sans-serif';
-             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-             ctx.fillText("READY...", 0, 0);
+        // ★軽量化: shadowBlur 付きテキストは 1 回だけオフスクリーンに焼いて drawImage で貼る。
+        let rc = readyTextCacheRef.current;
+        if (!rc) {
+            const mk = (text, font, fill, glow, blur) => {
+                const c = document.createElement('canvas');
+                c.width = 480; c.height = 140;
+                const cx = c.getContext('2d');
+                cx.shadowColor = glow; cx.shadowBlur = blur;
+                cx.fillStyle = fill; cx.font = font;
+                cx.textAlign = 'center'; cx.textBaseline = 'middle';
+                cx.fillText(text, 240, 70);
+                return c;
+            };
+            rc = readyTextCacheRef.current = {
+                GO: mk('GO!!', 'bold italic 80px sans-serif', '#ff3333', '#ff0000', 30),
+                READY: mk('READY...', 'bold italic 60px sans-serif', '#ffffff', '#00ccff', 20),
+            };
         }
-        ctx.restore();
+        const img = readyAnimStateRef.current === 'GO' ? rc.GO : rc.READY;
+        ctx.drawImage(img, (width - img.width) / 2, (height - img.height) / 2);
     }
 
     // 描画継続の判定。多重生成しないよう再スケジュールは scheduleRenderLoop() 経由に統一。

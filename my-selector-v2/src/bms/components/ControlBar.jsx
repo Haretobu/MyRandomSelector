@@ -11,20 +11,22 @@ const ControlBar = forwardRef(({
     const progressBarRef = useRef(null);
     const rangeInputRef = useRef(null);
     const timeTextRef = useRef(null);
+    const lastPctRef = useRef(-1);   // ★軽量化: 変化時のみ DOM を書く
+    const lastTxtRef = useRef('');
 
     // 親から呼び出せる関数を定義
     useImperativeHandle(ref, () => ({
         updateTime: (time) => {
-            const percent = duration ? (time / duration) * 100 : 0;
-            if (progressBarRef.current) {
-                progressBarRef.current.style.width = `${percent}%`;
+            const pct = duration ? Math.round((time / duration) * 1000) : 0; // 0.1%刻みで丸めて比較
+            if (pct !== lastPctRef.current) {
+                lastPctRef.current = pct;
+                if (progressBarRef.current) progressBarRef.current.style.width = `${pct / 10}%`;
+                if (rangeInputRef.current) rangeInputRef.current.value = time;
             }
-            if (rangeInputRef.current) {
-                rangeInputRef.current.value = time;
-            }
-            if (timeTextRef.current) {
-                // toFixed(2) だと桁が変わってガタつくことがあるので、必要ならパディングする
-                timeTextRef.current.innerText = `${time.toFixed(2)} / ${duration.toFixed(2)}`;
+            const txt = `${time.toFixed(2)} / ${duration.toFixed(2)}`;
+            if (txt !== lastTxtRef.current) {
+                lastTxtRef.current = txt;
+                if (timeTextRef.current) timeTextRef.current.innerText = txt;
             }
         }
     }));

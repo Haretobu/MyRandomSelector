@@ -3,6 +3,7 @@ import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react
 
 const BgaLayer = forwardRef(({ bgaState, zIndex, blendMode = 'normal', opacity = 1, isPlaying, isVideoEnabled = true }, ref) => {
     const videoRef = useRef(null);
+    const lastSyncRef = useRef(0); // ★軽量化: video.currentTime= の実行を間引く
 
     // 親から「時間を合わせろ」と命令されたときに動く関数
     useImperativeHandle(ref, () => ({
@@ -20,8 +21,11 @@ const BgaLayer = forwardRef(({ bgaState, zIndex, blendMode = 'normal', opacity =
                     if (!video.paused) video.pause();
                 }
 
-                // ズレが0.1秒以上あったら強制的に合わせる
-                if (Math.abs(video.currentTime - targetTime) > 0.1) {
+                // ★軽量化: 毎フレーム video.currentTime= を代入するとデコーダが詰まって重い。
+                //   ズレの許容を 0.3s に広げ、実際のシークは最大 ~4Hz に間引く。
+                const now = performance.now();
+                if (now - lastSyncRef.current > 250 && Math.abs(video.currentTime - targetTime) > 0.3) {
+                    lastSyncRef.current = now;
                     video.currentTime = targetTime;
                 }
             }
