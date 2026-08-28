@@ -210,9 +210,11 @@ export default function BmsViewer() {
   const lastJudgeRef = useRef({ kind: '', deltaMs: 0, t: 0 }); // 直近判定(キャンバス表示・フェード用)
   const judgeRankRef = useRef(2);          // JUDGE_WINDOWS の添字(#RANK 由来)
   const judgeOffsetRef = useRef(0);        // 判定オフセット(ms)。6-2-c でスライダー追加
-  const scratchDirRef = useRef({ 0: null, 8: null }); // サイド別・直近に有効だった皿方向('A'|'B')
+  const scratchDirRef = useRef({ 0: null, 8: null }); // サイド別・直近の皿入力方向('A'|'B')
   const scratchKeyDirRef = useRef({});     // KeyboardEvent.code -> 'A'(順) | 'B'(逆)
+  const scratchImpulseRef = useRef({ 0: { dir: 0, t: 0 }, 8: { dir: 0, t: 0 } }); // プレイモードの皿回転インパルス
   const activeLnRef = useRef(new Array(MAX_LANES).fill(null)); // プレイモード: 判定成立中の LN
+  const lastGameKeyTimeRef = useRef(0);    // プレイモード: 直近のゲームキー入力時刻(Space誤爆抑制用)
   const playSideRef = useRef(playSide);
   const showMutedMonitorRef = useRef(showMutedMonitor);
   const showAbortedMonitorRef = useRef(showAbortedMonitor);
@@ -450,8 +452,14 @@ export default function BmsViewer() {
       return null;
   };
 
-  // プレイモード: 1回のキー入力を判定。lane に対応する未処理ノーツを探す。
-  // scDir: 皿キーの方向('A'|'B')。皿は前回と逆方向のときだけ有効(交互押し)。
+  // プレイモード: 皿の回転インパルスを与える。scDir 'A'→順(-1) / 'B'→逆(+1)。
+  const doScratchSpin = (lane, scDir) => {
+      scratchImpulseRef.current[lane] = { dir: scDir === 'B' ? 1 : -1, t: performance.now() };
+  };
+
+  // プレイモード: 1回のキー/皿入力を判定。
+  //   通常ノーツ: 最寄りの未処理ノーツを bd 窓内で判定。皿はどちらの方向でも可。
+  //   皿 LN(CN): 頭はどちらの方向でも可。終端は「頭と逆方向」の皿入力が必要。
   const judgeLaneInput = (lane, bmsTime, isScratch, scDir) => {
       const objs = displayObjectsRef.current;
       if (!playModeRef.current || !isPlayingRef.current || !objs.length) return;
@@ -459,7 +467,24 @@ export default function BmsViewer() {
       const bd = w.bd / 1000;
       const t = bmsTime - judgeOffsetRef.current / 1000;
 
-      if (isScratch && scDir && scratchDirRef.current[lane] === scDir) return; // 同方向の連打 = 回していない
+      if (isScratch) {
+          if (scDir) scratchDirRef.current[lane] = scDir;
+          doScratchSpin(lane, scDir);
+
+          // 皿 CN の終端: 保持中の LN があり、頭と逆方向の皿入力なら終端判定
+          const ln = activeLnRef.current[lane];
+          if (ln && ln.type === 'long') {
+              if (scDir && ln._headDir && scDir !== ln._headDir) {
+                  const dEnd = (t - (ln.endTime || ln.time)) * 1000;
+                  if (Math.abs(dEnd) <= w.bd) pushJudge(classifyDelta(Math.abs(dEnd)) || 'bd', dEnd);
+                  else pushJudge('poor', 0);
+                  activeLnRef.current[lane] = null;
+                  return;
+              }
+              // 頭と同方向 / まだ終端でない → 何もしない(空POORにはしない)
+              return;
+          }
+      }
 
       // 最寄りの未処理ノーツ(|Δ| 最小、bd 窓内)
       let target = null, best = Infinity;
@@ -472,11 +497,8 @@ export default function BmsViewer() {
           if (d < best) { best = d; target = o; }
       }
 
-      if (isScratch && scDir) scratchDirRef.current[lane] = scDir;
-
       if (!target || best > bd) {
-          // 空打ち → 空POOR(コンボ非切断)
-          pushJudge('epoor', 0);
+          pushJudge('epoor', 0); // 空打ち → 空POOR(コンボ非切断)
           return;
       }
 
@@ -486,23 +508,14 @@ export default function BmsViewer() {
       noteCountsRef.current[lane]++;
       pushJudge(kind, deltaMs);
 
-      // LN: 頭が PGREAT/GREAT/GOOD で取れたら「保持中」に。BAD は即終了扱い。
+      // LN の頭が取れたら「保持中」に(BAD は即終了扱い)
       if (target.type === 'long' && (kind === 'pg' || kind === 'gr' || kind === 'gd')) {
           activeLnRef.current[lane] = target;
-      }
-
-      // 皿の回転エフェクト(既存のオートと同じ ref を使う)
-      if (isScratch) {
-          const typeRef = lane === 0 ? lastScratchTypeRef : lastScratchType2Ref;
-          const dirRef = lane === 0 ? scratchDirectionRef : scratchDirection2Ref;
-          const timeRef = lane === 0 ? lastScratchTimeRef : lastScratchTime2Ref;
-          typeRef.current = 'ACCEL';
-          dirRef.current = (scDir === 'B') ? 1 : -1;
-          timeRef.current = performance.now();
+          if (isScratch) target._headDir = scDir || 'A';
       }
   };
 
-  // 見逃し(ノーツが BAD 窓の遅れ側を未処理で通過) / LN 途中離し → POOR
+  // 見逃し(ノーツが BAD 窓の遅れ側を未処理で通過) / LN 終端の逃し → POOR
   const judgeMissNote = (obj, kind = 'poor') => {
       obj.processed = true;
       if (obj.type === 'long') {
@@ -582,6 +595,12 @@ export default function BmsViewer() {
     if (!isInputDebugMode && !playMode) { activeInputLanesRef.current.clear(); clearActiveLanes(); return; }
     const handleKeyDown = (e) => {
         if (e.repeat) return;
+        // プレイモード中: 直近2秒以内にゲームキーを叩いていたら Space の誤爆(再生/停止ボタン発火)を抑制
+        if (playModeRef.current && (e.code === 'Space' || e.code === 'Enter')
+            && performance.now() - lastGameKeyTimeRef.current < 2000) {
+            e.preventDefault();
+            return;
+        }
         const rev = debugKeyLaneRef.current;
         // 皿の手動回転用フラグ(Shift=逆回転 / Ctrl=高速)。キー割り当てで皿=Shift のときは lane も付く。
         if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') isShiftHeldRef.current = true;
@@ -590,6 +609,7 @@ export default function BmsViewer() {
         let lane = rev[e.code];
         if (lane === undefined) lane = -1;
         if (lane !== -1) {
+            if (playModeRef.current) lastGameKeyTimeRef.current = performance.now();
             activeInputLanesRef.current.add(lane);
             setLaneActive(lane, true);
 
@@ -683,14 +703,20 @@ export default function BmsViewer() {
         scheduleRenderLoop();
     };
     const handleKeyUp = (e) => {
+        // Space/Enter によるボタン発火は keyup で起きるため、抑制中は keyup も止める
+        if (playModeRef.current && (e.code === 'Space' || e.code === 'Enter')
+            && performance.now() - lastGameKeyTimeRef.current < 2000) {
+            e.preventDefault();
+            return;
+        }
         if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') isShiftHeldRef.current = false;
         else if (e.code === 'ControlLeft' || e.code === 'ControlRight') isCtrlHeldRef.current = false;
         const lane = debugKeyLaneRef.current[e.code];
         if (lane === undefined) return;
         activeInputLanesRef.current.delete(lane);
         setLaneActive(lane, false);
-        // プレイモード: LN 保持中に離したら、終点まで達していなければ POOR
-        if (playModeRef.current) {
+        // プレイモード: キー LN を保持中に離したら、終点まで達していなければ POOR(皿 CN は逆回しで判定)
+        if (playModeRef.current && lane !== 0 && lane !== 8) {
             const ln = activeLnRef.current[lane];
             if (ln) {
                 const cur = isPlayingRef.current && audioContextRef.current
@@ -1614,11 +1640,17 @@ export default function BmsViewer() {
             //   timeline 由来の triggerMiss は廃止 (MISS は入力プレイ時のみ)。
             // プレイモード: 見逃し(BAD窓の遅れ側を越えて未処理)→ POOR。LN の後始末もここで。
             if (playModeRef.current) {
+                const bdSec = (JUDGE_WINDOWS[judgeRankRef.current] || JUDGE_WINDOWS[2]).bd / 1000;
                 if (!obj.processed) {
-                    const bdSec = (JUDGE_WINDOWS[judgeRankRef.current] || JUDGE_WINDOWS[2]).bd / 1000;
                     if (isPlayingRef.current && timeDelta < -bdSec) judgeMissNote(obj, 'poor');
-                } else if (obj.type === 'long' && activeLnRef.current[obj.laneIndex] === obj && currentTime > (obj.endTime || obj.time)) {
-                    activeLnRef.current[obj.laneIndex] = null; // LN 完走
+                } else if (obj.type === 'long' && activeLnRef.current[obj.laneIndex] === obj) {
+                    const endT = obj.endTime || obj.time;
+                    if (gc.isScr[obj.laneIndex]) {
+                        // 皿 CN: 終端(逆回し)を bd 猶予内に受けられなければ POOR
+                        if (isPlayingRef.current && currentTime > endT + bdSec) { pushJudge('poor', 0); activeLnRef.current[obj.laneIndex] = null; }
+                    } else if (currentTime > endT) {
+                        activeLnRef.current[obj.laneIndex] = null; // キー LN: 押しっぱなしで終端通過 → 完走
+                    }
                 }
             } else if (!obj.processed && timeDelta <= 0) {
                 obj.processed = true;
@@ -1763,17 +1795,28 @@ export default function BmsViewer() {
         return m;
     };
 
+    // プレイモード: 直近のスクラッチ入力方向へ一気に回して減衰(オート判定と同じ見た目に)
+    const playScratchDelta = (lane) => {
+        const imp = scratchImpulseRef.current[lane];
+        const since = now - imp.t;
+        if (imp.dir && since < 260) return imp.dir * baseSpeed * 3.4 * (1 - since / 260) * safeDt;
+        return baseSpeed * 1.0 * safeDt; // アイドルはゆっくり順回転
+    };
+
     // 9K(pop'n) は皿がないので回転処理をスキップ(controllerRefs[0] はボタン0)
     if (!isPmsMode) {
         const sideFactor = ((mode === 'SP7' || mode === 'SP5') && playSideRef.current === '2P') ? -1 : 1;
-        scratchAngleRef.current += baseSpeed * scratchSpeed(currentActiveLanes[0], lastScratchTimeRef.current, lastScratchTypeRef, scratchDirectionRef) * sideFactor * safeDt;
+        if (playModeRef.current) {
+            scratchAngleRef.current += playScratchDelta(0);
+            scratchAngle2Ref.current += playScratchDelta(8);
+        } else {
+            scratchAngleRef.current += baseSpeed * scratchSpeed(currentActiveLanes[0], lastScratchTimeRef.current, lastScratchTypeRef, scratchDirectionRef) * sideFactor * safeDt;
+            scratchAngle2Ref.current += baseSpeed * scratchSpeed(currentActiveLanes[8], lastScratchTime2Ref.current, lastScratchType2Ref, scratchDirection2Ref) * -1 * safeDt;
+        }
         const scratchCtrl = controllerRefs.current[0];
         if (scratchCtrl) scratchCtrl.style.transform = `rotate(${scratchAngleRef.current}deg)`;
-        const scratchCtrl2 = controllerRefs.current[8]; // DP 2P 皿 (逆回転)
-        if (scratchCtrl2) {
-            scratchAngle2Ref.current += baseSpeed * scratchSpeed(currentActiveLanes[8], lastScratchTime2Ref.current, lastScratchType2Ref, scratchDirection2Ref) * -1 * safeDt;
-            scratchCtrl2.style.transform = `rotate(${scratchAngle2Ref.current}deg)`;
-        }
+        const scratchCtrl2 = controllerRefs.current[8]; // DP 2P 皿
+        if (scratchCtrl2) scratchCtrl2.style.transform = `rotate(${scratchAngle2Ref.current}deg)`;
     }
 
     // ★軽量化: 毎フレーム8レーン分の style 一括書き込みをやめ、状態が変化したレーンだけ書き込む。
