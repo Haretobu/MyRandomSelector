@@ -119,6 +119,8 @@ export default function BmsViewer() {
   const polyphonyHistoryRef = useRef([]);
   const maxPolyRef = useRef(0);
   const nextSoundIdRef = useRef(1); // 音源ログ/ノードの一意ID(React key・killedIds Set用)。Math.random()の衝突を避ける
+  const polyphonyRef = useRef(0);   // 現在の同時発音数(scheduleAudioが毎tick更新、表示は100msブロックで間引き)
+  const hudLastRef = useRef({});    // HUDに最後に push した値。変化時のみ setState するための比較用
   const scratchAngleRef = useRef(0);
   const lastFrameTimeRef = useRef(0);
   const lastScratchTimeRef = useRef(0);
@@ -167,6 +169,7 @@ export default function BmsViewer() {
   // 以前は seek/pause 時に animationRef を経由せず rAF を張っており、
   // 停止中にシークするたびループが増殖して FPS が低下していた。
   const renderLoopRef = useRef(null);
+  const scheduleAudioRef = useRef(null);
   const _renderTick = () => {
       animationRef.current = null;
       if (renderLoopRef.current) renderLoopRef.current();
@@ -675,7 +678,7 @@ export default function BmsViewer() {
       });
       lastNotesByLaneRef.current = lasts;
       setDuration(calculatedMaxDuration); setParsedSong(parsed); setTotalNotes(parsed.totalNotes);
-      setPlaybackTimeDisplay(0); pauseTimeRef.current = 0; setCombo(0); comboRef.current = 0;
+      setPlaybackTimeDisplay(0); pauseTimeRef.current = 0; setCombo(0); comboRef.current = 0; hudLastRef.current = {};
       lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(8).fill(0));
       setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsed.avgDensity });
       setLoadingMessage('準備完了'); setIsLoading(false);
@@ -699,9 +702,9 @@ export default function BmsViewer() {
           activeNodesRef.current = activeNodesRef.current.filter(n => !killedIds.has(n.id));
       }
       const currentPolyCount = activeNodesRef.current.length;
-      setPolyphonyCount(currentPolyCount);
-      // ★修正: 最大同時発音数(M POLY)の追跡（今まで一度も更新されていなかった）
-      if (currentPolyCount > maxPolyRef.current) { maxPolyRef.current = currentPolyCount; setMaxPolyphonyCount(currentPolyCount); }
+      // ★軽量化: 40Hz の setState をやめ、値は ref に記録するだけ。表示は renderLoop の 100ms ブロックで間引く。
+      polyphonyRef.current = currentPolyCount;
+      if (currentPolyCount > maxPolyRef.current) maxPolyRef.current = currentPolyCount;
       // ★修正+軽量化: 平均算出用の履歴を積む。無限に伸びないよう一定数でキャップする
       polyphonyHistoryRef.current.push(currentPolyCount);
       if (polyphonyHistoryRef.current.length > 400) polyphonyHistoryRef.current.shift();
@@ -785,7 +788,9 @@ export default function BmsViewer() {
       }
       nextNoteIndexRef.current = index;
   };
-  
+  // setInterval が常に最新の scheduleAudio クロージャを呼ぶようにする(displayObjects/parsedSong の stale 化を防ぐ)
+  scheduleAudioRef.current = scheduleAudio;
+
   const startPlayback = () => {
     if (!parsedSong || isLoading) return;
     applyHitSounds(tempKeyHitSoundBuffer, tempScratchHitSoundBuffer, isSeparateHitSound, tempKeySoundName, tempScratchSoundName);
@@ -809,7 +814,7 @@ export default function BmsViewer() {
         setReadyAnimState(null);
     }
     if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current);
-    schedulerTimerRef.current = setInterval(scheduleAudio, SCHEDULE_INTERVAL);
+    schedulerTimerRef.current = setInterval(() => { if (scheduleAudioRef.current) scheduleAudioRef.current(); }, SCHEDULE_INTERVAL);
     stopRenderLoop();
     scheduleRenderLoop();
     
@@ -901,7 +906,7 @@ export default function BmsViewer() {
             setBackingTracks([]); activeLongSoundsRef.current = [];
         }
 
-        pauseTimeRef.current = 0; setPlaybackTimeDisplay(0); setCombo(0); comboRef.current = 0;
+        pauseTimeRef.current = 0; setPlaybackTimeDisplay(0); setCombo(0); comboRef.current = 0; hudLastRef.current = {};
         lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(8).fill(0));
         if (parsedSong) displayObjects.forEach(o => o.processed = false);
         setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsedSong?.avgDensity || 0 });
@@ -947,6 +952,7 @@ export default function BmsViewer() {
     comboRef.current = passedNotes;
     setCombo(passedNotes);
     setNoteCounts([...noteCountsRef.current]);
+    hudLastRef.current = {}; // シーク後、次の100msブロックでHUD各値を強制的に再評価させる
 
     if (parsedSong) {
         const currentBar = parsedSong.barLines.find(b => b.time > val);
@@ -1052,16 +1058,26 @@ export default function BmsViewer() {
         // 3. その他の重い処理（小節線の計算やログ表示用のリスト更新など）
         // これらは毎フレームやる必要がないので、ここだけ間引いて軽量化します
         if (now - lastStateUpdateRef.current > 100) { // 100ms(秒間10回)程度に設定
-            // ★修正: 平均同時発音数(AVG POLY)の算出。毎フレームではなくこの間引き済みブロックでのみ計算して負荷を抑える
+            const H = hudLastRef.current;
+            // ★軽量化: 各 HUD 値は「前回と変わったときだけ」setState して不要な再レンダリングを抑える。
+            if (polyphonyRef.current !== H.poly) { H.poly = polyphonyRef.current; setPolyphonyCount(polyphonyRef.current); }
+            if (maxPolyRef.current !== H.maxPoly) { H.maxPoly = maxPolyRef.current; setMaxPolyphonyCount(maxPolyRef.current); }
             if (polyphonyHistoryRef.current.length > 0) {
                 const sum = polyphonyHistoryRef.current.reduce((a, b) => a + b, 0);
-                setAveragePolyphony(Math.round(sum / polyphonyHistoryRef.current.length));
+                const avg = Math.round(sum / polyphonyHistoryRef.current.length);
+                if (avg !== H.avgPoly) { H.avgPoly = avg; setAveragePolyphony(avg); }
+            }
+            // comboRef.current(= 通過ノーツ総数) を noteCounts / combo の dirty シグナルに使う
+            if (comboRef.current !== H.combo) {
+                H.combo = comboRef.current;
+                setCombo(comboRef.current);
+                setNoteCounts(noteCountsRef.current.slice());
             }
             if (parsedSong) {
                  // 小節情報の更新などはここで行う
                 const currentBar = parsedSong.barLines.find(b => b.time > currentTime);
                 const newMeasure = currentBar ? currentBar.measure - 1 : parsedSong.barLines.length - 1;
-                
+
                 if (newMeasure !== currentMeasureRef.current) {
                     currentMeasureRef.current = newMeasure;
                     setCurrentMeasure(newMeasure);
@@ -1070,18 +1086,26 @@ export default function BmsViewer() {
                     const totalInMeasure = parsedSong.notesPerMeasure[newMeasure] || 0;
                     const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999;
                     const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
+                    H.measProcessed = processedInMeasure;
                     setCurrentMeasureNotes({ processed: processedInMeasure, total: totalInMeasure, average: parsedSong.avgDensity });
                 } else {
                     const mStart = parsedSong.barLines[newMeasure]?.time || 0; const mEnd = parsedSong.barLines[newMeasure+1]?.time || 99999;
                     const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
-                    setCurrentMeasureNotes(prev => ({ ...prev, processed: processedInMeasure }));
+                    if (processedInMeasure !== H.measProcessed) {
+                        H.measProcessed = processedInMeasure;
+                        setCurrentMeasureNotes(prev => ({ ...prev, processed: processedInMeasure }));
+                    }
                 }
-                
+
                 const currentBpmVal = getBpmFromTime(parsedSong.timePoints, currentTime);
-                setRealtimeBpm(currentBpmVal);
-                const futureTime = currentTime + 2.0; 
+                if (currentBpmVal !== H.bpm) { H.bpm = currentBpmVal; setRealtimeBpm(currentBpmVal); }
+                const futureTime = currentTime + 2.0;
                 const nextTp = parsedSong.timePoints.find(tp => tp.time > currentTime && tp.time <= futureTime && tp.bpm !== currentBpmVal);
-                setNextBpmInfo(nextTp ? { value: nextTp.bpm, direction: nextTp.bpm > currentBpmVal ? 'up' : 'down', old: currentBpmVal } : null);
+                const nextBpmKey = nextTp ? `${nextTp.bpm}_${currentBpmVal}` : null;
+                if (nextBpmKey !== H.nextBpmKey) {
+                    H.nextBpmKey = nextBpmKey;
+                    setNextBpmInfo(nextTp ? { value: nextTp.bpm, direction: nextTp.bpm > currentBpmVal ? 'up' : 'down', old: currentBpmVal } : null);
+                }
                 
                 activeLongSoundsRef.current = activeLongSoundsRef.current.filter(s => {
                     if (s.isAborted) return true; 
@@ -1161,7 +1185,6 @@ export default function BmsViewer() {
     }
 
     const currentActiveLanes = new Array(8).fill(false);
-    let hitsThisFrame = new Array(8).fill(0);
 
     if (parsedSong) {
         const currentBeat = getBeatFromTime(parsedSong.timePoints, currentTime);
@@ -1195,7 +1218,7 @@ export default function BmsViewer() {
             //   timeline 由来の triggerMiss は廃止 (MISS は入力プレイ時のみ)。
             if (!obj.processed && timeDelta <= 0) {
                 obj.processed = true;
-                comboRef.current++; noteCountsRef.current[obj.laneIndex]++; hitsThisFrame[obj.laneIndex] = 1; lastPlayedSoundPerLaneRef.current[obj.laneIndex] = obj.filename;
+                comboRef.current++; noteCountsRef.current[obj.laneIndex]++; lastPlayedSoundPerLaneRef.current[obj.laneIndex] = obj.filename;
                 if (obj.laneIndex === 0) {
                     let dist = 999;
                     for(let k = i + 1; k < displayObjects.length; k++) {
@@ -1323,8 +1346,9 @@ export default function BmsViewer() {
 
     for(let lane=0; lane<8; lane++) { setLaneActive(lane, currentActiveLanes[lane] || activeInputLanesRef.current.has(lane));
     }
-    if (hitsThisFrame.some(v => v > 0)) { setCombo(comboRef.current); setNoteCounts([...noteCountsRef.current]);
-    }
+    // ★軽量化: COMBO/NOTES の毎フレーム setState を撤廃。
+    //   COMBO は infoPanelRef.updateInfo() で innerText を毎フレーム更新済み。
+    //   NOTES(noteCounts) と combo state の反映は下の 100ms ブロックで変化時のみ行う。
 
     if (showReady && readyAnimStateRef.current) {
         ctx.save(); ctx.translate(width/2, height/2);
