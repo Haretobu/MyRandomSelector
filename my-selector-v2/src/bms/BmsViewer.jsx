@@ -162,9 +162,41 @@ export default function BmsViewer() {
   const [tempKeySoundName, setTempKeySoundName] = useState(null);
   const [tempScratchSoundName, setTempScratchSoundName] = useState(null);
 
-  useEffect(() => { 
+  // --- 描画ループ(requestAnimationFrame)の一元管理: 常に1本だけ生存させる ---
+  // 以前は seek/pause 時に animationRef を経由せず rAF を張っており、
+  // 停止中にシークするたびループが増殖して FPS が低下していた。
+  const renderLoopRef = useRef(null);
+  const _renderTick = () => {
+      animationRef.current = null;
+      if (renderLoopRef.current) renderLoopRef.current();
+  };
+  const scheduleRenderLoop = () => {
+      if (animationRef.current != null) return;   // 既に予約済みなら何もしない(多重生成の防止)
+      animationRef.current = requestAnimationFrame(_renderTick);
+  };
+  const stopRenderLoop = () => {
+      if (animationRef.current != null) { cancelAnimationFrame(animationRef.current); animationRef.current = null; }
+  };
+
+  // --- BGA用オブジェクトURLの解放(メモリリーク対策) ---
+  // Blob URL は revoke しない限り Blob 本体をメモリに固定し続けるため、
+  // Map を clear する前に必ず revoke する。
+  const releaseImageAssets = () => {
+      imageAssetsRef.current.forEach(asset => {
+          const u = asset && (asset.url || asset.src);
+          if (typeof u === 'string' && u.startsWith('blob:')) {
+              try { URL.revokeObjectURL(u); } catch (e) {}
+          }
+      });
+      imageAssetsRef.current.clear();
+  };
+
+  useEffect(() => {
       const handleResize = () => {
           const mobile = window.innerWidth < MOBILE_BREAKPOINT;
+          // 同じ表示帯(PC/モバイル)にとどまる限りは何もしない。
+          // これをしないと、モバイルでアドレスバー開閉のたびにユーザーの不透明度設定が既定値へ戻ってしまう。
+          if (mobile === isMobileRef.current) return;
           setIsMobile(mobile);
           isMobileRef.current = mobile;
           if (mobile) {
@@ -199,12 +231,9 @@ export default function BmsViewer() {
   useEffect(() => { liftValRef.current = liftVal; }, [liftVal]);
   useEffect(() => { boardOpacityRef.current = boardOpacity; }, [boardOpacity]); 
   useEffect(() => { laneOpacityRef.current = laneOpacity; }, [laneOpacity]);
-  useEffect(() => { 
+  useEffect(() => {
       isInputDebugModeRef.current = isInputDebugMode;
-      if (isInputDebugMode && !animationRef.current) {
-          lastFrameTimeRef.current = performance.now();
-          animationRef.current = requestAnimationFrame(renderLoop);
-      }
+      if (isInputDebugMode) scheduleRenderLoop();
   }, [isInputDebugMode]);
   useEffect(() => { muteDebugAutoPlayRef.current = muteDebugAutoPlay; }, [muteDebugAutoPlay]);
 
@@ -271,7 +300,7 @@ export default function BmsViewer() {
   const resetGameStatus = () => {
     stopPlayback(true);
     if (audioContextRef.current) activeNodesRef.current.forEach(n => { try { n.node.stop(); n.node.disconnect(); } catch(e){} });
-    activeNodesRef.current = []; activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]); imageAssetsRef.current.clear(); 
+    activeNodesRef.current = []; activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]); releaseImageAssets();
     setParsedSong(null); setDisplayObjects([]); setCurrentBackBga(null); setCurrentLayerBga(null); setCurrentPoorBga(null); setStageFileImage(null);
     setShowMissLayer(false); setNextBpmInfo(null); setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: 0 });
     scratchAngleRef.current = 0; lastFrameTimeRef.current = 0; lastScratchTimeRef.current = 0; lastScratchTypeRef.current = 'REVERSE'; scratchDirectionRef.current = -1;
@@ -376,7 +405,7 @@ export default function BmsViewer() {
                 }
             }
         }
-        if (!animationRef.current) { lastFrameTimeRef.current = performance.now(); animationRef.current = requestAnimationFrame(renderLoop); }
+        scheduleRenderLoop();
     };
     const handleKeyUp = (e) => {
         let lane = -1;
@@ -391,7 +420,7 @@ export default function BmsViewer() {
         } else if (lane !== -1) { activeInputLanesRef.current.delete(lane); setLaneActive(lane, false); }
     };
     window.addEventListener('keydown', handleKeyDown); window.addEventListener('keyup', handleKeyUp);
-    if (!animationRef.current) { lastFrameTimeRef.current = performance.now(); animationRef.current = requestAnimationFrame(renderLoop); }
+    scheduleRenderLoop();
     return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); };
   }, [isInputDebugMode, playSide]);
 
@@ -412,7 +441,8 @@ export default function BmsViewer() {
       window.removeEventListener('click', resumeAudio);
       if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current);
       if (audioContextRef.current) audioContextRef.current.close();
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      stopRenderLoop();
+      releaseImageAssets();
     };
   }, []);
 
@@ -537,7 +567,7 @@ export default function BmsViewer() {
     setNextBpmInfo(null); setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: 0 });
     scratchAngleRef.current = 0; lastScratchTimeRef.current = 0; lastScratchTypeRef.current = 'REVERSE'; scratchDirectionRef.current = -1; activeInputLanesRef.current.clear(); isShiftHeldRef.current = false; isCtrlHeldRef.current = false;
     if (audioContextRef.current) activeNodesRef.current.forEach(n => { try { n.node.stop(); n.node.disconnect(); } catch(e){} });
-    activeNodesRef.current = []; activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]); imageAssetsRef.current.clear(); audioBuffersRef.current.clear(); 
+    activeNodesRef.current = []; activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]); releaseImageAssets(); audioBuffersRef.current.clear();
 
     setIsLoading(true); setLoadingProgress(0); setLoadingMessage('BMSファイルを解析中...');
 
@@ -766,25 +796,21 @@ export default function BmsViewer() {
     
     stopAudioNodes(); activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]);
     const offset = pauseTimeRef.current; startTimeRef.current = audioContextRef.current.currentTime - offset;
-    setIsPlaying(true); lastFrameTimeRef.current = performance.now();
+    setIsPlaying(true); isPlayingRef.current = true; lastFrameTimeRef.current = performance.now();
     nextNoteIndexRef.current = findStartIndex(displayObjects, offset - (parsedSong.maxLNDuration || 20.0));
     nextBackBgaIndexRef.current = 0;
     nextLayerBgaIndexRef.current = 0; nextPoorBgaIndexRef.current = 0;
 
     if (showReady && offset === 0) {
         setReadyAnimState('READY');
-        setTimeout(() => setReadyAnimState('GO'), 1000); setTimeout(() => setReadyAnimState(null), 1800); 
-        if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current);
-        schedulerTimerRef.current = setInterval(scheduleAudio, SCHEDULE_INTERVAL);
-        if (animationRef.current) cancelAnimationFrame(animationRef.current);
-        animationRef.current = requestAnimationFrame(renderLoop);
+        setTimeout(() => setReadyAnimState('GO'), 1000); setTimeout(() => setReadyAnimState(null), 1800);
     } else {
         setReadyAnimState(null);
-        if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current);
-        schedulerTimerRef.current = setInterval(scheduleAudio, SCHEDULE_INTERVAL);
-        if (animationRef.current) cancelAnimationFrame(animationRef.current);
-        animationRef.current = requestAnimationFrame(renderLoop);
     }
+    if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current);
+    schedulerTimerRef.current = setInterval(scheduleAudio, SCHEDULE_INTERVAL);
+    stopRenderLoop();
+    scheduleRenderLoop();
     
     if (parsedSong.backBgaObjects) {
         for (let i=0; i < parsedSong.backBgaObjects.length; i++) {
@@ -851,16 +877,16 @@ export default function BmsViewer() {
   };
 
   const pausePlayback = () => {
-    setIsPlaying(false); stopAudioNodes();
+    setIsPlaying(false); isPlayingRef.current = false; stopAudioNodes();
     pauseTimeRef.current = audioContextRef.current.currentTime - startTimeRef.current;
     setReadyAnimState(null);
-    if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; }
-    if (isInputDebugModeRef.current) requestAnimationFrame(renderLoop);
+    stopRenderLoop();
+    if (isInputDebugModeRef.current) scheduleRenderLoop();
   };
 
   const stopPlayback = (reset = true) => {
     const wasPlaying = isPlayingRef.current;
-    setIsPlaying(false); 
+    setIsPlaying(false); isPlayingRef.current = false;
     stopAudioNodes();
     if (reset) {
         if (wasPlaying && showAbortedMonitorRef.current) {
@@ -894,11 +920,9 @@ export default function BmsViewer() {
         activeShortSoundsRef.current = [];
     }
 
-    if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; }
+    stopRenderLoop();
     longAudioProgressRefs.current.forEach(el => el.style.width = '0%');
-    setTimeout(() => {
-        if (isInputDebugModeRef.current || !animationRef.current) { lastFrameTimeRef.current = performance.now(); animationRef.current = requestAnimationFrame(renderLoop); }
-    }, 0);
+    setTimeout(() => { scheduleRenderLoop(); }, 0);
   };
 
   const handleSeek = (e) => {
@@ -914,8 +938,9 @@ export default function BmsViewer() {
         setCurrentMeasureNotes({ processed: processedInMeasure, total: totalInMeasure, average: parsedSong.avgDensity });
         setBackingTracks([]); activeLongSoundsRef.current = [];
     }
-    clearActiveLanes(); if (isPlaying) startPlayback();
-    else requestAnimationFrame(renderLoop);
+    clearActiveLanes();
+    if (isPlaying) startPlayback();
+    else scheduleRenderLoop();
   };
 
   const renderLoop = () => {
@@ -1141,27 +1166,26 @@ export default function BmsViewer() {
             const beatDelta = obj.beat - currentBeat;
             const timeDelta = obj.time - currentTime;
             
-            if (!obj.processed) {
-                if (timeDelta <= 0 && timeDelta > -0.03) {
-                    obj.processed = true;
-                    comboRef.current++; noteCountsRef.current[obj.laneIndex]++; hitsThisFrame[obj.laneIndex] = 1; lastPlayedSoundPerLaneRef.current[obj.laneIndex] = obj.filename;
-                    if (obj.laneIndex === 0) {
-                        let dist = 999;
-                        for(let k = i + 1; k < displayObjects.length; k++) {
-                            const nextObj = displayObjects[k];
-                            if (nextObj.laneIndex === 0) { dist = nextObj.time - obj.time; break; }
-                            if (nextObj.time - obj.time > 5.0) break;
-                        }
-                        if (dist < 0.6) { lastScratchTypeRef.current = 'ACCEL';
-                        scratchDirectionRef.current = scratchDirectionRef.current * -1; } 
-                        else { lastScratchTypeRef.current = 'REVERSE';
-                        scratchDirectionRef.current = -1; }
-                        if (isPlayingRef.current) lastScratchTimeRef.current = now;
+            // ★オートプレイ判定をフレームレート非依存に:
+            //   フレーム落ちしても timeDelta<=0 のノーツはすべて「取りこぼしキャッチアップ」で処理する。
+            //   以前は 30ms(-0.03s)の窓を外すとコンボが加算されず、-0.2s を超えると triggerMiss() が誤発火していた。
+            //   timeline 由来の triggerMiss は廃止 (MISS は入力プレイ時のみ)。
+            if (!obj.processed && timeDelta <= 0) {
+                obj.processed = true;
+                comboRef.current++; noteCountsRef.current[obj.laneIndex]++; hitsThisFrame[obj.laneIndex] = 1; lastPlayedSoundPerLaneRef.current[obj.laneIndex] = obj.filename;
+                if (obj.laneIndex === 0) {
+                    let dist = 999;
+                    for(let k = i + 1; k < displayObjects.length; k++) {
+                        const nextObj = displayObjects[k];
+                        if (nextObj.laneIndex === 0) { dist = nextObj.time - obj.time; break; }
+                        if (nextObj.time - obj.time > 5.0) break;
                     }
-                }
-                else if (timeDelta <= -0.2) {
-                     obj.processed = true;
-                     triggerMiss();
+                    if (dist < 0.6) { lastScratchTypeRef.current = 'ACCEL';
+                    scratchDirectionRef.current = scratchDirectionRef.current * -1; }
+                    else { lastScratchTypeRef.current = 'REVERSE';
+                    scratchDirectionRef.current = -1; }
+                    // 大きく取りこぼした(過去すぎる)スクラッチでは皿の空転エフェクトを起こさない
+                    if (isPlayingRef.current && timeDelta > -0.12) lastScratchTimeRef.current = now;
                 }
             }
 
@@ -1295,10 +1319,13 @@ export default function BmsViewer() {
         ctx.restore();
     }
 
-    if (isPlayingRef.current || showReady || isInputDebugModeRef.current) { animationRef.current = requestAnimationFrame(renderLoop);
-    } 
-    else { animationRef.current = null; }
+    // 描画継続の判定。多重生成しないよう再スケジュールは scheduleRenderLoop() 経由に統一。
+    if (isPlayingRef.current || showReady || isInputDebugModeRef.current) {
+        scheduleRenderLoop();
+    }
   };
+  // rAF ループが常に最新の renderLoop クロージャを呼ぶようにする(古い state を掴み続けるのを軽減)
+  renderLoopRef.current = renderLoop;
 
   const is2P = playSide === '2P';
   return (
