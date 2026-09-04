@@ -714,6 +714,19 @@ export default function BmsViewer() {
 
   const resetAllState = () => { resetGameStatus(); audioBuffersRef.current.clear(); setBmsList([]); };
 
+  // オートプレイ用: M キーで「ミス」をシミュレート。デバッグ入力/プレイモードの有無に関わらず常時受け付ける。
+  //   (メインのキー入力リスナーは isInputDebugMode || playMode のときしか張られないため、専用に用意する)
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.repeat || e.code !== 'KeyM') return;
+      if (playModeRef.current) return;                            // プレイモードは自前の判定でミスを出す
+      if (debugKeyLaneRef.current['KeyM'] !== undefined) return;  // M が判定レーンに割り当て済みなら無効
+      triggerMiss();                                              // 中で missLayerEnabled を判定
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   useEffect(() => {
     if (!isInputDebugMode && !playMode) { activeInputLanesRef.current.clear(); clearActiveLanes(); return; }
     const handleKeyDown = (e) => {
@@ -738,7 +751,6 @@ export default function BmsViewer() {
         // 皿の手動回転用フラグ(Shift=逆回転 / Ctrl=高速)。キー割り当てで皿=Shift のときは lane も付く。
         if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') isShiftHeldRef.current = true;
         else if (e.code === 'ControlLeft' || e.code === 'ControlRight') isCtrlHeldRef.current = true;
-        else if (e.code === 'KeyM' && rev['KeyM'] === undefined && !playModeRef.current) { triggerMiss(); }
         let lane = rev[e.code];
         if (lane === undefined) lane = -1;
         if (lane !== -1) {
