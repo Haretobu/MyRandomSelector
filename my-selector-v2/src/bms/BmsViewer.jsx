@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
-import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, JUDGE_WINDOWS, judgeRankIndex, djLevel } from './constants';
+import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, JUDGE_WINDOWS, judgeRankIndex, djLevel, DEFAULT_AUDIO_FX } from './constants';
 import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, shuffleLanes, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 
@@ -134,6 +134,52 @@ export default function BmsViewer() {
   useEffect(() => {
     try { localStorage.setItem('bms_keymaps', JSON.stringify(keyMaps)); } catch { /* quota / privacy mode */ }
   }, [keyMaps]);
+  // 6-3: サウンドエフェクトのパラメータを Web Audio ノードへ反映。無効時は素通しになる値に。
+  useEffect(() => {
+    try { localStorage.setItem('bms_audio_fx', JSON.stringify(audioFx)); } catch { /* privacy mode */ }
+    const n = fxNodesRef.current;
+    const ac = audioContextRef.current;
+    if (!n || !ac) return;
+    const now = ac.currentTime;
+    const set = (param, v) => { try { param.setTargetAtTime(v, now, 0.02); } catch { param.value = v; } };
+    const master = !!audioFx.enabled;
+    // FILTER
+    const fOn = master && audioFx.filter.on;
+    n.filter.type = audioFx.filter.type === 'highpass' ? 'highpass' : 'lowpass';
+    set(n.filter.frequency, fOn ? Math.max(20, Math.min(22000, audioFx.filter.freq)) : (n.filter.type === 'highpass' ? 20 : 22000));
+    // EQ (3band)
+    const eOn = master && audioFx.eq.on;
+    set(n.eqLow.gain, eOn ? audioFx.eq.low : 0);
+    set(n.eqMid.gain, eOn ? audioFx.eq.mid : 0);
+    set(n.eqHigh.gain, eOn ? audioFx.eq.high : 0);
+    // COMP
+    const cOn = master && audioFx.comp.on;
+    set(n.comp.threshold, cOn ? audioFx.comp.threshold : 0);
+    set(n.comp.ratio, cOn ? Math.max(1, audioFx.comp.ratio) : 1);
+    // ECHO
+    const ecOn = master && audioFx.echo.on;
+    set(n.delay.delayTime, Math.max(0.01, Math.min(2.0, audioFx.echo.time)));
+    set(n.feedback.gain, ecOn ? Math.max(0, Math.min(0.9, audioFx.echo.feedback)) : 0);
+    set(n.echoWet.gain, ecOn ? Math.max(0, Math.min(1, audioFx.echo.mix)) : 0);
+  }, [audioFx]);
+  // 6-3: サウンドエフェクト設定(EQ/ECHO/COMP/FILTER)。localStorage 永続。
+  const [audioFx, setAudioFx] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('bms_audio_fx') || 'null');
+      if (saved && typeof saved === 'object') {
+        return {
+          ...DEFAULT_AUDIO_FX, ...saved,
+          filter: { ...DEFAULT_AUDIO_FX.filter, ...(saved.filter || {}) },
+          eq: { ...DEFAULT_AUDIO_FX.eq, ...(saved.eq || {}) },
+          comp: { ...DEFAULT_AUDIO_FX.comp, ...(saved.comp || {}) },
+          echo: { ...DEFAULT_AUDIO_FX.echo, ...(saved.echo || {}) },
+        };
+      }
+    } catch { /* privacy mode */ }
+    return DEFAULT_AUDIO_FX;
+  });
+  const fxNodesRef = useRef(null); // { filter, eqLow, eqMid, eqHigh, comp, delay, feedback, echoWet }
+
   const [muteDebugAutoPlay, setMuteDebugAutoPlay] = useState(true);
   const muteDebugAutoPlayRef = useRef(true);
   const [showSettings, setShowSettings] = useState(false);
@@ -800,10 +846,29 @@ export default function BmsViewer() {
   useEffect(() => {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     audioContextRef.current = new AudioContext({ latencyHint: 'interactive' });
-    gainNodeRef.current = audioContextRef.current.createGain();
+    const ac = audioContextRef.current;
+    gainNodeRef.current = ac.createGain();
     gainNodeRef.current.gain.value = volume;
-    gainNodeRef.current.connect(audioContextRef.current.destination);
-    
+
+    // 6-3: エフェクトラック。マスターゲイン → FILTER → EQ(3band) → COMP → destination(dry)
+    //      COMP → DELAY → echoWet → destination、DELAY → feedback → DELAY (ECHO)
+    const filter = ac.createBiquadFilter();  filter.type = 'lowpass'; filter.frequency.value = 22000;
+    const eqLow = ac.createBiquadFilter();   eqLow.type = 'lowshelf';  eqLow.frequency.value = 250;  eqLow.gain.value = 0;
+    const eqMid = ac.createBiquadFilter();   eqMid.type = 'peaking';   eqMid.frequency.value = 1000; eqMid.Q.value = 0.9; eqMid.gain.value = 0;
+    const eqHigh = ac.createBiquadFilter();  eqHigh.type = 'highshelf'; eqHigh.frequency.value = 4000; eqHigh.gain.value = 0;
+    const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = 0; comp.ratio.value = 1; comp.knee.value = 30; comp.attack.value = 0.003; comp.release.value = 0.25;
+    const delay = ac.createDelay(2.0); delay.delayTime.value = DEFAULT_AUDIO_FX.echo.time;
+    const feedback = ac.createGain(); feedback.gain.value = 0;
+    const echoWet = ac.createGain(); echoWet.gain.value = 0;
+
+    gainNodeRef.current.connect(filter);
+    filter.connect(eqLow); eqLow.connect(eqMid); eqMid.connect(eqHigh); eqHigh.connect(comp);
+    comp.connect(ac.destination);                 // dry
+    comp.connect(delay); delay.connect(feedback); feedback.connect(delay); // feedback ループ
+    delay.connect(echoWet); echoWet.connect(ac.destination);               // wet
+    fxNodesRef.current = { filter, eqLow, eqMid, eqHigh, comp, delay, feedback, echoWet };
+
     const defaultHitSound = createHitSound(audioContextRef.current);
     keyHitSoundBufferRef.current = defaultHitSound;
     scratchHitSoundBufferRef.current = defaultHitSound;
@@ -1996,6 +2061,7 @@ export default function BmsViewer() {
         keyMaps={keyMaps} setKeyMaps={setKeyMaps}
         playMode={playMode} setPlayMode={setPlayMode}
         judgeOffset={judgeOffset} setJudgeOffset={setJudgeOffset} suggestJudgeOffset={sSuggestJudgeOffset}
+        audioFx={audioFx} setAudioFx={setAudioFx}
         isSeparateHitSound={isSeparateHitSound} setIsSeparateHitSound={setIsSeparateHitSound}
         tempKeySoundName={tempKeySoundName} tempScratchSoundName={tempScratchSoundName}
         // Mobile Controls

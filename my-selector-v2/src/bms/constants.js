@@ -142,5 +142,17 @@ export const BGM_MIN_DURATION = 20.0;
 // モバイル判定の境界線 (px)
 export const MOBILE_BREAKPOINT = 768;
 
+// 6-3: サウンドエフェクト(EQ / ECHO / COMP / FILTER)の初期値。
+//   マスターゲイン → FILTER → EQ(3band) → COMP → destination(dry)
+//                                              → DELAY → wetGain → destination (feedback ループ付き = ECHO)
+//   各エフェクトは常時接続し、無効時は「素通しになる値」にする(再接続によるプチノイズ回避)。
+export const DEFAULT_AUDIO_FX = {
+  enabled: false,
+  filter: { on: false, type: 'lowpass', freq: 12000 }, // type: 'lowpass' | 'highpass'
+  eq: { on: false, low: 0, mid: 0, high: 0 },          // dB (-24..+24), mid は 1kHz peaking
+  comp: { on: false, threshold: -24, ratio: 4 },        // dB / 比
+  echo: { on: false, time: 0.3, feedback: 0.35, mix: 0.25 }, // 秒 / 0..0.9 / 0..1
+};
+
 // BGAのデフォルト不透明度
 export const DEFAULT_BGA_OPACITY = 0.5;
