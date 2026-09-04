@@ -32,6 +32,24 @@ const _laneXScratch = new Array(MAX_LANES).fill(0);   // laneX[index] = 板内�
 const _laneWScratch = new Array(MAX_LANES).fill(0);   // laneW[index] = レーン幅
 const DEFAULT_LANES = LANE_LAYOUTS.SP7;
 
+// 盤面の「レーン単位数」(皿=SCRATCH_UNITS, 鍵=1.0, 隙間を加算)。renderLoop の totalU と同じ計算。
+// キャンバス幅 = boardUnits × レーン幅px + 余白、でモード別に盤面ぴったりのサイズを出す。
+function boardUnitsFor(parsedSong, is2P) {
+  let lns = parsedSong?.lanes || DEFAULT_LANES;
+  const mode = parsedSong?.mode || 'SP7';
+  if (is2P && (mode === 'SP7' || mode === 'SP5')) {
+    const keys = lns.filter(l => l.kind === 'key');
+    const scr = lns.find(l => l.kind === 'scratch');
+    lns = scr ? [...keys, scr] : keys;
+  }
+  let u = 0;
+  for (let i = 0; i < lns.length; i++) {
+    if (i > 0) u += (lns[i].side !== lns[i - 1].side ? SIDE_GAP_UNITS : LANE_GAP_UNITS);
+    u += (lns[i].kind === 'scratch' ? SCRATCH_UNITS : 1.0);
+  }
+  return u;
+}
+
 // レーンの見た目の色を返す。lane = { index, kind, side }
 function laneKeyNum(lane) { return lane.side === 0 ? lane.index : lane.index - 8; } // 1..7
 function laneNoteColor(lane, pmsColors) {
@@ -214,6 +232,11 @@ export default function BmsViewer() {
   useEffect(() => { try { localStorage.setItem('bms_bga_side_pos', bgaSidePos); } catch {} }, [bgaSidePos]);
   const pcBehindBgaRef = useRef(null);
   const pcSideBgaRef = useRef(null);
+  // レーン1本(鍵)の幅(px)。キャンバス幅をこれ×盤面単位数で決めるので、盤面ぴったりになる。
+  const [laneWidthPx, setLaneWidthPx] = useState(() => {
+    try { const v = Number(localStorage.getItem('bms_lane_width')); return v >= 20 && v <= 72 ? v : 44; } catch { return 44; }
+  });
+  useEffect(() => { try { localStorage.setItem('bms_lane_width', String(laneWidthPx)); } catch {} }, [laneWidthPx]);
 
   const audioContextRef = useRef(null);
   const gainNodeRef = useRef(null);
@@ -1732,7 +1755,7 @@ export default function BmsViewer() {
         if (i > 0) totalU += (lanesArr[i].side !== lanesArr[i - 1].side ? SIDE_GAP_UNITS : LANE_GAP_UNITS);
         totalU += (lanesArr[i].kind === 'scratch' ? SCRATCH_UNITS : 1.0);
     }
-    const KEY_W = Math.max(7, Math.min(56, (width - 24) / totalU));
+    const KEY_W = Math.max(7, Math.min(72, (width - 24) / totalU));
     const laneX = _laneXScratch, laneW = _laneWScratch;
     laneW.fill(0);
     let cx = 0;
@@ -2080,6 +2103,8 @@ export default function BmsViewer() {
   renderLoopRef.current = renderLoop;
 
   const is2P = playSide === '2P';
+  // レーン領域(キャンバス)の幅 = 盤面ぴったり。余った幅はサイドBGA等に回る。
+  const canvasBoardW = parsedSong ? Math.ceil(boardUnitsFor(parsedSong, is2P) * laneWidthPx + 28) : 460;
 
   // 子(ControlBar / SettingsModal)の React.memo を効かせるための、参照が安定したハンドラ群
   const sHandleFileSelect = useEvent(handleFileSelect);
@@ -2125,6 +2150,7 @@ export default function BmsViewer() {
         bgaBehindChart={bgaBehindChart} setBgaBehindChart={setBgaBehindChart}
         bgaSidePanel={bgaSidePanel} setBgaSidePanel={setBgaSidePanel}
         bgaSidePos={bgaSidePos} setBgaSidePos={setBgaSidePos}
+        laneWidthPx={laneWidthPx} setLaneWidthPx={setLaneWidthPx}
         isSeparateHitSound={isSeparateHitSound} setIsSeparateHitSound={setIsSeparateHitSound}
         tempKeySoundName={tempKeySoundName} tempScratchSoundName={tempScratchSoundName}
         // Mobile Controls
@@ -2164,9 +2190,9 @@ export default function BmsViewer() {
 
          {/* PCレイアウト */}
          {!isMobile && (() => {
-            // サイドBGA (レーンの真横)。左右どちらか一方のみ表示。
+            // サイドBGA (レーンの真横)。左右どちらか一方のみ表示。残り幅を全部使う(flex-1)。
             const sideBga = bgaSidePanel ? (
-                <div className="relative z-10 shrink-0 w-[20vw] max-w-[360px] min-w-[160px] bg-black border-r border-blue-900/30 overflow-hidden flex items-center justify-center">
+                <div className="relative z-10 flex-1 min-w-[140px] bg-black border-r border-blue-900/30 overflow-hidden flex items-center justify-center">
                     <BgaStage ref={pcSideBgaRef} backBga={currentBackBga} layerBga={currentLayerBga} poorBga={currentPoorBga}
                         showMiss={showMissLayer} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} opacity={bgaOpacity} fit="contain" />
                     {!currentBackBga && !currentLayerBga && <div className="text-blue-900/40 text-xs font-bold tracking-widest pointer-events-none">BGA</div>}
@@ -2208,9 +2234,10 @@ export default function BmsViewer() {
 
                      {bgaSidePos === 'left' && sideBga}
 
-                     {/* レーン (Canvas) */}
-                     <div className={`relative z-10 flex-1 min-w-0 flex justify-center overflow-hidden ${bgaBehindChart ? '' : 'bg-black'}`}>
-                        <canvas ref={canvasRef} className="relative z-10 h-full w-full max-w-[460px] shadow-[0_0_50px_rgba(0,0,0,0.5)]" />
+                     {/* レーン (Canvas) = 盤面ぴったりの幅。サイドBGA表示時はこの幅に固定し、残りをBGAへ。 */}
+                     <div className={`relative z-10 min-w-0 flex justify-center overflow-hidden ${bgaSidePanel ? 'flex-none' : 'flex-1'} ${bgaBehindChart ? '' : 'bg-black'}`}
+                          style={bgaSidePanel ? { width: canvasBoardW, maxWidth: '100%' } : undefined}>
+                        <canvas ref={canvasRef} className="relative z-10 h-full w-full shadow-[0_0_50px_rgba(0,0,0,0.5)]" style={{ maxWidth: canvasBoardW }} />
                         {!parsedSong && <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-blue-900/20 z-20"><div className="text-center animate-pulse"><FolderOpen size={64} className="mx-auto mb-4 opacity-50"/><p className="text-xl font-bold tracking-widest">DROP FILE HERE</p></div></div>}
                      </div>
 

@@ -214,6 +214,7 @@ const SettingsModal = ({
     bgaBehindChart, setBgaBehindChart,
     bgaSidePanel, setBgaSidePanel,
     bgaSidePos, setBgaSidePos,
+    laneWidthPx, setLaneWidthPx,
     // ファイル操作
     handleFileSelect, handleZipSelect, bmsList, selectedBmsIndex, setSelectedBmsIndex,
     hiSpeed, setHiSpeed, bgaOpacity, setBgaOpacity,
@@ -324,6 +325,17 @@ const SettingsModal = ({
                                 </div>
                                 <input type="range" min="0" max="1" step="0.05" value={bgaOpacity} onChange={e => setBgaOpacity(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"/>
                             </div>
+
+                            {!isMobile && setLaneWidthPx && (
+                                <div>
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="text-blue-300">レーン幅 (PC)</span>
+                                        <span>{laneWidthPx}px</span>
+                                    </div>
+                                    <input type="range" min="20" max="72" step="1" value={laneWidthPx} onChange={e => setLaneWidthPx(Number(e.target.value))} className="w-full accent-blue-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"/>
+                                    <p className="text-[10px] text-gray-400 mt-1">※レーン領域の幅が変わります。余った幅はサイドBGA等に使われます。</p>
+                                </div>
+                            )}
 
                             <div className="pt-2 border-t border-blue-900/30 grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
