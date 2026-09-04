@@ -211,6 +211,9 @@ const SettingsModal = ({
     judgeOffset, setJudgeOffset, suggestJudgeOffset,
     audioFx, setAudioFx,
     missLayerEnabled, setMissLayerEnabled,
+    bgaBehindChart, setBgaBehindChart,
+    bgaSidePanel, setBgaSidePanel,
+    bgaSidePos, setBgaSidePos,
     // ファイル操作
     handleFileSelect, handleZipSelect, bmsList, selectedBmsIndex, setSelectedBmsIndex,
     hiSpeed, setHiSpeed, bgaOpacity, setBgaOpacity,
@@ -287,6 +290,32 @@ const SettingsModal = ({
                             <p className="text-[10px] text-gray-400 -mt-2 leading-relaxed">
                                 オート: <span className="font-mono">M</span> キーで発動 ／ 自己プレイ: 空POOR以外の POOR・BAD で発動
                             </p>
+
+                            {!isMobile && (
+                                <div className="pt-2 border-t border-blue-900/30 space-y-2">
+                                    <div className="text-[11px] font-bold text-blue-300">PC の BGA 表示位置</div>
+                                    <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer border border-transparent hover:border-blue-500/30">
+                                        <span className="text-sm">レーン背面に BGA を表示</span>
+                                        <input type="checkbox" checked={!!bgaBehindChart} onChange={e=>setBgaBehindChart(e.target.checked)} className="accent-blue-500 w-5 h-5"/>
+                                    </label>
+                                    <p className="text-[10px] text-gray-400 -mt-1 leading-relaxed">
+                                        ※ 「ボード全体の背景 (黒)」を下げると見えやすくなります
+                                    </p>
+                                    <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer border border-transparent hover:border-blue-500/30">
+                                        <span className="text-sm">サイド BGA パネル (IIDX 風)</span>
+                                        <input type="checkbox" checked={!!bgaSidePanel} onChange={e=>setBgaSidePanel(e.target.checked)} className="accent-blue-500 w-5 h-5"/>
+                                    </label>
+                                    <div className={`flex gap-2 ${bgaSidePanel ? '' : 'opacity-40 pointer-events-none'}`}>
+                                        {['left', 'right'].map(p => (
+                                            <button key={p} onClick={() => setBgaSidePos(p)}
+                                                className={`flex-1 text-[11px] font-bold py-1.5 rounded border transition ${bgaSidePos === p
+                                                    ? 'bg-orange-600 border-orange-400 text-white' : 'bg-black/40 border-gray-700 text-gray-400'}`}>
+                                                {p === 'left' ? '左サイド' : '右サイド'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                             
                             <div>
                                 <div className="flex justify-between text-sm mb-1">
