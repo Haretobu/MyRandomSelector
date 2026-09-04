@@ -1,7 +1,7 @@
 // src/bms/components/SettingsModal.jsx
 import React, { memo, useState, useEffect } from 'react';
 import { Settings, X, ChevronsUp, RotateCw, Film, Flag, Music, Layers, Speaker, EyeOff, FileX, Keyboard, FolderOpen, FileArchive, ChevronDown, Gamepad2, RotateCcw, SlidersHorizontal } from 'lucide-react';
-import { VISIBILITY_MODES, LANE_LAYOUTS, MODE_LABELS, DEFAULT_KEYMAPS, keyCodeLabel } from '../constants';
+import { VISIBILITY_MODES, LANE_LAYOUTS, MODE_LABELS, DEFAULT_KEYMAPS, DEFAULT_AUDIO_FX, keyCodeLabel } from '../constants';
 
 // キー割り当て設定(6-1-d)。表示・保存のみ。手動プレイの判定入力接続は P6-2。
 function KeyMapSection({ mode, keyMaps, setKeyMaps }) {
@@ -77,38 +77,44 @@ function KeyMapSection({ mode, keyMaps, setKeyMaps }) {
     );
 }
 
-// 6-3: サウンドエフェクト(EQ / ECHO / COMP / FILTER)。
+// 6-3: サウンドエフェクト。子コンポーネントはモジュールスコープに置く
+//   (レンダーごとに再生成すると <input range> がドラッグ中に作り直され、ホールド追従できなくなるため)。
+const FxRow = ({ label, children }) => (
+    <div className="flex items-center gap-2">
+        <span className="text-[10px] text-blue-300 w-14 shrink-0">{label}</span>
+        {children}
+    </div>
+);
+const FxSlider = ({ min, max, step, value, onChange, fmt }) => (
+    <>
+        <input type="range" min={min} max={max} step={step} value={value}
+            onChange={e => onChange(Number(e.target.value))}
+            className="flex-1 accent-orange-500 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
+        <span className="text-[10px] font-mono w-12 text-right">{fmt ? fmt(value) : value}</span>
+    </>
+);
+const FxSubHead = ({ name, checked, disabled, onChange }) => (
+    <label className="flex items-center justify-between cursor-pointer mt-2 mb-1">
+        <span className="text-[11px] font-bold text-blue-200">{name}</span>
+        <input type="checkbox" checked={checked} disabled={disabled}
+            onChange={e => onChange(e.target.checked)} className="accent-orange-500 w-4 h-4" />
+    </label>
+);
+
 function AudioFxSection({ audioFx, setAudioFx }) {
     const fx = audioFx || {};
     const patch = (k, v) => setAudioFx({ ...fx, [k]: { ...(fx[k] || {}), ...v } });
     const master = !!fx.enabled;
 
-    const Row = ({ label, children }) => (
-        <div className="flex items-center gap-2">
-            <span className="text-[10px] text-blue-300 w-14 shrink-0">{label}</span>
-            {children}
-        </div>
-    );
-    const Slider = ({ min, max, step, value, onChange, fmt }) => (
-        <>
-            <input type="range" min={min} max={max} step={step} value={value}
-                onChange={e => onChange(Number(e.target.value))}
-                className="flex-1 accent-orange-500 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
-            <span className="text-[10px] font-mono w-12 text-right">{fmt ? fmt(value) : value}</span>
-        </>
-    );
-    const SubHead = ({ k, name }) => (
-        <label className="flex items-center justify-between cursor-pointer mt-2 mb-1">
-            <span className="text-[11px] font-bold text-blue-200">{name}</span>
-            <input type="checkbox" checked={!!fx[k]?.on} disabled={!master}
-                onChange={e => patch(k, { on: e.target.checked })} className="accent-orange-500 w-4 h-4" />
-        </label>
-    );
-
     return (
         <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
-            <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center gap-2">
-                <SlidersHorizontal size={14} /> サウンドエフェクト
+            <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2"><SlidersHorizontal size={14} /> サウンドエフェクト</span>
+                <button
+                    onClick={() => setAudioFx(JSON.parse(JSON.stringify(DEFAULT_AUDIO_FX)))}
+                    className="text-[10px] font-bold text-blue-300 hover:text-white flex items-center gap-1 bg-black/40 border border-blue-900/50 rounded px-2 py-1 transition">
+                    <RotateCcw size={11} /> リセット
+                </button>
             </div>
             <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer border border-transparent hover:border-blue-500/30">
                 <span className="text-sm">エフェクトを有効にする（EQ / ECHO / COMP / FILTER）</span>
@@ -117,9 +123,9 @@ function AudioFxSection({ audioFx, setAudioFx }) {
 
             <div className={`mt-2 space-y-1 ${master ? '' : 'opacity-40 pointer-events-none'}`}>
                 {/* FILTER */}
-                <SubHead k="filter" name="FILTER" />
+                <FxSubHead name="FILTER" checked={!!fx.filter?.on} disabled={!master} onChange={v => patch('filter', { on: v })} />
                 <div className="bg-black/20 p-2 rounded space-y-1.5">
-                    <Row label="種類">
+                    <FxRow label="種類">
                         <div className="flex gap-1 flex-1">
                             {['lowpass', 'highpass'].map(t => (
                                 <button key={t} onClick={() => patch('filter', { type: t })}
@@ -129,52 +135,52 @@ function AudioFxSection({ audioFx, setAudioFx }) {
                                 </button>
                             ))}
                         </div>
-                    </Row>
-                    <Row label="周波数">
-                        <Slider min={40} max={18000} step={10} value={fx.filter?.freq ?? 12000}
+                    </FxRow>
+                    <FxRow label="周波数">
+                        <FxSlider min={40} max={18000} step={10} value={fx.filter?.freq ?? 12000}
                             onChange={v => patch('filter', { freq: v })} fmt={v => `${(v / 1000).toFixed(1)}k`} />
-                    </Row>
+                    </FxRow>
                 </div>
 
                 {/* EQ */}
-                <SubHead k="eq" name="EQ (3BAND)" />
+                <FxSubHead name="EQ (3BAND)" checked={!!fx.eq?.on} disabled={!master} onChange={v => patch('eq', { on: v })} />
                 <div className="bg-black/20 p-2 rounded space-y-1.5">
                     {[['low', 'LOW'], ['mid', 'MID'], ['high', 'HIGH']].map(([k, lbl]) => (
-                        <Row key={k} label={lbl}>
-                            <Slider min={-18} max={18} step={1} value={fx.eq?.[k] ?? 0}
+                        <FxRow key={k} label={lbl}>
+                            <FxSlider min={-18} max={18} step={1} value={fx.eq?.[k] ?? 0}
                                 onChange={v => patch('eq', { [k]: v })} fmt={v => `${v > 0 ? '+' : ''}${v}dB`} />
-                        </Row>
+                        </FxRow>
                     ))}
                 </div>
 
                 {/* COMP */}
-                <SubHead k="comp" name="COMPRESSOR" />
+                <FxSubHead name="COMPRESSOR" checked={!!fx.comp?.on} disabled={!master} onChange={v => patch('comp', { on: v })} />
                 <div className="bg-black/20 p-2 rounded space-y-1.5">
-                    <Row label="Thresh">
-                        <Slider min={-60} max={0} step={1} value={fx.comp?.threshold ?? -24}
+                    <FxRow label="Thresh">
+                        <FxSlider min={-60} max={0} step={1} value={fx.comp?.threshold ?? -24}
                             onChange={v => patch('comp', { threshold: v })} fmt={v => `${v}dB`} />
-                    </Row>
-                    <Row label="Ratio">
-                        <Slider min={1} max={20} step={0.5} value={fx.comp?.ratio ?? 4}
+                    </FxRow>
+                    <FxRow label="Ratio">
+                        <FxSlider min={1} max={20} step={0.5} value={fx.comp?.ratio ?? 4}
                             onChange={v => patch('comp', { ratio: v })} fmt={v => `${v}:1`} />
-                    </Row>
+                    </FxRow>
                 </div>
 
                 {/* ECHO */}
-                <SubHead k="echo" name="ECHO (DELAY)" />
+                <FxSubHead name="ECHO (DELAY)" checked={!!fx.echo?.on} disabled={!master} onChange={v => patch('echo', { on: v })} />
                 <div className="bg-black/20 p-2 rounded space-y-1.5">
-                    <Row label="Time">
-                        <Slider min={0.05} max={1.2} step={0.01} value={fx.echo?.time ?? 0.3}
+                    <FxRow label="Time">
+                        <FxSlider min={0.05} max={1.2} step={0.01} value={fx.echo?.time ?? 0.3}
                             onChange={v => patch('echo', { time: v })} fmt={v => `${Math.round(v * 1000)}ms`} />
-                    </Row>
-                    <Row label="Feedback">
-                        <Slider min={0} max={0.9} step={0.01} value={fx.echo?.feedback ?? 0.35}
+                    </FxRow>
+                    <FxRow label="Feedback">
+                        <FxSlider min={0} max={0.9} step={0.01} value={fx.echo?.feedback ?? 0.35}
                             onChange={v => patch('echo', { feedback: v })} fmt={v => `${Math.round(v * 100)}%`} />
-                    </Row>
-                    <Row label="Mix">
-                        <Slider min={0} max={1} step={0.01} value={fx.echo?.mix ?? 0.25}
+                    </FxRow>
+                    <FxRow label="Mix">
+                        <FxSlider min={0} max={1} step={0.01} value={fx.echo?.mix ?? 0.25}
                             onChange={v => patch('echo', { mix: v })} fmt={v => `${Math.round(v * 100)}%`} />
-                    </Row>
+                    </FxRow>
                 </div>
             </div>
             <div className="text-[10px] text-blue-500/60 mt-2 leading-relaxed">

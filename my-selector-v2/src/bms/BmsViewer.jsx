@@ -805,6 +805,9 @@ export default function BmsViewer() {
                             src.connect(gain);
                             gain.connect(gainNodeRef.current);
                             src.onended = () => {
+                                // ★リーク対策: 終了したノードは必ず切断する。
+                                //   GainNode は AudioBufferSourceNode と違い自動解放されず、放置するとマスターに繋がり続ける。
+                                try { src.disconnect(); gain.disconnect(); } catch (e) {}
                                 activeDebugSoundsRef.current.delete(src);
                             };
                             activeDebugSoundsRef.current.add(src);
@@ -1210,10 +1213,17 @@ export default function BmsViewer() {
                     if (absolutePlayTime >= currentTime) src.start(absolutePlayTime);
                     else { const offset = currentTime - absolutePlayTime;
                     if (offset < buffer.duration) src.start(currentTime, offset); }
-                    
+
                     const endTime = absolutePlayTime + buffer.duration;
                     const nodeData = { node: src, startTime: absolutePlayTime, endTime: endTime, isLong: isLong, id: item.id };
                     activeNodesRef.current.push(nodeData);
+                    // ★リーク対策: 自然終了したノードは切断し、activeNodesRef からも除去する。
+                    src.onended = () => {
+                        try { src.disconnect(); } catch (e) {}
+                        const a = activeNodesRef.current;
+                        const k = a.indexOf(nodeData);
+                        if (k !== -1) a.splice(k, 1);
+                    };
                 }
 
                 if (shouldPlay || showMutedMonitorRef.current) {
@@ -1238,10 +1248,12 @@ export default function BmsViewer() {
                if (buffer) {
                    const src = ctx.createBufferSource();
                    src.buffer = buffer;
-                   const gain = ctx.createGain(); 
+                   const gain = ctx.createGain();
                    gain.gain.value = 0.6 * hitSoundVolumeRef.current;
-                   src.connect(gain); 
-                   gain.connect(gainNodeRef.current); 
+                   src.connect(gain);
+                   gain.connect(gainNodeRef.current);
+                   // ★リーク対策: 打鍵音の src / gain を終了時に切断(GainNode は自動解放されない)。
+                   src.onended = () => { try { src.disconnect(); gain.disconnect(); } catch (e) {} };
                    src.start(hitTime);
                }
           }

@@ -55,7 +55,7 @@ const LogPanel = forwardRef(({ backingTracks, activeShortSoundsRef, lastPlayedSo
                                 <span className={`w-1.5 h-1.5 rounded-full ${s.isAborted ? 'bg-red-500' : (s.isSkipped ? 'bg-cyan-500' : (s.isMuted ? 'bg-gray-600' : 'bg-green-500'))} shrink-0 shadow-[0_0_5px_currentColor]`}/>{s.name}
                             </div>
                             <div className="h-[4px] bg-[#1e293b] w-full mt-[1px] overflow-hidden rounded-full relative">
-                                <div className={`h-full absolute left-0 top-0 ${s.isAborted ? 'bg-red-500' : (s.isSkipped ? 'bg-cyan-400' : (s.isMuted ? 'bg-gray-500' : 'bg-green-400'))}`} ref={el => { if(el) longAudioProgressRefs.current.set(s.id, el); }} style={{width: '0%'}} />
+                                <div className={`h-full absolute left-0 top-0 ${s.isAborted ? 'bg-red-500' : (s.isSkipped ? 'bg-cyan-400' : (s.isMuted ? 'bg-gray-500' : 'bg-green-400'))}`} ref={el => { if (el) longAudioProgressRefs.current.set(s.id, el); else longAudioProgressRefs.current.delete(s.id); }} style={{width: '0%'}} />
                             </div>
                         </div>
                     ))}
