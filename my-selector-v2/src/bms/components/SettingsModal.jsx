@@ -227,17 +227,46 @@ const SettingsModal = ({
     isSeparateHitSound, setIsSeparateHitSound,
     tempKeySoundName, tempScratchSoundName
 }) => {
-    if (!showSettings) return null;
+    // PC はタブ付き右ドロワー。モバイルは従来どおり全画面モーダル(タブなし・1画面スクロール)。
+    const [tab, setTab] = useState('view');
+    if (!showSettings && isMobile) return null;
 
-    return (
-        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center backdrop-blur-sm" onClick={() => setShowSettings(false)}>
-            <div className="bg-[#080808] w-full max-w-[700px] h-[90vh] md:h-auto md:max-h-[90vh] border-2 border-blue-900/50 shadow-2xl p-4 md:p-6 relative text-blue-100 flex flex-col rounded-xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-4 shrink-0">
-                     <div className="text-xl md:text-2xl font-bold text-blue-400 flex items-center gap-2"><Settings /> 設定 & メニュー</div>
-                    <button onClick={() => setShowSettings(false)} className="text-blue-400 hover:text-white transition p-2 bg-white/10 rounded-full"><X size={24} /></button>
-                </div>
+    const T = isMobile ? null : tab;   // null = 全表示(モバイル)
+    const showView = !T || T === 'view';
+    const showPlay = !T || T === 'play';
+    const showInput = !T || T === 'input';
+    const showSound = !T || T === 'sound';
+    const showSystem = !T || T === 'system';
 
-                <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-blue-900 pr-2 space-y-6">
+    const TABS = [
+        { id: 'view', label: '表示' },
+        { id: 'play', label: 'プレイ' },
+        { id: 'input', label: '入力' },
+        { id: 'sound', label: '音' },
+        { id: 'system', label: 'システム' },
+    ];
+
+    const header = (
+        <div className="flex justify-between items-center mb-3 shrink-0">
+            <div className="text-lg md:text-xl font-bold text-blue-400 flex items-center gap-2"><Settings size={18} /> 設定</div>
+            <button onClick={() => setShowSettings(false)} className="text-blue-400 hover:text-white transition p-1.5 bg-white/10 rounded-full"><X size={20} /></button>
+        </div>
+    );
+    const tabBar = !isMobile && (
+        <div className="flex gap-1 mb-3 shrink-0">
+            {TABS.map(t => (
+                <button key={t.id} onClick={() => setTab(t.id)}
+                    className={`flex-1 text-[11px] font-bold py-1.5 rounded transition ${tab === t.id
+                        ? 'bg-blue-600/30 text-white border-b-2 border-blue-400'
+                        : 'text-blue-400/60 hover:text-blue-200 hover:bg-white/5'}`}>
+                    {t.label}
+                </button>
+            ))}
+        </div>
+    );
+
+    const content = (
+                <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-blue-900 pr-1 space-y-4">
                     
                     {/* スマホ用: ファイル読み込み・基本設定 */}
                     {isMobile && (
@@ -274,7 +303,7 @@ const SettingsModal = ({
                     )}
 
                     {/* 表示・BGA設定 */}
-                    <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
+                    <div hidden={!showView} className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
                         <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center gap-2">
                             <Film size={14} /> 表示・BGA設定
                         </div>
@@ -359,7 +388,7 @@ const SettingsModal = ({
                     </div>
 
                     {/* レーンカバー設定 (共通) */}
-                    <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50 relative">
+                    <div hidden={!showView} className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50 relative">
                         <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center gap-2">
                             <ChevronsUp size={14} /> 譜面の表示エリア (LANE COVER)
                         </div>
@@ -412,7 +441,7 @@ const SettingsModal = ({
                     </div>
 
                     {/* オートHI-SPEED / グリーンナンバー固定 (共通) */}
-                    <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
+                    <div hidden={!showView} className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
                         <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center gap-2">
                             <ChevronsUp size={14} /> HI-SPEED (グリーンナンバー固定)
                         </div>
@@ -434,7 +463,7 @@ const SettingsModal = ({
                     </div>
 
                     {/* レーンミュート (共通・モード対応) */}
-                    <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
+                    <div hidden={!showPlay} className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
                         <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center gap-2">
                             <Speaker size={14} /> レーンミュート
                         </div>
@@ -463,12 +492,12 @@ const SettingsModal = ({
                     </div>
 
                     {/* キー割り当て (PC のみ・モード対応) */}
-                    {!isMobile && (
+                    {!isMobile && showInput && (
                         <KeyMapSection mode={parsedSong?.mode || 'SP7'} keyMaps={keyMaps} setKeyMaps={setKeyMaps} />
                     )}
 
-                    {/* PC用設定 */}
-                    <div className="flex flex-col md:flex-row gap-4 items-start">
+                    {/* PC用設定 (プレイサイド / レーンオプション) */}
+                    <div hidden={!showPlay} className="flex flex-col md:flex-row gap-4 items-start">
                          {(() => {
                              const sideLocked = parsedSong && parsedSong.mode !== 'SP7' && parsedSong.mode !== 'SP5';
                              return (
@@ -545,7 +574,7 @@ const SettingsModal = ({
                     </div>
 
                     {/* プレイモード (PC のみ・6-2) */}
-                    {!isMobile && (
+                    {!isMobile && showPlay && (
                         <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
                             <div className="text-xs text-blue-400 mb-2 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center gap-2">
                                 <Gamepad2 size={14} /> プレイモード
@@ -602,10 +631,10 @@ const SettingsModal = ({
                     )}
 
                     {/* サウンドエフェクト (共通・6-3) */}
-                    <AudioFxSection audioFx={audioFx} setAudioFx={setAudioFx} />
+                    <div hidden={!showSound}><AudioFxSection audioFx={audioFx} setAudioFx={setAudioFx} /></div>
 
                     {/* 詳細設定1 (システム・デバッグ) */}
-                    <details className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50 mt-2 group" open={!isMobile}>
+                    <details hidden={!showSystem} className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50 mt-2 group" open={!isMobile}>
                         <summary className="text-xs text-blue-400 mb-2 font-bold uppercase tracking-wider flex items-center justify-between cursor-pointer list-none">
                             <span>詳細設定1 (システム・デバッグ)</span>
                             <ChevronDown size={16} className="transition-transform group-open:rotate-180" />
@@ -661,7 +690,7 @@ const SettingsModal = ({
                     </details>
 
                     {/* 詳細設定2 (カスタム打鍵音設定) */}
-                    <details className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50 mt-2 group" open={!isMobile}>
+                    <details hidden={!showSound} className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50 mt-2 group" open={!isMobile}>
                         <summary className="text-xs text-blue-400 mb-2 font-bold uppercase tracking-wider flex items-center justify-between cursor-pointer list-none">
                             <span>詳細設定2 (カスタム打鍵音)</span>
                             <ChevronDown size={16} className="transition-transform group-open:rotate-180" />
@@ -730,7 +759,26 @@ const SettingsModal = ({
                         </div>
                     </details>
                 </div>
+    );
+
+    if (isMobile) {
+        return (
+            <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center backdrop-blur-sm" onClick={() => setShowSettings(false)}>
+                <div className="bg-[#080808] w-full max-w-[700px] h-[90vh] border-2 border-blue-900/50 shadow-2xl p-4 relative text-blue-100 flex flex-col rounded-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+                    {header}
+                    {content}
+                </div>
             </div>
+        );
+    }
+
+    // PC: 右ドロワー。開いている間は BmsViewer 側でアプリを左に寄せる(paddingRight)。
+    return (
+        <div className="fixed top-0 right-0 h-full z-[95] w-[min(380px,42vw)] bg-[#080808] border-l-2 border-blue-900/50 shadow-2xl p-3 text-blue-100 flex flex-col transition-transform duration-300 ease-out"
+             style={{ transform: showSettings ? 'translateX(0)' : 'translateX(100%)' }}>
+            {header}
+            {tabBar}
+            {showSettings ? content : null}
         </div>
     );
 };

@@ -83,7 +83,7 @@ const InfoPanel = forwardRef(({
     return (
         <div className="w-64 flex flex-col border-r border-blue-900/30 bg-[#0a0a0a] p-2 gap-2 shrink-0">
             {/* 設定ボタンエリア */}
-            <div className="bg-[#112233] border border-blue-500/30 text-blue-100 p-2 rounded flex items-center gap-2 text-xs font-bold shrink-0 cursor-pointer hover:bg-[#1e3a5f] transition shadow-sm group" onClick={() => setShowSettings(true)}>
+            <div className="bg-[#112233] border border-blue-500/30 text-blue-100 p-2 rounded flex items-center gap-2 text-xs font-bold shrink-0 cursor-pointer hover:bg-[#1e3a5f] transition shadow-sm group" onClick={() => setShowSettings(v => !v)}>
                  <Settings size={14} className="text-blue-400 group-hover:rotate-90 transition-transform duration-500"/>
                   <div className="flex-1 flex flex-col"><span className="text-blue-200 group-hover:text-white transition-colors">{playOption}</span><span className="text-[8px] text-blue-500/70 font-mono tracking-tighter mt-0.5">設定を開く</span></div>
             </div>

@@ -2124,7 +2124,9 @@ export default function BmsViewer() {
   const sSuggestJudgeOffset = useEvent(suggestJudgeOffset);
 
   return (
-    <div className={`flex flex-col h-screen bg-neutral-950 text-white font-sans overflow-hidden ${isDragOver ? 'ring-4 ring-blue-500' : ''}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+    <div className={`flex flex-col h-screen bg-neutral-950 text-white font-sans overflow-hidden transition-[padding] duration-300 ease-out ${isDragOver ? 'ring-4 ring-blue-500' : ''}`}
+      style={{ paddingRight: (showSettings && !isMobile) ? 'min(380px, 42vw)' : 0 }}
+      onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
       
       <SettingsModal
         showSettings={showSettings} setShowSettings={setShowSettings} isMobile={isMobile}
