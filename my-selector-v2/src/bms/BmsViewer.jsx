@@ -89,6 +89,17 @@ export default function BmsViewer() {
   const [stageFileImage, setStageFileImage] = useState(null);
 
   const [showMissLayer, setShowMissLayer] = useState(false);
+  const showMissLayerRef = useRef(false);
+  useEffect(() => { showMissLayerRef.current = showMissLayer; }, [showMissLayer]);
+  // ミスレイヤー(POOR BGA)の有効/無効。オート=Mキー / 自己プレイ=空POOR以外のPOOR・BAD で発動。localStorage 永続。
+  const [missLayerEnabled, setMissLayerEnabled] = useState(() => {
+    try { const v = localStorage.getItem('bms_miss_layer'); return v === null ? true : v === '1'; } catch { return true; }
+  });
+  const missLayerEnabledRef = useRef(true);
+  useEffect(() => {
+    missLayerEnabledRef.current = missLayerEnabled;
+    try { localStorage.setItem('bms_miss_layer', missLayerEnabled ? '1' : '0'); } catch { /* privacy mode */ }
+  }, [missLayerEnabled]);
   const [currentMeasure, setCurrentMeasure] = useState(0);
   const [playSide, setPlaySide] = useState('1P');
   const [playOption, setPlayOption] = useState('OFF');    // 1P / 左サイド / 9K 全体
@@ -463,14 +474,20 @@ export default function BmsViewer() {
   };
   const clearActiveLanes = () => { for(let i=0; i<MAX_LANES; i++) { if (laneVisualRef.current[i] !== false) { laneVisualRef.current[i] = false; setLaneActive(i, false); } } };
 
+  // ミスレイヤー(POOR BGA)を一時表示する。コンボには触れない。連続ミスでは setState せずタイマーだけ延長。
+  const flashMissLayer = () => {
+      if (!missLayerEnabledRef.current) return;
+      if (missLayerTimerRef.current) clearTimeout(missLayerTimerRef.current);
+      if (!showMissLayerRef.current) setShowMissLayer(true);
+      missLayerTimerRef.current = setTimeout(() => { setShowMissLayer(false); }, 500);
+  };
+
+  // オートプレイ用: M キーで「ミス」をシミュレート(コンボ0 + ミスレイヤー)。
   const triggerMiss = () => {
+      if (!missLayerEnabledRef.current) return;
       comboRef.current = 0;
       setCombo(0);
-      setShowMissLayer(true);
-      if (missLayerTimerRef.current) clearTimeout(missLayerTimerRef.current);
-      missLayerTimerRef.current = setTimeout(() => {
-          setShowMissLayer(false);
-      }, 500);
+      flashMissLayer();
   };
 
   // ===== 6-2 判定 =====
@@ -507,7 +524,8 @@ export default function BmsViewer() {
           else if (kind === 'gr') j.exScore += 1;
       } else if (kind === 'bd' || kind === 'poor') {
           comboRef.current = 0;
-      } // epoor(空POOR) はコンボ非切断
+          flashMissLayer(); // 自己プレイ: 空POOR以外の POOR / BAD でミスレイヤー
+      } // epoor(空POOR) はコンボ非切断・ミスレイヤーなし
       j.combo = comboRef.current;
       if ((kind === 'gr' || kind === 'gd' || kind === 'bd') && deltaMs !== 0) {
           if (deltaMs < 0) j.fast++; else j.slow++;
@@ -2074,6 +2092,7 @@ export default function BmsViewer() {
         playMode={playMode} setPlayMode={setPlayMode}
         judgeOffset={judgeOffset} setJudgeOffset={setJudgeOffset} suggestJudgeOffset={sSuggestJudgeOffset}
         audioFx={audioFx} setAudioFx={setAudioFx}
+        missLayerEnabled={missLayerEnabled} setMissLayerEnabled={setMissLayerEnabled}
         isSeparateHitSound={isSeparateHitSound} setIsSeparateHitSound={setIsSeparateHitSound}
         tempKeySoundName={tempKeySoundName} tempScratchSoundName={tempScratchSoundName}
         // Mobile Controls

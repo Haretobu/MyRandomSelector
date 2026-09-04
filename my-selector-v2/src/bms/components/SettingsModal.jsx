@@ -210,6 +210,7 @@ const SettingsModal = ({
     playMode, setPlayMode,
     judgeOffset, setJudgeOffset, suggestJudgeOffset,
     audioFx, setAudioFx,
+    missLayerEnabled, setMissLayerEnabled,
     // ファイル操作
     handleFileSelect, handleZipSelect, bmsList, selectedBmsIndex, setSelectedBmsIndex,
     hiSpeed, setHiSpeed, bgaOpacity, setBgaOpacity,
@@ -278,6 +279,14 @@ const SettingsModal = ({
                                 <span className="text-sm">BGA動画再生 (重い場合OFF)</span>
                                 <input type="checkbox" checked={playBgaVideo} onChange={e=>setPlayBgaVideo(e.target.checked)} disabled={!hasVideo} className="accent-blue-500 w-5 h-5"/>
                             </label>
+
+                            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer border border-transparent hover:border-blue-500/30">
+                                <span className="text-sm">ミスレイヤー (POOR BGA) を表示</span>
+                                <input type="checkbox" checked={!!missLayerEnabled} onChange={e=>setMissLayerEnabled(e.target.checked)} className="accent-blue-500 w-5 h-5"/>
+                            </label>
+                            <p className="text-[10px] text-gray-400 -mt-2 leading-relaxed">
+                                オート: <span className="font-mono">M</span> キーで発動 ／ 自己プレイ: 空POOR以外の POOR・BAD で発動
+                            </p>
                             
                             <div>
                                 <div className="flex justify-between text-sm mb-1">
