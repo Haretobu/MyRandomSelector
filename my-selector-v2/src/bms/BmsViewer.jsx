@@ -2162,17 +2162,18 @@ export default function BmsViewer() {
              </div>
          )}
 
-         {/* PCレイアウト: 4カラム構成 */}
-         {!isMobile && (
+         {/* PCレイアウト */}
+         {!isMobile && (() => {
+            // サイドBGA (レーンの真横)。左右どちらか一方のみ表示。
+            const sideBga = bgaSidePanel ? (
+                <div className="relative z-10 shrink-0 w-[20vw] max-w-[360px] min-w-[160px] bg-black border-r border-blue-900/30 overflow-hidden flex items-center justify-center">
+                    <BgaStage ref={pcSideBgaRef} backBga={currentBackBga} layerBga={currentLayerBga} poorBga={currentPoorBga}
+                        showMiss={showMissLayer} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} opacity={bgaOpacity} fit="contain" />
+                    {!currentBackBga && !currentLayerBga && <div className="text-blue-900/40 text-xs font-bold tracking-widest pointer-events-none">BGA</div>}
+                </div>
+            ) : null;
+            return (
              <div className="flex w-full h-full">
-                 {/* サイドBGA (左) */}
-                 {bgaSidePanel && bgaSidePos === 'left' && (
-                     <div className="relative shrink-0 w-[22vw] max-w-[420px] min-w-[200px] bg-black border-r border-blue-900/30 overflow-hidden">
-                         <BgaStage ref={pcSideBgaRef} backBga={currentBackBga} layerBga={currentLayerBga} poorBga={currentPoorBga}
-                             showMiss={showMissLayer} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} opacity={bgaOpacity} />
-                         {!currentBackBga && !currentLayerBga && <div className="absolute inset-0 flex items-center justify-center text-blue-900/40 text-xs font-bold tracking-widest pointer-events-none">BGA</div>}
-                     </div>
-                 )}
                  {/* 左: コントローラー */}
                  <ControllerPanel
                     ref={controllerPanelRef}
@@ -2182,40 +2183,40 @@ export default function BmsViewer() {
                     keyMap={keyMaps[parsedSong?.mode] || keyMaps.SP7}
                  />
 
-                 {/* 中央左: 情報・BGA */}
-                 <InfoPanel
-                    ref={infoPanelRef}
-                    setShowSettings={setShowSettings}
-                    playOption={(parsedSong?.mode === 'DP14' || parsedSong?.mode === 'DP10')
-                        ? `${playOption}/${playOption2}${dpFlip ? ' F' : ''}`
-                        : playOption}
-                    currentBackBga={currentBackBga} currentLayerBga={currentLayerBga} currentPoorBga={currentPoorBga}
-                    showMissLayer={showMissLayer} isPlaying={isPlaying}
-                    playBgaVideo={playBgaVideo} readyAnimState={readyAnimState}
-                    currentMeasureLines={currentMeasureLines} totalNotes={totalNotes}
-                 />
+                 {/* 中央ゾーン: 情報 + (サイドBGA) + レーン。この帯全体が「レーン背面BGA」の範囲。 */}
+                 <div className="relative flex-1 flex min-w-0 border-r border-blue-900/30">
+                     {bgaBehindChart && (
+                         <div className="absolute inset-0 z-0 bg-black pointer-events-none">
+                             <BgaStage ref={pcBehindBgaRef} backBga={currentBackBga} layerBga={currentLayerBga} poorBga={currentPoorBga}
+                                 showMiss={showMissLayer} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} opacity={bgaOpacity} fit="contain" />
+                         </div>
+                     )}
 
-                 {/* 中央右: レーン (Canvas) */}
-                 <div className="flex-1 bg-black relative flex justify-center border-r border-blue-900/30 overflow-hidden">
-                    {bgaBehindChart && (
-                        <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[600px] z-0 pointer-events-none">
-                            <BgaStage ref={pcBehindBgaRef} backBga={currentBackBga} layerBga={currentLayerBga} poorBga={currentPoorBga}
-                                showMiss={showMissLayer} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} opacity={bgaOpacity} />
-                        </div>
-                    )}
-                    <canvas ref={canvasRef} className="relative z-10 h-full w-full max-w-[600px] shadow-[0_0_50px_rgba(0,0,0,0.5)]" />
-                    {!parsedSong && <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-blue-900/20 z-20"><div className="text-center animate-pulse"><FolderOpen size={64} className="mx-auto mb-4 opacity-50"/><p className="text-xl font-bold tracking-widest">DROP FILE HERE</p></div></div>}
-                    {!showSettings && parsedSong && <div className="absolute bottom-[100px] w-full h-[2px] bg-red-500/60 pointer-events-none z-20 shadow-[0_0_10px_rgba(239,68,68,0.8)]" style={{maxWidth:'600px'}}/>}
-                 </div>
+                     {/* 情報・BGA */}
+                     <InfoPanel
+                        ref={infoPanelRef}
+                        setShowSettings={setShowSettings}
+                        playOption={(parsedSong?.mode === 'DP14' || parsedSong?.mode === 'DP10')
+                            ? `${playOption}/${playOption2}${dpFlip ? ' F' : ''}`
+                            : playOption}
+                        currentBackBga={currentBackBga} currentLayerBga={currentLayerBga} currentPoorBga={currentPoorBga}
+                        showMissLayer={showMissLayer} isPlaying={isPlaying}
+                        playBgaVideo={playBgaVideo} readyAnimState={readyAnimState}
+                        currentMeasureLines={currentMeasureLines} totalNotes={totalNotes}
+                        bgaBehind={bgaBehindChart}
+                     />
 
-                 {/* サイドBGA (右) */}
-                 {bgaSidePanel && bgaSidePos === 'right' && (
-                     <div className="relative shrink-0 w-[22vw] max-w-[420px] min-w-[200px] bg-black border-r border-blue-900/30 overflow-hidden">
-                         <BgaStage ref={pcSideBgaRef} backBga={currentBackBga} layerBga={currentLayerBga} poorBga={currentPoorBga}
-                             showMiss={showMissLayer} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} opacity={bgaOpacity} />
-                         {!currentBackBga && !currentLayerBga && <div className="absolute inset-0 flex items-center justify-center text-blue-900/40 text-xs font-bold tracking-widest pointer-events-none">BGA</div>}
+                     {bgaSidePos === 'left' && sideBga}
+
+                     {/* レーン (Canvas) */}
+                     <div className={`relative z-10 flex-1 min-w-0 flex justify-center overflow-hidden ${bgaBehindChart ? '' : 'bg-black'}`}>
+                        <canvas ref={canvasRef} className="relative z-10 h-full w-full max-w-[600px] shadow-[0_0_50px_rgba(0,0,0,0.5)]" />
+                        {!parsedSong && <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-blue-900/20 z-20"><div className="text-center animate-pulse"><FolderOpen size={64} className="mx-auto mb-4 opacity-50"/><p className="text-xl font-bold tracking-widest">DROP FILE HERE</p></div></div>}
+                        {!showSettings && parsedSong && <div className="absolute bottom-[100px] w-full h-[2px] bg-red-500/60 pointer-events-none z-20 shadow-[0_0_10px_rgba(239,68,68,0.8)]" style={{maxWidth:'600px'}}/>}
                      </div>
-                 )}
+
+                     {bgaSidePos === 'right' && sideBga}
+                 </div>
 
                  {/* 右: ログパネル */}
                  <LogPanel
@@ -2229,7 +2230,8 @@ export default function BmsViewer() {
                     mode={parsedSong?.mode}
                  />
              </div>
-         )}
+            );
+         })()}
 
          {/* スマホのみ: Canvas (全画面) */}
          {isMobile && (

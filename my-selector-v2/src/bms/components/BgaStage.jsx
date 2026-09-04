@@ -6,7 +6,7 @@ import BgaLayer from './BgaLayer';
 
 const BgaStage = forwardRef(({
     backBga, layerBga, poorBga, showMiss,
-    isPlaying, isVideoEnabled = true, opacity = 1,
+    isPlaying, isVideoEnabled = true, opacity = 1, fit = 'contain',
 }, ref) => {
     const backRef = useRef(null);
     const layerRef = useRef(null);
@@ -22,11 +22,11 @@ const BgaStage = forwardRef(({
 
     return (
         <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none" style={{ opacity }}>
-            <BgaLayer ref={backRef} bgaState={backBga} zIndex={0} isPlaying={isPlaying} isVideoEnabled={isVideoEnabled} />
-            <BgaLayer ref={layerRef} bgaState={layerBga} zIndex={10} blendMode="screen" isPlaying={isPlaying} isVideoEnabled={isVideoEnabled} />
+            <BgaLayer ref={backRef} bgaState={backBga} zIndex={0} isPlaying={isPlaying} isVideoEnabled={isVideoEnabled} objectFit={fit} />
+            <BgaLayer ref={layerRef} bgaState={layerBga} zIndex={10} blendMode="screen" isPlaying={isPlaying} isVideoEnabled={isVideoEnabled} objectFit={fit} />
             {showMiss && poorBga && (
                 <div className="absolute inset-0 w-full h-full z-50 bg-black/50">
-                    <BgaLayer ref={poorRef} bgaState={poorBga} zIndex={50} isPlaying={isPlaying} isVideoEnabled={isVideoEnabled} />
+                    <BgaLayer ref={poorRef} bgaState={poorBga} zIndex={50} isPlaying={isPlaying} isVideoEnabled={isVideoEnabled} objectFit={fit} />
                 </div>
             )}
         </div>

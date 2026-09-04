@@ -1,7 +1,7 @@
 // src/bms/components/BgaLayer.jsx
 import React, { useRef, useEffect, forwardRef, useImperativeHandle, memo } from 'react';
 
-const BgaLayer = forwardRef(({ bgaState, zIndex, blendMode = 'normal', opacity = 1, isPlaying, isVideoEnabled = true }, ref) => {
+const BgaLayer = forwardRef(({ bgaState, zIndex, blendMode = 'normal', opacity = 1, isPlaying, isVideoEnabled = true, objectFit = 'cover' }, ref) => {
     const videoRef = useRef(null);
     const lastSyncRef = useRef(0); // ★軽量化: video.currentTime= の実行を間引く
 
@@ -61,12 +61,12 @@ const BgaLayer = forwardRef(({ bgaState, zIndex, blendMode = 'normal', opacity =
     if (bgaState.type === 'video') {
         if (!isVideoEnabled) return null;
         return (
-          <video 
+          <video
               ref={videoRef}
-              src={bgaState.url || bgaState.src} 
-              className="absolute inset-0 w-full h-full object-cover" 
-              style={{ zIndex, mixBlendMode: blendMode, opacity }}
-              muted 
+              src={bgaState.url || bgaState.src}
+              className="absolute inset-0 w-full h-full"
+              style={{ zIndex, mixBlendMode: blendMode, opacity, objectFit }}
+              muted
               playsInline
               loop={false}
           />
@@ -74,11 +74,11 @@ const BgaLayer = forwardRef(({ bgaState, zIndex, blendMode = 'normal', opacity =
     }
     
     return (
-      <img 
-          src={bgaState.src || bgaState.url} 
-          className="absolute inset-0 w-full h-full object-cover" 
-          style={{ zIndex, mixBlendMode: blendMode, opacity }} 
-          alt="BGA" 
+      <img
+          src={bgaState.src || bgaState.url}
+          className="absolute inset-0 w-full h-full"
+          style={{ zIndex, mixBlendMode: blendMode, opacity, objectFit }}
+          alt="BGA"
       />
     );
 });
