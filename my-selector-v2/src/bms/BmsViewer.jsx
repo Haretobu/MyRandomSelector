@@ -1732,7 +1732,7 @@ export default function BmsViewer() {
         if (i > 0) totalU += (lanesArr[i].side !== lanesArr[i - 1].side ? SIDE_GAP_UNITS : LANE_GAP_UNITS);
         totalU += (lanesArr[i].kind === 'scratch' ? SCRATCH_UNITS : 1.0);
     }
-    const KEY_W = Math.max(7, Math.min(40, (width - 24) / totalU));
+    const KEY_W = Math.max(7, Math.min(56, (width - 24) / totalU));
     const laneX = _laneXScratch, laneW = _laneWScratch;
     laneW.fill(0);
     let cx = 0;
@@ -2210,7 +2210,7 @@ export default function BmsViewer() {
 
                      {/* レーン (Canvas) */}
                      <div className={`relative z-10 flex-1 min-w-0 flex justify-center overflow-hidden ${bgaBehindChart ? '' : 'bg-black'}`}>
-                        <canvas ref={canvasRef} className="relative z-10 h-full w-full max-w-[600px] shadow-[0_0_50px_rgba(0,0,0,0.5)]" />
+                        <canvas ref={canvasRef} className="relative z-10 h-full w-full max-w-[460px] shadow-[0_0_50px_rgba(0,0,0,0.5)]" />
                         {!parsedSong && <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-blue-900/20 z-20"><div className="text-center animate-pulse"><FolderOpen size={64} className="mx-auto mb-4 opacity-50"/><p className="text-xl font-bold tracking-widest">DROP FILE HERE</p></div></div>}
                      </div>
 
