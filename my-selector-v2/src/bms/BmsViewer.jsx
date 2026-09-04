@@ -134,6 +134,23 @@ export default function BmsViewer() {
   useEffect(() => {
     try { localStorage.setItem('bms_keymaps', JSON.stringify(keyMaps)); } catch { /* quota / privacy mode */ }
   }, [keyMaps]);
+  // 6-3: サウンドエフェクト設定(EQ/ECHO/COMP/FILTER)。localStorage 永続。
+  const [audioFx, setAudioFx] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('bms_audio_fx') || 'null');
+      if (saved && typeof saved === 'object') {
+        return {
+          ...DEFAULT_AUDIO_FX, ...saved,
+          filter: { ...DEFAULT_AUDIO_FX.filter, ...(saved.filter || {}) },
+          eq: { ...DEFAULT_AUDIO_FX.eq, ...(saved.eq || {}) },
+          comp: { ...DEFAULT_AUDIO_FX.comp, ...(saved.comp || {}) },
+          echo: { ...DEFAULT_AUDIO_FX.echo, ...(saved.echo || {}) },
+        };
+      }
+    } catch { /* privacy mode */ }
+    return DEFAULT_AUDIO_FX;
+  });
+  const fxNodesRef = useRef(null); // { filter, eqLow, eqMid, eqHigh, comp, delay, feedback, echoWet }
   // 6-3: サウンドエフェクトのパラメータを Web Audio ノードへ反映。無効時は素通しになる値に。
   useEffect(() => {
     try { localStorage.setItem('bms_audio_fx', JSON.stringify(audioFx)); } catch { /* privacy mode */ }
@@ -162,23 +179,6 @@ export default function BmsViewer() {
     set(n.feedback.gain, ecOn ? Math.max(0, Math.min(0.9, audioFx.echo.feedback)) : 0);
     set(n.echoWet.gain, ecOn ? Math.max(0, Math.min(1, audioFx.echo.mix)) : 0);
   }, [audioFx]);
-  // 6-3: サウンドエフェクト設定(EQ/ECHO/COMP/FILTER)。localStorage 永続。
-  const [audioFx, setAudioFx] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('bms_audio_fx') || 'null');
-      if (saved && typeof saved === 'object') {
-        return {
-          ...DEFAULT_AUDIO_FX, ...saved,
-          filter: { ...DEFAULT_AUDIO_FX.filter, ...(saved.filter || {}) },
-          eq: { ...DEFAULT_AUDIO_FX.eq, ...(saved.eq || {}) },
-          comp: { ...DEFAULT_AUDIO_FX.comp, ...(saved.comp || {}) },
-          echo: { ...DEFAULT_AUDIO_FX.echo, ...(saved.echo || {}) },
-        };
-      }
-    } catch { /* privacy mode */ }
-    return DEFAULT_AUDIO_FX;
-  });
-  const fxNodesRef = useRef(null); // { filter, eqLow, eqMid, eqHigh, comp, delay, feedback, echoWet }
 
   const [muteDebugAutoPlay, setMuteDebugAutoPlay] = useState(true);
   const muteDebugAutoPlayRef = useRef(true);
