@@ -2209,16 +2209,9 @@ export default function BmsViewer() {
                     keyMap={keyMaps[parsedSong?.mode] || keyMaps.SP7}
                  />
 
-                 {/* 中央ゾーン: 情報 + (サイドBGA) + レーン。この帯全体が「レーン背面BGA」の範囲。 */}
-                 <div className="relative flex-1 flex min-w-0 border-r border-blue-900/30">
-                     {bgaBehindChart && (
-                         <div className="absolute inset-0 z-0 bg-black pointer-events-none">
-                             <BgaStage ref={pcBehindBgaRef} backBga={currentBackBga} layerBga={currentLayerBga} poorBga={currentPoorBga}
-                                 showMiss={showMissLayer} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} opacity={bgaOpacity} fit="contain" />
-                         </div>
-                     )}
-
-                     {/* 情報・BGA */}
+                 {/* 中央ゾーン: 情報 + レーンゾーン */}
+                 <div className="flex-1 flex min-w-0 border-r border-blue-900/30">
+                     {/* 情報・BGA (背面BGAはここには掛けない) */}
                      <InfoPanel
                         ref={infoPanelRef}
                         setShowSettings={setShowSettings}
@@ -2229,19 +2222,28 @@ export default function BmsViewer() {
                         showMissLayer={showMissLayer} isPlaying={isPlaying}
                         playBgaVideo={playBgaVideo} readyAnimState={readyAnimState}
                         currentMeasureLines={currentMeasureLines} totalNotes={totalNotes}
-                        bgaBehind={bgaBehindChart}
                      />
 
-                     {bgaSidePos === 'left' && sideBga}
+                     {/* レーンゾーン: (サイドBGA) + レーン。背面BGA はこの範囲だけに敷く。 */}
+                     <div className="relative flex-1 flex min-w-0">
+                         {bgaBehindChart && (
+                             <div className="absolute inset-0 z-0 bg-black pointer-events-none">
+                                 <BgaStage ref={pcBehindBgaRef} backBga={currentBackBga} layerBga={currentLayerBga} poorBga={currentPoorBga}
+                                     showMiss={showMissLayer} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} opacity={bgaOpacity} fit="contain" />
+                             </div>
+                         )}
 
-                     {/* レーン (Canvas) = 盤面ぴったりの幅。サイドBGA表示時はこの幅に固定し、残りをBGAへ。 */}
-                     <div className={`relative z-10 min-w-0 flex justify-center overflow-hidden ${bgaSidePanel ? 'flex-none' : 'flex-1'} ${bgaBehindChart ? '' : 'bg-black'}`}
-                          style={bgaSidePanel ? { width: canvasBoardW, maxWidth: '100%' } : undefined}>
-                        <canvas ref={canvasRef} className="relative z-10 h-full w-full shadow-[0_0_50px_rgba(0,0,0,0.5)]" style={{ maxWidth: canvasBoardW }} />
-                        {!parsedSong && <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-blue-900/20 z-20"><div className="text-center animate-pulse"><FolderOpen size={64} className="mx-auto mb-4 opacity-50"/><p className="text-xl font-bold tracking-widest">DROP FILE HERE</p></div></div>}
+                         {bgaSidePos === 'left' && sideBga}
+
+                         {/* レーン (Canvas) = 盤面ぴったりの幅。サイドBGA表示時はこの幅に固定し、残りをBGAへ。 */}
+                         <div className={`relative z-10 min-w-0 flex justify-center overflow-hidden ${bgaSidePanel ? 'flex-none' : 'flex-1'} ${bgaBehindChart ? '' : 'bg-black'}`}
+                              style={bgaSidePanel ? { width: canvasBoardW, maxWidth: '100%' } : undefined}>
+                            <canvas ref={canvasRef} className="relative z-10 h-full w-full shadow-[0_0_50px_rgba(0,0,0,0.5)]" style={{ maxWidth: canvasBoardW }} />
+                            {!parsedSong && <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-blue-900/20 z-20"><div className="text-center animate-pulse"><FolderOpen size={64} className="mx-auto mb-4 opacity-50"/><p className="text-xl font-bold tracking-widest">DROP FILE HERE</p></div></div>}
+                         </div>
+
+                         {bgaSidePos === 'right' && sideBga}
                      </div>
-
-                     {bgaSidePos === 'right' && sideBga}
                  </div>
 
                  {/* 右: ログパネル */}
