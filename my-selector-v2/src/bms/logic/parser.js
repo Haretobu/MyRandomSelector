@@ -153,8 +153,22 @@ export const parseBMS = async (file) => {
                 timePoints.push({ time: currentTime, beat: currentBeat, bpm: currentBpmHeader });
             }
         } else { // stop
+            // ★STOP中の逆算(getBeatFromTime/getBpmFromTime、描画・HUDが使う)がここまで壊れていた:
+            //   停止「終了」の timePoint しか無かったため、停止中の任意の時刻に対する beat 逆算は
+            //   直前の(停止前の)timePointを使って停止前のBPMのまま拍を進め続けてしまい、
+            //   停止終了の瞬間に本来の拍まで一気に巻き戻っていた(ノーツ/LNが停止中も流れ続け、
+            //   停止明けに巻き戻って再度流れてくるように見える原因)。
+            //   停止「開始」の timePoint を bpm=0 で追加する。(time-point.time)/(60/0=Infinity) は
+            //   常に0になるため、この区間は拍が一切進まなくなる(#STOP中はBPM=0、という実際の仕様通り)。
+            //   ノーツの発音スケジュール(applyTimeSorted、beat→time の順方向変換)は影響を受けない
+            //   ("開始"と"終了"は同じ beat を持つため、そこに一致するオブジェクトは必ず"終了"側に解決される)。
+            if (timePoints[timePoints.length - 1].beat === currentBeat) {
+                timePoints[timePoints.length - 1].bpm = 0;
+            } else {
+                timePoints.push({ time: currentTime, beat: currentBeat, bpm: 0 });
+            }
             currentTime += e.beats * (60.0 / currentBpmHeader); // 停止時間を加算（拍位置は進めない）
-            timePoints.push({ time: currentTime, beat: currentBeat, bpm: currentBpmHeader });
+            timePoints.push({ time: currentTime, beat: currentBeat, bpm: currentBpmHeader }); // 停止終了、元のBPMへ復帰
         }
     }
     timePoints.push({ time: Infinity, beat: Infinity, bpm: currentBpmHeader });
