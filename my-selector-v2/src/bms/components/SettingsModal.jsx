@@ -93,6 +93,16 @@ function GamepadMapSection({ mode, gamepadEnabled, setGamepadEnabled, gamepadNam
         let cancelled = false;
         let raf = null;
         const prevState = {};
+        // ★重要: リスニング開始時点で既に押されている(または遊びで value>0.5 の)ボタンを
+        //   先に prevState へ記録しておく。これをしないと、開始直後にたまたま押しっぱなしの
+        //   ボタン(皿など)を「新しく押された」と誤検知して即座に割り当ててしまい、
+        //   意図したボタンを押す前に別のボタンが割り当てられる不具合になっていた。
+        (navigator.getGamepads ? navigator.getGamepads() : []).forEach(pad => {
+            if (!pad) return;
+            for (let i = 0; i < pad.buttons.length; i++) {
+                prevState[`${pad.index}_${i}`] = pad.buttons[i].pressed || pad.buttons[i].value > 0.5;
+            }
+        });
         const assign = (btnIndex) => {
             if (listening.slot === 'alt') {
                 setGamepadScratchAlt(prev => ({ ...prev, [km]: { ...(prev[km] || DEFAULT_GAMEPAD_SCRATCH_ALT), [listening.lane]: btnIndex } }));

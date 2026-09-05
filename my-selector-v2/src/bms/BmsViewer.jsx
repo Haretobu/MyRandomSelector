@@ -566,9 +566,18 @@ export default function BmsViewer() {
     window.addEventListener('gamepaddisconnected', onDisconnect);
     const already = pickFirst(); // ページを開く前から繋がっていた場合
     if (already) { gamepadIndexRef.current = already.index; setGamepadName(already.id); }
+    // ★フォールバック: 一部のUSB変換器/ドライバでは gamepadconnected イベントが確実に発火せず、
+    //   ページ再読み込み後にボタンを押しても接続扱いにならないことがある。イベントだけに頼らず、
+    //   1秒おきに navigator.getGamepads() を直接見て検知する(未接続→接続 の変化を拾う保険)。
+    const pollId = setInterval(() => {
+      if (gamepadIndexRef.current != null) return; // 既に何か繋がっていれば何もしない
+      const p = pickFirst();
+      if (p) { gamepadIndexRef.current = p.index; setGamepadName(p.id); }
+    }, 1000);
     return () => {
       window.removeEventListener('gamepadconnected', onConnect);
       window.removeEventListener('gamepaddisconnected', onDisconnect);
+      clearInterval(pollId);
     };
   }, []);
 
@@ -988,6 +997,18 @@ export default function BmsViewer() {
 
   useEffect(() => {
     if (!isInputDebugMode && !playMode) { activeInputLanesRef.current.clear(); clearActiveLanes(); return; }
+    // ★ゲームパッド用: 有効化した瞬間、既に押されている(皿を回している最中など)ボタンを
+    //   先に「押されている」として記録しておく。空の状態から始めると、有効化した瞬間に
+    //   押しっぱなしのボタンを「新しく押された」と誤検知して勝手にレーンが反応してしまう。
+    if (navigator.getGamepads) {
+        const prev = gamepadPrevPressedRef.current;
+        navigator.getGamepads().forEach(pad => {
+            if (!pad) return;
+            for (let i = 0; i < pad.buttons.length; i++) {
+                prev[i] = pad.buttons[i].pressed || pad.buttons[i].value > 0.5;
+            }
+        });
+    }
     const handleKeyDown = (e) => {
         if (e.repeat) return;
         // プレイモード中: Space はブラウザ既定のボタン発火を止めて自前でトグル。
