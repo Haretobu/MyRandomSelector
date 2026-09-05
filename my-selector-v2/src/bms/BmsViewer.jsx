@@ -458,6 +458,11 @@ export default function BmsViewer() {
   useEffect(() => {
       playModeRef.current = playMode;
       if (playMode) { resetJudge(); scheduleRenderLoop(); }
+      // ★プレイモードOFF直後、InfoPanel のスコア表示が残る不具合の対策:
+      //   非表示化は renderLoop の100ms間引きブロック(scoreHidden)に任せていたが、
+      //   OFFにした直後は isPlaying 等も false でrenderLoop自体が止まってしまい、
+      //   その間引きが一度も実行されないまま表示が残ることがあった。ここで即座に隠す。
+      else { hudLastRef.current.scoreHidden = true; infoPanelRef.current?.updateScore(null); }
   }, [playMode]);
   useEffect(() => { judgeRankRef.current = judgeRankIndex(parsedSong?.header?.rank); }, [parsedSong]);
 
@@ -823,15 +828,19 @@ export default function BmsViewer() {
                 const LATE_LIMIT = 0.22;
 
                 // 1. 近くのノーツを探す (範囲を少し広めに取って検索)
-                const centerIndex = findStartIndex(displayObjects, bmsTime - LATE_LIMIT);
+                // ★このハンドラは [isInputDebugMode, playMode, playSide] が変わった時しか張り直されないため、
+                //   state の displayObjects を直接参照すると「曲を読み込み直しても古い譜面のまま」になり、
+                //   キー音がほとんど鳴らなくなる不具合の原因になっていた。常に最新を持つ ref を使う。
+                const objs = displayObjectsRef.current;
+                const centerIndex = findStartIndex(objs, bmsTime - LATE_LIMIT);
                 const searchStart = Math.max(0, centerIndex - 10);
-                const searchEnd = Math.min(displayObjects.length, centerIndex + 50);
+                const searchEnd = Math.min(objs.length, centerIndex + 50);
 
                 let targetObj = null;
                 let minAbsDiff = 9999; // 最も近いものを選ぶための記録用
 
                 for (let i = searchStart; i < searchEnd; i++) {
-                    const obj = displayObjects[i];
+                    const obj = objs[i];
                     if (obj.laneIndex === lane && obj.isNote) {
                         const diff = obj.time - bmsTime; // 正なら未来、負なら過去
 
@@ -2203,14 +2212,6 @@ export default function BmsViewer() {
 
          {/* PCレイアウト */}
          {!isMobile && (() => {
-            // サイドBGA (レーンの真横)。左右どちらか一方のみ表示。残り幅を全部使う(flex-1)。
-            const sideBga = bgaSidePanel ? (
-                <div className="relative z-10 flex-1 min-w-[140px] bg-black border-r border-blue-900/30 overflow-hidden flex items-center justify-center">
-                    <BgaStage ref={pcSideBgaRef} backBga={currentBackBga} layerBga={currentLayerBga} poorBga={currentPoorBga}
-                        showMiss={showMissLayer} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} opacity={bgaOpacity} fit="contain" />
-                    {!currentBackBga && !currentLayerBga && <div className="text-blue-900/40 text-xs font-bold tracking-widest pointer-events-none">BGA</div>}
-                </div>
-            ) : null;
             return (
              <div className="flex w-full h-full">
                  {/* 左: コントローラー */}
@@ -2245,16 +2246,23 @@ export default function BmsViewer() {
                              </div>
                          )}
 
-                         {bgaSidePos === 'left' && sideBga}
+                         {/* サイドBGA: 常時マウントし、幅/不透明度/order だけを CSS で切り替える。
+                             条件付きレンダリングでON/OFFの度にアンマウント→再マウントしていたため、
+                             毎回動画が0秒から再読み込みされ、常時再生中のInfoPanelプレビューとの間に
+                             シーク待ちのタイムラグが生じていた(ON/OFF・左右切替のどちらでも同様)。 */}
+                         <div className={`relative z-10 bg-black overflow-hidden flex items-center justify-center transition-[flex-grow,opacity] duration-150 ${bgaSidePanel ? 'flex-1 min-w-[140px] opacity-100 border-r border-blue-900/30' : 'flex-none w-0 min-w-0 opacity-0 pointer-events-none'}`}
+                              style={{ order: bgaSidePos === 'left' ? 0 : 2 }}>
+                             <BgaStage ref={pcSideBgaRef} backBga={currentBackBga} layerBga={currentLayerBga} poorBga={currentPoorBga}
+                                 showMiss={showMissLayer} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} opacity={bgaOpacity} fit="contain" />
+                             {!currentBackBga && !currentLayerBga && <div className="text-blue-900/40 text-xs font-bold tracking-widest pointer-events-none">BGA</div>}
+                         </div>
 
                          {/* レーン (Canvas) = 盤面ぴったりの幅。サイドBGA表示時はこの幅に固定し、残りをBGAへ。 */}
                          <div className={`relative z-10 min-w-0 flex justify-center overflow-hidden ${bgaSidePanel ? 'flex-none' : 'flex-1'} ${bgaBehindChart ? '' : 'bg-black'}`}
-                              style={bgaSidePanel ? { width: canvasBoardW, maxWidth: '100%' } : undefined}>
+                              style={{ order: 1, ...(bgaSidePanel ? { width: canvasBoardW, maxWidth: '100%' } : null) }}>
                             <canvas ref={canvasRef} className="relative z-10 h-full w-full shadow-[0_0_50px_rgba(0,0,0,0.5)]" style={{ maxWidth: canvasBoardW }} />
                             {!parsedSong && <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-blue-900/20 z-20"><div className="text-center animate-pulse"><FolderOpen size={64} className="mx-auto mb-4 opacity-50"/><p className="text-xl font-bold tracking-widest">DROP FILE HERE</p></div></div>}
                          </div>
-
-                         {bgaSidePos === 'right' && sideBga}
                      </div>
                  </div>
 
