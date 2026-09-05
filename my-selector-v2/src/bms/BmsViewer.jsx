@@ -1704,8 +1704,11 @@ export default function BmsViewer() {
             //   ターンテーブルはバネで中央(0)に戻らない機種があり、絶対値のしきい値だけで
             //   press/release を決めると「静止位置が0でない」場合に押しっぱなしのまま戻らなくなる。
             //   そのため絶対位置ではなく、フレーム間で値が動いているかどうかで判定する。
-            const AXIS_DELTA = 0.04;     // これ以上の変化があれば「回転中」とみなす
-            const AXIS_RELEASE_MS = 120; // この時間動きが無ければ「離した」とみなす
+            // ★実測値: この種のコントローラは1フレームあたりの変化量が0.005〜0.010程度と非常に小さい
+            //   (回転角がそのまま数値になっており、静止時は完全にピタッと止まる)。0.04 では小さすぎて
+            //   全く検知できていなかった。ノイズは無い機種なので、閾値はかなり低くても安全。
+            const AXIS_DELTA = 0.0015;  // これ以上の変化があれば「回転中」とみなす
+            const AXIS_RELEASE_MS = 90; // この時間動きが無ければ「離した」とみなす
             const axisState = gamepadAxisStateRef.current;
             for (let ai = 0; ai < pad.axes.length; ai++) {
                 const v = pad.axes[ai];
