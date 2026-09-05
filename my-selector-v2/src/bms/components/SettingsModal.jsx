@@ -1,5 +1,5 @@
 // src/bms/components/SettingsModal.jsx
-import React, { memo, useState, useEffect } from 'react';
+import React, { memo, useState, useEffect, useRef } from 'react';
 import { Settings, X, ChevronsUp, RotateCw, Film, Flag, Music, Layers, Speaker, EyeOff, FileX, Keyboard, FolderOpen, FileArchive, ChevronDown, Gamepad2, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { VISIBILITY_MODES, LANE_LAYOUTS, MODE_LABELS, DEFAULT_KEYMAPS, DEFAULT_AUDIO_FX, keyCodeLabel } from '../constants';
 
@@ -106,10 +106,21 @@ function AudioFxSection({ audioFx, setAudioFx }) {
     const patch = (k, v) => setAudioFx({ ...fx, [k]: { ...(fx[k] || {}), ...v } });
     const master = !!fx.enabled;
 
+    // 折りたたみ: 既定は master の状態に合わせ、OFF→ON になった瞬間だけ自動展開する。
+    const [open, setOpen] = useState(master);
+    const prevMasterRef = useRef(master);
+    useEffect(() => {
+        if (master && !prevMasterRef.current) setOpen(true);
+        prevMasterRef.current = master;
+    }, [master]);
+
     return (
         <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
             <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center justify-between gap-2">
-                <span className="flex items-center gap-2"><SlidersHorizontal size={14} /> サウンドエフェクト</span>
+                <button type="button" onClick={() => setOpen(o => !o)} className="flex items-center gap-2 hover:text-white transition text-left">
+                    <SlidersHorizontal size={14} /> <span>サウンドエフェクト</span>
+                    <ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+                </button>
                 <button
                     onClick={() => setAudioFx(JSON.parse(JSON.stringify(DEFAULT_AUDIO_FX)))}
                     className="text-[10px] font-bold text-blue-300 hover:text-white flex items-center gap-1 bg-black/40 border border-blue-900/50 rounded px-2 py-1 transition">
@@ -121,6 +132,7 @@ function AudioFxSection({ audioFx, setAudioFx }) {
                 <input type="checkbox" checked={master} onChange={e => setAudioFx({ ...fx, enabled: e.target.checked })} className="accent-blue-500 w-4 h-4" />
             </label>
 
+            {open && (
             <div className={`mt-2 space-y-1 ${master ? '' : 'opacity-40 pointer-events-none'}`}>
                 {/* FILTER */}
                 <FxSubHead name="FILTER" checked={!!fx.filter?.on} disabled={!master} onChange={v => patch('filter', { on: v })} />
@@ -183,9 +195,126 @@ function AudioFxSection({ audioFx, setAudioFx }) {
                     </FxRow>
                 </div>
             </div>
+            )}
             <div className="text-[10px] text-blue-500/60 mt-2 leading-relaxed">
                 キー音・BGM・打鍵音すべてに掛かります。設定は自動保存されます。
             </div>
+        </div>
+    );
+}
+
+// 折りたたみ可能な設定ブロック。親トグルが OFF→ON になった瞬間だけ自動展開する。
+//   (OFF に戻しても閉じない。手動で開閉した状態はそのまま尊重する)
+function AutoHiSpeedSection({ autoHiSpeed, setAutoHiSpeed, targetGreen, setTargetGreen, hiSpeed }) {
+    const [open, setOpen] = useState(!!autoHiSpeed);
+    const prevRef = useRef(!!autoHiSpeed);
+    useEffect(() => {
+        if (autoHiSpeed && !prevRef.current) setOpen(true);
+        prevRef.current = !!autoHiSpeed;
+    }, [autoHiSpeed]);
+
+    return (
+        <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
+            <div className="flex items-center justify-between gap-2">
+                <button type="button" onClick={() => setOpen(o => !o)}
+                    className="flex-1 flex items-center gap-2 text-xs text-blue-400 font-bold uppercase tracking-wider text-left">
+                    <ChevronsUp size={14} /> <span>HI-SPEED (グリーンナンバー固定)</span>
+                    <ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+                </button>
+                <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
+                    <span className="text-[10px] text-blue-300">オート</span>
+                    <input type="checkbox" checked={autoHiSpeed} onChange={e => setAutoHiSpeed(e.target.checked)} className="accent-blue-500 w-4 h-4"/>
+                </label>
+            </div>
+            {open && (
+                <div className="pt-3 mt-1 border-t border-blue-900/30">
+                    <div className={`flex items-center gap-2 ${autoHiSpeed ? '' : 'opacity-40 pointer-events-none'}`}>
+                        <span className="text-[11px] text-blue-300 w-32 shrink-0">目標グリーンナンバー</span>
+                        <input type="number" min="60" max="1500" step="5" value={targetGreen}
+                            onChange={e => setTargetGreen(Math.max(60, Math.min(1500, Number(e.target.value) || 300)))}
+                            className="w-20 bg-black/50 border border-blue-500/30 rounded px-2 py-1 text-white text-sm text-center font-mono"/>
+                        <span className="text-[11px] text-blue-500/70">ms</span>
+                    </div>
+                    <div className="text-[10px] text-blue-500/60 mt-2 leading-relaxed">
+                        現在 HI-SPEED: <span className="text-blue-300 font-mono">{hiSpeed}</span>（{autoHiSpeed ? '自動' : '手動'}）。
+                        HI-SPEED を手動で変えるとオートは OFF になります。
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// プレイモード設定ブロック(折りたたみ、有効化で自動展開)
+function PlayModeSection({ playMode, setPlayMode, judgeOffset, setJudgeOffset, suggestJudgeOffset }) {
+    const [open, setOpen] = useState(!!playMode);
+    const prevRef = useRef(!!playMode);
+    useEffect(() => {
+        if (playMode && !prevRef.current) setOpen(true);
+        prevRef.current = !!playMode;
+    }, [playMode]);
+
+    return (
+        <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
+            <div className="flex items-center justify-between gap-2">
+                <button type="button" onClick={() => setOpen(o => !o)}
+                    className="flex-1 flex items-center gap-2 text-xs text-blue-400 font-bold uppercase tracking-wider text-left">
+                    <Gamepad2 size={14} /> <span>プレイモード</span>
+                    <ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+                </button>
+                <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
+                    <span className="text-[10px] text-blue-300">有効</span>
+                    <input type="checkbox" checked={!!playMode} onChange={e => setPlayMode(e.target.checked)} className="accent-blue-500 w-4 h-4" />
+                </label>
+            </div>
+            {open && (
+                <div className="pt-3 mt-1 border-t border-blue-900/30">
+                    <div className="text-[10px] text-blue-500/60 leading-relaxed">
+                        自分の入力で判定します（オートプレイ判定を止める）。キー割り当てで操作。判定・コンボ・EX SCORE・DJ LEVEL・FAST/SLOW を表示。完走でリザルト、途中は Tab 長押しで成績表示。<br />
+                        皿は割り当てキー（既定 Shift）と Ctrl の2キー。CN は最初と逆方向に回して離す。<br />
+                        ※「デバッグ用キー入力」とは別機能です（併用可）。
+                    </div>
+
+                    {/* 判定オフセット (6-2-c) */}
+                    <div className="mt-3 pt-3 border-t border-blue-900/30">
+                        <div className="flex items-center justify-between mb-1">
+                            <span className="text-[12px] font-bold text-blue-300">判定オフセット</span>
+                            <div className="flex items-center gap-2">
+                                <input type="number" min={-100} max={100} step={1} value={judgeOffset}
+                                    onChange={e => setJudgeOffset(Math.max(-100, Math.min(100, Math.round(Number(e.target.value) || 0))))}
+                                    className="w-16 bg-black/50 border border-blue-500/30 rounded px-2 py-0.5 text-white text-sm text-center font-mono" />
+                                <span className="text-[11px] text-blue-500/70">ms</span>
+                            </div>
+                        </div>
+                        <input type="range" min={-100} max={100} step={1} value={judgeOffset}
+                            onChange={e => setJudgeOffset(Number(e.target.value))}
+                            className="w-full accent-blue-500 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
+                        {(() => {
+                            const s = suggestJudgeOffset ? suggestJudgeOffset() : { n: 0, value: 0 };
+                            const enough = s.n >= 10;
+                            return (
+                                <div className="flex items-center gap-2 mt-2">
+                                    <button
+                                        disabled={!enough}
+                                        onClick={() => setJudgeOffset(Math.max(-100, Math.min(100, s.value)))}
+                                        className={`text-[11px] font-bold px-3 py-1 rounded border transition ${enough
+                                            ? 'bg-blue-600/30 border-blue-500/50 text-white hover:bg-blue-600/50'
+                                            : 'bg-black/30 border-gray-700 text-gray-500 cursor-not-allowed'}`}>
+                                        オート調整
+                                    </button>
+                                    <span className="text-[10px] text-blue-500/70 font-mono">
+                                        {enough ? `直近${s.n}件 → 推奨 ${s.value > 0 ? '+' : ''}${s.value}ms` : `データ不足（${s.n}/10）`}
+                                    </span>
+                                    <button onClick={() => setJudgeOffset(0)} className="ml-auto text-[10px] text-blue-400 hover:text-white border border-blue-900/50 rounded px-2 py-1">0に戻す</button>
+                                </div>
+                            );
+                        })()}
+                        <div className="text-[10px] text-blue-500/60 mt-1.5 leading-relaxed">
+                            FAST が多い（早入り）→ マイナス方向 / SLOW が多い（遅入り）→ プラス方向。オート調整は直近の判定タイミングの中央値から算出（ボタンで手動反映）。
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -440,26 +569,9 @@ const SettingsModal = ({
                         </div>
                     </div>
 
-                    {/* オートHI-SPEED / グリーンナンバー固定 (共通) */}
-                    <div hidden={!showView} className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
-                        <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center gap-2">
-                            <ChevronsUp size={14} /> HI-SPEED (グリーンナンバー固定)
-                        </div>
-                        <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer border border-transparent hover:border-blue-500/30">
-                            <span className="text-sm">オートHI-SPEED（主BPMで緑数字を固定）</span>
-                            <input type="checkbox" checked={autoHiSpeed} onChange={e => setAutoHiSpeed(e.target.checked)} className="accent-blue-500 w-4 h-4"/>
-                        </label>
-                        <div className={`flex items-center gap-2 mt-2 ${autoHiSpeed ? '' : 'opacity-40 pointer-events-none'}`}>
-                            <span className="text-[11px] text-blue-300 w-32 shrink-0">目標グリーンナンバー</span>
-                            <input type="number" min="60" max="1500" step="5" value={targetGreen}
-                                onChange={e => setTargetGreen(Math.max(60, Math.min(1500, Number(e.target.value) || 300)))}
-                                className="w-20 bg-black/50 border border-blue-500/30 rounded px-2 py-1 text-white text-sm text-center font-mono"/>
-                            <span className="text-[11px] text-blue-500/70">ms</span>
-                        </div>
-                        <div className="text-[10px] text-blue-500/60 mt-2 leading-relaxed">
-                            現在 HI-SPEED: <span className="text-blue-300 font-mono">{hiSpeed}</span>（{autoHiSpeed ? '自動' : '手動'}）。
-                            HI-SPEED を手動で変えるとオートは OFF になります。
-                        </div>
+                    {/* オートHI-SPEED / グリーンナンバー固定 (共通・折りたたみ) */}
+                    <div hidden={!showView}>
+                        <AutoHiSpeedSection autoHiSpeed={autoHiSpeed} setAutoHiSpeed={setAutoHiSpeed} targetGreen={targetGreen} setTargetGreen={setTargetGreen} hiSpeed={hiSpeed} />
                     </div>
 
                     {/* レーンミュート (共通・モード対応) */}
@@ -573,61 +685,9 @@ const SettingsModal = ({
                          })()}
                     </div>
 
-                    {/* プレイモード (PC のみ・6-2) */}
+                    {/* プレイモード (PC のみ・6-2・折りたたみ) */}
                     {!isMobile && showPlay && (
-                        <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
-                            <div className="text-xs text-blue-400 mb-2 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center gap-2">
-                                <Gamepad2 size={14} /> プレイモード
-                            </div>
-                            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer border border-transparent hover:border-blue-500/30">
-                                <span className="text-sm">自分の入力で判定する（オートプレイ判定を止める）</span>
-                                <input type="checkbox" checked={!!playMode} onChange={e => setPlayMode(e.target.checked)} className="accent-blue-500 w-4 h-4" />
-                            </label>
-                            <div className="text-[10px] text-blue-500/60 mt-2 leading-relaxed">
-                                キー割り当てで操作。判定・コンボ・EX SCORE・DJ LEVEL・FAST/SLOW を表示。完走でリザルト、途中は Tab 長押しで成績表示。<br />
-                                皿は割り当てキー（既定 Shift）と Ctrl の2キー。CN は最初と逆方向に回して離す。<br />
-                                ※「デバッグ用キー入力」とは別機能です（併用可）。
-                            </div>
-
-                            {/* 判定オフセット (6-2-c) */}
-                            <div className="mt-3 pt-3 border-t border-blue-900/30">
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[12px] font-bold text-blue-300">判定オフセット</span>
-                                    <div className="flex items-center gap-2">
-                                        <input type="number" min={-100} max={100} step={1} value={judgeOffset}
-                                            onChange={e => setJudgeOffset(Math.max(-100, Math.min(100, Math.round(Number(e.target.value) || 0))))}
-                                            className="w-16 bg-black/50 border border-blue-500/30 rounded px-2 py-0.5 text-white text-sm text-center font-mono" />
-                                        <span className="text-[11px] text-blue-500/70">ms</span>
-                                    </div>
-                                </div>
-                                <input type="range" min={-100} max={100} step={1} value={judgeOffset}
-                                    onChange={e => setJudgeOffset(Number(e.target.value))}
-                                    className="w-full accent-blue-500 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
-                                {(() => {
-                                    const s = suggestJudgeOffset ? suggestJudgeOffset() : { n: 0, value: 0 };
-                                    const enough = s.n >= 10;
-                                    return (
-                                        <div className="flex items-center gap-2 mt-2">
-                                            <button
-                                                disabled={!enough}
-                                                onClick={() => setJudgeOffset(Math.max(-100, Math.min(100, s.value)))}
-                                                className={`text-[11px] font-bold px-3 py-1 rounded border transition ${enough
-                                                    ? 'bg-blue-600/30 border-blue-500/50 text-white hover:bg-blue-600/50'
-                                                    : 'bg-black/30 border-gray-700 text-gray-500 cursor-not-allowed'}`}>
-                                                オート調整
-                                            </button>
-                                            <span className="text-[10px] text-blue-500/70 font-mono">
-                                                {enough ? `直近${s.n}件 → 推奨 ${s.value > 0 ? '+' : ''}${s.value}ms` : `データ不足（${s.n}/10）`}
-                                            </span>
-                                            <button onClick={() => setJudgeOffset(0)} className="ml-auto text-[10px] text-blue-400 hover:text-white border border-blue-900/50 rounded px-2 py-1">0に戻す</button>
-                                        </div>
-                                    );
-                                })()}
-                                <div className="text-[10px] text-blue-500/60 mt-1.5 leading-relaxed">
-                                    FAST が多い（早入り）→ マイナス方向 / SLOW が多い（遅入り）→ プラス方向。オート調整は直近の判定タイミングの中央値から算出（ボタンで手動反映）。
-                                </div>
-                            </div>
-                        </div>
+                        <PlayModeSection playMode={playMode} setPlayMode={setPlayMode} judgeOffset={judgeOffset} setJudgeOffset={setJudgeOffset} suggestJudgeOffset={suggestJudgeOffset} />
                     )}
 
                     {/* サウンドエフェクト (共通・6-3) */}

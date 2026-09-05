@@ -257,7 +257,6 @@ export default function BmsViewer() {
   const activeInputLanesRef = useRef(new Set()); 
   const activeShortSoundsRef = useRef([]);
   const activeLongSoundsRef = useRef([]); 
-  const activeDebugSoundsRef = useRef(new Set());
   const nextBackBgaIndexRef = useRef(0);
   const nextLayerBgaIndexRef = useRef(0);
   const nextPoorBgaIndexRef = useRef(0);
@@ -879,17 +878,24 @@ export default function BmsViewer() {
                             const src = audioContextRef.current.createBufferSource();
                             src.buffer = buffer;
                             const gain = audioContextRef.current.createGain();
-                            gain.gain.value = volumeRef.current; 
+                            gain.gain.value = volumeRef.current;
                             src.connect(gain);
                             gain.connect(gainNodeRef.current);
+                            // ★活プレイの音抜け対策: 以前は activeDebugSoundsRef (無制限) に積んでいたため、
+                            //   自動再生と違って同時発音数の上限が掛からず、密な自己プレイで同時発音が
+                            //   膨れ上がって音声処理が詰まり、途中で音が途切れる原因になっていた。
+                            //   scheduleAudio と同じ activeNodesRef に載せ、同じ MAX_SHORT_POLYPHONY 上限
+                            //   (超過時は古いものから停止)を効かせるようにする。
+                            const nodeData = { node: src, startTime: ctxTime, endTime: ctxTime + buffer.duration, isLong: false, id: nextSoundIdRef.current++ };
+                            activeNodesRef.current.push(nodeData);
                             src.onended = () => {
                                 // ★リーク対策: 終了したノードは必ず切断する。
                                 //   GainNode は AudioBufferSourceNode と違い自動解放されず、放置するとマスターに繋がり続ける。
                                 try { src.disconnect(); gain.disconnect(); } catch (e) {}
-                                activeDebugSoundsRef.current.delete(src);
+                                const a = activeNodesRef.current;
+                                const k = a.indexOf(nodeData);
+                                if (k !== -1) a.splice(k, 1);
                             };
-                            activeDebugSoundsRef.current.add(src);
-
                             src.start(0);
                         }
                     }
@@ -1431,15 +1437,10 @@ export default function BmsViewer() {
   };
 
   const stopAudioNodes = () => {
-      activeNodesRef.current.forEach(n => { 
-          try { n.node.stop(); n.node.disconnect(); } catch(e){} 
+      activeNodesRef.current.forEach(n => {
+          try { n.node.stop(); n.node.disconnect(); } catch(e){}
       });
       activeNodesRef.current = [];
-
-      activeDebugSoundsRef.current.forEach(node => {
-          try { node.stop(); node.disconnect(); } catch(e){}
-      });
-      activeDebugSoundsRef.current.clear();
       if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current);
   };
 
@@ -2226,7 +2227,6 @@ export default function BmsViewer() {
                      {/* 情報・BGA (背面BGAはここには掛けない) */}
                      <InfoPanel
                         ref={infoPanelRef}
-                        setShowSettings={setShowSettings}
                         playOption={(parsedSong?.mode === 'DP14' || parsedSong?.mode === 'DP10')
                             ? `${playOption}/${playOption2}${dpFlip ? ' F' : ''}`
                             : playOption}
@@ -2290,11 +2290,22 @@ export default function BmsViewer() {
 
          {/* スマホ用: フローティング設定ボタン */}
          {isMobile && (
-             <button 
+             <button
                 onClick={() => setShowSettings(true)}
                 className="absolute top-4 right-4 z-50 p-3 bg-blue-600/80 rounded-full text-white shadow-lg backdrop-blur-sm active:scale-95 transition-transform"
              >
                  <Settings size={24} />
+             </button>
+         )}
+
+         {/* PC用: 画面右上に固定の設定ボタン(設定ドロワーが出てくる位置と揃える) */}
+         {!isMobile && (
+             <button
+                onClick={() => setShowSettings(v => !v)}
+                title="設定"
+                className="fixed top-3 right-3 z-[90] p-2.5 bg-blue-600/80 hover:bg-blue-500 rounded-full text-white shadow-lg backdrop-blur-sm active:scale-95 transition-transform"
+             >
+                 <Settings size={20} />
              </button>
          )}
 
