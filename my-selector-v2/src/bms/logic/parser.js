@@ -14,12 +14,6 @@ export const parseBMS = async (file) => {
     const header = { bpm: 130, wavs: {}, bmps: {}, bpms: {}, stops: {}, title: 'Unknown', artist: 'Unknown', genre: '', playlevel: '', rank: null, difficulty: null, stagefile: null, lnObj: null, player: 1 };
     let rawObjects = [];
     const measureLen = {}; const rawLinesByMeasure = {}; const notesPerMeasure = {}; const scratchPerMeasure = {};
-    // ★同一小節・同一チャンネルの行が複数回出現する譜面(密なBGM/キー音チャンネルを複数行に分割する
-    //   エディタがよくある)向け: 各行を独立処理せず、出現順に文字列連結してから位置を計算する。
-    //   連結しないと2行目以降が毎回「total=1(そのオブジェクト単体の長さ)」扱いになり、
-    //   本来は小節内に分散しているはずのオブジェクトが軒並み小節先頭(position=0)に潰れてしまい、
-    //   BGMや譜面が大きくズレる原因になっていた。
-    const channelValues = {};
     let maxMeasureIndex = 0;
     let maxLaneIndex = 0;
     let isSupportedMode = true;
@@ -56,51 +50,39 @@ export const parseBMS = async (file) => {
         const ch = key.substring(4, 6);
         if (!rawLinesByMeasure[measure]) rawLinesByMeasure[measure] = [];
         rawLinesByMeasure[measure].push(line);
-        if (!channelValues[measure]) channelValues[measure] = {};
-        // 同一小節・同一チャンネルが複数回出現する場合は出現順に連結する(下の注釈参照)
-        channelValues[measure][ch] = (channelValues[measure][ch] || '') + value;
+        if (value.length % 2 === 0) {
+          const total = value.length / 2;
+          for (let i = 0; i < total; i++) {
+            const val = parseInt36(value.substring(i * 2, i * 2 + 2));
+            if (val !== 0) {
+              const lane = laneMap[ch];
+              if (lane) {
+                  if (lane.index > maxLaneIndex) maxLaneIndex = lane.index;
+                  if (!lane.isBg) {
+                      notesPerMeasure[measure] = (notesPerMeasure[measure] || 0) + 1;
+                      if (lane.isScratch) scratchPerMeasure[measure] = (scratchPerMeasure[measure] || 0) + 1;
+                  }
+              } else if (isPms && RE_PMS_PLAYFIELD_CH.test(ch)) {
+                  unmappedPmsCh.add(ch); // 未対応チャンネルの可視ノーツ → あとで警告
+              }
+
+              if (lane || ch === '01' || ch === '04' || ch === '06' || ch === '07' || ch === '03' || ch === '08' || ch === '09') {
+                rawObjects.push({
+                    measure, channel: ch, position: i / total, value: val,
+                    isNote: !!lane && !lane.isBg,
+                    isBackBga: (ch === '04'),
+                    isPoorBga: (ch === '06'), isLayerBga: (ch === '07'),
+                    isBpm: (ch === '03' || ch === '08'),
+                    isStop: (ch === '09'),
+                    laneIndex: lane ? lane.index : -1, isLong: lane ? lane.isLong : false 
+                });
+              }
+            }
+          }
+        }
       }
     }
-
-    // 連結済みの各小節・チャンネル文字列から、実際のオブジェクトを生成する。
-    for (const measureKey of Object.keys(channelValues)) {
-        const measure = Number(measureKey);
-        const chans = channelValues[measureKey];
-        for (const ch of Object.keys(chans)) {
-            const value = chans[ch];
-            if (value.length % 2 !== 0) continue;
-            const total = value.length / 2;
-            for (let i = 0; i < total; i++) {
-                const val = parseInt36(value.substring(i * 2, i * 2 + 2));
-                if (val !== 0) {
-                    const lane = laneMap[ch];
-                    if (lane) {
-                        if (lane.index > maxLaneIndex) maxLaneIndex = lane.index;
-                        if (!lane.isBg) {
-                            notesPerMeasure[measure] = (notesPerMeasure[measure] || 0) + 1;
-                            if (lane.isScratch) scratchPerMeasure[measure] = (scratchPerMeasure[measure] || 0) + 1;
-                        }
-                    } else if (isPms && RE_PMS_PLAYFIELD_CH.test(ch)) {
-                        unmappedPmsCh.add(ch); // 未対応チャンネルの可視ノーツ → あとで警告
-                    }
-
-                    if (lane || ch === '01' || ch === '04' || ch === '06' || ch === '07' || ch === '03' || ch === '08' || ch === '09') {
-                        rawObjects.push({
-                            measure, channel: ch, position: i / total, value: val,
-                            isNote: !!lane && !lane.isBg,
-                            isBackBga: (ch === '04'),
-                            isPoorBga: (ch === '06'), isLayerBga: (ch === '07'),
-                            isBpm: (ch === '03' || ch === '08'),
-                            isStop: (ch === '09'),
-                            laneIndex: lane ? lane.index : -1, isLong: lane ? lane.isLong : false
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-
+    
     let totalNotesCount = 0;
     Object.values(notesPerMeasure).forEach(c => totalNotesCount += c);
     const avgDensity = maxMeasureIndex > 0 ? totalNotesCount / (maxMeasureIndex + 1) : 0;
@@ -153,54 +135,20 @@ export const parseBMS = async (file) => {
                 timePoints.push({ time: currentTime, beat: currentBeat, bpm: currentBpmHeader });
             }
         } else { // stop
-            // ★STOP中の逆算(getBeatFromTime/getBpmFromTime、描画・HUDが使う)がここまで壊れていた:
-            //   停止「終了」の timePoint しか無かったため、停止中の任意の時刻に対する beat 逆算は
-            //   直前の(停止前の)timePointを使って停止前のBPMのまま拍を進め続けてしまい、
-            //   停止終了の瞬間に本来の拍まで一気に巻き戻っていた(ノーツ/LNが停止中も流れ続け、
-            //   停止明けに巻き戻って再度流れてくるように見える原因)。
-            //   停止「開始」の timePoint を bpm=0 で追加する。(time-point.time)/(60/0=Infinity) は
-            //   常に0になるため、この区間は拍が一切進まなくなる(#STOP中はBPM=0、という実際の仕様通り)。
-            //   ※ 同じ beat に「開始」「終了」2つの timePoint ができるため、そこに一致するオブジェクトの
-            //   発音時刻(順方向 beat→time 変換)は「開始」側(=停止前、正しい)を使うよう applyTimeSorted /
-            //   barLines 側で対応済み(下記コメント参照)。
-            if (timePoints[timePoints.length - 1].beat === currentBeat) {
-                timePoints[timePoints.length - 1].bpm = 0;
-            } else {
-                timePoints.push({ time: currentTime, beat: currentBeat, bpm: 0 });
-            }
             currentTime += e.beats * (60.0 / currentBpmHeader); // 停止時間を加算（拍位置は進めない）
-            timePoints.push({ time: currentTime, beat: currentBeat, bpm: currentBpmHeader }); // 停止終了、元のBPMへ復帰
+            timePoints.push({ time: currentTime, beat: currentBeat, bpm: currentBpmHeader });
         }
     }
     timePoints.push({ time: Infinity, beat: Infinity, bpm: currentBpmHeader });
     // ★軽量化: 旧 applyTime は「各オブジェクト × 全 timePoints」の線形走査で O(objects * timePoints) だった。
     //   finalObjects / backBgaObjects / ... はいずれも beat 昇順、timePoints も beat 昇順なので、
     //   ポインタを前進させるマージ歩行で O(objects + timePoints) にする（算出される time は従来と完全に同一）。
-    // ★STOP1つにつき同じ beat の timePoint が2つ(開始bpm=0 / 終了)並ぶため、その beat にちょうど
-    //   一致するオブジェクト(STOPと同じ行にある通常のノーツ・BGM等)は「終了」側まで読み進めてしまうと
-    //   本来より停止時間ぶん遅れて発音してしまう(停止直後に音がまとめて鳴る/ズレて聞こえる原因)。
-    //   beat が厳密に小さい点までだけ読み進め、次の点がちょうど同じ beat ならその「最初の」点(開始側)
-    //   に1つだけ進めて止める(＝同じ beat の2点なら常に開始側を使う)。beat が厳密に大きい通常の
-    //   ケースは従来どおり(結果は完全に同一)。
-    const findTimePointIndex = (ti, beat) => {
-        // ★重要: 同じ beat を持つオブジェクトが複数(STOPと同じ行の複数レーン等)連続する場合、
-        //   このtiは呼び出しをまたいで使い回される(効率化のため)。ここで「既にその beat の
-        //   最初の点にいるか」を確認せずに毎回1つ先まで進めてしまうと、同じ行の2つ目以降の
-        //   オブジェクトが「開始」側ではなく「終了」側にどんどんズレていってしまっていた
-        //   (STOP行の一部の音だけ正しく、残りが停止時間ぶん遅れて鳴る不具合の原因)。
-        if (timePoints[ti].beat === beat) return ti;
-        while (ti < timePoints.length - 1 && timePoints[ti + 1].beat < beat) ti++;
-        if (ti < timePoints.length - 1 && timePoints[ti + 1].beat === beat) ti++;
-        return ti;
-    };
-    // bpm=0(停止開始点)に一致した場合、beat差は必ず0のはずだが 0 * (60/0=Infinity) は
-    // NaN になってしまう(0×∞は不定形)。この場合は素直に tp.time を使う。
-    const beatToTime = (tp, beat) => tp.bpm > 0 ? tp.time + (beat - tp.beat) * (60.0 / tp.bpm) : tp.time;
     const applyTimeSorted = (objs) => {
         let ti = 0;
         for (const obj of objs) {
-            ti = findTimePointIndex(ti, obj.beat);
-            obj.time = beatToTime(timePoints[ti], obj.beat);
+            while (ti < timePoints.length - 1 && timePoints[ti + 1].beat <= obj.beat) ti++;
+            const tp = timePoints[ti];
+            obj.time = tp.time + (obj.beat - tp.beat) * (60.0 / tp.bpm);
         }
     };
     applyTimeSorted(finalObjects); applyTimeSorted(backBgaObjects); applyTimeSorted(layerBgaObjects); applyTimeSorted(poorBgaObjects);
@@ -235,8 +183,9 @@ export const parseBMS = async (file) => {
     let bti = 0;
     for (let m = 0; m <= maxMeasure; m++) {
         const beat = measureStartBeats[m];
-        bti = findTimePointIndex(bti, beat); // ★STOPと同じ小節境界にある場合も「開始」側を使う(上のコメント参照)
-        barLines.push({ measure: m, beat: beat, time: beatToTime(timePoints[bti], beat) });
+        while (bti < timePoints.length - 1 && timePoints[bti + 1].beat <= beat) bti++;
+        const tp = timePoints[bti];
+        barLines.push({ measure: m, beat: beat, time: tp.time + (beat - tp.beat) * (60.0 / tp.bpm) });
     }
     const lastObjTime = resolvedObjects.length > 0 ? resolvedObjects[resolvedObjects.length-1].time : 0;
     if (maxLNDuration < 20.0) maxLNDuration = 20.0;
