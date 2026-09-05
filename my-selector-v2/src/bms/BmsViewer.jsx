@@ -188,6 +188,19 @@ export default function BmsViewer() {
   });
   useEffect(() => { try { localStorage.setItem('bms_gamepad_scratch_alt', JSON.stringify(gamepadScratchAlt)); } catch { /* quota / privacy mode */ } }, [gamepadScratchAlt]);
   const [gamepadName, setGamepadName] = useState(null); // 接続中のコントローラ名(表示用)
+  // 軸(皿が軸として来る機種)の感度。機種によって1フレームあたりの変化量が大きく違うため調整可能にする。
+  const [gamepadAxisDelta, setGamepadAxisDelta] = useState(() => {
+    try { const v = Number(localStorage.getItem('bms_gamepad_axis_delta')); return v > 0 ? v : 0.0015; } catch { return 0.0015; }
+  });
+  useEffect(() => { try { localStorage.setItem('bms_gamepad_axis_delta', String(gamepadAxisDelta)); } catch { /* privacy mode */ } }, [gamepadAxisDelta]);
+  const [gamepadAxisReleaseMs, setGamepadAxisReleaseMs] = useState(() => {
+    try { const v = Number(localStorage.getItem('bms_gamepad_axis_release_ms')); return v >= 20 ? v : 90; } catch { return 90; }
+  });
+  useEffect(() => { try { localStorage.setItem('bms_gamepad_axis_release_ms', String(gamepadAxisReleaseMs)); } catch { /* privacy mode */ } }, [gamepadAxisReleaseMs]);
+  const gamepadAxisDeltaRef = useRef(0.0015);
+  useEffect(() => { gamepadAxisDeltaRef.current = gamepadAxisDelta; }, [gamepadAxisDelta]);
+  const gamepadAxisReleaseMsRef = useRef(90);
+  useEffect(() => { gamepadAxisReleaseMsRef.current = gamepadAxisReleaseMs; }, [gamepadAxisReleaseMs]);
 
   // 6-3: サウンドエフェクト設定(EQ/ECHO/COMP/FILTER)。localStorage 永続。
   const [audioFx, setAudioFx] = useState(() => {
@@ -1704,11 +1717,9 @@ export default function BmsViewer() {
             //   ターンテーブルはバネで中央(0)に戻らない機種があり、絶対値のしきい値だけで
             //   press/release を決めると「静止位置が0でない」場合に押しっぱなしのまま戻らなくなる。
             //   そのため絶対位置ではなく、フレーム間で値が動いているかどうかで判定する。
-            // ★実測値: この種のコントローラは1フレームあたりの変化量が0.005〜0.010程度と非常に小さい
-            //   (回転角がそのまま数値になっており、静止時は完全にピタッと止まる)。0.04 では小さすぎて
-            //   全く検知できていなかった。ノイズは無い機種なので、閾値はかなり低くても安全。
-            const AXIS_DELTA = 0.0015;  // これ以上の変化があれば「回転中」とみなす
-            const AXIS_RELEASE_MS = 90; // この時間動きが無ければ「離した」とみなす
+            // ★機種によって1フレームあたりの変化量の大きさが大きく異なるため、設定画面で調整可能にしてある。
+            const AXIS_DELTA = gamepadAxisDeltaRef.current;      // これ以上の変化があれば「回転中」とみなす
+            const AXIS_RELEASE_MS = gamepadAxisReleaseMsRef.current; // この時間動きが無ければ「離した」とみなす
             const axisState = gamepadAxisStateRef.current;
             for (let ai = 0; ai < pad.axes.length; ai++) {
                 const v = pad.axes[ai];
@@ -2348,6 +2359,8 @@ export default function BmsViewer() {
         muteDebugAutoPlay={muteDebugAutoPlay} setMuteDebugAutoPlay={setMuteDebugAutoPlay}
         keyMaps={keyMaps} setKeyMaps={setKeyMaps}
         gamepadEnabled={gamepadEnabled} setGamepadEnabled={setGamepadEnabled} gamepadName={gamepadName}
+        gamepadAxisDelta={gamepadAxisDelta} setGamepadAxisDelta={setGamepadAxisDelta}
+        gamepadAxisReleaseMs={gamepadAxisReleaseMs} setGamepadAxisReleaseMs={setGamepadAxisReleaseMs}
         gamepadMaps={gamepadMaps} setGamepadMaps={setGamepadMaps}
         gamepadScratchAlt={gamepadScratchAlt} setGamepadScratchAlt={setGamepadScratchAlt}
         playMode={playMode} setPlayMode={setPlayMode}

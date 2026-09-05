@@ -114,7 +114,8 @@ function GamepadLiveMonitor() {
 // ゲームパッド(物理コントローラ)入力設定。Gamepad API でブラウザから直接認識する。
 //   Joy2Key等でキーボードに変換すると、スクラッチが押しっぱなしの機種でブラウザのショートカットが
 //   暴発してしまうため、それを避ける目的で追加。スクラッチは物理的に2ボタン(順/逆)想定。
-function GamepadMapSection({ mode, gamepadEnabled, setGamepadEnabled, gamepadName, gamepadMaps, setGamepadMaps, gamepadScratchAlt, setGamepadScratchAlt }) {
+function GamepadMapSection({ mode, gamepadEnabled, setGamepadEnabled, gamepadName, gamepadMaps, setGamepadMaps, gamepadScratchAlt, setGamepadScratchAlt,
+    gamepadAxisDelta, setGamepadAxisDelta, gamepadAxisReleaseMs, setGamepadAxisReleaseMs }) {
     const km = DEFAULT_GAMEPAD_MAPS[mode] ? mode : 'SP7';
     const curMap = (gamepadMaps && gamepadMaps[km]) || DEFAULT_GAMEPAD_MAPS[km];
     const curAlt = (gamepadScratchAlt && gamepadScratchAlt[km]) || DEFAULT_GAMEPAD_SCRATCH_ALT;
@@ -226,6 +227,26 @@ function GamepadMapSection({ mode, gamepadEnabled, setGamepadEnabled, gamepadNam
                 </button>
             </div>
             {showRaw && <GamepadLiveMonitor />}
+            <div className="bg-black/20 rounded p-2 mb-3 mt-2 space-y-1.5">
+                <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-blue-300">スクラッチ(軸)の感度</span>
+                    <span className="font-mono">{gamepadAxisDelta}</span>
+                </div>
+                <input type="range" min={0.0005} max={0.05} step={0.0005} value={gamepadAxisDelta}
+                    onChange={e => setGamepadAxisDelta(Number(e.target.value))}
+                    className="w-full accent-orange-500 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
+                <div className="flex items-center justify-between text-[11px] mt-1">
+                    <span className="text-blue-300">スクラッチ(軸)を離すまでの時間</span>
+                    <span className="font-mono">{gamepadAxisReleaseMs}ms</span>
+                </div>
+                <input type="range" min={20} max={300} step={5} value={gamepadAxisReleaseMs}
+                    onChange={e => setGamepadAxisReleaseMs(Number(e.target.value))}
+                    className="w-full accent-orange-500 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
+                <p className="text-[10px] text-gray-500 leading-relaxed">
+                    スクラッチがボタンではなく軸(AXIS)として来る機種向けの調整です(ボタン式のスクラッチには影響しません)。
+                    全く反応しない場合は感度の数値を下げて、逆に触っていないのに押しっぱなしになる場合は数値を上げてください。
+                </p>
+            </div>
             <div className="flex flex-wrap gap-1.5 justify-center">
                 {laneList.map((lane, i, arr) => {
                     const brk = i > 0 && arr[i - 1].side !== lane.side;
@@ -546,6 +567,7 @@ const SettingsModal = ({
     keyMaps, setKeyMaps,
     gamepadEnabled, setGamepadEnabled, gamepadName,
     gamepadMaps, setGamepadMaps, gamepadScratchAlt, setGamepadScratchAlt,
+    gamepadAxisDelta, setGamepadAxisDelta, gamepadAxisReleaseMs, setGamepadAxisReleaseMs,
     playMode, setPlayMode,
     judgeOffset, setJudgeOffset, suggestJudgeOffset,
     audioFx, setAudioFx,
@@ -823,7 +845,9 @@ const SettingsModal = ({
                         <GamepadMapSection mode={parsedSong?.mode || 'SP7'}
                             gamepadEnabled={gamepadEnabled} setGamepadEnabled={setGamepadEnabled} gamepadName={gamepadName}
                             gamepadMaps={gamepadMaps} setGamepadMaps={setGamepadMaps}
-                            gamepadScratchAlt={gamepadScratchAlt} setGamepadScratchAlt={setGamepadScratchAlt} />
+                            gamepadScratchAlt={gamepadScratchAlt} setGamepadScratchAlt={setGamepadScratchAlt}
+                            gamepadAxisDelta={gamepadAxisDelta} setGamepadAxisDelta={setGamepadAxisDelta}
+                            gamepadAxisReleaseMs={gamepadAxisReleaseMs} setGamepadAxisReleaseMs={setGamepadAxisReleaseMs} />
                     )}
 
                     {/* PC用設定 (プレイサイド / レーンオプション) */}
