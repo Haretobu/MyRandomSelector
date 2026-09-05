@@ -1,5 +1,5 @@
 // src/bms/BmsViewer.jsx
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
 import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, JUDGE_WINDOWS, judgeRankIndex, djLevel, DEFAULT_AUDIO_FX } from './constants';
@@ -419,6 +419,17 @@ export default function BmsViewer() {
     window.addEventListener('resize', update);
     return () => { ro.disconnect(); window.removeEventListener('resize', update); };
   }, [isMobile]);
+
+  // ★モード切替(7K⇔14K等)直後の一瞬だけレーン幅が旧モード基準になる問題への対策:
+  //   ResizeObserver のコールバックは非同期(次フレーム以降)なので、盤面のレーン構成が
+  //   変わった直後は canvasRectRef が古い実測幅のままになる一瞬が生じていた。
+  //   ここで描画前(useLayoutEffect=paint前)に同期的に再計測し、そのズレを消す。
+  useLayoutEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) canvasRectRef.current = { width: r.width, height: r.height };
+  }, [parsedSong?.mode, playSide, laneWidthPx]);
 
   useEffect(() => { hiSpeedRef.current = hiSpeed; }, [hiSpeed]);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
@@ -1793,7 +1804,7 @@ export default function BmsViewer() {
     const laneHeight = isLiftEnabled ? JUDGE_Y : height;
 
     // ★軽量化(Part1): 静的な板はオフスクリーンに1回だけ描き、毎フレームは drawImage。
-    const boardKey = `${width}|${height}|${dpr}|${KEY_W}|${Math.round(BOARD_X)}|${Math.round(BOARD_W)}|${JUDGE_Y}|${isLiftEnabled}|${mode}|${is2P}|${bOpacity}|${lOpacity}|${isMobileRef.current}|${showSettings}|${!!parsedSong}`;
+    const boardKey = `${width}|${height}|${dpr}|${KEY_W}|${Math.round(BOARD_X)}|${Math.round(BOARD_W)}|${JUDGE_Y}|${isLiftEnabled}|${mode}|${is2P}|${bOpacity}|${lOpacity}|${isMobileRef.current}|${!!parsedSong}`;
     const bl = boardLayerRef.current;
     if (bl.key !== boardKey) {
         bl.key = boardKey;
@@ -1817,7 +1828,7 @@ export default function BmsViewer() {
             bx.moveTo(lx + laneW[lane.index], 0); bx.lineTo(lx + laneW[lane.index], laneHeight);
         }
         bx.stroke();
-        if (!showSettings && parsedSong) {
+        if (parsedSong) {
             bx.strokeStyle = '#ef4444';
             bx.lineWidth = 2; bx.beginPath(); bx.moveTo(BOARD_X, JUDGE_Y); bx.lineTo(BOARD_X + BOARD_W, JUDGE_Y); bx.stroke();
         }
@@ -2124,8 +2135,7 @@ export default function BmsViewer() {
   const sSuggestJudgeOffset = useEvent(suggestJudgeOffset);
 
   return (
-    <div className={`flex flex-col h-screen bg-neutral-950 text-white font-sans overflow-hidden transition-[padding] duration-300 ease-out ${isDragOver ? 'ring-4 ring-blue-500' : ''}`}
-      style={{ paddingRight: (showSettings && !isMobile) ? 'min(380px, 42vw)' : 0 }}
+    <div className={`flex flex-col h-screen bg-neutral-950 text-white font-sans overflow-hidden ${isDragOver ? 'ring-4 ring-blue-500' : ''}`}
       onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
       
       <SettingsModal

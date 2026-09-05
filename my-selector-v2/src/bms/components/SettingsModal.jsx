@@ -497,7 +497,7 @@ const SettingsModal = ({
                     )}
 
                     {/* PC用設定 (プレイサイド / レーンオプション) */}
-                    <div hidden={!showPlay} className="flex flex-col md:flex-row gap-4 items-start">
+                    <div className={`${showPlay ? 'flex' : 'hidden'} flex-col md:flex-row gap-4 items-start`}>
                          {(() => {
                              const sideLocked = parsedSong && parsedSong.mode !== 'SP7' && parsedSong.mode !== 'SP5';
                              return (
@@ -645,6 +645,10 @@ const SettingsModal = ({
                                 <input type="checkbox" checked={showReady} onChange={e=>setShowReady(e.target.checked)} className="accent-blue-500"/>
                              </label>
                             <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
+                                <div className="flex items-center gap-3"><Music className="text-blue-400" size={18}/><span className="text-sm">キー音を再生</span></div>
+                                <input type="checkbox" checked={playKeySounds} onChange={e=>setPlayKeySounds(e.target.checked)} className="accent-blue-500"/>
+                            </label>
+                            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
                                 <div className="flex items-center gap-3"><Layers className="text-blue-400" size={18}/><span className="text-sm">BGMを再生</span></div>
                                 <input type="checkbox" checked={playLongAudio} onChange={e=>setPlayLongAudio(e.target.checked)} className="accent-blue-500"/>
                              </label>
@@ -702,10 +706,6 @@ const SettingsModal = ({
                                 <span className="text-sm text-blue-300">打鍵音の音量</span>
                                 <input type="range" min="0" max="2" step="0.1" value={hitSoundVolume} onChange={e => setHitSoundVolume(parseFloat(e.target.value))} className="w-32 accent-blue-500 cursor-pointer"/>
                             </div>
-                            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
-                                <div className="flex items-center gap-3"><Music className="text-blue-400" size={18}/><span className="text-sm">キー音を再生</span></div>
-                                <input type="checkbox" checked={playKeySounds} onChange={e=>setPlayKeySounds(e.target.checked)} className="accent-blue-500"/>
-                            </label>
 
                             <div className="border-t border-blue-900/30 my-2"></div>
 
@@ -772,7 +772,8 @@ const SettingsModal = ({
         );
     }
 
-    // PC: 右ドロワー。開いている間は BmsViewer 側でアプリを左に寄せる(paddingRight)。
+    // PC: 右ドロワー。純粋なオーバーレイ(fixed)で、アプリ本体のレイアウト幅には影響を与えない。
+    // 開いている間は画面右端の内容(BACKING TRACK 列など)に重なって表示される。
     return (
         <div className="fixed top-0 right-0 h-full z-[95] w-[min(380px,42vw)] bg-[#080808] border-l-2 border-blue-900/50 shadow-2xl p-3 text-blue-100 flex flex-col transition-transform duration-300 ease-out"
              style={{ transform: showSettings ? 'translateX(0)' : 'translateX(100%)' }}>
