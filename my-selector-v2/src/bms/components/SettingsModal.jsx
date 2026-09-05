@@ -77,6 +77,40 @@ function KeyMapSection({ mode, keyMaps, setKeyMaps }) {
     );
 }
 
+// 生データモニター: ボタン/軸の現在値をリアルタイム表示(トラブルシューティング用)。
+// 表示中だけ rAF で毎フレーム読み続けるので、通常は非表示にしておく。
+function GamepadLiveMonitor() {
+    const [snap, setSnap] = useState(null);
+    useEffect(() => {
+        let raf = null;
+        const tick = () => {
+            const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+            const pad = pads.find(p => p);
+            setSnap(pad ? { buttons: pad.buttons.map(b => b.pressed || b.value > 0.5), axes: pad.axes.map(v => v) } : null);
+            raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => { if (raf) cancelAnimationFrame(raf); };
+    }, []);
+    if (!snap) return <div className="text-[10px] text-gray-500 mt-2">未接続、または反応なし</div>;
+    return (
+        <div className="text-[9px] font-mono text-blue-200/80 space-y-1.5 mt-2 bg-black/30 rounded p-2">
+            <div>
+                <span className="text-blue-500/70">BUTTONS: </span>
+                {snap.buttons.map((p, i) => (
+                    <span key={i} className={`inline-block px-1 mr-0.5 mb-0.5 rounded ${p ? 'bg-orange-600 text-white' : 'bg-black/40 text-gray-500'}`}>{i}</span>
+                ))}
+            </div>
+            <div>
+                <span className="text-blue-500/70">AXES: </span>
+                {snap.axes.map((v, i) => (
+                    <span key={i} className={`inline-block px-1 mr-1.5 mb-0.5 rounded ${Math.abs(v) > 0.5 ? 'text-orange-300' : 'text-gray-400'}`}>A{i}:{v.toFixed(3)}</span>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 // ゲームパッド(物理コントローラ)入力設定。Gamepad API でブラウザから直接認識する。
 //   Joy2Key等でキーボードに変換すると、スクラッチが押しっぱなしの機種でブラウザのショートカットが
 //   暴発してしまうため、それを避ける目的で追加。スクラッチは物理的に2ボタン(順/逆)想定。
@@ -87,6 +121,7 @@ function GamepadMapSection({ mode, gamepadEnabled, setGamepadEnabled, gamepadNam
     const laneList = LANE_LAYOUTS[km] || LANE_LAYOUTS.SP7;
     // listening: { lane, slot: 'main' | 'alt' } | null
     const [listening, setListening] = useState(null);
+    const [showRaw, setShowRaw] = useState(false);
 
     useEffect(() => {
         if (!listening) return;
@@ -184,9 +219,13 @@ function GamepadMapSection({ mode, gamepadEnabled, setGamepadEnabled, gamepadNam
                 <span className="text-sm">物理コントローラを使う(Joy2Key不要)</span>
                 <input type="checkbox" checked={gamepadEnabled} onChange={e => setGamepadEnabled(e.target.checked)} className="accent-blue-500 w-4 h-4" />
             </label>
-            <div className="text-[11px] text-blue-500/70 mb-3">
-                接続中: <span className={gamepadName ? 'text-blue-300 font-mono' : 'text-gray-500'}>{gamepadName || '未接続'}</span>
+            <div className="text-[11px] text-blue-500/70 mb-3 flex items-center justify-between">
+                <span>接続中: <span className={gamepadName ? 'text-blue-300 font-mono' : 'text-gray-500'}>{gamepadName || '未接続'}</span></span>
+                <button onClick={() => setShowRaw(v => !v)} className="text-[10px] font-bold text-blue-300 hover:text-white bg-black/40 border border-blue-900/50 rounded px-2 py-0.5 transition">
+                    {showRaw ? '生データを隠す' : '生データを表示'}
+                </button>
             </div>
+            {showRaw && <GamepadLiveMonitor />}
             <div className="flex flex-wrap gap-1.5 justify-center">
                 {laneList.map((lane, i, arr) => {
                     const brk = i > 0 && arr[i - 1].side !== lane.side;
