@@ -14,6 +14,12 @@ export const parseBMS = async (file) => {
     const header = { bpm: 130, wavs: {}, bmps: {}, bpms: {}, stops: {}, title: 'Unknown', artist: 'Unknown', genre: '', playlevel: '', rank: null, difficulty: null, stagefile: null, lnObj: null, player: 1 };
     let rawObjects = [];
     const measureLen = {}; const rawLinesByMeasure = {}; const notesPerMeasure = {}; const scratchPerMeasure = {};
+    // ★同一小節・同一チャンネルの行が複数回出現する譜面(密なBGM/キー音チャンネルを複数行に分割する
+    //   エディタがよくある)向け: 各行を独立処理せず、出現順に文字列連結してから位置を計算する。
+    //   連結しないと2行目以降が毎回「total=1(そのオブジェクト単体の長さ)」扱いになり、
+    //   本来は小節内に分散しているはずのオブジェクトが軒並み小節先頭(position=0)に潰れてしまい、
+    //   BGMや譜面が大きくズレる原因になっていた。
+    const channelValues = {};
     let maxMeasureIndex = 0;
     let maxLaneIndex = 0;
     let isSupportedMode = true;
@@ -50,39 +56,51 @@ export const parseBMS = async (file) => {
         const ch = key.substring(4, 6);
         if (!rawLinesByMeasure[measure]) rawLinesByMeasure[measure] = [];
         rawLinesByMeasure[measure].push(line);
-        if (value.length % 2 === 0) {
-          const total = value.length / 2;
-          for (let i = 0; i < total; i++) {
-            const val = parseInt36(value.substring(i * 2, i * 2 + 2));
-            if (val !== 0) {
-              const lane = laneMap[ch];
-              if (lane) {
-                  if (lane.index > maxLaneIndex) maxLaneIndex = lane.index;
-                  if (!lane.isBg) {
-                      notesPerMeasure[measure] = (notesPerMeasure[measure] || 0) + 1;
-                      if (lane.isScratch) scratchPerMeasure[measure] = (scratchPerMeasure[measure] || 0) + 1;
-                  }
-              } else if (isPms && RE_PMS_PLAYFIELD_CH.test(ch)) {
-                  unmappedPmsCh.add(ch); // 未対応チャンネルの可視ノーツ → あとで警告
-              }
-
-              if (lane || ch === '01' || ch === '04' || ch === '06' || ch === '07' || ch === '03' || ch === '08' || ch === '09') {
-                rawObjects.push({
-                    measure, channel: ch, position: i / total, value: val,
-                    isNote: !!lane && !lane.isBg,
-                    isBackBga: (ch === '04'),
-                    isPoorBga: (ch === '06'), isLayerBga: (ch === '07'),
-                    isBpm: (ch === '03' || ch === '08'),
-                    isStop: (ch === '09'),
-                    laneIndex: lane ? lane.index : -1, isLong: lane ? lane.isLong : false 
-                });
-              }
-            }
-          }
-        }
+        if (!channelValues[measure]) channelValues[measure] = {};
+        // 同一小節・同一チャンネルが複数回出現する場合は出現順に連結する(下の注釈参照)
+        channelValues[measure][ch] = (channelValues[measure][ch] || '') + value;
       }
     }
-    
+
+    // 連結済みの各小節・チャンネル文字列から、実際のオブジェクトを生成する。
+    for (const measureKey of Object.keys(channelValues)) {
+        const measure = Number(measureKey);
+        const chans = channelValues[measureKey];
+        for (const ch of Object.keys(chans)) {
+            const value = chans[ch];
+            if (value.length % 2 !== 0) continue;
+            const total = value.length / 2;
+            for (let i = 0; i < total; i++) {
+                const val = parseInt36(value.substring(i * 2, i * 2 + 2));
+                if (val !== 0) {
+                    const lane = laneMap[ch];
+                    if (lane) {
+                        if (lane.index > maxLaneIndex) maxLaneIndex = lane.index;
+                        if (!lane.isBg) {
+                            notesPerMeasure[measure] = (notesPerMeasure[measure] || 0) + 1;
+                            if (lane.isScratch) scratchPerMeasure[measure] = (scratchPerMeasure[measure] || 0) + 1;
+                        }
+                    } else if (isPms && RE_PMS_PLAYFIELD_CH.test(ch)) {
+                        unmappedPmsCh.add(ch); // 未対応チャンネルの可視ノーツ → あとで警告
+                    }
+
+                    if (lane || ch === '01' || ch === '04' || ch === '06' || ch === '07' || ch === '03' || ch === '08' || ch === '09') {
+                        rawObjects.push({
+                            measure, channel: ch, position: i / total, value: val,
+                            isNote: !!lane && !lane.isBg,
+                            isBackBga: (ch === '04'),
+                            isPoorBga: (ch === '06'), isLayerBga: (ch === '07'),
+                            isBpm: (ch === '03' || ch === '08'),
+                            isStop: (ch === '09'),
+                            laneIndex: lane ? lane.index : -1, isLong: lane ? lane.isLong : false
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+
     let totalNotesCount = 0;
     Object.values(notesPerMeasure).forEach(c => totalNotesCount += c);
     const avgDensity = maxMeasureIndex > 0 ? totalNotesCount / (maxMeasureIndex + 1) : 0;
