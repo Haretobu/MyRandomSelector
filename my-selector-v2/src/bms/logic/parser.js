@@ -160,8 +160,9 @@ export const parseBMS = async (file) => {
             //   停止明けに巻き戻って再度流れてくるように見える原因)。
             //   停止「開始」の timePoint を bpm=0 で追加する。(time-point.time)/(60/0=Infinity) は
             //   常に0になるため、この区間は拍が一切進まなくなる(#STOP中はBPM=0、という実際の仕様通り)。
-            //   ノーツの発音スケジュール(applyTimeSorted、beat→time の順方向変換)は影響を受けない
-            //   ("開始"と"終了"は同じ beat を持つため、そこに一致するオブジェクトは必ず"終了"側に解決される)。
+            //   ※ 同じ beat に「開始」「終了」2つの timePoint ができるため、そこに一致するオブジェクトの
+            //   発音時刻(順方向 beat→time 変換)は「開始」側(=停止前、正しい)を使うよう applyTimeSorted /
+            //   barLines 側で対応済み(下記コメント参照)。
             if (timePoints[timePoints.length - 1].beat === currentBeat) {
                 timePoints[timePoints.length - 1].bpm = 0;
             } else {
@@ -175,12 +176,31 @@ export const parseBMS = async (file) => {
     // ★軽量化: 旧 applyTime は「各オブジェクト × 全 timePoints」の線形走査で O(objects * timePoints) だった。
     //   finalObjects / backBgaObjects / ... はいずれも beat 昇順、timePoints も beat 昇順なので、
     //   ポインタを前進させるマージ歩行で O(objects + timePoints) にする（算出される time は従来と完全に同一）。
+    // ★STOP1つにつき同じ beat の timePoint が2つ(開始bpm=0 / 終了)並ぶため、その beat にちょうど
+    //   一致するオブジェクト(STOPと同じ行にある通常のノーツ・BGM等)は「終了」側まで読み進めてしまうと
+    //   本来より停止時間ぶん遅れて発音してしまう(停止直後に音がまとめて鳴る/ズレて聞こえる原因)。
+    //   beat が厳密に小さい点までだけ読み進め、次の点がちょうど同じ beat ならその「最初の」点(開始側)
+    //   に1つだけ進めて止める(＝同じ beat の2点なら常に開始側を使う)。beat が厳密に大きい通常の
+    //   ケースは従来どおり(結果は完全に同一)。
+    const findTimePointIndex = (ti, beat) => {
+        // ★重要: 同じ beat を持つオブジェクトが複数(STOPと同じ行の複数レーン等)連続する場合、
+        //   このtiは呼び出しをまたいで使い回される(効率化のため)。ここで「既にその beat の
+        //   最初の点にいるか」を確認せずに毎回1つ先まで進めてしまうと、同じ行の2つ目以降の
+        //   オブジェクトが「開始」側ではなく「終了」側にどんどんズレていってしまっていた
+        //   (STOP行の一部の音だけ正しく、残りが停止時間ぶん遅れて鳴る不具合の原因)。
+        if (timePoints[ti].beat === beat) return ti;
+        while (ti < timePoints.length - 1 && timePoints[ti + 1].beat < beat) ti++;
+        if (ti < timePoints.length - 1 && timePoints[ti + 1].beat === beat) ti++;
+        return ti;
+    };
+    // bpm=0(停止開始点)に一致した場合、beat差は必ず0のはずだが 0 * (60/0=Infinity) は
+    // NaN になってしまう(0×∞は不定形)。この場合は素直に tp.time を使う。
+    const beatToTime = (tp, beat) => tp.bpm > 0 ? tp.time + (beat - tp.beat) * (60.0 / tp.bpm) : tp.time;
     const applyTimeSorted = (objs) => {
         let ti = 0;
         for (const obj of objs) {
-            while (ti < timePoints.length - 1 && timePoints[ti + 1].beat <= obj.beat) ti++;
-            const tp = timePoints[ti];
-            obj.time = tp.time + (obj.beat - tp.beat) * (60.0 / tp.bpm);
+            ti = findTimePointIndex(ti, obj.beat);
+            obj.time = beatToTime(timePoints[ti], obj.beat);
         }
     };
     applyTimeSorted(finalObjects); applyTimeSorted(backBgaObjects); applyTimeSorted(layerBgaObjects); applyTimeSorted(poorBgaObjects);
@@ -215,9 +235,8 @@ export const parseBMS = async (file) => {
     let bti = 0;
     for (let m = 0; m <= maxMeasure; m++) {
         const beat = measureStartBeats[m];
-        while (bti < timePoints.length - 1 && timePoints[bti + 1].beat <= beat) bti++;
-        const tp = timePoints[bti];
-        barLines.push({ measure: m, beat: beat, time: tp.time + (beat - tp.beat) * (60.0 / tp.bpm) });
+        bti = findTimePointIndex(bti, beat); // ★STOPと同じ小節境界にある場合も「開始」側を使う(上のコメント参照)
+        barLines.push({ measure: m, beat: beat, time: beatToTime(timePoints[bti], beat) });
     }
     const lastObjTime = resolvedObjects.length > 0 ? resolvedObjects[resolvedObjects.length-1].time : 0;
     if (maxLNDuration < 20.0) maxLNDuration = 20.0;
