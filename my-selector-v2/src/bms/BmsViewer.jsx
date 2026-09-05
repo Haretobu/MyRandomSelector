@@ -546,6 +546,7 @@ export default function BmsViewer() {
   useEffect(() => { gamepadEnabledRef.current = gamepadEnabled; }, [gamepadEnabled]);
   const gamepadIndexRef = useRef(null);       // 使用する gamepad の index (navigator.getGamepads() 内)
   const gamepadPrevPressedRef = useRef({});   // ボタン番号 → 前フレームの押下状態
+  const gamepadPrevAxisSignRef = useRef({});  // 軸番号 → 前フレームの符号(-1|0|1、皿が軸として来る機種向け)
 
   // ゲームパッドの接続/切断を検知し、使う対象(先に繋がったもの)を決める。表示名は設定画面用。
   useEffect(() => {
@@ -1002,10 +1003,15 @@ export default function BmsViewer() {
     //   押しっぱなしのボタンを「新しく押された」と誤検知して勝手にレーンが反応してしまう。
     if (navigator.getGamepads) {
         const prev = gamepadPrevPressedRef.current;
+        const prevAxis = gamepadPrevAxisSignRef.current;
         navigator.getGamepads().forEach(pad => {
             if (!pad) return;
             for (let i = 0; i < pad.buttons.length; i++) {
                 prev[i] = pad.buttons[i].pressed || pad.buttons[i].value > 0.5;
+            }
+            for (let i = 0; i < pad.axes.length; i++) {
+                const v = pad.axes[i];
+                prevAxis[i] = v > 0.5 ? 1 : (v < -0.5 ? -1 : 0);
             }
         });
     }
@@ -1689,6 +1695,27 @@ export default function BmsViewer() {
                         else handleLaneUpRef.current(lane);
                     }
                     prev[bi] = pressed;
+                }
+            }
+            // ★「Unknown Gamepad」等の非標準機種では、スクラッチがボタンではなく軸(axis)として
+            //   来ることがある(設定画面の GamepadMapSection と同じ仕組み。"a<軸番号><符号>" キーで参照)。
+            const prevAxis = gamepadPrevAxisSignRef.current;
+            const AXIS_ON = 0.5, AXIS_OFF = 0.25;
+            for (let ai = 0; ai < pad.axes.length; ai++) {
+                const v = pad.axes[ai];
+                const prevSign = prevAxis[ai] || 0;
+                if (v > AXIS_ON && prevSign <= 0) {
+                    const lane = laneMap[`a${ai}+`];
+                    if (lane !== undefined) handleLaneDownRef.current(lane, lane === 0 || lane === 8, dirMap[`a${ai}+`]);
+                    prevAxis[ai] = 1;
+                } else if (v < -AXIS_ON && prevSign >= 0) {
+                    const lane = laneMap[`a${ai}-`];
+                    if (lane !== undefined) handleLaneDownRef.current(lane, lane === 0 || lane === 8, dirMap[`a${ai}-`]);
+                    prevAxis[ai] = -1;
+                } else if (Math.abs(v) < AXIS_OFF && prevSign !== 0) {
+                    const lane = laneMap[prevSign > 0 ? `a${ai}+` : `a${ai}-`];
+                    if (lane !== undefined) handleLaneUpRef.current(lane);
+                    prevAxis[ai] = 0;
                 }
             }
         }

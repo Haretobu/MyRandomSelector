@@ -92,28 +92,34 @@ function GamepadMapSection({ mode, gamepadEnabled, setGamepadEnabled, gamepadNam
         if (!listening) return;
         let cancelled = false;
         let raf = null;
-        const prevState = {};
-        // ★重要: リスニング開始時点で既に押されている(または遊びで value>0.5 の)ボタンを
-        //   先に prevState へ記録しておく。これをしないと、開始直後にたまたま押しっぱなしの
-        //   ボタン(皿など)を「新しく押された」と誤検知して即座に割り当ててしまい、
-        //   意図したボタンを押す前に別のボタンが割り当てられる不具合になっていた。
+        const AXIS_ON = 0.5, AXIS_OFF = 0.25;
+        const prevBtn = {};
+        const prevAxisSign = {}; // key: `${pad.index}_${axisIndex}` -> -1|0|1 (ヒステリシス用)
+        // ★重要: リスニング開始時点で既に押されている/倒れているボタン・軸を先に記録しておく。
+        //   これをしないと、開始直後にたまたま押しっぱなし・倒れっぱなしの入力(皿など)を
+        //   「新しく押された」と誤検知して即座に割り当ててしまい、意図した入力の前に
+        //   別のものが割り当てられる不具合になっていた。
         (navigator.getGamepads ? navigator.getGamepads() : []).forEach(pad => {
             if (!pad) return;
             for (let i = 0; i < pad.buttons.length; i++) {
-                prevState[`${pad.index}_${i}`] = pad.buttons[i].pressed || pad.buttons[i].value > 0.5;
+                prevBtn[`${pad.index}_${i}`] = pad.buttons[i].pressed || pad.buttons[i].value > 0.5;
+            }
+            for (let i = 0; i < pad.axes.length; i++) {
+                const v = pad.axes[i];
+                prevAxisSign[`${pad.index}_${i}`] = v > AXIS_ON ? 1 : (v < -AXIS_ON ? -1 : 0);
             }
         });
-        const assign = (btnIndex) => {
+        const assign = (value) => {
             if (listening.slot === 'alt') {
-                setGamepadScratchAlt(prev => ({ ...prev, [km]: { ...(prev[km] || DEFAULT_GAMEPAD_SCRATCH_ALT), [listening.lane]: btnIndex } }));
+                setGamepadScratchAlt(prev => ({ ...prev, [km]: { ...(prev[km] || DEFAULT_GAMEPAD_SCRATCH_ALT), [listening.lane]: value } }));
             } else {
                 setGamepadMaps(prev => {
                     const next = { ...prev };
                     const m = { ...(next[km] || DEFAULT_GAMEPAD_MAPS[km]) };
-                    // 既に他レーンが使っているボタンなら解除(入れ替えではなく未割り当てに)
-                    const dup = Object.keys(m).find(k => m[k] === btnIndex && Number(k) !== listening.lane);
+                    // 既に他レーンが使っているボタン/軸なら解除(入れ替えではなく未割り当てに)
+                    const dup = Object.keys(m).find(k => m[k] === value && Number(k) !== listening.lane);
                     if (dup != null) m[dup] = null;
-                    m[listening.lane] = btnIndex;
+                    m[listening.lane] = value;
                     next[km] = m;
                     return next;
                 });
@@ -128,8 +134,19 @@ function GamepadMapSection({ mode, gamepadEnabled, setGamepadEnabled, gamepadNam
                 for (let i = 0; i < pad.buttons.length; i++) {
                     const key = `${pad.index}_${i}`;
                     const pressed = pad.buttons[i].pressed || pad.buttons[i].value > 0.5;
-                    if (pressed && !prevState[key]) { assign(i); return; }
-                    prevState[key] = pressed;
+                    if (pressed && !prevBtn[key]) { assign(i); return; }
+                    prevBtn[key] = pressed;
+                }
+                // ★一部のコントローラ(特に「Unknown Gamepad」として認識される非標準機種)は、
+                //   スクラッチのような2方向入力をボタンではなく「軸(axis)」として送ってくる。
+                //   軸の正/負それぞれの方向を、別々の割り当て候補として拾えるようにする。
+                for (let i = 0; i < pad.axes.length; i++) {
+                    const key = `${pad.index}_${i}`;
+                    const v = pad.axes[i];
+                    const prevSign = prevAxisSign[key] || 0;
+                    if (v > AXIS_ON && prevSign <= 0) { assign(`a${i}+`); return; }
+                    if (v < -AXIS_ON && prevSign >= 0) { assign(`a${i}-`); return; }
+                    if (Math.abs(v) < AXIS_OFF) prevAxisSign[key] = 0;
                 }
             }
             raf = requestAnimationFrame(tick);
@@ -144,7 +161,14 @@ function GamepadMapSection({ mode, gamepadEnabled, setGamepadEnabled, gamepadNam
         const n = lane.side === 0 ? lane.index : lane.index - 8;
         return `${lane.side === 1 ? '2P ' : ''}${n}`;
     };
-    const btnLabel = (v) => (v === null || v === undefined) ? '未設定' : `#${v}`;
+    const btnLabel = (v) => {
+        if (v === null || v === undefined) return '未設定';
+        if (typeof v === 'string') {
+            const m = v.match(/^a(\d+)([+-])$/);
+            if (m) return `AXIS${m[1]}${m[2]}`;
+        }
+        return `#${v}`;
+    };
 
     return (
         <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
@@ -215,7 +239,7 @@ function GamepadMapSection({ mode, gamepadEnabled, setGamepadEnabled, gamepadNam
                 })}
             </div>
             <div className="text-[10px] text-blue-500/60 mt-2 leading-relaxed">
-                ボタンを押してから物理コントローラのボタンを押すと割り当てられます。スクラッチは「順」「逆」を別々に割り当ててください(2ボタン式のターンテーブル用)。他のレーンと重複するボタンは自動的に解除されます。<br />
+                ボタンを押してから物理コントローラを操作すると割り当てられます。スクラッチは「順」「逆」を別々に割り当ててください(2ボタン式のターンテーブル用)。ボタンではなく軸(AXIS)として来る機種でも、回した方向を検知して自動的に割り当てます。他のレーンと重複する入力は自動的に解除されます。<br />
                 ※ ブラウザにコントローラを認識させるため、ページ内でいずれかのボタンを一度押してから使ってください(ブラウザの仕様)。
             </div>
         </div>
