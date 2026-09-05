@@ -1,7 +1,7 @@
 // src/bms/components/SettingsModal.jsx
 import React, { memo, useState, useEffect, useRef } from 'react';
 import { Settings, X, ChevronsUp, RotateCw, Film, Flag, Music, Layers, Speaker, EyeOff, FileX, Keyboard, FolderOpen, FileArchive, ChevronDown, Gamepad2, RotateCcw, SlidersHorizontal } from 'lucide-react';
-import { VISIBILITY_MODES, LANE_LAYOUTS, MODE_LABELS, DEFAULT_KEYMAPS, DEFAULT_AUDIO_FX, keyCodeLabel } from '../constants';
+import { VISIBILITY_MODES, LANE_LAYOUTS, MODE_LABELS, DEFAULT_KEYMAPS, DEFAULT_GAMEPAD_MAPS, DEFAULT_GAMEPAD_SCRATCH_ALT, DEFAULT_AUDIO_FX, keyCodeLabel } from '../constants';
 
 // キー割り当て設定(6-1-d)。表示・保存のみ。手動プレイの判定入力接続は P6-2。
 function KeyMapSection({ mode, keyMaps, setKeyMaps }) {
@@ -72,6 +72,141 @@ function KeyMapSection({ mode, keyMaps, setKeyMaps }) {
             <div className="text-[10px] text-blue-500/60 mt-2 leading-relaxed">
                 ボタンを押してからキーを入力すると割り当てが変わります（Esc でキャンセル）。他のレーンと重複するキーは自動で入れ替わります。<br />
                 ※ 手動プレイの判定入力への接続は今後のアップデート（プレイ機能）で対応します。現在は表示と保存のみです。
+            </div>
+        </div>
+    );
+}
+
+// ゲームパッド(物理コントローラ)入力設定。Gamepad API でブラウザから直接認識する。
+//   Joy2Key等でキーボードに変換すると、スクラッチが押しっぱなしの機種でブラウザのショートカットが
+//   暴発してしまうため、それを避ける目的で追加。スクラッチは物理的に2ボタン(順/逆)想定。
+function GamepadMapSection({ mode, gamepadEnabled, setGamepadEnabled, gamepadName, gamepadMaps, setGamepadMaps, gamepadScratchAlt, setGamepadScratchAlt }) {
+    const km = DEFAULT_GAMEPAD_MAPS[mode] ? mode : 'SP7';
+    const curMap = (gamepadMaps && gamepadMaps[km]) || DEFAULT_GAMEPAD_MAPS[km];
+    const curAlt = (gamepadScratchAlt && gamepadScratchAlt[km]) || DEFAULT_GAMEPAD_SCRATCH_ALT;
+    const laneList = LANE_LAYOUTS[km] || LANE_LAYOUTS.SP7;
+    // listening: { lane, slot: 'main' | 'alt' } | null
+    const [listening, setListening] = useState(null);
+
+    useEffect(() => {
+        if (!listening) return;
+        let cancelled = false;
+        let raf = null;
+        const prevState = {};
+        const assign = (btnIndex) => {
+            if (listening.slot === 'alt') {
+                setGamepadScratchAlt(prev => ({ ...prev, [km]: { ...(prev[km] || DEFAULT_GAMEPAD_SCRATCH_ALT), [listening.lane]: btnIndex } }));
+            } else {
+                setGamepadMaps(prev => {
+                    const next = { ...prev };
+                    const m = { ...(next[km] || DEFAULT_GAMEPAD_MAPS[km]) };
+                    // 既に他レーンが使っているボタンなら解除(入れ替えではなく未割り当てに)
+                    const dup = Object.keys(m).find(k => m[k] === btnIndex && Number(k) !== listening.lane);
+                    if (dup != null) m[dup] = null;
+                    m[listening.lane] = btnIndex;
+                    next[km] = m;
+                    return next;
+                });
+            }
+            setListening(null);
+        };
+        const tick = () => {
+            if (cancelled) return;
+            const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+            for (const pad of pads) {
+                if (!pad) continue;
+                for (let i = 0; i < pad.buttons.length; i++) {
+                    const key = `${pad.index}_${i}`;
+                    const pressed = pad.buttons[i].pressed || pad.buttons[i].value > 0.5;
+                    if (pressed && !prevState[key]) { assign(i); return; }
+                    prevState[key] = pressed;
+                }
+            }
+            raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => { cancelled = true; if (raf) cancelAnimationFrame(raf); };
+    }, [listening, km, setGamepadMaps, setGamepadScratchAlt]);
+
+    const laneLabel = (lane) => {
+        if (lane.kind === 'scratch') return lane.side === 1 ? '2P SC' : 'SC';
+        if (km === 'PMS9') return `B${lane.index + 1}`;
+        const n = lane.side === 0 ? lane.index : lane.index - 8;
+        return `${lane.side === 1 ? '2P ' : ''}${n}`;
+    };
+    const btnLabel = (v) => (v === null || v === undefined) ? '未設定' : `#${v}`;
+
+    return (
+        <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
+            <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2"><Gamepad2 size={14} /> ゲームパッド入力（{MODE_LABELS[km] || km}）</span>
+                <button
+                    onClick={() => { setListening(null); setGamepadMaps(prev => ({ ...prev, [km]: { ...DEFAULT_GAMEPAD_MAPS[km] } })); setGamepadScratchAlt(prev => ({ ...prev, [km]: { ...DEFAULT_GAMEPAD_SCRATCH_ALT } })); }}
+                    className="text-[10px] font-bold text-blue-300 hover:text-white flex items-center gap-1 bg-black/40 border border-blue-900/50 rounded px-2 py-1 transition">
+                    <RotateCcw size={11} /> 全解除
+                </button>
+            </div>
+            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer border border-transparent hover:border-blue-500/30 mb-3">
+                <span className="text-sm">物理コントローラを使う(Joy2Key不要)</span>
+                <input type="checkbox" checked={gamepadEnabled} onChange={e => setGamepadEnabled(e.target.checked)} className="accent-blue-500 w-4 h-4" />
+            </label>
+            <div className="text-[11px] text-blue-500/70 mb-3">
+                接続中: <span className={gamepadName ? 'text-blue-300 font-mono' : 'text-gray-500'}>{gamepadName || '未接続'}</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5 justify-center">
+                {laneList.map((lane, i, arr) => {
+                    const brk = i > 0 && arr[i - 1].side !== lane.side;
+                    if (lane.kind === 'scratch') {
+                        const listeningMain = listening && listening.lane === lane.index && listening.slot === 'main';
+                        const listeningAlt = listening && listening.lane === lane.index && listening.slot === 'alt';
+                        return (
+                            <React.Fragment key={lane.index}>
+                                {brk && <div className="basis-full h-0" />}
+                                <div className="flex flex-col items-center gap-0.5">
+                                    <span className="text-[8px] opacity-60 leading-none">{laneLabel(lane)}</span>
+                                    <div className="flex gap-1">
+                                        <button
+                                            onClick={() => setListening(listeningMain ? null : { lane: lane.index, slot: 'main' })}
+                                            title="順回転"
+                                            className={`w-[52px] rounded border px-1 py-1 transition-all flex flex-col items-center gap-0.5 ${listeningMain
+                                                ? 'bg-orange-600 border-orange-400 text-white animate-pulse shadow-[0_0_10px_rgba(234,88,12,0.6)]'
+                                                : 'bg-black/40 border-gray-700 text-gray-300 hover:bg-gray-800 hover:border-blue-500/40'}`}>
+                                            <span className="text-[8px] opacity-60 leading-none">順</span>
+                                            <span className="font-mono text-[11px] font-bold leading-none whitespace-nowrap">{listeningMain ? '…' : btnLabel(curMap[lane.index])}</span>
+                                        </button>
+                                        <button
+                                            onClick={() => setListening(listeningAlt ? null : { lane: lane.index, slot: 'alt' })}
+                                            title="逆回転"
+                                            className={`w-[52px] rounded border px-1 py-1 transition-all flex flex-col items-center gap-0.5 ${listeningAlt
+                                                ? 'bg-orange-600 border-orange-400 text-white animate-pulse shadow-[0_0_10px_rgba(234,88,12,0.6)]'
+                                                : 'bg-black/40 border-gray-700 text-gray-300 hover:bg-gray-800 hover:border-blue-500/40'}`}>
+                                            <span className="text-[8px] opacity-60 leading-none">逆</span>
+                                            <span className="font-mono text-[11px] font-bold leading-none whitespace-nowrap">{listeningAlt ? '…' : btnLabel(curAlt[lane.index])}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </React.Fragment>
+                        );
+                    }
+                    const listeningThis = listening && listening.lane === lane.index && listening.slot === 'main';
+                    return (
+                        <React.Fragment key={lane.index}>
+                            {brk && <div className="basis-full h-0" />}
+                            <button
+                                onClick={() => setListening(listeningThis ? null : { lane: lane.index, slot: 'main' })}
+                                className={`w-[52px] rounded border px-1 py-1 transition-all flex flex-col items-center gap-0.5 ${listeningThis
+                                    ? 'bg-orange-600 border-orange-400 text-white animate-pulse shadow-[0_0_10px_rgba(234,88,12,0.6)]'
+                                    : 'bg-black/40 border-gray-700 text-gray-300 hover:bg-gray-800 hover:border-blue-500/40'}`}>
+                                <span className="text-[8px] opacity-60 leading-none">{laneLabel(lane)}</span>
+                                <span className="font-mono text-[11px] font-bold leading-none whitespace-nowrap">{listeningThis ? '…' : btnLabel(curMap[lane.index])}</span>
+                            </button>
+                        </React.Fragment>
+                    );
+                })}
+            </div>
+            <div className="text-[10px] text-blue-500/60 mt-2 leading-relaxed">
+                ボタンを押してから物理コントローラのボタンを押すと割り当てられます。スクラッチは「順」「逆」を別々に割り当ててください(2ボタン式のターンテーブル用)。他のレーンと重複するボタンは自動的に解除されます。<br />
+                ※ ブラウザにコントローラを認識させるため、ページ内でいずれかのボタンを一度押してから使ってください(ブラウザの仕様)。
             </div>
         </div>
     );
@@ -336,6 +471,8 @@ const SettingsModal = ({
     isInputDebugMode, setIsInputDebugMode,
     muteDebugAutoPlay, setMuteDebugAutoPlay,
     keyMaps, setKeyMaps,
+    gamepadEnabled, setGamepadEnabled, gamepadName,
+    gamepadMaps, setGamepadMaps, gamepadScratchAlt, setGamepadScratchAlt,
     playMode, setPlayMode,
     judgeOffset, setJudgeOffset, suggestJudgeOffset,
     audioFx, setAudioFx,
@@ -606,6 +743,14 @@ const SettingsModal = ({
                     {/* キー割り当て (PC のみ・モード対応) */}
                     {!isMobile && showInput && (
                         <KeyMapSection mode={parsedSong?.mode || 'SP7'} keyMaps={keyMaps} setKeyMaps={setKeyMaps} />
+                    )}
+
+                    {/* ゲームパッド入力 (PC のみ・モード対応・物理コントローラ) */}
+                    {!isMobile && showInput && (
+                        <GamepadMapSection mode={parsedSong?.mode || 'SP7'}
+                            gamepadEnabled={gamepadEnabled} setGamepadEnabled={setGamepadEnabled} gamepadName={gamepadName}
+                            gamepadMaps={gamepadMaps} setGamepadMaps={setGamepadMaps}
+                            gamepadScratchAlt={gamepadScratchAlt} setGamepadScratchAlt={setGamepadScratchAlt} />
                     )}
 
                     {/* PC用設定 (プレイサイド / レーンオプション) */}

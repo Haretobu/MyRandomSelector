@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
-import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, JUDGE_WINDOWS, judgeRankIndex, djLevel, DEFAULT_AUDIO_FX } from './constants';
+import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, DEFAULT_GAMEPAD_MAPS, DEFAULT_GAMEPAD_SCRATCH_ALT, JUDGE_WINDOWS, judgeRankIndex, djLevel, DEFAULT_AUDIO_FX } from './constants';
 import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, shuffleLanes, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 
@@ -164,6 +164,31 @@ export default function BmsViewer() {
   useEffect(() => {
     try { localStorage.setItem('bms_keymaps', JSON.stringify(keyMaps)); } catch { /* quota / privacy mode */ }
   }, [keyMaps]);
+
+  // ゲームパッド入力(Gamepad API): 物理コントローラを直接認識する。Joy2Key等のキーボード変換を経由しないため、
+  // スクラッチが押しっぱなしになってもブラウザのショートカットに干渉しない。
+  const [gamepadEnabled, setGamepadEnabled] = useState(() => {
+    try { return localStorage.getItem('bms_gamepad_enabled') === '1'; } catch { return false; }
+  });
+  useEffect(() => { try { localStorage.setItem('bms_gamepad_enabled', gamepadEnabled ? '1' : '0'); } catch { /* privacy mode */ } }, [gamepadEnabled]);
+  const [gamepadMaps, setGamepadMaps] = useState(() => {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem('bms_gamepad_maps') || '{}') || {}; } catch { saved = {}; }
+    const merged = {};
+    for (const m of Object.keys(DEFAULT_GAMEPAD_MAPS)) merged[m] = { ...DEFAULT_GAMEPAD_MAPS[m], ...(saved[m] || {}) };
+    return merged;
+  });
+  useEffect(() => { try { localStorage.setItem('bms_gamepad_maps', JSON.stringify(gamepadMaps)); } catch { /* quota / privacy mode */ } }, [gamepadMaps]);
+  const [gamepadScratchAlt, setGamepadScratchAlt] = useState(() => {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem('bms_gamepad_scratch_alt') || '{}') || {}; } catch { saved = {}; }
+    const merged = {};
+    for (const m of Object.keys(DEFAULT_GAMEPAD_MAPS)) merged[m] = { ...DEFAULT_GAMEPAD_SCRATCH_ALT, ...(saved[m] || {}) };
+    return merged;
+  });
+  useEffect(() => { try { localStorage.setItem('bms_gamepad_scratch_alt', JSON.stringify(gamepadScratchAlt)); } catch { /* quota / privacy mode */ } }, [gamepadScratchAlt]);
+  const [gamepadName, setGamepadName] = useState(null); // 接続中のコントローラ名(表示用)
+
   // 6-3: サウンドエフェクト設定(EQ/ECHO/COMP/FILTER)。localStorage 永続。
   const [audioFx, setAudioFx] = useState(() => {
     try {
@@ -489,6 +514,64 @@ export default function BmsViewer() {
     scratchKeyDirRef.current = dir;
   }, [keyMaps, parsedSong]);
 
+  // ゲームパッドの「ボタン番号 → laneIndex」逆引き表。keyMaps と同じ考え方(scratchAlt = もう一方向)。
+  const gamepadButtonLaneRef = useRef({});
+  const gamepadButtonDirRef = useRef({});
+  useEffect(() => {
+    const mode = parsedSong?.mode || 'SP7';
+    const m = gamepadMaps[mode] || {};
+    const alt = gamepadScratchAlt[mode] || {};
+    const rev = {};
+    const dir = {};
+    for (const idx of Object.keys(m)) {
+      const btn = m[idx];
+      if (btn === null || btn === undefined) continue;
+      const li = Number(idx);
+      rev[btn] = li;
+      if (li === 0 || li === 8) dir[btn] = 'A';
+    }
+    for (const idx of Object.keys(alt)) {
+      const btn = alt[idx];
+      if (btn === null || btn === undefined) continue;
+      const li = Number(idx);
+      if (m[li] === undefined) continue; // そのモードに該当サイドの皿が無い
+      if (rev[btn] === undefined) rev[btn] = li;
+      dir[btn] = 'B';
+    }
+    gamepadButtonLaneRef.current = rev;
+    gamepadButtonDirRef.current = dir;
+  }, [gamepadMaps, gamepadScratchAlt, parsedSong]);
+
+  const gamepadEnabledRef = useRef(false);
+  useEffect(() => { gamepadEnabledRef.current = gamepadEnabled; }, [gamepadEnabled]);
+  const gamepadIndexRef = useRef(null);       // 使用する gamepad の index (navigator.getGamepads() 内)
+  const gamepadPrevPressedRef = useRef({});   // ボタン番号 → 前フレームの押下状態
+
+  // ゲームパッドの接続/切断を検知し、使う対象(先に繋がったもの)を決める。表示名は設定画面用。
+  useEffect(() => {
+    const pickFirst = () => {
+      const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+      for (const p of pads) { if (p) return p; }
+      return null;
+    };
+    const onConnect = (e) => { gamepadIndexRef.current = e.gamepad.index; setGamepadName(e.gamepad.id); };
+    const onDisconnect = (e) => {
+      if (gamepadIndexRef.current === e.gamepad.index) {
+        const next = pickFirst();
+        gamepadIndexRef.current = next ? next.index : null;
+        setGamepadName(next ? next.id : null);
+      }
+    };
+    window.addEventListener('gamepadconnected', onConnect);
+    window.addEventListener('gamepaddisconnected', onDisconnect);
+    const already = pickFirst(); // ページを開く前から繋がっていた場合
+    if (already) { gamepadIndexRef.current = already.index; setGamepadName(already.id); }
+    return () => {
+      window.removeEventListener('gamepadconnected', onConnect);
+      window.removeEventListener('gamepaddisconnected', onDisconnect);
+    };
+  }, []);
+
   const displayObjectsRef = useRef([]); // window イベントハンドラから最新の displayObjects を読むため
   useEffect(() => { displayObjectsRef.current = displayObjects; }, [displayObjects]);
 
@@ -779,6 +862,130 @@ export default function BmsViewer() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // レーン入力が来た時の共通処理(キーボード/ゲームパッド共通)。isScr=皿かどうか、scDir='A'|'B'|undefined。
+  const handleLaneDown = (lane, isScr, scDir) => {
+      if (playModeRef.current) lastGameKeyTimeRef.current = performance.now();
+      activeInputLanesRef.current.add(lane);
+      setLaneActive(lane, true);
+
+      if ((isInputDebugModeRef.current || playModeRef.current) && parsedSong && audioContextRef.current) {
+          const ctxTime = audioContextRef.current.currentTime;
+          const bmsTime = isPlayingRef.current
+              ? (ctxTime - startTimeRef.current)
+              : pauseTimeRef.current;
+
+          if (playModeRef.current) judgeLaneInput(lane, bmsTime, isScr, scDir);
+
+          // ■ 設定に基づいた判定幅 (beatoraja BAD判定基準)
+          // Early(早入り/未来): -0.28s まで (280ms)
+          // Late (遅入り/過去): +0.22s まで (220ms)
+          const EARLY_LIMIT = 0.28;
+          const LATE_LIMIT = 0.22;
+
+          // 1. 近くのノーツを探す (範囲を少し広めに取って検索)
+          // ★常に最新の譜面データを持つ ref を使う(state を直接参照すると、曲を読み込み直した際に
+          //   古い譜面データを参照し続けてキー音がほとんど鳴らなくなる不具合の原因になっていた)。
+          const objs = displayObjectsRef.current;
+          const centerIndex = findStartIndex(objs, bmsTime - LATE_LIMIT);
+          const searchStart = Math.max(0, centerIndex - 10);
+          const searchEnd = Math.min(objs.length, centerIndex + 50);
+
+          let targetObj = null;
+          let minAbsDiff = 9999; // 最も近いものを選ぶための記録用
+
+          for (let i = searchStart; i < searchEnd; i++) {
+              const obj = objs[i];
+              if (obj.laneIndex === lane && obj.isNote) {
+                  const diff = obj.time - bmsTime; // 正なら未来、負なら過去
+
+                  // 判定範囲内かチェック (-0.22 <= diff <= 0.28)
+                  // diffが負(過去)の場合は -diff <= 0.22
+                  // diffが正(未来)の場合は diff <= 0.28
+                  const isLateValid = diff < 0 && -diff <= LATE_LIMIT;
+                  const isEarlyValid = diff >= 0 && diff <= EARLY_LIMIT;
+
+                  if (isLateValid || isEarlyValid) {
+                      // 範囲内なら、より中心に近いものを優先する
+                      const absDiff = Math.abs(diff);
+                      if (absDiff < minAbsDiff) {
+                          minAbsDiff = absDiff;
+                          targetObj = obj;
+                      }
+                  }
+              }
+          }
+
+          // 2. 音を鳴らす処理
+          let soundToPlay = null;
+
+          if (targetObj) {
+              // ヒットしたノーツがある場合
+              soundToPlay = targetObj.value;
+          } else {
+              // ■ 追加機能: 最後のノーツを過ぎた後の処理
+              // そのレーンの最後のノーツを取得
+              const lastNote = lastNotesByLaneRef.current[lane];
+
+              // 「最後のノーツが存在し」かつ「現在時刻が最後のノーツのLate判定(-0.22s)より後ろ」なら
+              if (lastNote && bmsTime > lastNote.time + LATE_LIMIT) {
+                  soundToPlay = lastNote.value;
+              }
+          }
+
+          // 音源再生実行
+          if (soundToPlay !== null) {
+              const wavName = parsedSong.header.wavs[soundToPlay];
+              if (wavName) {
+                  const buffer = audioBuffersRef.current.get(wavName.toLowerCase());
+                  if (buffer) {
+                      const src = audioContextRef.current.createBufferSource();
+                      src.buffer = buffer;
+                      const gain = audioContextRef.current.createGain();
+                      gain.gain.value = volumeRef.current;
+                      src.connect(gain);
+                      gain.connect(gainNodeRef.current);
+                      // ★活プレイの音抜け対策: 以前は activeDebugSoundsRef (無制限) に積んでいたため、
+                      //   自動再生と違って同時発音数の上限が掛からず、密な自己プレイで同時発音が
+                      //   膨れ上がって音声処理が詰まり、途中で音が途切れる原因になっていた。
+                      //   scheduleAudio と同じ activeNodesRef に載せ、同じ MAX_SHORT_POLYPHONY 上限
+                      //   (超過時は古いものから停止)を効かせるようにする。
+                      const nodeData = { node: src, startTime: ctxTime, endTime: ctxTime + buffer.duration, isLong: false, id: nextSoundIdRef.current++ };
+                      activeNodesRef.current.push(nodeData);
+                      src.onended = () => {
+                          // ★リーク対策: 終了したノードは必ず切断する。
+                          //   GainNode は AudioBufferSourceNode と違い自動解放されず、放置するとマスターに繋がり続ける。
+                          try { src.disconnect(); gain.disconnect(); } catch (e) {}
+                          const a = activeNodesRef.current;
+                          const k = a.indexOf(nodeData);
+                          if (k !== -1) a.splice(k, 1);
+                      };
+                      src.start(0);
+                  }
+              }
+          }
+      }
+      scheduleRenderLoop();
+  };
+  const handleLaneUp = (lane) => {
+      activeInputLanesRef.current.delete(lane);
+      setLaneActive(lane, false);
+      // プレイモード: キー LN を保持中に離したら、終点まで達していなければ POOR(皿 CN は逆回しで判定)
+      if (playModeRef.current && lane !== 0 && lane !== 8) {
+          const ln = activeLnRef.current[lane];
+          if (ln) {
+              const cur = isPlayingRef.current && audioContextRef.current
+                  ? audioContextRef.current.currentTime - startTimeRef.current : pauseTimeRef.current;
+              const w = JUDGE_WINDOWS[judgeRankRef.current] || JUDGE_WINDOWS[2];
+              if (cur < (ln.endTime || ln.time) - w.gd / 1000) judgeMissNote(ln, 'poor');
+              activeLnRef.current[lane] = null;
+          }
+      }
+  };
+  // handleKeyDown/handleKeyUp は限られた依存配列の useEffect 内に留まるため、
+  // 常に最新の handleLaneDown/handleLaneUp を呼べるよう ref 経由にする(renderLoopRef と同じパターン)。
+  const handleLaneDownRef = useRef(handleLaneDown); handleLaneDownRef.current = handleLaneDown;
+  const handleLaneUpRef = useRef(handleLaneUp); handleLaneUpRef.current = handleLaneUp;
+
   useEffect(() => {
     if (!isInputDebugMode && !playMode) { activeInputLanesRef.current.clear(); clearActiveLanes(); return; }
     const handleKeyDown = (e) => {
@@ -801,117 +1008,19 @@ export default function BmsViewer() {
         }
         const rev = debugKeyLaneRef.current;
         // 皿の手動回転用フラグ(Shift=逆回転 / Ctrl=高速)。キー割り当てで皿=Shift のときは lane も付く。
-        if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') isShiftHeldRef.current = true;
-        else if (e.code === 'ControlLeft' || e.code === 'ControlRight') isCtrlHeldRef.current = true;
+        // ★物理コントローラ対策: スクラッチが「押しっぱなし」になる機種だと、Shift/Ctrl が押されたまま
+        //   別のレーンキーを叩いた瞬間にブラウザ/OSのショートカット(Ctrl+F 等)が暴発してしまう。
+        //   ここで割り当て済みキーは必ず preventDefault し、ブラウザ側に既定動作をさせない。
+        if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { isShiftHeldRef.current = true; e.preventDefault(); }
+        else if (e.code === 'ControlLeft' || e.code === 'ControlRight') { isCtrlHeldRef.current = true; e.preventDefault(); }
         let lane = rev[e.code];
         if (lane === undefined) lane = -1;
         if (lane !== -1) {
-            if (playModeRef.current) lastGameKeyTimeRef.current = performance.now();
-            activeInputLanesRef.current.add(lane);
-            setLaneActive(lane, true);
-
+            e.preventDefault();
             const isScr = (lane === 0 || lane === 8);
             const scDir = scratchKeyDirRef.current[e.code];
-
-            if ((isInputDebugModeRef.current || playModeRef.current) && parsedSong && audioContextRef.current) {
-                const ctxTime = audioContextRef.current.currentTime;
-                const bmsTime = isPlayingRef.current
-                    ? (ctxTime - startTimeRef.current)
-                    : pauseTimeRef.current;
-
-                if (playModeRef.current) judgeLaneInput(lane, bmsTime, isScr, scDir);
-
-                // ■ 設定に基づいた判定幅 (beatoraja BAD判定基準)
-                // Early(早入り/未来): -0.28s まで (280ms)
-                // Late (遅入り/過去): +0.22s まで (220ms)
-                const EARLY_LIMIT = 0.28; 
-                const LATE_LIMIT = 0.22;
-
-                // 1. 近くのノーツを探す (範囲を少し広めに取って検索)
-                // ★このハンドラは [isInputDebugMode, playMode, playSide] が変わった時しか張り直されないため、
-                //   state の displayObjects を直接参照すると「曲を読み込み直しても古い譜面のまま」になり、
-                //   キー音がほとんど鳴らなくなる不具合の原因になっていた。常に最新を持つ ref を使う。
-                const objs = displayObjectsRef.current;
-                const centerIndex = findStartIndex(objs, bmsTime - LATE_LIMIT);
-                const searchStart = Math.max(0, centerIndex - 10);
-                const searchEnd = Math.min(objs.length, centerIndex + 50);
-
-                let targetObj = null;
-                let minAbsDiff = 9999; // 最も近いものを選ぶための記録用
-
-                for (let i = searchStart; i < searchEnd; i++) {
-                    const obj = objs[i];
-                    if (obj.laneIndex === lane && obj.isNote) {
-                        const diff = obj.time - bmsTime; // 正なら未来、負なら過去
-
-                        // 判定範囲内かチェック (-0.22 <= diff <= 0.28)
-                        // diffが負(過去)の場合は -diff <= 0.22
-                        // diffが正(未来)の場合は diff <= 0.28
-                        const isLateValid = diff < 0 && -diff <= LATE_LIMIT;
-                        const isEarlyValid = diff >= 0 && diff <= EARLY_LIMIT;
-
-                        if (isLateValid || isEarlyValid) {
-                            // 範囲内なら、より中心に近いものを優先する
-                            const absDiff = Math.abs(diff);
-                            if (absDiff < minAbsDiff) {
-                                minAbsDiff = absDiff;
-                                targetObj = obj;
-                            }
-                        }
-                    }
-                }
-
-                // 2. 音を鳴らす処理
-                let soundToPlay = null;
-
-                if (targetObj) {
-                    // ヒットしたノーツがある場合
-                    soundToPlay = targetObj.value;
-                } else {
-                    // ■ 追加機能: 最後のノーツを過ぎた後の処理
-                    // そのレーンの最後のノーツを取得
-                    const lastNote = lastNotesByLaneRef.current[lane];
-                    
-                    // 「最後のノーツが存在し」かつ「現在時刻が最後のノーツのLate判定(-0.22s)より後ろ」なら
-                    if (lastNote && bmsTime > lastNote.time + LATE_LIMIT) {
-                        soundToPlay = lastNote.value;
-                    }
-                }
-
-                // 音源再生実行
-                if (soundToPlay !== null) {
-                    const wavName = parsedSong.header.wavs[soundToPlay];
-                    if (wavName) {
-                        const buffer = audioBuffersRef.current.get(wavName.toLowerCase());
-                        if (buffer) {
-                            const src = audioContextRef.current.createBufferSource();
-                            src.buffer = buffer;
-                            const gain = audioContextRef.current.createGain();
-                            gain.gain.value = volumeRef.current;
-                            src.connect(gain);
-                            gain.connect(gainNodeRef.current);
-                            // ★活プレイの音抜け対策: 以前は activeDebugSoundsRef (無制限) に積んでいたため、
-                            //   自動再生と違って同時発音数の上限が掛からず、密な自己プレイで同時発音が
-                            //   膨れ上がって音声処理が詰まり、途中で音が途切れる原因になっていた。
-                            //   scheduleAudio と同じ activeNodesRef に載せ、同じ MAX_SHORT_POLYPHONY 上限
-                            //   (超過時は古いものから停止)を効かせるようにする。
-                            const nodeData = { node: src, startTime: ctxTime, endTime: ctxTime + buffer.duration, isLong: false, id: nextSoundIdRef.current++ };
-                            activeNodesRef.current.push(nodeData);
-                            src.onended = () => {
-                                // ★リーク対策: 終了したノードは必ず切断する。
-                                //   GainNode は AudioBufferSourceNode と違い自動解放されず、放置するとマスターに繋がり続ける。
-                                try { src.disconnect(); gain.disconnect(); } catch (e) {}
-                                const a = activeNodesRef.current;
-                                const k = a.indexOf(nodeData);
-                                if (k !== -1) a.splice(k, 1);
-                            };
-                            src.start(0);
-                        }
-                    }
-                }
-            }
+            handleLaneDownRef.current(lane, isScr, scDir);
         }
-        scheduleRenderLoop();
     };
     const handleKeyUp = (e) => {
         if (playModeRef.current && (e.code === 'Space' || e.code === 'Enter')) { e.preventDefault(); return; }
@@ -920,19 +1029,7 @@ export default function BmsViewer() {
         else if (e.code === 'ControlLeft' || e.code === 'ControlRight') isCtrlHeldRef.current = false;
         const lane = debugKeyLaneRef.current[e.code];
         if (lane === undefined) return;
-        activeInputLanesRef.current.delete(lane);
-        setLaneActive(lane, false);
-        // プレイモード: キー LN を保持中に離したら、終点まで達していなければ POOR(皿 CN は逆回しで判定)
-        if (playModeRef.current && lane !== 0 && lane !== 8) {
-            const ln = activeLnRef.current[lane];
-            if (ln) {
-                const cur = isPlayingRef.current && audioContextRef.current
-                    ? audioContextRef.current.currentTime - startTimeRef.current : pauseTimeRef.current;
-                const w = JUDGE_WINDOWS[judgeRankRef.current] || JUDGE_WINDOWS[2];
-                if (cur < (ln.endTime || ln.time) - w.gd / 1000) judgeMissNote(ln, 'poor');
-                activeLnRef.current[lane] = null;
-            }
-        }
+        handleLaneUpRef.current(lane);
     };
     window.addEventListener('keydown', handleKeyDown); window.addEventListener('keyup', handleKeyUp);
     scheduleRenderLoop();
@@ -1551,6 +1648,30 @@ export default function BmsViewer() {
   const renderLoop = () => {
     if (!canvasRef.current) return;
     const now = performance.now(); const dt = (now - lastFrameTimeRef.current) / 1000; lastFrameTimeRef.current = now;
+
+    // ゲームパッド(物理コントローラ)のポーリング。Gamepad API はイベント通知が無く、
+    // 毎フレーム navigator.getGamepads() で状態を読んで前フレームとの差分から press/release を作る。
+    // キーボードと同じく isInputDebugMode/playMode のときだけ有効(通常のオート再生視聴中は無視)。
+    if (gamepadEnabledRef.current && gamepadIndexRef.current != null && (isInputDebugModeRef.current || playModeRef.current) && navigator.getGamepads) {
+        const pad = navigator.getGamepads()[gamepadIndexRef.current];
+        if (pad) {
+            const prev = gamepadPrevPressedRef.current;
+            const laneMap = gamepadButtonLaneRef.current;
+            const dirMap = gamepadButtonDirRef.current;
+            for (let bi = 0; bi < pad.buttons.length; bi++) {
+                const pressed = pad.buttons[bi].pressed || pad.buttons[bi].value > 0.5;
+                const was = !!prev[bi];
+                if (pressed !== was) {
+                    const lane = laneMap[bi];
+                    if (lane !== undefined) {
+                        if (pressed) handleLaneDownRef.current(lane, lane === 0 || lane === 8, dirMap[bi]);
+                        else handleLaneUpRef.current(lane);
+                    }
+                    prev[bi] = pressed;
+                }
+            }
+        }
+    }
     const canvas = canvasRef.current;
     // ★軽量化: getContext()は初回だけ呼び、以降はキャッシュを使い回す（毎フレーム呼ぶとブラウザによっては無駄なオーバーヘッドになる）
     // ★BGA修正: alpha:trueにして、canvasの透明部分から背面のBGAレイヤーが透けるようにする
@@ -2165,6 +2286,9 @@ export default function BmsViewer() {
         isInputDebugMode={isInputDebugMode} setIsInputDebugMode={setIsInputDebugMode}
         muteDebugAutoPlay={muteDebugAutoPlay} setMuteDebugAutoPlay={setMuteDebugAutoPlay}
         keyMaps={keyMaps} setKeyMaps={setKeyMaps}
+        gamepadEnabled={gamepadEnabled} setGamepadEnabled={setGamepadEnabled} gamepadName={gamepadName}
+        gamepadMaps={gamepadMaps} setGamepadMaps={setGamepadMaps}
+        gamepadScratchAlt={gamepadScratchAlt} setGamepadScratchAlt={setGamepadScratchAlt}
         playMode={playMode} setPlayMode={setPlayMode}
         judgeOffset={judgeOffset} setJudgeOffset={setJudgeOffset} suggestJudgeOffset={sSuggestJudgeOffset}
         audioFx={audioFx} setAudioFx={setAudioFx}

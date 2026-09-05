@@ -84,6 +84,14 @@ export function keyCodeLabel(code) {
 // beatoraja のキーボードプレイに倣い、皿は2キーを交互に押して回す。
 export const DEFAULT_SCRATCH_ALT = { 0: 'ControlLeft', 8: 'ControlRight' };
 
+// ゲームパッド入力(Gamepad API)。ボタン番号は機種依存のため既定値はすべて未割り当て(null)。
+// 設定画面で物理コントローラのボタンを押して割り当てる。形は DEFAULT_KEYMAPS と同じ(lane index → ボタン番号)。
+export const DEFAULT_GAMEPAD_MAPS = Object.fromEntries(
+  Object.entries(LANE_LAYOUTS).map(([mode, lanes]) => [mode, Object.fromEntries(lanes.map(l => [l.index, null]))])
+);
+// 皿の逆回転用ボタン(物理ターンテーブルが2ボタン式の場合のもう一方向)。DEFAULT_SCRATCH_ALT と同じ形。
+export const DEFAULT_GAMEPAD_SCRATCH_ALT = { 0: null, 8: null };
+
 // 判定ウィンドウ(6-2-a)。#RANK 0..3 別、片側 ms。beatoraja 準拠の近似値。
 // pg=PGREAT, gr=GREAT, gd=GOOD, bd=BAD(これを超えて遅れると見逃しPOOR / 空打ちは空POOR)。
 export const JUDGE_WINDOWS = [
