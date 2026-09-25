@@ -563,8 +563,8 @@ export const openLotteryResultModal = (work, App, tempState = null) => {
             </div>
             <p class="text-lg font-bold text-sky-300">${work.genre}</p>
             <div class="flex items-center justify-center gap-2 my-2">
-                <h3 class="text-3xl font-bold text-white">${App.escapeHTML(work.name)}</h3>
-                <button id="copy-result-title-btn" class="p-2 text-gray-400 hover:text-white transition-colors" title="タイトルをコピー">
+                <h3 class="text-3xl font-bold text-white min-w-0 [overflow-wrap:anywhere]">${App.escapeHTML(work.name)}</h3>
+                <button id="copy-result-title-btn" class="shrink-0 p-2 text-gray-400 hover:text-white transition-colors" title="タイトルをコピー">
                     <i class="fas fa-copy"></i>
                 </button>
             </div>
@@ -710,7 +710,7 @@ export const openFeedbackModal = (work, App, tempState = null) => {
     const content = `
         <div class="text-center">
             <img src="${work.imageUrl || 'https://placehold.co/600x400/1f2937/4b5563?text=No+Image'}" alt="${App.escapeHTML(work.name)}" class="max-w-xs max-h-48 object-contain mx-auto rounded-lg mb-4">
-            <h4 class="text-lg font-bold">${App.escapeHTML(work.name)}</h4><p class="text-gray-400 mb-4">前回の抽選作品の評価をお願いします！</p>
+            <h4 class="text-lg font-bold [overflow-wrap:anywhere]">${App.escapeHTML(work.name)}</h4><p class="text-gray-400 mb-4">前回の抽選作品の評価をお願いします！</p>
             <div class="my-6"><label class="block text-sm text-gray-400 mb-2">評価</label><div class="flex items-center justify-center space-x-2 text-3xl" id="feedback-rating"></div></div>
             <div class="my-6"><label class="block text-sm text-gray-400 mb-1">タグ</label><div id="feedback-tags" class="flex flex-wrap justify-center gap-2 p-2 bg-gray-700 rounded-lg min-h-[40px] mb-2"></div><button type="button" id="feedback-assign-tags-btn" class="w-full text-sm p-2 bg-gray-600 hover:bg-gray-700 rounded-lg">タグを割り当て/編集</button></div>
             <div class="pt-4 flex justify-end space-x-3">
