@@ -853,6 +853,14 @@ const App = {
         if (!AppState._loadDataSetRequestId) AppState._loadDataSetRequestId = 0;
         const requestId = ++AppState._loadDataSetRequestId;
 
+        // 同じIDの再読み込み（自動更新など）かどうか。
+        // この場合は一覧を隠さず、スクロール位置も維持する（隠すとページ高さが縮んで先頭に戻されるため）
+        const isRefresh = AppState.syncId === newSyncId && AppState.isLoadComplete;
+        const savedScrollY = window.scrollY;
+        const restoreScroll = () => {
+            if (isRefresh) requestAnimationFrame(() => window.scrollTo(0, savedScrollY));
+        };
+
         try {
             // IDが変わっていない、かつ読み込み完了済みなら何もしない
             if (AppState.syncId === newSyncId && AppState.isLoadComplete) {
@@ -868,15 +876,17 @@ const App = {
             if (AppState.unsubscribeWorks) AppState.unsubscribeWorks();
             if (AppState.unsubscribeTags) AppState.unsubscribeTags();
 
-            // UI初期化
-            AppState.ui.workListEl.classList.add('hidden');
-            AppState.ui.paginationControls.classList.add('hidden');
-            AppState.ui.workListMessage.innerHTML = `
-                <div class="text-center py-10 text-gray-500">
-                    <i class="fas fa-spinner fa-spin fa-3x text-teal-400"></i>
-                    <p class="mt-4 text-base">データを読み込み中...</p>
-                </div>`;
-            AppState.ui.workListMessage.classList.remove('hidden');
+            // UI初期化（再読み込み時は表示中の一覧をそのまま残す）
+            if (!isRefresh) {
+                AppState.ui.workListEl.classList.add('hidden');
+                AppState.ui.paginationControls.classList.add('hidden');
+                AppState.ui.workListMessage.innerHTML = `
+                    <div class="text-center py-10 text-gray-500">
+                        <i class="fas fa-spinner fa-spin fa-3x text-teal-400"></i>
+                        <p class="mt-4 text-base">データを読み込み中...</p>
+                    </div>`;
+                AppState.ui.workListMessage.classList.remove('hidden');
+            }
 
             // ★ ステップ1: IndexedDBから爆速ロード
             try {
@@ -897,7 +907,8 @@ const App = {
                     AppState.loadingStatus.tags = true;
                     
                     App.renderAll();
-                    
+                    restoreScroll();
+
                     // ★★★ 修正ポイント: ここでメイン画面を表示（透明化解除）します ★★★
                     AppState.ui.loadingOverlay.classList.add('hidden');
                     AppState.ui.appContainer.classList.remove('opacity-0'); 
@@ -942,7 +953,8 @@ const App = {
                         AppState.loadingStatus.tags = true;
                         
                         App.renderAll();
-                        
+                        restoreScroll();
+
                         // 同期完了時にも確実に画面を表示
                         AppState.ui.loadingOverlay.classList.add('hidden');
                         AppState.ui.appContainer.classList.remove('opacity-0');

@@ -469,9 +469,9 @@ export const openTagModal = (options) => {
                 </div>
             </div>
 
-            ${!['manage'].includes(mode) ? `<div class="mb-4"><div class="flex justify-between items-center mb-1"><label class="block text-sm text-gray-400">選択中のタグ</label><button type="button" id="reset-selected-tags-btn" class="text-xs text-gray-400 hover:text-white px-2 py-1 rounded hover:bg-gray-700">リセット <i class="fas fa-times ml-1"></i></button></div><div id="tag-selector-preview" class="flex flex-wrap gap-2 p-2 bg-gray-900 rounded-lg min-h-[40px] max-h-24 overflow-y-auto custom-scrollbar"></div></div>` : ''}
-            
-            <div id="tag-list" class="flex-grow overflow-y-auto pr-2 gap-2 grid grid-cols-1 md:grid-cols-2"></div>
+            ${!['manage'].includes(mode) ? `<div class="mb-4"><div class="flex justify-between items-center mb-1"><label class="block text-sm text-gray-400">選択中のタグ</label><button type="button" id="reset-selected-tags-btn" class="text-xs text-gray-400 hover:text-white px-2 py-1 rounded hover:bg-gray-700">リセット <i class="fas fa-times ml-1"></i></button></div><div id="tag-selector-preview" class="flex flex-wrap content-start gap-2 p-2 bg-gray-900 rounded-lg h-[4.5rem] shrink-0 overflow-y-auto custom-scrollbar"></div></div>` : ''}
+
+            <div id="tag-list" class="flex-grow min-h-0 overflow-y-auto p-1 pr-2 gap-2 grid grid-cols-1 md:grid-cols-2 content-start"></div>
             ${!['manage'].includes(mode) ? `<div class="pt-4 mt-4 border-t border-gray-700 flex justify-end space-x-3"><button id="tag-modal-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">キャンセル</button><button id="tag-modal-confirm" class="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold">決定</button></div>` : ''}
         </div>`;
 
