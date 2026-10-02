@@ -96,7 +96,6 @@ export default function BmsViewer() {
   const [dpFlip, setDpFlip] = useState(false);            // DP: 左右サイドを入れ替え
   const [currentLaneOrder, setCurrentLaneOrder] = useState([1,2,3,4,5,6,7]); // 左サイド配置(表示用)
   const [laneOrder2, setLaneOrder2] = useState(null);     // 右サイド配置(表示用, DP のみ / S-RANDOM は 'S')
-  const [comboPos, setComboPos] = useState('CENTER');
   const [totalNotes, setTotalNotes] = useState(0);
   const [laneMute, setLaneMute] = useState(() => new Array(MAX_LANES).fill(false)); // レーンごとミュート(0=SC, 1-7=鍵盤)
   const laneMuteRef = useLatestRef(laneMute);
@@ -172,7 +171,6 @@ export default function BmsViewer() {
   
   const [showMutedMonitor, setShowMutedMonitor] = useState(true);
   const [showAbortedMonitor, setShowAbortedMonitor] = useState(true); 
-  const [monitorUpdateInterval, setMonitorUpdateInterval] = useState(50);
   const [playBgaVideo, setPlayBgaVideo] = useState(true);
   const [hasVideo, setHasVideo] = useState(false);
 
@@ -1399,6 +1397,16 @@ export default function BmsViewer() {
   const sHiSpeedChange = useEvent((v) => { setAutoHiSpeed(false); setHiSpeed(v); });
   const sSuggestJudgeOffset = useEvent(suggestJudgeOffset);
 
+  // 設定画面「表示」タブの設定一式(HI-SPEED の手動変更はオートHI-SPEED を OFF にする sHiSpeedChange 経由)
+  const viewSettings = React.useMemo(() => ({
+    visibilityMode, setVisibilityMode, suddenPlusVal, setSuddenPlusVal, hiddenPlusVal, setHiddenPlusVal, liftVal, setLiftVal,
+    hasVideo, playBgaVideo, setPlayBgaVideo, missLayerEnabled, setMissLayerEnabled,
+    bgaBehindChart, setBgaBehindChart, bgaSidePanel, setBgaSidePanel, bgaSidePos, setBgaSidePos,
+    laneWidthPx, setLaneWidthPx, bgaOpacity, setBgaOpacity, boardOpacity, setBoardOpacity, laneOpacity, setLaneOpacity,
+    autoHiSpeed, setAutoHiSpeed, targetGreen, setTargetGreen, hiSpeed,
+  }), [visibilityMode, suddenPlusVal, hiddenPlusVal, liftVal, hasVideo, playBgaVideo, missLayerEnabled, bgaBehindChart, bgaSidePanel,
+      bgaSidePos, laneWidthPx, bgaOpacity, boardOpacity, laneOpacity, autoHiSpeed, targetGreen, hiSpeed]);
+
   // 設定画面「プレイ」タブの設定一式(ハンドラは参照が安定した sXxx を使う)
   const playSettings = React.useMemo(() => ({
     laneMute, setLaneMute, playSide, setPlaySide, playOption, setPlayOption, playOption2, setPlayOption2, dpFlip, setDpFlip,
@@ -1422,28 +1430,10 @@ export default function BmsViewer() {
       
       <SettingsModal
         showSettings={showSettings} setShowSettings={setShowSettings} isMobile={isMobile}
-        visibilityMode={visibilityMode} setVisibilityMode={setVisibilityMode}
-        suddenPlusVal={suddenPlusVal} setSuddenPlusVal={setSuddenPlusVal} hiddenPlusVal={hiddenPlusVal} setHiddenPlusVal={setHiddenPlusVal} liftVal={liftVal} setLiftVal={setLiftVal}
-        comboPos={comboPos} setComboPos={setComboPos}
-        volume={volume} setVolume={setVolume} monitorUpdateInterval={monitorUpdateInterval} setMonitorUpdateInterval={setMonitorUpdateInterval}
-        hasVideo={hasVideo} playBgaVideo={playBgaVideo} setPlayBgaVideo={setPlayBgaVideo}
-        scratchRotationEnabled={scratchRotationEnabled} setScratchRotationEnabled={setScratchRotationEnabled}
-        input={inputSettings}
-        play={playSettings}
-        sound={soundSettings}
-        system={systemSettings}
-        missLayerEnabled={missLayerEnabled} setMissLayerEnabled={setMissLayerEnabled}
-        bgaBehindChart={bgaBehindChart} setBgaBehindChart={setBgaBehindChart}
-        bgaSidePanel={bgaSidePanel} setBgaSidePanel={setBgaSidePanel}
-        bgaSidePos={bgaSidePos} setBgaSidePos={setBgaSidePos}
-        laneWidthPx={laneWidthPx} setLaneWidthPx={setLaneWidthPx}
-        // Mobile Controls
+        view={viewSettings} play={playSettings} input={inputSettings} sound={soundSettings} system={systemSettings}
+        // スマホ用のファイル読込・基本設定
         handleFileSelect={sHandleFileSelect} handleZipSelect={sHandleZipSelect} bmsList={bmsList} selectedBmsIndex={selectedBmsIndex} setSelectedBmsIndex={setSelectedBmsIndex}
-        isPlaying={isPlaying} startPlayback={sStartPlayback} pausePlayback={sPausePlayback} stopPlayback={sStopPlayback}
-        hiSpeed={hiSpeed} setHiSpeed={sHiSpeedChange} bgaOpacity={bgaOpacity} setBgaOpacity={setBgaOpacity}
-        autoHiSpeed={autoHiSpeed} setAutoHiSpeed={setAutoHiSpeed} targetGreen={targetGreen} setTargetGreen={setTargetGreen}
-        laneOpacity={laneOpacity} setLaneOpacity={setLaneOpacity}
-        boardOpacity={boardOpacity} setBoardOpacity={setBoardOpacity}
+        hiSpeed={hiSpeed} setHiSpeed={sHiSpeedChange} volume={volume} setVolume={setVolume}
         parsedSong={parsedSong}
       />
 
