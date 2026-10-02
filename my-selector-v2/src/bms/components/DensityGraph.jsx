@@ -1,12 +1,14 @@
 // src/bms/components/DensityGraph.jsx
 import React, { useMemo, useRef, useEffect, memo } from 'react';
 import { BarChart3 } from 'lucide-react';
+import { useLiveStore } from '../logic/liveStore';
 
 const BAR_W = 2;   // バー1本の幅(px)
 const BAR_GAP = 1; // バー間の隙間(px)
 
-const DensityGraph = ({ parsedSong, currentMeasure }) => {
+const DensityGraph = ({ parsedSong, live }) => {
     const scrollRef = useRef(null);
+    const currentMeasure = useLiveStore(live, s => s.measure);
 
     const { bars, maxDensity } = useMemo(() => {
         if (!parsedSong) return { bars: [], maxDensity: 0 };
@@ -32,6 +34,25 @@ const DensityGraph = ({ parsedSong, currentMeasure }) => {
         return { bars: barsData, maxDensity: maxVal };
     }, [parsedSong]);
 
+    // ★軽量化: バー(小節数ぶんの div)は譜面が変わったときだけ生成する。現在小節の強調は下の1本のマーカーで行い、
+    //   小節が変わるたびに全バーを再レンダリングしないようにする。
+    const barNodes = useMemo(() => bars.map((bar) => {
+        const isPeak = bar.count === maxDensity && maxDensity > 0;
+        return (
+            <div
+                key={bar.measure}
+                className="flex-none flex flex-col justify-end"
+                style={{ width: `${BAR_W}px`, height: `${Math.max(4, bar.heightPercent)}%`, opacity: 0.85 }}
+                title={`#${bar.measure}: ${bar.count} notes (SC ${bar.scratch})`}
+            >
+                {bar.scratch > 0 && (
+                    <div className="w-full bg-red-500 shrink-0" style={{ height: `${bar.scratchRatio * 100}%` }} />
+                )}
+                <div className={`w-full flex-1 ${isPeak ? 'bg-orange-400' : 'bg-blue-500'}`} />
+            </div>
+        );
+    }), [bars, maxDensity]);
+
     // 現在の小節に合わせて自動横スクロール
     useEffect(() => {
         if (scrollRef.current && currentMeasure >= 0) {
@@ -41,6 +62,7 @@ const DensityGraph = ({ parsedSong, currentMeasure }) => {
     }, [currentMeasure]);
 
     if (!parsedSong) return null;
+    const cur = bars[currentMeasure];
 
     return (
         <div className="bg-[#112233]/50 rounded p-2 border border-blue-900/30 mt-2 w-full flex flex-col shrink-0">
@@ -57,30 +79,13 @@ const DensityGraph = ({ parsedSong, currentMeasure }) => {
                 ref={scrollRef}
                 className="relative w-full h-14 bg-black/40 border-b border-l border-blue-900/30 overflow-x-auto scrollbar-hide"
             >
-                <div className="flex items-end h-full w-max" style={{ gap: `${BAR_GAP}px` }}>
-                    {bars.map((bar) => {
-                        const isCurrent = bar.measure === currentMeasure;
-                        const isPeak = bar.count === maxDensity && maxDensity > 0;
-                        const keyColor = isCurrent ? 'bg-white' : (isPeak ? 'bg-orange-400' : 'bg-blue-500');
-                        const scrColor = isCurrent ? 'bg-red-300' : 'bg-red-500';
-                        return (
-                            <div
-                                key={bar.measure}
-                                className="flex-none flex flex-col justify-end transition-[height] duration-200"
-                                style={{
-                                    width: `${BAR_W}px`,
-                                    height: `${Math.max(4, bar.heightPercent)}%`,
-                                    opacity: isCurrent ? 1 : 0.85,
-                                }}
-                                title={`#${bar.measure}: ${bar.count} notes (SC ${bar.scratch})`}
-                            >
-                                {bar.scratch > 0 && (
-                                    <div className={`w-full ${scrColor} shrink-0`} style={{ height: `${bar.scratchRatio * 100}%` }} />
-                                )}
-                                <div className={`w-full flex-1 ${keyColor}`} />
-                            </div>
-                        );
-                    })}
+                <div className="relative flex items-end h-full w-max" style={{ gap: `${BAR_GAP}px` }}>
+                    {barNodes}
+                    {/* 現在小節のマーカー(白) */}
+                    {cur && (
+                        <div className="absolute bottom-0 bg-white pointer-events-none"
+                            style={{ left: currentMeasure * (BAR_W + BAR_GAP), width: BAR_W, height: `${Math.max(4, cur.heightPercent)}%` }} />
+                    )}
                 </div>
             </div>
         </div>

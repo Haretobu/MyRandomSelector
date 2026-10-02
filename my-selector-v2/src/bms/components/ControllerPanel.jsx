@@ -95,7 +95,7 @@ function PopnBoard({ lanes, refFn, countRefs, showLabel, showCount, keyMap }) {
     );
 }
 
-const ControllerPanel = forwardRef(({ controllerRefs, keyboardRefs, parsedSong, difficultyInfo, currentMeasure, is2P, keyMap }, ref) => {
+const ControllerPanel = forwardRef(({ controllerRefs, keyboardRefs, parsedSong, difficultyInfo, live, is2P, keyMap }, ref) => {
     const countRefs = useRef([]);
 
     useImperativeHandle(ref, () => ({
@@ -155,7 +155,7 @@ const ControllerPanel = forwardRef(({ controllerRefs, keyboardRefs, parsedSong, 
                 {(isDP || isPms) && <div className="text-[9px] text-blue-500/50 mt-1 text-center">キー割り当ての変更は今後対応</div>}
             </div>
 
-            <DensityGraph parsedSong={parsedSong} currentMeasure={currentMeasure} />
+            <DensityGraph parsedSong={parsedSong} live={live} />
 
             {/* 曲情報パネル */}
             <div className="bg-[#0f172a] p-4 rounded mt-auto border border-blue-900/30 min-h-[120px] flex flex-col justify-center items-center text-center shadow-lg relative overflow-hidden group">

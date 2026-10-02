@@ -3,11 +3,16 @@
 // PC の「レーン背面BGA」「サイドBGAパネル」で使う。syncTime で動画BGAの位置合わせを行う。
 import React, { forwardRef, useImperativeHandle, useRef, memo } from 'react';
 import BgaLayer from './BgaLayer';
+import { useLiveStore } from '../logic/liveStore';
 
 const BgaStage = forwardRef(({
-    backBga, layerBga, poorBga, showMiss,
+    live,   // BGA / ミスレイヤーの値はストアから購読(親を再レンダリングさせないため)
     isPlaying, isVideoEnabled = true, opacity = 1, fit = 'contain',
 }, ref) => {
+    const backBga = useLiveStore(live, s => s.backBga);
+    const layerBga = useLiveStore(live, s => s.layerBga);
+    const poorBga = useLiveStore(live, s => s.poorBga);
+    const showMiss = useLiveStore(live, s => s.showMiss);
     const backRef = useRef(null);
     const layerRef = useRef(null);
     const poorRef = useRef(null);

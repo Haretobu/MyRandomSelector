@@ -2,14 +2,20 @@
 import React, { forwardRef, useImperativeHandle, useRef, memo } from 'react';
 import { Settings, Image as ImageIcon } from 'lucide-react';
 import BgaLayer from './BgaLayer';
+import { useLiveStore } from '../logic/liveStore';
 
 const InfoPanel = forwardRef(({
     playOption,
-    currentBackBga, currentLayerBga, currentPoorBga,
-    showMissLayer, isPlaying,
+    live,   // BGA / ミスレイヤー / BMS MONITOR の行はストアから購読(親を再レンダリングさせないため)
+    isPlaying,
     playBgaVideo, readyAnimState,
-    currentMeasureLines, totalNotes,
+    totalNotes,
 }, ref) => {
+    const currentBackBga = useLiveStore(live, s => s.backBga);
+    const currentLayerBga = useLiveStore(live, s => s.layerBga);
+    const currentPoorBga = useLiveStore(live, s => s.poorBga);
+    const showMissLayer = useLiveStore(live, s => s.showMiss);
+    const currentMeasureLines = useLiveStore(live, s => s.measureLines);
 
     const comboTextRef = useRef(null);
     const notesTextRef = useRef(null);

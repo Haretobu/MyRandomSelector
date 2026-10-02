@@ -6,6 +6,7 @@ const DEFAULT_LANES = [{index:0,kind:'scratch',side:0},{index:1,kind:'key',side:
 const LogPanel = forwardRef(({ backingTracks, activeShortSoundsRef, lastPlayedSoundPerLaneRef, longAudioProgressRefs, isPlaying, lanes, mode }, ref) => {
     const polyRef = useRef(null);      // POLY 数値の span
     const maxPolyRef = useRef(null);   // M POLY 数値の span
+    const dropRef = useRef(null);      // DROP(予約が間に合わず鳴らせなかった音の数)の span
     const avgRef = useRef(0);          // 直近の平均(POLYの色分けに使う)
     const monitorListRef = useRef(null); // SOUND MONITOR のリスト領域(高さ実測用)
     const [listH, setListH] = useState(0);
@@ -23,9 +24,13 @@ const LogPanel = forwardRef(({ backingTracks, activeShortSoundsRef, lastPlayedSo
     const maxRows = listH ? Math.max(4, Math.floor(listH / 15)) : 18;
 
     useImperativeHandle(ref, () => ({
-        updatePoly: (poly, maxPoly, avg) => {
+        updatePoly: (poly, maxPoly, avg, dropped = 0) => {
             avgRef.current = avg;
             if (maxPolyRef.current) maxPolyRef.current.textContent = maxPoly;
+            if (dropRef.current) {
+                dropRef.current.textContent = dropped;
+                dropRef.current.style.color = dropped > 0 ? '#ef4444' : '#ffffff';
+            }
             if (polyRef.current) {
                 polyRef.current.textContent = poly;
                 polyRef.current.style.color = poly > avg + 10 ? '#ef4444' : '#ffffff';
@@ -67,6 +72,7 @@ const LogPanel = forwardRef(({ backingTracks, activeShortSoundsRef, lastPlayedSo
                  <div className="text-[10px] font-bold mb-1 border-b border-blue-900/30 flex justify-between items-center text-blue-300 shrink-0">
                     <span>SOUND MONITOR</span>
                     <div className="flex gap-2">
+                         <span className="text-blue-500/70 text-[8px]" title="処理落ちで予約が間に合わず鳴らせなかった音の数">DROP: <span ref={dropRef} className="text-white">0</span></span>
                          <span className="text-blue-500/70 text-[8px]">M POLY: <span ref={maxPolyRef} className="text-white">0</span></span>
                         <span className="text-blue-500/70">POLY: <span ref={polyRef} className="text-white">0</span></span>
                     </div>

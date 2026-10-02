@@ -5,6 +5,7 @@ import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, DEFAULT_GAMEPAD_MAPS, DEFAULT_GAMEPAD_SCRATCH_ALT, JUDGE_WINDOWS, judgeRankIndex, djLevel, DEFAULT_AUDIO_FX } from './constants';
 import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, shuffleLanes, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
 import { parseBMS } from './logic/parser';
+import { createLiveStore, useLiveStore } from './logic/liveStore';
 
 import SettingsModal from './components/SettingsModal';
 import ControllerPanel from './components/ControllerPanel';
@@ -64,6 +65,31 @@ function laneBgColor(lane, lOpacity, isMobile, pms) {
   return dark ? `rgba(15, 23, 42, ${lOpacity})` : `rgba(30, 41, 59, ${lOpacity})`;
 }
 
+// スマホ用の背景BGA。BGA の値はストアから購読する(BmsViewer 本体を再レンダリングさせないため)。
+function MobileBgaLayers({ live, isPlaying, playBgaVideo, opacity, backRef, layerRef, poorRef }) {
+  const back = useLiveStore(live, s => s.backBga);
+  const layer = useLiveStore(live, s => s.layerBga);
+  const poor = useLiveStore(live, s => s.poorBga);
+  const showMiss = useLiveStore(live, s => s.showMiss);
+  return (
+    <div className="absolute inset-0 z-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none" style={{ opacity }}>
+      <BgaLayer ref={backRef} bgaState={back} zIndex={0} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} />
+      <BgaLayer ref={layerRef} bgaState={layer} zIndex={10} blendMode="screen" isPlaying={isPlaying} isVideoEnabled={playBgaVideo} />
+      {showMiss && poor && (
+        <div className="absolute inset-0 w-full h-full z-50 bg-black/50 flex items-center justify-center">
+          <BgaLayer ref={poorRef} bgaState={poor} zIndex={50} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// サイドBGAパネルの「BGA」プレースホルダ(BGA が無いときだけ表示)
+function BgaPlaceholder({ live }) {
+  const hasBga = useLiveStore(live, s => !!(s.backBga || s.layerBga));
+  return hasBga ? null : <div className="text-blue-900/40 text-xs font-bold tracking-widest pointer-events-none">BGA</div>;
+}
+
 export default function BmsViewer() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
   const [bgaOpacity, setBgaOpacity] = useState(DEFAULT_BGA_OPACITY);
@@ -78,7 +104,12 @@ export default function BmsViewer() {
   const [selectedBmsIndex, setSelectedBmsIndex] = useState(-1);
   const [parsedSong, setParsedSong] = useState(null);
   const [displayObjects, setDisplayObjects] = useState([]);
-  const [currentMeasureLines, setCurrentMeasureLines] = useState([]);
+  // ★軽量化: 再生中に高頻度で変わる表示用の値は useState ではなくストアに置く(liveStore.js 参照)。
+  //   setter 名は従来のまま残し、呼び出し側はそのまま使えるようにしている。
+  const [live] = useState(() => createLiveStore({
+    backBga: null, layerBga: null, poorBga: null, showMiss: false, measure: 0, measureLines: [],
+  }));
+  const setCurrentMeasureLines = (v) => live.set({ measureLines: v });
   // ↓ P1-e で imperative 更新に移行。値は未使用、setter は互換のため no-op で残す。
   const setCurrentMeasureNotes = () => {};
   const [isPlaying, setIsPlaying] = useState(false);
@@ -102,14 +133,13 @@ export default function BmsViewer() {
   const [hiddenPlusVal, setHiddenPlusVal] = useState(200);
   const [liftVal, setLiftVal] = useState(150);
 
-  const [currentBackBga, setCurrentBackBga] = useState(null);
-  const [currentLayerBga, setCurrentLayerBga] = useState(null);
-  const [currentPoorBga, setCurrentPoorBga] = useState(null); 
+  const setCurrentBackBga = (v) => live.set({ backBga: v });
+  const setCurrentLayerBga = (v) => live.set({ layerBga: v });
+  const setCurrentPoorBga = (v) => live.set({ poorBga: v });
   const [stageFileImage, setStageFileImage] = useState(null);
 
-  const [showMissLayer, setShowMissLayer] = useState(false);
   const showMissLayerRef = useRef(false);
-  useEffect(() => { showMissLayerRef.current = showMissLayer; }, [showMissLayer]);
+  const setShowMissLayer = (v) => { showMissLayerRef.current = v; live.set({ showMiss: v }); };
   // ミスレイヤー(POOR BGA)の有効/無効。オート=Mキー / 自己プレイ=空POOR以外のPOOR・BAD で発動。localStorage 永続。
   const [missLayerEnabled, setMissLayerEnabled] = useState(() => {
     try { const v = localStorage.getItem('bms_miss_layer'); return v === null ? true : v === '1'; } catch { return true; }
@@ -119,7 +149,7 @@ export default function BmsViewer() {
     missLayerEnabledRef.current = missLayerEnabled;
     try { localStorage.setItem('bms_miss_layer', missLayerEnabled ? '1' : '0'); } catch { /* privacy mode */ }
   }, [missLayerEnabled]);
-  const [currentMeasure, setCurrentMeasure] = useState(0);
+  const setCurrentMeasure = (v) => live.set({ measure: v });
   const [playSide, setPlaySide] = useState('1P');
   const [playOption, setPlayOption] = useState('OFF');    // 1P / 左サイド / 9K 全体
   const [playOption2, setPlayOption2] = useState('OFF');  // 2P / 右サイド (DP のみ)
@@ -324,6 +354,7 @@ export default function BmsViewer() {
   const maxPolyRef = useRef(0);
   const nextSoundIdRef = useRef(1); // 音源ログ/ノードの一意ID(React key・killedIds Set用)。Math.random()の衝突を避ける
   const polyphonyRef = useRef(0);   // 現在の同時発音数(scheduleAudioが毎tick更新、表示は100msブロックで間引き)
+  const droppedSoundsRef = useRef(0); // 予約が間に合わず鳴らせなかった音の数(曲ロード/停止でリセット)
   const hudLastRef = useRef({});    // HUDに最後に push した値。変化時のみ setState するための比較用
   const canvasRectRef = useRef(null);   // canvas の CSS サイズ(ResizeObserver でキャッシュ、毎フレーム getBoundingClientRect しない)
   const laneVisualRef = useRef(new Array(MAX_LANES).fill(null)); // 各レーンの見た目 active 状態。変化時のみ DOM 書き込み
@@ -952,13 +983,14 @@ export default function BmsViewer() {
           const objs = displayObjectsRef.current;
           const centerIndex = findStartIndex(objs, bmsTime - LATE_LIMIT);
           const searchStart = Math.max(0, centerIndex - 10);
-          const searchEnd = Math.min(objs.length, centerIndex + 50);
-
           let targetObj = null;
           let minAbsDiff = 9999; // 最も近いものを選ぶための記録用
 
-          for (let i = searchStart; i < searchEnd; i++) {
+          // ★キー音が鳴らない対策: 以前は「前後50オブジェクト」で打ち切っていたため、BGM オブジェクトが密集する
+          //   区間では判定範囲(+0.28s)まで届かず、押してもキー音が見つからないことがあった。時間で打ち切る。
+          for (let i = searchStart; i < objs.length; i++) {
               const obj = objs[i];
+              if (obj.time - bmsTime > EARLY_LIMIT) break;
               if (obj.laneIndex === lane && obj.isNote) {
                   const diff = obj.time - bmsTime; // 正なら未来、負なら過去
 
@@ -1414,7 +1446,7 @@ export default function BmsViewer() {
       resetJudge(); recentDeltasRef.current = []; // 曲ロード時はオート調整用データもクリア
       lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(MAX_LANES).fill(0));
       setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsed.avgDensity });
-      lastStateUpdateRef.current = 0; // 次の renderLoop フレームで HUD を即更新させる
+      lastStateUpdateRef.current = 0; droppedSoundsRef.current = 0; // 次の renderLoop フレームで HUD を即更新させる
       setLoadingMessage('準備完了'); setIsLoading(false);
     } catch (e) { console.error(e); setIsLoading(false); }
   };
@@ -1453,7 +1485,11 @@ export default function BmsViewer() {
           const absolutePlayTime = startTimeRef.current + obj.time;
           if (absolutePlayTime > scheduleUntil) break;
           const isMidStart = absolutePlayTime < currentTime - 0.1;
-          if (isMidStart && !midStart) { index++; continue; }
+          if (isMidStart && !midStart) {
+              // 予約が間に合わず捨てた音を数える(SOUND MONITOR の DROP に表示。0 以外なら処理落ちで音抜けしている)
+              if (parsedSong.header.wavs[obj.value]) droppedSoundsRef.current++;
+              index++; continue;
+          }
 
           if (parsedSong.header.wavs[obj.value]) {
               const buffer = audioBuffersRef.current.get(parsedSong.header.wavs[obj.value].toLowerCase());
@@ -1686,7 +1722,7 @@ export default function BmsViewer() {
             setBackingTracks([]); activeLongSoundsRef.current = [];
         }
 
-        pauseTimeRef.current = 0; seekedSinceStartRef.current = false; setPlaybackTimeDisplay(0); setCombo(0); comboRef.current = 0; hudLastRef.current = {}; lastBgaKeyRef.current = {};
+        pauseTimeRef.current = 0; seekedSinceStartRef.current = false; droppedSoundsRef.current = 0; setPlaybackTimeDisplay(0); setCombo(0); comboRef.current = 0; hudLastRef.current = {}; lastBgaKeyRef.current = {};
         resetJudge();
         lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(MAX_LANES).fill(0));
         if (parsedSong) displayObjects.forEach(o => o.processed = false);
@@ -1912,9 +1948,9 @@ export default function BmsViewer() {
                 const sum = polyphonyHistoryRef.current.reduce((a, b) => a + b, 0);
                 avgPoly = Math.round(sum / polyphonyHistoryRef.current.length);
             }
-            if (polyphonyRef.current !== H.poly || maxPolyRef.current !== H.maxPoly || avgPoly !== H.avgPoly) {
-                H.poly = polyphonyRef.current; H.maxPoly = maxPolyRef.current; H.avgPoly = avgPoly;
-                logPanelRef.current?.updatePoly(H.poly, H.maxPoly, H.avgPoly);
+            if (polyphonyRef.current !== H.poly || maxPolyRef.current !== H.maxPoly || avgPoly !== H.avgPoly || droppedSoundsRef.current !== H.dropped) {
+                H.poly = polyphonyRef.current; H.maxPoly = maxPolyRef.current; H.avgPoly = avgPoly; H.dropped = droppedSoundsRef.current;
+                logPanelRef.current?.updatePoly(H.poly, H.maxPoly, H.avgPoly, H.dropped);
             }
             // レーン別ノーツ数 → ControllerPanel(imperative)。comboRef を dirty シグナルに。
             if (comboRef.current !== H.combo || notesDoneRef.current !== H.notes) {
@@ -2459,15 +2495,8 @@ export default function BmsViewer() {
          
          {/* スマホ用: 背景BGA */}
          {isMobile && (
-             <div className="absolute inset-0 z-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none" style={{ opacity: bgaOpacity }}>
-                <BgaLayer ref={mobileBackBgaRef} bgaState={currentBackBga} zIndex={0} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} />
-                <BgaLayer ref={mobileLayerBgaRef} bgaState={currentLayerBga} zIndex={10} blendMode="screen" isPlaying={isPlaying} isVideoEnabled={playBgaVideo} />
-                {showMissLayer && currentPoorBga && (
-                    <div className="absolute inset-0 w-full h-full z-50 bg-black/50 flex items-center justify-center">
-                        <BgaLayer ref={mobilePoorBgaRef} bgaState={currentPoorBga} zIndex={50} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} />
-                    </div>
-                )}
-             </div>
+             <MobileBgaLayers live={live} isPlaying={isPlaying} playBgaVideo={playBgaVideo} opacity={bgaOpacity}
+                 backRef={mobileBackBgaRef} layerRef={mobileLayerBgaRef} poorRef={mobilePoorBgaRef} />
          )}
 
          {/* PCレイアウト */}
@@ -2479,7 +2508,7 @@ export default function BmsViewer() {
                     ref={controllerPanelRef}
                     controllerRefs={controllerRefs} keyboardRefs={keyboardRefs}
                     is2P={is2P} parsedSong={parsedSong} difficultyInfo={difficultyInfo}
-                    currentMeasure={currentMeasure}
+                    live={live}
                     keyMap={keyMaps[parsedSong?.mode] || keyMaps.SP7}
                  />
 
@@ -2491,18 +2520,16 @@ export default function BmsViewer() {
                         playOption={(parsedSong?.mode === 'DP14' || parsedSong?.mode === 'DP10')
                             ? `${playOption}/${playOption2}${dpFlip ? ' F' : ''}`
                             : playOption}
-                        currentBackBga={currentBackBga} currentLayerBga={currentLayerBga} currentPoorBga={currentPoorBga}
-                        showMissLayer={showMissLayer} isPlaying={isPlaying}
+                        live={live} isPlaying={isPlaying}
                         playBgaVideo={playBgaVideo} readyAnimState={readyAnimState}
-                        currentMeasureLines={currentMeasureLines} totalNotes={totalNotes}
+                        totalNotes={totalNotes}
                      />
 
                      {/* レーンゾーン: (サイドBGA) + レーン。背面BGA はこの範囲だけに敷く。 */}
                      <div className="relative flex-1 flex min-w-0">
                          {bgaBehindChart && (
                              <div className="absolute inset-0 z-0 bg-black pointer-events-none">
-                                 <BgaStage ref={pcBehindBgaRef} backBga={currentBackBga} layerBga={currentLayerBga} poorBga={currentPoorBga}
-                                     showMiss={showMissLayer} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} opacity={bgaOpacity} fit="contain" />
+                                 <BgaStage ref={pcBehindBgaRef} live={live} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} opacity={bgaOpacity} fit="contain" />
                              </div>
                          )}
 
@@ -2513,9 +2540,8 @@ export default function BmsViewer() {
                          <div className={`relative z-10 bg-black overflow-hidden flex items-center justify-center transition-[flex-grow,opacity] duration-150 ${bgaSidePanel ? 'flex-1 min-w-[140px] opacity-100 border-r border-blue-900/30' : 'flex-none w-0 min-w-0 opacity-0 pointer-events-none'}`}
                               style={{ order: bgaSidePos === 'left' ? 0 : 2 }}>
                              {/* ★軽量化: 非表示中もマウントは維持(再表示時の再読み込みを避ける)するが、動画は一時停止してデコードさせない */}
-                             <BgaStage ref={pcSideBgaRef} backBga={currentBackBga} layerBga={currentLayerBga} poorBga={currentPoorBga}
-                                 showMiss={showMissLayer} isPlaying={isPlaying && bgaSidePanel} isVideoEnabled={playBgaVideo} opacity={bgaOpacity} fit="contain" />
-                             {!currentBackBga && !currentLayerBga && <div className="text-blue-900/40 text-xs font-bold tracking-widest pointer-events-none">BGA</div>}
+                             <BgaStage ref={pcSideBgaRef} live={live} isPlaying={isPlaying && bgaSidePanel} isVideoEnabled={playBgaVideo} opacity={bgaOpacity} fit="contain" />
+                             <BgaPlaceholder live={live} />
                          </div>
 
                          {/* レーン (Canvas) = 盤面ぴったりの幅。サイドBGA表示時はこの幅に固定し、残りをBGAへ。 */}

@@ -141,7 +141,9 @@ export const VISIBILITY_MODES = {
     LIFT_SUD_PLUS: 'LIFT & SUD+'
 };
 
-export const LOOKAHEAD = 0.1;
+// 音声の先読み予約(秒)。メインスレッドが一瞬止まっても(低スペック機の引っかかり)予約済みの音は鳴るよう、
+// 0.1 → 0.3 に拡大。0.1 だと 0.2 秒程度の停止で「予約が間に合わず捨てられる」キー音が出ていた。
+export const LOOKAHEAD = 0.3;
 export const SCHEDULE_INTERVAL = 25;
 export const MAX_SHORT_POLYPHONY = 256;
 
