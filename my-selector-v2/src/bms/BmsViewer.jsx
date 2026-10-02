@@ -6,6 +6,7 @@ import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MO
 import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, shuffleLanes, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 import { createLiveStore, useLiveStore } from './logic/liveStore';
+import { resolveLnRelease } from './logic/judge';
 
 import SettingsModal from './components/SettingsModal';
 import ControllerPanel from './components/ControllerPanel';
@@ -825,9 +826,27 @@ export default function BmsViewer() {
       scratchImpulseRef.current[lane] = { dir: scDir === 'B' ? 1 : -1, t: performance.now() };
   };
 
+  // ===== LN 判定(beatoraja の既定「LN モード」準拠) =====
+  //   ・LN 1本 = 1ノーツ。判定は1回だけ。
+  //   ・始点を押した時点では判定を出さず、始点の判定を覚えておく(activeLnRef)。
+  //   ・終点まで押し続けたら、終点の時刻に「始点の判定」を確定。
+  //   ・途中で離したら「始点」と「離した時刻 vs 終点(LN終端の判定幅)」の悪い方。BAD 以下なら BAD。
+  //   ・皿 LN も同じ(押し続けて離す)。始点を取ったキー(方向)を離したときだけ離したとみなす。
+  //   ・始点を逃したら POOR 1回(見逃し)。始点が BAD なら BAD 1回で LN は終了(保持しない)。
+  // 保持中の LN を確定させる。releaseT = 離した時刻(終点まで押し続けた場合は null)
+  const finishLn = (lane, releaseT) => {
+      const a = activeLnRef.current[lane];
+      if (!a) return;
+      activeLnRef.current[lane] = null;
+      if (releaseT === null) { pushJudge(a.startKind, a.startDelta); return; }
+      const earlyMs = ((a.ln.endTime ?? a.ln.time) - releaseT) * 1000; // 正 = 終点より早く離した
+      const r = resolveLnRelease(a.startKind, a.startDelta, earlyMs, !!laneMetaRef.current[lane]?.isScratch);
+      pushJudge(r.kind, r.delta);
+  };
+
   // プレイモード: 1回のキー/皿入力を判定。
   //   通常ノーツ: 最寄りの未処理ノーツを bd 窓内で判定。皿はどちらの方向でも可。
-  //   皿 LN(CN): 頭はどちらの方向でも可。終端は「頭と逆方向」の皿入力が必要。
+  //   LN: 上の「LN 判定」参照。
   const judgeLaneInput = (lane, bmsTime, isScratch, scDir) => {
       const objs = displayObjectsRef.current;
       if (!playModeRef.current || !isPlayingRef.current || !objs.length) return;
@@ -838,21 +857,9 @@ export default function BmsViewer() {
       if (isScratch) {
           if (scDir) scratchDirRef.current[lane] = scDir;
           doScratchSpin(lane, scDir);
-
-          // 皿 CN の終端: 保持中の LN があり、頭と逆方向の皿入力なら終端判定
-          const ln = activeLnRef.current[lane];
-          if (ln && ln.type === 'long') {
-              if (scDir && ln._headDir && scDir !== ln._headDir) {
-                  const dEnd = (t - (ln.endTime || ln.time)) * 1000;
-                  if (Math.abs(dEnd) <= w.bd) pushJudge(classifyDelta(Math.abs(dEnd)) || 'bd', dEnd);
-                  else pushJudge('poor', 0);
-                  activeLnRef.current[lane] = null;
-                  return;
-              }
-              // 頭と同方向 / まだ終端でない → 何もしない(空POORにはしない)
-              return;
-          }
       }
+      // LN 保持中の押し直し(皿の別方向キーなど)は何もしない(beatoraja の「押し直し」と同じく判定なし)
+      if (activeLnRef.current[lane]) return;
 
       // このレーンの最寄りノーツ(処理済み含む)を探す。EPOOR_RANGE 内にノーツが居るかで空POORを判定する。
       const EPOOR_RANGE = 0.5;
@@ -879,7 +886,10 @@ export default function BmsViewer() {
       const kind = classifyDelta(Math.abs(deltaMs)) || 'bd';
       target.processed = true;
       noteCountsRef.current[lane]++;
-      pushJudge(kind, deltaMs);
+      // LN の始点が PG/GR/GD なら判定は保留して「保持中」に(離した時 / 終点で1回だけ確定)。BAD はその場で確定。
+      const holdLn = target.type === 'long' && kind !== 'bd';
+      if (holdLn) activeLnRef.current[lane] = { ln: target, startKind: kind, startDelta: deltaMs, dir: isScratch ? (scDir || null) : null };
+      else pushJudge(kind, deltaMs);
 
       // 6-2-c: オート調整用に生Δ(オフセット非適用)を記録。近い判定だけ(GOOD 以内)採用。
       if (kind === 'pg' || kind === 'gr' || kind === 'gd') {
@@ -887,21 +897,11 @@ export default function BmsViewer() {
           arr.push(deltaMs + judgeOffsetRef.current);
           if (arr.length > 60) arr.shift();
       }
-
-      // LN の頭が取れたら「保持中」に(BAD は即終了扱い)
-      if (target.type === 'long' && (kind === 'pg' || kind === 'gr' || kind === 'gd')) {
-          activeLnRef.current[lane] = target;
-          if (isScratch) target._headDir = scDir || 'A';
-      }
   };
 
-  // 見逃し(ノーツが BAD 窓の遅れ側を未処理で通過) / LN 終端の逃し → POOR
+  // 見逃し(ノーツ / LN 始点が BAD 窓の遅れ側を未処理で通過) → POOR 1回
   const judgeMissNote = (obj, kind = 'poor') => {
       obj.processed = true;
-      if (obj.type === 'long') {
-          const lane = obj.laneIndex;
-          if (activeLnRef.current[lane] === obj) activeLnRef.current[lane] = null;
-      }
       pushJudge(kind, 0);
   };
 
@@ -1108,18 +1108,17 @@ export default function BmsViewer() {
       }
       scheduleRenderLoop();
   };
-  const handleLaneUp = (lane) => {
+  // scDir: 皿の場合、離したキー/ボタンの方向('A'|'B')。LN の始点を取った方向以外を離しても LN は離さない扱い。
+  const handleLaneUp = (lane, scDir) => {
       activeInputLanesRef.current.delete(lane);
       setLaneActive(lane, false);
-      // プレイモード: キー LN を保持中に離したら、終点まで達していなければ POOR(皿 CN は逆回しで判定)
-      if (playModeRef.current && lane !== 0 && lane !== 8) {
-          const ln = activeLnRef.current[lane];
-          if (ln) {
+      // プレイモード: LN を保持中に離した → 始点と離しタイミングの悪い方で確定(上の「LN 判定」参照)
+      if (playModeRef.current && isPlayingRef.current) { // 一時停止中に離しても判定しない(再開後も保持中のまま)
+          const a = activeLnRef.current[lane];
+          if (a && !(a.dir && scDir && scDir !== a.dir)) {
               const cur = isPlayingRef.current && audioContextRef.current
                   ? readAudioClock() - startTimeRef.current : pauseTimeRef.current;
-              const w = JUDGE_WINDOWS[judgeRankRef.current] || JUDGE_WINDOWS[2];
-              if (cur < (ln.endTime || ln.time) - w.gd / 1000) judgeMissNote(ln, 'poor');
-              activeLnRef.current[lane] = null;
+              finishLn(lane, cur - judgeOffsetRef.current / 1000);
           }
       }
   };
@@ -1186,7 +1185,7 @@ export default function BmsViewer() {
         else if (e.code === 'ControlLeft' || e.code === 'ControlRight') isCtrlHeldRef.current = false;
         const lane = debugKeyLaneRef.current[e.code];
         if (lane === undefined) return;
-        handleLaneUpRef.current(lane);
+        handleLaneUpRef.current(lane, scratchKeyDirRef.current[e.code]);
     };
     window.addEventListener('keydown', handleKeyDown); window.addEventListener('keyup', handleKeyUp);
     scheduleRenderLoop();
@@ -1872,7 +1871,7 @@ export default function BmsViewer() {
                     const lane = laneMap[bi];
                     if (lane !== undefined) {
                         if (pressed) handleLaneDownRef.current(lane, lane === 0 || lane === 8, dirMap[bi]);
-                        else handleLaneUpRef.current(lane);
+                        else handleLaneUpRef.current(lane, dirMap[bi]);
                     }
                     prev[bi] = pressed;
                 }
@@ -1896,14 +1895,14 @@ export default function BmsViewer() {
                     const dir = delta > 0 ? '+' : '-';
                     st.t = now;
                     if (st.dir !== dir) {
-                        if (st.dir) { const l = laneMap[`a${ai}${st.dir}`]; if (l !== undefined) handleLaneUpRef.current(l); }
+                        if (st.dir) { const l = laneMap[`a${ai}${st.dir}`]; if (l !== undefined) handleLaneUpRef.current(l, dirMap[`a${ai}${st.dir}`]); }
                         const lane = laneMap[`a${ai}${dir}`];
                         if (lane !== undefined) handleLaneDownRef.current(lane, lane === 0 || lane === 8, dirMap[`a${ai}${dir}`]);
                         st.dir = dir;
                     }
                 } else if (st.dir && (now - st.t) > AXIS_RELEASE_MS) {
                     const l = laneMap[`a${ai}${st.dir}`];
-                    if (l !== undefined) handleLaneUpRef.current(l);
+                    if (l !== undefined) handleLaneUpRef.current(l, dirMap[`a${ai}${st.dir}`]);
                     st.dir = null;
                 }
             }
@@ -2236,14 +2235,10 @@ export default function BmsViewer() {
                 const bdSec = (JUDGE_WINDOWS[judgeRankRef.current] || JUDGE_WINDOWS[2]).bd / 1000;
                 if (!obj.processed) {
                     if (isPlayingRef.current && timeDelta < -bdSec) judgeMissNote(obj, 'poor');
-                } else if (obj.type === 'long' && activeLnRef.current[obj.laneIndex] === obj) {
-                    const endT = obj.endTime || obj.time;
-                    if (gc.isScr[obj.laneIndex]) {
-                        // 皿 CN: 終端(逆回し)を bd 猶予内に受けられなければ POOR
-                        if (isPlayingRef.current && currentTime > endT + bdSec) { pushJudge('poor', 0); activeLnRef.current[obj.laneIndex] = null; }
-                    } else if (currentTime > endT) {
-                        activeLnRef.current[obj.laneIndex] = null; // キー LN: 押しっぱなしで終端通過 → 完走
-                    }
+                } else if (obj.type === 'long' && activeLnRef.current[obj.laneIndex]?.ln === obj) {
+                    // LN を終点まで押し続けた → 始点の判定で確定(キー・皿共通。beatoraja の LN モード)
+                    const endT = obj.endTime ?? obj.time;
+                    if (isPlayingRef.current && currentTime - judgeOffsetRef.current / 1000 >= endT) finishLn(obj.laneIndex, null);
                 }
             } else if (!obj.processed && timeDelta <= 0) {
                 obj.processed = true;

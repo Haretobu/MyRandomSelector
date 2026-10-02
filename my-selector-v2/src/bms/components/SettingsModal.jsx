@@ -543,7 +543,7 @@ function PlayModeSection({ playMode, setPlayMode, judgeOffset, setJudgeOffset, s
                 <div className="pt-3 mt-1 border-t border-blue-900/30">
                     <div className="text-[10px] text-blue-500/60 leading-relaxed">
                         自分の入力で判定します（オートプレイ判定を止める）。キー割り当てで操作。判定・コンボ・EX SCORE・DJ LEVEL・FAST/SLOW を表示。完走でリザルト、途中は Tab 長押しで成績表示。<br />
-                        皿は割り当てキー（既定 Shift）と Ctrl の2キー。CN は最初と逆方向に回して離す。<br />
+                        皿は割り当てキー（既定 Shift）と Ctrl の2キー。LN は鍵盤・皿とも押し続けて終点で離す（beatoraja の LN モード準拠・1本 = 1ノーツ）。皿 LN は最初に押した方のキーを押し続ける。<br />
                         ※「デバッグ用キー入力」とは別機能です（併用可）。
                     </div>
 
