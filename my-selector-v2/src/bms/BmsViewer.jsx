@@ -3,8 +3,9 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
 import { VISIBILITY_MODES, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, DEFAULT_GAMEPAD_MAPS, DEFAULT_GAMEPAD_SCRATCH_ALT, DEFAULT_AUDIO_FX, DEFAULT_LITE_MODE } from './constants';
-import { findStartIndex, getBpmFromTime, guessDifficulty, extractZipFiles, getBaseName } from './logic/utils';
+import { findStartIndex, getBpmFromTime, guessDifficulty, extractZipFiles } from './logic/utils';
 import { parseBMS } from './logic/parser';
+import { collectSongAssets, buildFileMap, prepareImageAssets, decodeSongAudio, computeSongTiming } from './logic/songLoader';
 import { createLiveStore } from './logic/liveStore';
 import { buildJudgeConfig } from './logic/judge';
 import { useStoredState, useLatestRef, BOOL, oneOf, num, mergedJson } from './hooks/useStoredState';
@@ -803,109 +804,24 @@ export default function BmsViewer() {
       const diffInfo = guessDifficulty(parsed.header, bmsFile.name);
       setDifficultyInfo(diffInfo); realtimeBpmRef.current = parsed.header.bpm;
 
-      const neededAudio = new Set(); const neededImages = new Set();
-      parsed.objects.forEach(o => { if (parsed.header.wavs[o.value]) neededAudio.add(parsed.header.wavs[o.value]); });
-      parsed.backBgaObjects.forEach(o => { if (parsed.header.bmps[o.value]) neededImages.add(parsed.header.bmps[o.value]); });
-      parsed.layerBgaObjects.forEach(o => { if (parsed.header.bmps[o.value]) neededImages.add(parsed.header.bmps[o.value]); });
-      parsed.poorBgaObjects.forEach(o => { if (parsed.header.bmps[o.value]) neededImages.add(parsed.header.bmps[o.value]); });
-      if (parsed.header.stagefile) neededImages.add(parsed.header.stagefile);
-      
-      const fileMap = {};
-      files.forEach(f => {
-        if (f === bmsFile) return;
-        const base = getBaseName(f.name);
-        if (!fileMap[base]) fileMap[base] = [];
-        fileMap[base].push(f);
+      // 素材の読み込み(logic/songLoader.js): フォルダ内のファイルと対応付け → 画像を用意 → 音声をデコード
+      const assets = collectSongAssets(parsed);
+      const fileMap = buildFileMap(files, bmsFile);
+      const { stageAsset, hasVideo } = prepareImageAssets(parsed, fileMap, assets.images, imageAssetsRef.current);
+      setHasVideo(hasVideo);
+      if (stageAsset) setCurrentBackBga(stageAsset);
+
+      const completed = await decodeSongAudio(fileMap, assets.audio, engine.buffers, (buf) => engine.decode(buf), {
+        onStart: (count) => { setLoadingProgress(0); setLoadingMessage(`音声ファイルを読み込み中... (新規 ${count}個)`); },
+        onProgress: setLoadingProgress,
+        isStale, // 新しい譜面の読み込みが始まったら打ち切る(デコード済みの音はキャッシュに残るので無駄にはならない)
       });
+      if (!completed) return;
 
-      const imageQueue = [];
-      neededImages.forEach(raw => {
-          const base = getBaseName(raw).toLowerCase(); const candidates = fileMap[base];
-          if (candidates?.length) {
-              let best = candidates[0]; const exact = candidates.find(c => c.name.toLowerCase() === raw.toLowerCase());
-              if (exact) best = exact;
-              imageQueue.push({ key: raw.toLowerCase(), file: best });
-           }
-      });
-      // ★修正: React stateのcurrentBackBga(stale closure)に頼らず、ローカル変数でこの読み込み処理内の割り当て状況を追跡する
-      let stageFileAssigned = false;
-      let videoDetected = false; // ★修正: 動画アセットを検出したかどうか（hasVideoに反映する）
-
-      for (const item of imageQueue) {
-          try {
-              let asset = imageAssetsRef.current.get(item.key);
-              const isVideo = asset ? asset.type === 'video' : /\.(mp4|webm|mov)$/i.test(item.file.name);
-              if (!asset) { // ★P4: 未キャッシュのものだけ生成
-                  const url = URL.createObjectURL(item.file);
-                  if (isVideo) asset = { type: 'video', url };
-                  else { asset = new Image(); asset.src = url; }
-                  imageAssetsRef.current.set(item.key, asset);
-              }
-              if (isVideo) videoDetected = true;
-              if (parsed.header.stagefile && item.key === parsed.header.stagefile.toLowerCase()) {
-                  if (!isVideo) { setCurrentBackBga(asset); stageFileAssigned = true; }
-              }
-          } catch(e) { console.warn("Asset load failed", item.key); }
-      }
-
-      // ★修正: hasVideoは動画BGAの検出結果をそのまま反映（今まで一度もtrueにならなかった）
-      setHasVideo(videoDetected);
-
-      if (parsed.header.stagefile && !stageFileAssigned) { 
-          const asset = imageAssetsRef.current.get(parsed.header.stagefile.toLowerCase());
-          if(asset && asset.type !== 'video') setCurrentBackBga(asset); 
-      }
-
-      const queue = [];
-      neededAudio.forEach(raw => {
-        const key = raw.toLowerCase();
-        if (engine.buffers.has(key)) return; // ★P4: デコード済みはスキップ
-        const base = getBaseName(raw).toLowerCase(); const candidates = fileMap[base];
-        if (candidates?.length) {
-          let best = candidates[0]; const exact = candidates.find(c => c.name.toLowerCase() === key);
-          if (exact) best = exact;
-          queue.push({ key, file: best });
-        }
-      });
-      queue.sort((a, b) => b.file.size - a.file.size);
-
-      if (queue.length > 0) { setLoadingProgress(0); setLoadingMessage(`音声ファイルを読み込み中... (新規 ${queue.length}個)`); }
-      const CONCURRENCY = 6;
-      for (let i = 0; i < queue.length; i += CONCURRENCY) {
-        await Promise.all(queue.slice(i, i + CONCURRENCY).map(async (item) => {
-          try {
-            const buf = await item.file.arrayBuffer(); const audioBuf = await engine.decode(buf);
-            engine.buffers.set(item.key, audioBuf);
-          } catch (e) {} finally { setLoadingProgress(Math.round((Math.min(i + CONCURRENCY, queue.length) / queue.length) * 100)); }
-        }));
-        if (isStale()) return; // 新しい譜面の読み込みが始まった(デコード済みの音はキャッシュに残るので無駄にはならない)
-      }
-      if (isStale()) return;
-      
-      let calculatedMaxDuration = parsed.totalTime;
-      let maxSoundDuration = 0;
-      parsed.objects.forEach(obj => {
-          const filename = parsed.header.wavs[obj.value];
-          if (filename) {
-              const buffer = engine.buffers.get(filename.toLowerCase());
-              if (buffer) {
-                  const endTime = obj.time + buffer.duration; if (endTime > calculatedMaxDuration) calculatedMaxDuration = endTime;
-                  if (buffer.duration > maxSoundDuration) maxSoundDuration = buffer.duration;
-              }
-          }
-      });
-      engine.maxSoundDuration = maxSoundDuration;
-      const lasts = new Array(MAX_LANES).fill(null);
-      parsed.objects.forEach(obj => {
-          if (obj.isNote && obj.laneIndex >= 0 && obj.laneIndex < MAX_LANES) {
-              // より後ろの時間にあるノーツを更新していく
-              if (!lasts[obj.laneIndex] || obj.time > lasts[obj.laneIndex].time) {
-                  lasts[obj.laneIndex] = obj;
-              }
-          }
-      });
-      lastNotesByLaneRef.current = lasts;
-      setDuration(calculatedMaxDuration); setParsedSong(parsed); setTotalNotes(parsed.totalNotes);
+      const timing = computeSongTiming(parsed, engine.buffers);
+      engine.maxSoundDuration = timing.maxSoundDuration;
+      lastNotesByLaneRef.current = timing.lastNotesByLane;
+      setDuration(timing.duration); setParsedSong(parsed); setTotalNotes(parsed.totalNotes);
       setPlaybackTimeDisplay(0); pauseTimeRef.current = 0; comboRef.current = 0; hudLastRef.current = {};
       resetJudge(); judge.clearRecent(); // 曲ロード時はオフセット推奨用データもクリア
       lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); 
