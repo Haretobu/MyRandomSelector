@@ -980,10 +980,10 @@ export default function BmsViewer() {
                   if (buffer) {
                       const src = audioContextRef.current.createBufferSource();
                       src.buffer = buffer;
-                      const gain = audioContextRef.current.createGain();
-                      gain.gain.value = volumeRef.current;
-                      src.connect(gain);
-                      gain.connect(gainNodeRef.current);
+                      // ★音量はマスター(gainNodeRef = volume)で掛かるので、ここでは掛けない。
+                      //   以前は個別の GainNode にも volume を掛けていたため volume² になり、
+                      //   自分で鳴らすキー音だけ BGM より小さく聞こえていた(オート再生側と同じ経路に揃える)。
+                      src.connect(gainNodeRef.current);
                       // ★活プレイの音抜け対策: 以前は activeDebugSoundsRef (無制限) に積んでいたため、
                       //   自動再生と違って同時発音数の上限が掛からず、密な自己プレイで同時発音が
                       //   膨れ上がって音声処理が詰まり、途中で音が途切れる原因になっていた。
@@ -993,8 +993,7 @@ export default function BmsViewer() {
                       activeNodesRef.current.push(nodeData);
                       src.onended = () => {
                           // ★リーク対策: 終了したノードは必ず切断する。
-                          //   GainNode は AudioBufferSourceNode と違い自動解放されず、放置するとマスターに繋がり続ける。
-                          try { src.disconnect(); gain.disconnect(); } catch (e) {}
+                          try { src.disconnect(); } catch (e) {}
                           const a = activeNodesRef.current;
                           const k = a.indexOf(nodeData);
                           if (k !== -1) a.splice(k, 1);
@@ -1820,51 +1819,27 @@ export default function BmsViewer() {
         //   まだ鳴っている音源(ロングBGM含む)が activeNodesRef から誤って除去され、
         //   stopAudioNodes() が止められなくなって「シークのたびにロング音源が重なる」原因になっていた。
         //   activeNodesRef の掃除は scheduleAudio() 側(絶対時刻で正しく比較)に一本化する。
-        if (parsedSong.backBgaObjects && nextBackBgaIndexRef.current < parsedSong.backBgaObjects.length) {
-            const bgaObj = parsedSong.backBgaObjects[nextBackBgaIndexRef.current];
-            if (bgaObj.time <= bgaTime) {
+        // ★BGA の進行: 以前は1フレームにつき1オブジェクトしか進めなかったため、フレームレートより細かい
+        //   コマ送りBGAや同時刻の複数切り替えがあると、どんどん表示が遅れていった。
+        //   時刻に達したオブジェクトをすべて消化し、そのうち「最後に有効だったもの」だけを setState する。
+        //   clearOnZero: 値 00 で消灯するか(レイヤーBGAのみ)。アセットが無いオブジェクトは表示を変えない(従来どおり)。
+        const advanceBga = (arr, idxRef, setter, clearOnZero) => {
+            if (!arr) return;
+            let idx = idxRef.current;
+            let next;                 // undefined = 変化なし / null = 消灯 / それ以外 = 表示するアセット
+            while (idx < arr.length && arr[idx].time <= bgaTime) {
+                const bgaObj = arr[idx++];
+                if (clearOnZero && bgaObj.value === 0) { next = null; continue; }
                 const filename = parsedSong.header.bmps[bgaObj.value];
-                if (filename) { 
-                    const asset = imageAssetsRef.current.get(filename.toLowerCase());
-                    if (asset) {
-                         if (asset.type === 'video') setCurrentBackBga({ ...asset, startTime: bgaObj.time });
-                        else setCurrentBackBga(asset);
-                    }
-                }
-                nextBackBgaIndexRef.current++;
+                const asset = filename && imageAssetsRef.current.get(filename.toLowerCase());
+                if (asset) next = asset.type === 'video' ? { ...asset, startTime: bgaObj.time } : asset;
             }
-        }
-        if (parsedSong.layerBgaObjects && nextLayerBgaIndexRef.current < parsedSong.layerBgaObjects.length) {
-            const bgaObj = parsedSong.layerBgaObjects[nextLayerBgaIndexRef.current];
-            if (bgaObj.time <= bgaTime) {
-                if (bgaObj.value === 0) setCurrentLayerBga(null);
-                else { 
-                    const filename = parsedSong.header.bmps[bgaObj.value];
-                    if (filename) { 
-                        const asset = imageAssetsRef.current.get(filename.toLowerCase());
-                        if (asset) {
-                            if (asset.type === 'video') setCurrentLayerBga({ ...asset, startTime: bgaObj.time });
-                            else setCurrentLayerBga(asset);
-                        }
-                    } 
-                }
-                nextLayerBgaIndexRef.current++;
-            }
-        }
-        if (parsedSong.poorBgaObjects && nextPoorBgaIndexRef.current < parsedSong.poorBgaObjects.length) {
-            const bgaObj = parsedSong.poorBgaObjects[nextPoorBgaIndexRef.current];
-            if (bgaObj.time <= bgaTime) {
-                const filename = parsedSong.header.bmps[bgaObj.value];
-                if (filename) { 
-                    const asset = imageAssetsRef.current.get(filename.toLowerCase());
-                    if (asset) {
-                        if (asset.type === 'video') setCurrentPoorBga({ ...asset, startTime: bgaObj.time });
-                        else setCurrentPoorBga(asset);
-                    }
-                }
-                nextPoorBgaIndexRef.current++;
-            }
-        }
+            idxRef.current = idx;
+            if (next !== undefined) setter(next);
+        };
+        advanceBga(parsedSong.backBgaObjects, nextBackBgaIndexRef, setCurrentBackBga, false);
+        advanceBga(parsedSong.layerBgaObjects, nextLayerBgaIndexRef, setCurrentLayerBga, true);
+        advanceBga(parsedSong.poorBgaObjects, nextPoorBgaIndexRef, setCurrentPoorBga, false);
 
         // ★軽量化: activeNodesRef のフィルタは scheduleAudio() 側で毎tick行っているため、
         // ここ(renderLoop、毎フレーム)での重複フィルタ処理は削除

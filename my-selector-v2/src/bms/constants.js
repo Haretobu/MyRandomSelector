@@ -102,6 +102,8 @@ export const JUDGE_WINDOWS = [
 ];
 // #RANK ヘッダ値 → JUDGE_WINDOWS の添字(0..3)。未指定は NORMAL(2)。
 export const judgeRankIndex = (rank) => {
+    // ★Number(null) / Number('') は 0(VERY HARD)になってしまうため、未指定は明示的に NORMAL にする
+    if (rank === null || rank === undefined || rank === '') return 2;
     const r = Number(rank);
     if (!Number.isFinite(r)) return 2;
     return Math.max(0, Math.min(3, r));
