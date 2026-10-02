@@ -1,7 +1,7 @@
 // src/bms/components/settings/SystemSettings.jsx
 // 設定画面の「システム」タブ: lite モード(低スペック機向け)と 詳細設定1(システム・デバッグ)。
 import React from 'react';
-import { Flag, Music, Layers, Speaker, EyeOff, FileX, Gamepad2, ChevronDown, Gauge, RotateCcw } from 'lucide-react';
+import { Flag, Music, Layers, Speaker, EyeOff, FileX, Gamepad2, ChevronDown, Gauge, RotateCcw, RotateCw } from 'lucide-react';
 import { DEFAULT_LITE_MODE, LITE_MODE_ITEMS } from '../../constants';
 
 // lite モード(低スペック機向け)。親スイッチを ON にすると詳細項目が展開される。
@@ -101,6 +101,16 @@ export default function SystemSettings({ hidden, isMobile, system }) {
                 <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
                     <div className="flex items-center gap-3"><FileX className="text-blue-400" size={18}/><span className="text-sm">停止時に音源情報を残す</span></div>
                      <input type="checkbox" checked={system.showAbortedMonitor} onChange={e=>system.setShowAbortedMonitor(e.target.checked)} className="accent-blue-500"/>
+                </label>
+                <div className="border-t border-blue-900/30 my-2"></div>
+                <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
+                    <div className="flex items-center gap-3"><RotateCw className="text-blue-400" size={18}/>
+                        <div className="flex flex-col">
+                            <span className="text-sm">スクラッチの定常回転</span>
+                            <span className="text-[10px] text-blue-400/60">OFF = 皿ノーツが無いときはコントローラ表示の皿を止める</span>
+                        </div>
+                    </div>
+                    <input type="checkbox" checked={system.scratchRotationEnabled} onChange={e=>system.setScratchRotationEnabled(e.target.checked)} className="accent-blue-500"/>
                 </label>
                 
                 {!isMobile && (

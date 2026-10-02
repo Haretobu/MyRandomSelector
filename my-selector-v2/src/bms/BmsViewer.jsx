@@ -110,7 +110,8 @@ export default function BmsViewer() {
   const [resumeAudioOnSeek, setResumeAudioOnSeek] = useStoredState('bms_resume_audio_on_seek', true, BOOL);
   const resumeAudioOnSeekRef = useLatestRef(resumeAudioOnSeek);
   const seekedSinceStartRef = useRef(false);  // 前回の再生開始以降にシークしたか(再開が「シーク」か「一時停止からの復帰」かの判別用)
-  const [scratchRotationEnabled, setScratchRotationEnabled] = useState(true);
+  // コントローラ表示の皿の定常回転(OFF = 皿ノーツが無いときは止める)。localStorage 永続。
+  const [scratchRotationEnabled, setScratchRotationEnabled] = useStoredState('bms_scratch_rotation', true, BOOL);
   const [isInputDebugMode, setIsInputDebugMode] = useState(false);
   const [playMode, setPlayMode] = useState(false); // 6-2: プレイモード(自分の入力で判定)
   const [playResult, setPlayResult] = useState(null); // 6-2-b: 完走リザルト(モーダル表示用)
@@ -1378,7 +1379,8 @@ export default function BmsViewer() {
     playKeySounds, setPlayKeySounds, playLongAudio, setPlayLongAudio, playBgSounds, setPlayBgSounds,
     resumeAudioOnSeek, setResumeAudioOnSeek, showMutedMonitor, setShowMutedMonitor, showAbortedMonitor, setShowAbortedMonitor,
     isInputDebugMode, setIsInputDebugMode, muteDebugAutoPlay, setMuteDebugAutoPlay,
-  }), [liteMode, showReady, playKeySounds, playLongAudio, playBgSounds, resumeAudioOnSeek, showMutedMonitor, showAbortedMonitor, isInputDebugMode, muteDebugAutoPlay]);
+    scratchRotationEnabled, setScratchRotationEnabled,
+  }), [liteMode, showReady, playKeySounds, playLongAudio, playBgSounds, resumeAudioOnSeek, showMutedMonitor, showAbortedMonitor, isInputDebugMode, muteDebugAutoPlay, scratchRotationEnabled]);
 
   // 子(ControlBar / SettingsModal)の React.memo を効かせるための、参照が安定したハンドラ群
   const sHandleFileSelect = useEvent(handleFileSelect);
