@@ -117,10 +117,6 @@ export const parseBMS = async (file) => {
               const lane = laneMap[ch];
               if (lane) {
                   if (lane.index > maxLaneIndex) maxLaneIndex = lane.index;
-                  if (!lane.isBg) {
-                      notesPerMeasure[measure] = (notesPerMeasure[measure] || 0) + 1;
-                      if (lane.isScratch) scratchPerMeasure[measure] = (scratchPerMeasure[measure] || 0) + 1;
-                  }
               } else if (isPms && RE_PMS_PLAYFIELD_CH.test(ch)) {
                   unmappedPmsCh.add(ch); // 未対応チャンネルの可視ノーツ → あとで警告
               }
@@ -133,7 +129,7 @@ export const parseBMS = async (file) => {
                     isPoorBga: (ch === '06'), isLayerBga: (ch === '07'),
                     isBpm: (ch === '03' || ch === '08'),
                     isStop: (ch === '09'),
-                    laneIndex: lane ? lane.index : -1, isLong: lane ? lane.isLong : false 
+                    laneIndex: lane ? lane.index : -1, isLong: lane ? lane.isLong : false, isScratch: !!(lane && lane.isScratch)
                 });
               }
             }
@@ -142,9 +138,6 @@ export const parseBMS = async (file) => {
       }
     }
     
-    let totalNotesCount = 0;
-    Object.values(notesPerMeasure).forEach(c => totalNotesCount += c);
-    const avgDensity = maxMeasureIndex > 0 ? totalNotesCount / (maxMeasureIndex + 1) : 0;
     rawObjects.sort((a, b) => (a.measure !== b.measure) ? a.measure - b.measure : a.position - b.position);
     const maxMeasure = maxMeasureIndex;
     const measureStartBeats = [0];
@@ -313,6 +306,14 @@ export const parseBMS = async (file) => {
 
     // 鍵盤モード判定
     const noteCount = resolvedObjects.filter(o => o.isNote).length;
+    // 小節ごとのノーツ数(密度グラフ・MEASURE 表示用)。LN をつないだ後で数える(LN 1本 = 1ノーツ)。
+    // ★以前は読み込み中に数えていたため LN の始点と終点を二重に数え、総ノーツ数と合っていなかった。
+    for (const o of resolvedObjects) {
+        if (!o.isNote) continue;
+        notesPerMeasure[o.measure] = (notesPerMeasure[o.measure] || 0) + 1;
+        if (o.isScratch) scratchPerMeasure[o.measure] = (scratchPerMeasure[o.measure] || 0) + 1;
+    }
+    const avgDensity = maxMeasureIndex > 0 ? noteCount / (maxMeasureIndex + 1) : 0;
     let hasSide2 = false, has1P67 = false, has2P67 = false;
     for (const o of resolvedObjects) {
         if (!o.isNote) continue;
