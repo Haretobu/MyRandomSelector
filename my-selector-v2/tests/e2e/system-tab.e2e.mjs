@@ -1,0 +1,35 @@
+// システムタブの操作 E2E: lite モード ON で詳細が開く / チェックボックスの変更が保存される / デバッグ入力の子項目
+import puppeteer from 'puppeteer-core';
+const BASE = process.env.E2E_BASE || process.argv[2] || 'http://localhost:5199'; // run.mjs が E2E_BASE を渡す
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+let fail = 0;
+const check = (label, ok, info = '') => { if (!ok) fail++; console.log(ok ? 'OK  ' : 'NG  ', label, info); };
+const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, headless: 'new', defaultViewport: { width: 1600, height: 1000 } });
+const page = await browser.newPage();
+const errors = [];
+page.on('pageerror', e => errors.push(e.message));
+await page.goto(BASE + '/bms.html', { waitUntil: 'networkidle0' });
+await page.evaluate(() => localStorage.clear());
+await page.reload({ waitUntil: 'networkidle0' });
+await page.evaluate(() => document.querySelector('button[title="設定"]').click()); await sleep(300);
+await page.evaluate(() => [...document.querySelectorAll('button')].find(b => b.innerText.trim() === 'システム').click()); await sleep(300);
+const text = () => page.evaluate(() => document.body.innerText);
+const clickLabel = (t) => page.evaluate((t) => [...document.querySelectorAll('label')].find(l => l.innerText.includes(t)).querySelector('input').click(), t);
+check('lite モード OFF: 詳細は閉じている', !(await text()).includes('描画解像度を下げる'));
+await clickLabel('lite モードを有効にする'); await sleep(200);
+check('lite モード ON: 詳細(6項目)が開く', (await text()).includes('有効な項目: 6 / 6'));
+await clickLabel('描画解像度を下げる'); await sleep(200);
+check('項目を OFF: 有効な項目 5 / 6', (await text()).includes('有効な項目: 5 / 6'));
+check('lite 設定が保存される', await page.evaluate(() => { const v = JSON.parse(localStorage.getItem('bms_lite_mode')); return v.enabled === true && v.lowRes === false; }));
+await clickLabel('シーク後も鳴っている音を途中から再生'); await sleep(200);
+check('シーク後の途中再生 OFF が保存される', await page.evaluate(() => localStorage.getItem('bms_resume_audio_on_seek') === '0'));
+check('デバッグ入力 OFF: 子項目は非表示', !(await text()).includes('入力時に自動再生音をミュート'));
+await clickLabel('デバッグ用キー入力'); await sleep(200);
+check('デバッグ入力 ON: 子項目が出る', (await text()).includes('入力時に自動再生音をミュート'));
+await page.evaluate(() => [...document.querySelectorAll('button')].find(b => b.innerText.trim() === '表示').click()); await sleep(200);
+check('別タブではシステムタブの内容は隠れる', !(await text()).includes('lite モードを有効にする'));
+check('ページエラーなし', errors.length === 0, errors.join(' | '));
+await page.evaluate(() => localStorage.clear());
+await browser.close();
+console.log(fail ? `${fail} FAILED` : 'ALL PASSED');
+process.exit(fail ? 1 : 0);

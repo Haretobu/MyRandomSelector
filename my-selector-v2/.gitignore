@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# E2E テストが生成するテスト譜面・音源
+tests/e2e/.fixtures/
