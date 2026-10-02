@@ -192,8 +192,11 @@ export default function PlaySettings({ hidden, isMobile, song, play }) {
                      order.forEach((v, i) => { const p = v - base; if (p >= 0 && p < order.length) inv[p] = i + 1; });
                      return inv.join('');
                  };
-                 const t1 = play.playOption !== 'OFF' ? orderText(play.currentLaneOrder, isPms ? 0 : 1) : null;
-                 const t2 = (isDP && play.playOption2 !== 'OFF') ? orderText(play.laneOrder2, 9) : null;
+                 // ★配置は譜面の読み込み時(とオプション変更時)に決まる。譜面が無いときは表示用の配置が未計算
+                 //   (初期値の 1234567 のまま)なので、数字は出さずに案内だけ出す。
+                 const t1 = song && play.playOption !== 'OFF' ? orderText(play.currentLaneOrder, isPms ? 0 : 1) : null;
+                 const t2 = song && isDP && play.playOption2 !== 'OFF' ? orderText(play.laneOrder2, 9) : null;
+                 const pendingOrder = !song && play.playOption !== 'OFF';
                  return (
                      <div className="w-full md:flex-1 border border-blue-900/50 p-3 bg-[#0f172a] rounded-lg flex flex-col gap-2 relative">
                          <div className="flex justify-between items-center">
@@ -225,6 +228,9 @@ export default function PlaySettings({ hidden, isMobile, song, play }) {
                                  {t1 && <div className="tracking-[0.2em]"><span className="text-blue-500/70 tracking-normal mr-1">{isDP ? '1P' : '配置'}</span>{t1}</div>}
                                  {t2 && <div className="tracking-[0.2em]"><span className="text-blue-500/70 tracking-normal mr-1">2P</span>{t2}</div>}
                              </div>
+                         )}
+                         {pendingOrder && (
+                             <div className="text-[10px] text-blue-500/60 text-center">譜面を読み込むと配置が決まります</div>
                          )}
                      </div>
                  );
