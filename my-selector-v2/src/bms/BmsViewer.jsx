@@ -283,6 +283,8 @@ export default function BmsViewer() {
   useEffect(() => { try { localStorage.setItem('bms_bga_side_pos', bgaSidePos); } catch {} }, [bgaSidePos]);
   const pcBehindBgaRef = useRef(null);
   const pcSideBgaRef = useRef(null);
+  const bgaSidePanelRef = useRef(bgaSidePanel);
+  useEffect(() => { bgaSidePanelRef.current = bgaSidePanel; }, [bgaSidePanel]);
   // レーン1本(鍵)の幅(px)。キャンバス幅をこれ×盤面単位数で決めるので、盤面ぴったりになる。
   const [laneWidthPx, setLaneWidthPx] = useState(() => {
     try { const v = Number(localStorage.getItem('bms_lane_width')); return v >= 20 && v <= 72 ? v : 44; } catch { return 44; }
@@ -405,6 +407,28 @@ export default function BmsViewer() {
   // 停止中にシークするたびループが増殖して FPS が低下していた。
   const renderLoopRef = useRef(null);
   const scheduleAudioRef = useRef(null);
+
+  // --- 描画・判定用の滑らかな時計 ---
+  // ★軽量化/カクつき対策: AudioContext.currentTime は音声処理ブロック単位(Windows では 10〜20ms 程度)でしか進まず、
+  //   60fps の描画と周期が合わないため、そのまま使うとフレームごとのスクロール量がばらついてカクついて見える。
+  //   performance.now() で補間する。currentTime は「ブロック開始時刻」で実時刻より 0〜1ブロック遅れるので、
+  //   (currentTime - perf) の最大値を実際のオフセットとみなし、時計のドリフトにはゆっくり減衰させて追従する。
+  const smoothClockRef = useRef({ off: null, lastNow: 0 });
+  const resetSmoothClock = () => { smoothClockRef.current = { off: null, lastNow: 0 }; };
+  const readAudioClock = () => {
+      const ac = audioContextRef.current;
+      if (!ac) return 0;
+      const c = ac.currentTime;
+      const s = smoothClockRef.current;
+      if (ac.state !== 'running') { s.off = null; return c; } // 停止中の音声時計は進まないので補間しない
+      const now = performance.now() / 1000;
+      const sample = c - now;
+      if (s.off === null || Math.abs(sample - s.off) > 0.1) s.off = sample;   // 初回・一時停止明け・大きな乱れは即同期
+      else if (sample > s.off) s.off = sample;
+      else s.off -= Math.min(0.1, Math.max(0, now - s.lastNow)) * 0.002;   // 2ms/秒で減衰(音声時計とのドリフト追従)
+      s.lastNow = now;
+      return now + s.off;
+  };
   const _renderTick = () => {
       animationRef.current = null;
       if (renderLoopRef.current) renderLoopRef.current();
@@ -911,7 +935,7 @@ export default function BmsViewer() {
       if ((isInputDebugModeRef.current || playModeRef.current) && parsedSong && audioContextRef.current) {
           const ctxTime = audioContextRef.current.currentTime;
           const bmsTime = isPlayingRef.current
-              ? (ctxTime - startTimeRef.current)
+              ? (readAudioClock() - startTimeRef.current) // 描画と同じ補間済みの時計で判定する
               : pauseTimeRef.current;
 
           if (playModeRef.current) judgeLaneInput(lane, bmsTime, isScr, scDir);
@@ -1013,7 +1037,7 @@ export default function BmsViewer() {
           const ln = activeLnRef.current[lane];
           if (ln) {
               const cur = isPlayingRef.current && audioContextRef.current
-                  ? audioContextRef.current.currentTime - startTimeRef.current : pauseTimeRef.current;
+                  ? readAudioClock() - startTimeRef.current : pauseTimeRef.current;
               const w = JUDGE_WINDOWS[judgeRankRef.current] || JUDGE_WINDOWS[2];
               if (cur < (ln.endTime || ln.time) - w.gd / 1000) judgeMissNote(ln, 'poor');
               activeLnRef.current[lane] = null;
@@ -1612,6 +1636,7 @@ export default function BmsViewer() {
     const fromSeek = seekedSinceStartRef.current;
     seekedSinceStartRef.current = false;
     midStartPendingRef.current = offset > 0 && (!fromSeek || resumeAudioOnSeekRef.current);
+    resetSmoothClock(); // 一時停止中は音声時計が止まる(suspend)ことがあるため補間をやり直す
     setIsPlaying(true); isPlayingRef.current = true; lastFrameTimeRef.current = performance.now();
     applySeekPosition(offset); // startTimeRef / nextNoteIndexRef / BGA インデックス・フレームを同期
 
@@ -1637,7 +1662,7 @@ export default function BmsViewer() {
 
   const pausePlayback = () => {
     setIsPlaying(false); isPlayingRef.current = false; stopAudioNodes();
-    pauseTimeRef.current = audioContextRef.current.currentTime - startTimeRef.current;
+    pauseTimeRef.current = readAudioClock() - startTimeRef.current; // 描画と同じ時計(一時停止時に表示が巻き戻らない)
     setReadyAnimState(null);
     stopRenderLoop();
     if (isInputDebugModeRef.current || playModeRef.current) scheduleRenderLoop();
@@ -1802,10 +1827,13 @@ export default function BmsViewer() {
       if (v.width > 0 && v.height > 0) canvasRectRef.current = v; // 0 サイズはキャッシュせず次フレーム再測定
       return v;
     })();
-    if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) { canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr; ctx.scale(dpr, dpr); }
-    else ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const rawTime = isPlayingRef.current && audioContextRef.current ? audioContextRef.current.currentTime - startTimeRef.current : pauseTimeRef.current;
+    // ★軽量化: canvas.width/height は整数なので、比較も丸めた値で行う。以前は rect.width * dpr(125%/150% 表示の
+    //   ノートPCや小数幅のレイアウトでは小数になる)と直接比較していたため常に不一致となり、毎フレーム canvas の
+    //   バッキングストアを再確保していた(低スペック機でのカクつき・引っかかりの大きな原因)。
+    const cw = Math.max(1, Math.round(rect.width * dpr)), ch = Math.max(1, Math.round(rect.height * dpr));
+    if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const rawTime = isPlayingRef.current && audioContextRef.current ? readAudioClock() - startTimeRef.current : pauseTimeRef.current;
     // ★曲の長さで頭打ちにする。以前は終端を過ぎても時刻が進み続け、時間表示が「183.00 / 182.12」のように
     //   曲長を超えたり、動画BGAが終端を越えた位置へ同期されて表示が乱れる原因になっていた。
     const currentTime = duration > 0 ? Math.min(rawTime, duration) : rawTime;
@@ -1866,7 +1894,7 @@ export default function BmsViewer() {
         }
         // PC の 背面 / サイド BGA(表示中のみ ref が入る)
         pcBehindBgaRef.current?.syncTime(currentTime);
-        pcSideBgaRef.current?.syncTime(currentTime);
+        if (bgaSidePanelRef.current) pcSideBgaRef.current?.syncTime(currentTime); // 非表示中は同期しない(動画は一時停止中)
 
         // 3. その他の重い処理（小節線の計算やログ表示用のリスト更新など）
         // これらは毎フレームやる必要がないので、ここだけ間引いて軽量化します
@@ -1898,7 +1926,13 @@ export default function BmsViewer() {
                 const newMeasure = currentBar ? currentBar.measure - 1 : parsedSong.barLines.length - 1;
                 const mStart = parsedSong.barLines[newMeasure]?.time || 0;
                 const mEnd = parsedSong.barLines[newMeasure + 1]?.time || 99999;
-                const processedInMeasure = displayObjects.filter(o => o.isNote && o.processed && o.time >= mStart && o.time < mEnd).length;
+                // ★軽量化: 全オブジェクトを filter(配列生成)せず、二分探索で小節の範囲だけ数える
+                let processedInMeasure = 0;
+                for (let i = findStartIndex(displayObjects, mStart); i < displayObjects.length; i++) {
+                    const o = displayObjects[i];
+                    if (o.time >= mEnd) break;
+                    if (o.isNote && o.processed) processedInMeasure++;
+                }
                 const totalInMeasure = parsedSong.notesPerMeasure[newMeasure] || 0;
 
                 if (newMeasure !== currentMeasureRef.current) {
@@ -2478,8 +2512,9 @@ export default function BmsViewer() {
                              シーク待ちのタイムラグが生じていた(ON/OFF・左右切替のどちらでも同様)。 */}
                          <div className={`relative z-10 bg-black overflow-hidden flex items-center justify-center transition-[flex-grow,opacity] duration-150 ${bgaSidePanel ? 'flex-1 min-w-[140px] opacity-100 border-r border-blue-900/30' : 'flex-none w-0 min-w-0 opacity-0 pointer-events-none'}`}
                               style={{ order: bgaSidePos === 'left' ? 0 : 2 }}>
+                             {/* ★軽量化: 非表示中もマウントは維持(再表示時の再読み込みを避ける)するが、動画は一時停止してデコードさせない */}
                              <BgaStage ref={pcSideBgaRef} backBga={currentBackBga} layerBga={currentLayerBga} poorBga={currentPoorBga}
-                                 showMiss={showMissLayer} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} opacity={bgaOpacity} fit="contain" />
+                                 showMiss={showMissLayer} isPlaying={isPlaying && bgaSidePanel} isVideoEnabled={playBgaVideo} opacity={bgaOpacity} fit="contain" />
                              {!currentBackBga && !currentLayerBga && <div className="text-blue-900/40 text-xs font-bold tracking-widest pointer-events-none">BGA</div>}
                          </div>
 
