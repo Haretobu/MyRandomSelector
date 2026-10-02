@@ -16,6 +16,7 @@ import LogPanel from './components/LogPanel';
 import ControlBar from './components/ControlBar';
 import BgaStage from './components/BgaStage';
 import ResultModal from './components/ResultModal';
+import LoadingOverlay from './components/LoadingOverlay';
 import MobileBgaLayers, { BgaPlaceholder } from './components/MobileBgaLayers';
 import { MAX_LANES, DEFAULT_LANES, boardUnitsFor, laneNoteColor } from './render/laneLayout';
 import { useEvent } from './hooks/useEvent';
@@ -67,7 +68,7 @@ export default function BmsViewer() {
   const [lastVolume, setLastVolume] = useState(0.8);
   const [hitSoundVolume, setHitSoundVolume] = useState(1.0);
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingProgress, setLoadingProgress] = useState(null); // 音声デコードの進捗(%)。null = 数値で出せない段階(バーを出さない)
   const [loadingMessage, setLoadingMessage] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [customKeyHitSound, setCustomKeyHitSound] = useState(null);
@@ -656,7 +657,7 @@ export default function BmsViewer() {
   const handleZipSelect = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      setIsLoading(true); setLoadingMessage('ZIPファイルを解凍中...');
+      setIsLoading(true); setLoadingProgress(null); setLoadingMessage('ZIPファイルを解凍中...');
       try {
           const extractedFiles = await extractZipFiles(file);
           processFiles(extractedFiles);
@@ -783,7 +784,7 @@ export default function BmsViewer() {
     engine.stopAll(); activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]);
     // ★P4: デコード済み WAV / 画像はフォルダ内で使い回す(キャッシュのクリアは processFiles = 新フォルダ時のみ)
 
-    setIsLoading(true); setLoadingProgress(0); setLoadingMessage('BMSファイルを解析中...');
+    setIsLoading(true); setLoadingProgress(null); setLoadingMessage('BMSファイルを解析中...');
 
     // ★読み込みの世代番号。譜面を素早く切り替えると、先に始めた読み込みが後から完了して
     //   新しい譜面を古い譜面で上書きすることがあった。await のたびに「自分が最新か」を確認し、古ければ中断する。
@@ -868,7 +869,7 @@ export default function BmsViewer() {
       });
       queue.sort((a, b) => b.file.size - a.file.size);
 
-      if (queue.length > 0) setLoadingMessage(`音声ファイルを読み込み中... (新規 ${queue.length}個)`);
+      if (queue.length > 0) { setLoadingProgress(0); setLoadingMessage(`音声ファイルを読み込み中... (新規 ${queue.length}個)`); }
       const CONCURRENCY = 6;
       for (let i = 0; i < queue.length; i += CONCURRENCY) {
         await Promise.all(queue.slice(i, i + CONCURRENCY).map(async (item) => {
@@ -1528,6 +1529,8 @@ export default function BmsViewer() {
 
       {/* メインエリア: PCとスマホで構造を分ける */}
       <div className="flex-1 relative min-h-0 overflow-hidden flex justify-center">
+         {/* 読み込み中の表示(ZIP 解凍 / BMS 解析 / 音声デコードの進捗) */}
+         {isLoading && <LoadingOverlay message={loadingMessage} progress={loadingProgress} />}
          
          {/* スマホ用: 背景BGA */}
          {isMobile && (
