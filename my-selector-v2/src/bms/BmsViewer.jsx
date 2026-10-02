@@ -1236,12 +1236,15 @@ export default function BmsViewer() {
 
   const processFiles = (fileList) => {
     const validFiles = fileList.filter(f => /\.(bms|bme|bml|pms|wav|ogg|mp3|bmp|jpg|jpeg|png|gif|mp4|webm|mov)$/i.test(f.name));
-    if (validFiles.length === 0) { alert("BMS関連ファイルが見つかりませんでした。"); return; }
-    resetAllState(); 
+    // ★ZIP 読み込みでは呼び出し前に isLoading を立てている。譜面の読み込みに進まない経路では
+    //   ここで必ず下ろす(以前は BMS の無い ZIP を開くと「読み込み中」のまま操作できなくなっていた)。
+    if (validFiles.length === 0) { setIsLoading(false); alert("BMS関連ファイルが見つかりませんでした。"); return; }
+    resetAllState();
     setFiles(validFiles);
     const bmsFiles = validFiles.filter(f => /\.(bms|bme|bml|pms)$/i.test(f.name)).map((f, i) => ({ file: f, index: i, name: f.name }));
     setBmsList(bmsFiles);
     if (bmsFiles.length > 0) setSelectedBmsIndex(0);
+    else { setIsLoading(false); alert("譜面ファイル(.bms / .bme / .bml / .pms)が見つかりませんでした。"); }
   };
 
   const handleFileSelect = (e) => processFiles(Array.from(e.target.files));
@@ -1366,6 +1369,7 @@ export default function BmsViewer() {
   
   useEffect(() => { if (selectedBmsIndex >= 0 && bmsList[selectedBmsIndex]) loadBmsAndAudio(bmsList[selectedBmsIndex].file); }, [selectedBmsIndex, bmsList]);
 
+  const loadSeqRef = useRef(0); // 譜面読み込みの世代番号(古い読み込みの結果を捨てるため)
   const loadBmsAndAudio = async (bmsFile) => {
     if (isPlayingRef.current) stopPlayback(true);
     lastBgaKeyRef.current = {};
@@ -1378,9 +1382,16 @@ export default function BmsViewer() {
 
     setIsLoading(true); setLoadingProgress(0); setLoadingMessage('BMSファイルを解析中...');
 
+    // ★読み込みの世代番号。譜面を素早く切り替えると、先に始めた読み込みが後から完了して
+    //   新しい譜面を古い譜面で上書きすることがあった。await のたびに「自分が最新か」を確認し、古ければ中断する。
+    const loadId = ++loadSeqRef.current;
+    const isStale = () => loadId !== loadSeqRef.current;
+
     try {
       const parsed = await parseBMS(bmsFile);
+      if (isStale()) return;
       setTimeout(() => {
+          if (isStale()) return;
           if (!parsed.isSupportedMode) alert("警告：この形式はまだ描画に対応していません。");
           else if (parsed.unmappedPmsChannels && parsed.unmappedPmsChannels.length)
               alert(`警告：この pms は未対応のチャンネル（${parsed.unmappedPmsChannels.join(', ')}）を使用しています。一部のノーツが表示・再生されません。`);
@@ -1461,9 +1472,11 @@ export default function BmsViewer() {
           try {
             const buf = await item.file.arrayBuffer(); const audioBuf = await audioContextRef.current.decodeAudioData(buf);
             audioBuffersRef.current.set(item.key, audioBuf);
-          } catch (e) {} finally { setLoadingProgress(Math.round(((i) / queue.length) * 100)); }
+          } catch (e) {} finally { setLoadingProgress(Math.round((Math.min(i + CONCURRENCY, queue.length) / queue.length) * 100)); }
         }));
+        if (isStale()) return; // 新しい譜面の読み込みが始まった(デコード済みの音はキャッシュに残るので無駄にはならない)
       }
+      if (isStale()) return;
       
       let calculatedMaxDuration = parsed.totalTime;
       let maxSoundDuration = 0;
@@ -1495,7 +1508,7 @@ export default function BmsViewer() {
       setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsed.avgDensity });
       lastStateUpdateRef.current = 0; droppedSoundsRef.current = 0; // 次の renderLoop フレームで HUD を即更新させる
       setLoadingMessage('準備完了'); setIsLoading(false);
-    } catch (e) { console.error(e); setIsLoading(false); }
+    } catch (e) { console.error(e); if (!isStale()) setIsLoading(false); }
   };
 
 

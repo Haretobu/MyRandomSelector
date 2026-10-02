@@ -113,10 +113,20 @@ const getMimeType = (filename) => {
     return map[ext] || 'application/octet-stream';
 };
 
+// ZIP 内のファイル名のデコード。JSZip は既定で UTF-8 として読むため、日本の BMS に多い
+// Shift-JIS のファイル名が文字化けし、#WAV / #BMP の参照と一致せず音や BGA が欠けていた。
+// UTF-8 として正しく読めなければ Shift-JIS とみなす(BMS 本文の decodeBmsText と同じ方針)。
+// ※ ZIP の「UTF-8 フラグ」が立っているエントリは JSZip が UTF-8 で読むので、この関数は使われない。
+const decodeZipFileName = (bytes) => {
+    const buf = typeof bytes === 'string' ? Uint8Array.from(bytes, c => c.charCodeAt(0)) : new Uint8Array(bytes);
+    try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+    catch (e) { return new TextDecoder('shift-jis').decode(buf); }
+};
+
 // ZIP解凍: MIMEタイプを付与して展開
 export const extractZipFiles = async (file) => {
     const zip = new JSZip();
-    const loadedZip = await zip.loadAsync(file);
+    const loadedZip = await zip.loadAsync(file, { decodeFileName: decodeZipFileName });
     const files = [];
     
     for (const relativePath of Object.keys(loadedZip.files)) {

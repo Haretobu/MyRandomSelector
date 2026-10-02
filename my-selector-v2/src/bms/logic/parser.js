@@ -266,6 +266,11 @@ export const parseBMS = async (file) => {
             lastNoteByLane[lane] = null;
         } else { resolvedObjects.push(obj); lastNoteByLane[lane] = obj; }
     }
+    // ★終端の無い LN(5x/6x チャンネルの開始だけで終わっている)は、以前はノーツごと消えていた。
+    //   ノーツが欠けないよう、通常ノーツとして残す。
+    for (const start of pendingLN) {
+        if (start) resolvedObjects.push(start);
+    }
     resolvedObjects.sort((a, b) => a.time - b.time);
     // ★軽量化: barLines も measureStartBeats(昇順) × timePoints(昇順) のマージ歩行で O(measures + timePoints)
     const barLines = [];
@@ -275,7 +280,13 @@ export const parseBMS = async (file) => {
         bti = findTimePointIndex(bti, beat); // ★STOPと同じ小節境界にある場合も「開始」側を使う(上のコメント参照)
         barLines.push({ measure: m, beat: beat, time: beatToTime(timePoints[bti], beat) });
     }
-    const lastObjTime = resolvedObjects.length > 0 ? resolvedObjects[resolvedObjects.length-1].time : 0;
+    // ★曲の終端は「最後に始まるオブジェクト」ではなく「最後に終わるオブジェクト」で決める。
+    //   以前は開始時刻だけを見ていたため、最後の LN の終点がそれより後ろにあると曲が途中で打ち切られていた。
+    let lastObjTime = 0;
+    for (const o of resolvedObjects) {
+        const end = o.type === 'long' && o.endTime !== undefined ? o.endTime : o.time;
+        if (end > lastObjTime) lastObjTime = end;
+    }
     if (maxLNDuration < 20.0) maxLNDuration = 20.0;
 
     // BPM レンジ: 最低 ～ 最頻(再生秒数が最長の区間) ～ 最大。
