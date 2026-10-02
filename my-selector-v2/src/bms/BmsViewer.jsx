@@ -81,7 +81,6 @@ export default function BmsViewer() {
   const setCurrentBackBga = (v) => live.set({ backBga: v });
   const setCurrentLayerBga = (v) => live.set({ layerBga: v });
   const setCurrentPoorBga = (v) => live.set({ poorBga: v });
-  const [stageFileImage, setStageFileImage] = useState(null);
 
   const showMissLayerRef = useRef(false);
   const setShowMissLayer = (v) => { showMissLayerRef.current = v; live.set({ showMiss: v }); };
@@ -99,7 +98,6 @@ export default function BmsViewer() {
   const [totalNotes, setTotalNotes] = useState(0);
   const [laneMute, setLaneMute] = useState(() => new Array(MAX_LANES).fill(false)); // レーンごとミュート(0=SC, 1-7=鍵盤)
   const laneMuteRef = useLatestRef(laneMute);
-  const [currentBpm, setCurrentBpm] = useState(130); 
   const [showReady, setShowReady] = useState(true);
   const [readyAnimState, setReadyAnimState] = useState(null); 
   const [backingTracks, setBackingTracks] = useState([]);
@@ -505,7 +503,7 @@ export default function BmsViewer() {
     stopPlayback(true);
     engine.stopAll(); activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]); releaseImageAssets();
     lastBgaKeyRef.current = {};
-    setParsedSong(null); setDisplayObjects([]); setCurrentBackBga(null); setCurrentLayerBga(null); setCurrentPoorBga(null); setStageFileImage(null);
+    setParsedSong(null); setDisplayObjects([]); setCurrentBackBga(null); setCurrentLayerBga(null); setCurrentPoorBga(null);
     setShowMissLayer(false); setCurrentMeasureLines([]); 
     scratchAngleRef.current = 0; lastFrameTimeRef.current = 0; lastScratchTimeRef.current = 0; lastScratchTypeRef.current = 'REVERSE'; scratchDirectionRef.current = -1;
     activeInputLanesRef.current.clear(); isShiftHeldRef.current = false; isCtrlHeldRef.current = false; setHasVideo(false); setPlayBgaVideo(true);
@@ -802,7 +800,7 @@ export default function BmsViewer() {
               alert(`警告：この pms は未対応のチャンネル（${parsed.unmappedPmsChannels.join(', ')}）を使用しています。一部のノーツが表示・再生されません。`);
       }, 100);
       const diffInfo = guessDifficulty(parsed.header, bmsFile.name);
-      setDifficultyInfo(diffInfo); realtimeBpmRef.current = parsed.header.bpm; setCurrentBpm(parsed.header.bpm);
+      setDifficultyInfo(diffInfo); realtimeBpmRef.current = parsed.header.bpm;
 
       const neededAudio = new Set(); const neededImages = new Set();
       parsed.objects.forEach(o => { if (parsed.header.wavs[o.value]) neededAudio.add(parsed.header.wavs[o.value]); });
