@@ -1,8 +1,9 @@
 // src/bms/components/SettingsModal.jsx
 import React, { memo, useState, useEffect, useRef } from 'react';
-import { Settings, X, ChevronsUp, RotateCw, Film, Flag, Music, Layers, Speaker, EyeOff, FileX, FolderOpen, FileArchive, ChevronDown, Gamepad2, RotateCcw, SlidersHorizontal, Gauge } from 'lucide-react';
-import { VISIBILITY_MODES, DEFAULT_AUDIO_FX, DEFAULT_LITE_MODE, LITE_MODE_ITEMS } from '../constants';
+import { Settings, X, ChevronsUp, RotateCw, Film, Speaker, FolderOpen, FileArchive, ChevronDown, Gamepad2, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { VISIBILITY_MODES, DEFAULT_AUDIO_FX } from '../constants';
 import InputSettings from './settings/InputSettings';
+import SystemSettings from './settings/SystemSettings';
 
 // 6-3: サウンドエフェクト。子コンポーネントはモジュールスコープに置く
 //   (レンダーごとに再生成すると <input range> がドラッグ中に作り直され、ホールド追従できなくなるため)。
@@ -27,49 +28,6 @@ const FxSubHead = ({ name, checked, disabled, onChange }) => (
             onChange={e => onChange(e.target.checked)} className="accent-orange-500 w-4 h-4" />
     </label>
 );
-
-// lite モード(低スペック機向け)。親スイッチを ON にすると詳細項目が展開される。
-function LiteModeSection({ liteMode, setLiteMode }) {
-    const lm = liteMode || DEFAULT_LITE_MODE;
-    const on = !!lm.enabled;
-    const activeCount = LITE_MODE_ITEMS.filter(it => lm[it.key]).length;
-    return (
-        <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
-            <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center justify-between gap-2">
-                <span className="flex items-center gap-2"><Gauge size={14} /> lite モード(低スペック機向け)</span>
-                {on && (
-                    <button
-                        onClick={() => setLiteMode({ ...DEFAULT_LITE_MODE, enabled: true })}
-                        className="text-[10px] font-bold text-blue-300 hover:text-white flex items-center gap-1 bg-black/40 border border-blue-900/50 rounded px-2 py-1 transition">
-                        <RotateCcw size={11} /> 既定に戻す
-                    </button>
-                )}
-            </div>
-            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer border border-transparent hover:border-blue-500/30">
-                <div className="flex flex-col">
-                    <span className="text-sm">lite モードを有効にする</span>
-                    <span className="text-[10px] text-blue-400/60">見た目・演出を少し落として動作を軽くします。この設定はこのPC(ブラウザ)にだけ保存されます</span>
-                </div>
-                <input type="checkbox" checked={on} onChange={e => setLiteMode({ ...lm, enabled: e.target.checked })} className="accent-blue-500 w-4 h-4 shrink-0 ml-2" />
-            </label>
-
-            {on && (
-                <div className="mt-2 space-y-1">
-                    <div className="text-[10px] text-blue-400/60 px-1">有効な項目: {activeCount} / {LITE_MODE_ITEMS.length}</div>
-                    {LITE_MODE_ITEMS.map(it => (
-                        <label key={it.key} className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer border border-transparent hover:border-blue-500/30">
-                            <div className="flex flex-col">
-                                <span className="text-[13px]">{it.label}</span>
-                                <span className="text-[10px] text-blue-400/60">{it.desc}</span>
-                            </div>
-                            <input type="checkbox" checked={!!lm[it.key]} onChange={e => setLiteMode({ ...lm, [it.key]: e.target.checked })} className="accent-blue-500 w-4 h-4 shrink-0 ml-2" />
-                        </label>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-}
 
 function AudioFxSection({ audioFx, setAudioFx }) {
     const fx = audioFx || {};
@@ -336,18 +294,13 @@ const SettingsModal = ({
     customScratchHitSound, handleScratchHitSoundUpload, handleScratchHitSoundReset,
     volume, setVolume, monitorUpdateInterval, setMonitorUpdateInterval,
     hasVideo, playBgaVideo, setPlayBgaVideo, hitSoundVolume, setHitSoundVolume,
-    showReady, setShowReady, playKeySounds, setPlayKeySounds, playLongAudio, setPlayLongAudio,
-    playBgSounds, setPlayBgSounds, showMutedMonitor, setShowMutedMonitor,
-    resumeAudioOnSeek, setResumeAudioOnSeek,
-    showAbortedMonitor, setShowAbortedMonitor, scratchRotationEnabled, setScratchRotationEnabled,
-    isInputDebugMode, setIsInputDebugMode,
-    muteDebugAutoPlay, setMuteDebugAutoPlay,
+    scratchRotationEnabled, setScratchRotationEnabled,
     input, // 入力タブ(キー割り当て / ゲームパッド)の設定一式。InputSettings.jsx を参照
     playMode, setPlayMode,
     judgeOffset, setJudgeOffset, suggestJudgeOffset,
     judgeSystem, setJudgeSystem, judgeCfg,
     audioFx, setAudioFx,
-    liteMode, setLiteMode,
+    system, // システムタブ(lite モード / 詳細設定1)の設定一式。SystemSettings.jsx を参照
     missLayerEnabled, setMissLayerEnabled,
     bgaBehindChart, setBgaBehindChart,
     bgaSidePanel, setBgaSidePanel,
@@ -701,77 +654,8 @@ const SettingsModal = ({
                     {/* サウンドエフェクト (共通・6-3) */}
                     <div hidden={!showSound}><AudioFxSection audioFx={audioFx} setAudioFx={setAudioFx} /></div>
 
-                    {/* lite モード (システム) */}
-                    <div hidden={!showSystem}><LiteModeSection liteMode={liteMode} setLiteMode={setLiteMode} /></div>
-
-                    {/* 詳細設定1 (システム・デバッグ) */}
-                    <details hidden={!showSystem} className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50 mt-2 group" open={!isMobile}>
-                        <summary className="text-xs text-blue-400 mb-2 font-bold uppercase tracking-wider flex items-center justify-between cursor-pointer list-none">
-                            <span>詳細設定1 (システム・デバッグ)</span>
-                            <ChevronDown size={16} className="transition-transform group-open:rotate-180" />
-                        </summary>
-                        <div className="space-y-3 pt-2">
-                             <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
-                                <div className="flex items-center gap-3"><Flag className="text-blue-400" size={18}/><span className="text-sm">開始時のREADY演出</span></div>
-                                <input type="checkbox" checked={showReady} onChange={e=>setShowReady(e.target.checked)} className="accent-blue-500"/>
-                             </label>
-                            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
-                                <div className="flex items-center gap-3"><Music className="text-blue-400" size={18}/><span className="text-sm">キー音を再生</span></div>
-                                <input type="checkbox" checked={playKeySounds} onChange={e=>setPlayKeySounds(e.target.checked)} className="accent-blue-500"/>
-                            </label>
-                            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
-                                <div className="flex items-center gap-3"><Layers className="text-blue-400" size={18}/><span className="text-sm">BGMを再生</span></div>
-                                <input type="checkbox" checked={playLongAudio} onChange={e=>setPlayLongAudio(e.target.checked)} className="accent-blue-500"/>
-                             </label>
-                            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
-                                <div className="flex items-center gap-3"><Speaker className="text-blue-400" size={18}/><span className="text-sm">バックサウンドを再生</span></div>
-                                 <input type="checkbox" checked={playBgSounds} onChange={e=>setPlayBgSounds(e.target.checked)} className="accent-blue-500"/>
-                            </label>
-                            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
-                                <div className="flex items-center gap-3"><Music className="text-blue-400" size={18}/>
-                                    <div className="flex flex-col">
-                                        <span className="text-sm">シーク後も鳴っている音を途中から再生</span>
-                                        <span className="text-[10px] text-blue-400/60">OFF = beatoraja 式(シーク地点より前に始まった音は鳴らさない)。一時停止→再開は常に続きから再生</span>
-                                    </div>
-                                </div>
-                                <input type="checkbox" checked={resumeAudioOnSeek} onChange={e=>setResumeAudioOnSeek(e.target.checked)} className="accent-blue-500"/>
-                            </label>
-                            <div className="border-t border-blue-900/30 my-2"></div>
-                             <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
-                                <div className="flex items-center gap-3"><EyeOff className="text-blue-400" size={18}/><span className="text-sm">ミュート音源をモニターに表示</span></div>
-                                <input type="checkbox" checked={showMutedMonitor} onChange={e=>setShowMutedMonitor(e.target.checked)} className="accent-blue-500"/>
-                               </label>
-                            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
-                                <div className="flex items-center gap-3"><FileX className="text-blue-400" size={18}/><span className="text-sm">停止時に音源情報を残す</span></div>
-                                 <input type="checkbox" checked={showAbortedMonitor} onChange={e=>setShowAbortedMonitor(e.target.checked)} className="accent-blue-500"/>
-                            </label>
-                            
-                            {!isMobile && (
-                                <>
-                                    <div className="border-t border-blue-900/30 my-2"></div>
-                                    <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
-                                        <div className="flex items-center gap-3"><Gamepad2 className="text-blue-400" size={18}/><span className="text-sm font-bold text-blue-200">デバッグ用キー入力</span></div>
-                                        <input type="checkbox" checked={isInputDebugMode} onChange={e=>setIsInputDebugMode(e.target.checked)} className="accent-blue-500"/>
-                                    </label>
-
-                                    {isInputDebugMode && (
-                                        <div className="flex items-center justify-between pl-6 border-l-2 border-gray-700 ml-1 bg-black/10 p-2 rounded">
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-medium text-gray-300">入力時に自動再生音をミュート</span>
-                                                <span className="text-[10px] text-gray-500">キー音再生設定に関わらず自動再生音が消えます</span>
-                                            </div>
-                                            <input 
-                                                type="checkbox" 
-                                                checked={muteDebugAutoPlay} 
-                                                onChange={(e) => setMuteDebugAutoPlay(e.target.checked)} 
-                                                className="accent-green-500 w-4 h-4" 
-                                            />
-                                        </div>
-                                    )}
-                                </>
-                            )}
-                        </div>
-                    </details>
+                    {/* システムタブ: lite モード / 詳細設定1 */}
+                    <SystemSettings hidden={!showSystem} isMobile={isMobile} system={system} />
 
                     {/* 詳細設定2 (カスタム打鍵音設定) */}
                     <details hidden={!showSound} className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50 mt-2 group" open={!isMobile}>

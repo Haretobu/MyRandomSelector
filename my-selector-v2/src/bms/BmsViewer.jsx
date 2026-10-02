@@ -1374,6 +1374,14 @@ export default function BmsViewer() {
     gamepadAxisDelta, setGamepadAxisDelta, gamepadAxisReleaseMs, setGamepadAxisReleaseMs,
   }), [keyMaps, gamepadEnabled, gamepadName, gamepadMaps, gamepadScratchAlt, gamepadAxisDelta, gamepadAxisReleaseMs]);
 
+  // 設定画面「システム」タブの設定一式
+  const systemSettings = React.useMemo(() => ({
+    liteMode, setLiteMode, showReady, setShowReady,
+    playKeySounds, setPlayKeySounds, playLongAudio, setPlayLongAudio, playBgSounds, setPlayBgSounds,
+    resumeAudioOnSeek, setResumeAudioOnSeek, showMutedMonitor, setShowMutedMonitor, showAbortedMonitor, setShowAbortedMonitor,
+    isInputDebugMode, setIsInputDebugMode, muteDebugAutoPlay, setMuteDebugAutoPlay,
+  }), [liteMode, showReady, playKeySounds, playLongAudio, playBgSounds, resumeAudioOnSeek, showMutedMonitor, showAbortedMonitor, isInputDebugMode, muteDebugAutoPlay]);
+
   // 子(ControlBar / SettingsModal)の React.memo を効かせるための、参照が安定したハンドラ群
   const sHandleFileSelect = useEvent(handleFileSelect);
   const sHandleZipSelect = useEvent(handleZipSelect);
@@ -1406,19 +1414,13 @@ export default function BmsViewer() {
         customScratchHitSound={customScratchHitSound} handleScratchHitSoundUpload={sScratchHitUpload} handleScratchHitSoundReset={sScratchHitReset}
         volume={volume} setVolume={setVolume} monitorUpdateInterval={monitorUpdateInterval} setMonitorUpdateInterval={setMonitorUpdateInterval}
         hasVideo={hasVideo} playBgaVideo={playBgaVideo} setPlayBgaVideo={setPlayBgaVideo} hitSoundVolume={hitSoundVolume} setHitSoundVolume={setHitSoundVolume}
-        showReady={showReady} setShowReady={setShowReady} playKeySounds={playKeySounds} setPlayKeySounds={setPlayKeySounds} playLongAudio={playLongAudio} setPlayLongAudio={setPlayLongAudio}
-        playBgSounds={playBgSounds} setPlayBgSounds={setPlayBgSounds}
-        resumeAudioOnSeek={resumeAudioOnSeek} setResumeAudioOnSeek={setResumeAudioOnSeek}
-        showMutedMonitor={showMutedMonitor} setShowMutedMonitor={setShowMutedMonitor}
-        showAbortedMonitor={showAbortedMonitor} setShowAbortedMonitor={setShowAbortedMonitor} scratchRotationEnabled={scratchRotationEnabled} setScratchRotationEnabled={setScratchRotationEnabled}
-        isInputDebugMode={isInputDebugMode} setIsInputDebugMode={setIsInputDebugMode}
-        muteDebugAutoPlay={muteDebugAutoPlay} setMuteDebugAutoPlay={setMuteDebugAutoPlay}
+        scratchRotationEnabled={scratchRotationEnabled} setScratchRotationEnabled={setScratchRotationEnabled}
         input={inputSettings}
         playMode={playMode} setPlayMode={setPlayMode}
         judgeOffset={judgeOffset} setJudgeOffset={setJudgeOffset} suggestJudgeOffset={sSuggestJudgeOffset}
         judgeSystem={judgeSystem} setJudgeSystem={setJudgeSystem} judgeCfg={judgeCfg}
         audioFx={audioFx} setAudioFx={setAudioFx}
-        liteMode={liteMode} setLiteMode={setLiteMode}
+        system={systemSettings}
         missLayerEnabled={missLayerEnabled} setMissLayerEnabled={setMissLayerEnabled}
         bgaBehindChart={bgaBehindChart} setBgaBehindChart={setBgaBehindChart}
         bgaSidePanel={bgaSidePanel} setBgaSidePanel={setBgaSidePanel}
