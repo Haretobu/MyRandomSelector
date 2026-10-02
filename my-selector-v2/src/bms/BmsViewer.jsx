@@ -1399,6 +1399,15 @@ export default function BmsViewer() {
   const sHiSpeedChange = useEvent((v) => { setAutoHiSpeed(false); setHiSpeed(v); });
   const sSuggestJudgeOffset = useEvent(suggestJudgeOffset);
 
+  // 設定画面「音」タブの設定一式(ハンドラは参照が安定した sXxx を使う)
+  const soundSettings = React.useMemo(() => ({
+    audioFx, setAudioFx, hitSoundVolume, setHitSoundVolume, isSeparateHitSound, setIsSeparateHitSound,
+    handleKeyHitSoundUpload: sKeyHitUpload, handleKeyHitSoundReset: sKeyHitReset,
+    handleScratchHitSoundUpload: sScratchHitUpload, handleScratchHitSoundReset: sScratchHitReset,
+    tempKeySoundName, tempScratchSoundName, customKeyHitSound, customScratchHitSound,
+  }), [audioFx, hitSoundVolume, isSeparateHitSound, tempKeySoundName, tempScratchSoundName, customKeyHitSound, customScratchHitSound,
+      sKeyHitUpload, sKeyHitReset, sScratchHitUpload, sScratchHitReset]);
+
   return (
     <div className={`flex flex-col h-screen bg-neutral-950 text-white font-sans overflow-hidden ${isDragOver ? 'ring-4 ring-blue-500' : ''}`}
       onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
@@ -1410,24 +1419,20 @@ export default function BmsViewer() {
         playSide={playSide} setPlaySide={setPlaySide} playOption={playOption} setPlayOption={setPlayOption} currentLaneOrder={currentLaneOrder} refreshRandom={sRefreshRandom}
         playOption2={playOption2} setPlayOption2={setPlayOption2} dpFlip={dpFlip} setDpFlip={setDpFlip} laneOrder2={laneOrder2}
         comboPos={comboPos} setComboPos={setComboPos}
-        customKeyHitSound={customKeyHitSound} handleKeyHitSoundUpload={sKeyHitUpload} handleKeyHitSoundReset={sKeyHitReset}
-        customScratchHitSound={customScratchHitSound} handleScratchHitSoundUpload={sScratchHitUpload} handleScratchHitSoundReset={sScratchHitReset}
         volume={volume} setVolume={setVolume} monitorUpdateInterval={monitorUpdateInterval} setMonitorUpdateInterval={setMonitorUpdateInterval}
-        hasVideo={hasVideo} playBgaVideo={playBgaVideo} setPlayBgaVideo={setPlayBgaVideo} hitSoundVolume={hitSoundVolume} setHitSoundVolume={setHitSoundVolume}
+        hasVideo={hasVideo} playBgaVideo={playBgaVideo} setPlayBgaVideo={setPlayBgaVideo}
         scratchRotationEnabled={scratchRotationEnabled} setScratchRotationEnabled={setScratchRotationEnabled}
         input={inputSettings}
         playMode={playMode} setPlayMode={setPlayMode}
         judgeOffset={judgeOffset} setJudgeOffset={setJudgeOffset} suggestJudgeOffset={sSuggestJudgeOffset}
         judgeSystem={judgeSystem} setJudgeSystem={setJudgeSystem} judgeCfg={judgeCfg}
-        audioFx={audioFx} setAudioFx={setAudioFx}
+        sound={soundSettings}
         system={systemSettings}
         missLayerEnabled={missLayerEnabled} setMissLayerEnabled={setMissLayerEnabled}
         bgaBehindChart={bgaBehindChart} setBgaBehindChart={setBgaBehindChart}
         bgaSidePanel={bgaSidePanel} setBgaSidePanel={setBgaSidePanel}
         bgaSidePos={bgaSidePos} setBgaSidePos={setBgaSidePos}
         laneWidthPx={laneWidthPx} setLaneWidthPx={setLaneWidthPx}
-        isSeparateHitSound={isSeparateHitSound} setIsSeparateHitSound={setIsSeparateHitSound}
-        tempKeySoundName={tempKeySoundName} tempScratchSoundName={tempScratchSoundName}
         // Mobile Controls
         handleFileSelect={sHandleFileSelect} handleZipSelect={sHandleZipSelect} bmsList={bmsList} selectedBmsIndex={selectedBmsIndex} setSelectedBmsIndex={setSelectedBmsIndex}
         isPlaying={isPlaying} startPlayback={sStartPlayback} pausePlayback={sPausePlayback} stopPlayback={sStopPlayback}
