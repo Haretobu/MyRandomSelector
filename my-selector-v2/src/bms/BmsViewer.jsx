@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
-import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, DEFAULT_GAMEPAD_MAPS, DEFAULT_GAMEPAD_SCRATCH_ALT, djLevel, DEFAULT_AUDIO_FX, DEFAULT_LITE_MODE } from './constants';
-import { findStartIndex, getBpmFromTime, createHitSound, guessDifficulty, extractZipFiles, getBaseName } from './logic/utils';
+import { VISIBILITY_MODES, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, DEFAULT_GAMEPAD_MAPS, DEFAULT_GAMEPAD_SCRATCH_ALT, djLevel, DEFAULT_AUDIO_FX, DEFAULT_LITE_MODE } from './constants';
+import { findStartIndex, getBpmFromTime, guessDifficulty, extractZipFiles, getBaseName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 import { createLiveStore } from './logic/liveStore';
 import { buildJudgeConfig, classifyJudge, resolveLnRelease } from './logic/judge';
@@ -20,6 +20,7 @@ import MobileBgaLayers, { BgaPlaceholder } from './components/MobileBgaLayers';
 import { MAX_LANES, DEFAULT_LANES, boardUnitsFor, laneNoteColor } from './render/laneLayout';
 import { useEvent } from './hooks/useEvent';
 import { LaneRenderer } from './render/LaneRenderer';
+import { AudioEngine } from './audio/AudioEngine';
 import { applyLaneOptions } from './logic/laneOptions';
 
 // localStorage の設定値マージ: モード別の設定(キー割り当て等)は、モードごとに既定値へ保存値を重ねる
@@ -106,8 +107,6 @@ export default function BmsViewer() {
   const [resumeAudioOnSeek, setResumeAudioOnSeek] = useStoredState('bms_resume_audio_on_seek', true, BOOL);
   const resumeAudioOnSeekRef = useLatestRef(resumeAudioOnSeek);
   const seekedSinceStartRef = useRef(false);  // 前回の再生開始以降にシークしたか(再開が「シーク」か「一時停止からの復帰」かの判別用)
-  const midStartPendingRef = useRef(false);   // 次の scheduleAudio 1回だけ、開始地点より前に鳴り始めた音を途中から鳴らす
-  const maxSoundDurationRef = useRef(0);      // 読み込んだ音源のうち最長の長さ(秒)。途中再生の探索範囲に使う
   const [scratchRotationEnabled, setScratchRotationEnabled] = useState(true);
   const [isInputDebugMode, setIsInputDebugMode] = useState(false);
   const [playMode, setPlayMode] = useState(false); // 6-2: プレイモード(自分の入力で判定)
@@ -154,47 +153,15 @@ export default function BmsViewer() {
     live.set({ quietMonitors: liteRef.current.quietMonitors }); // 密度グラフ(ストア購読)用
     scheduleRenderLoop();
   }, [liteMode]);
-  const fxNodesRef = useRef(null); // { filter, eqLow, eqMid, eqHigh, comp, delay, feedback, echoWet }
-  // 6-3: サウンドエフェクトのパラメータを Web Audio ノードへ反映。無効時は素通しになる値に。
-  useEffect(() => {
-    try { localStorage.setItem('bms_audio_fx', JSON.stringify(audioFx)); } catch { /* privacy mode */ }
-    const n = fxNodesRef.current;
-    const ac = audioContextRef.current;
-    if (!n || !ac) return;
-    const now = ac.currentTime;
-    const set = (param, v) => { try { param.setTargetAtTime(v, now, 0.02); } catch { param.value = v; } };
-    const master = !!audioFx.enabled;
-    // FILTER
-    const fOn = master && audioFx.filter.on;
-    n.filter.type = audioFx.filter.type === 'highpass' ? 'highpass' : 'lowpass';
-    set(n.filter.frequency, fOn ? Math.max(20, Math.min(22000, audioFx.filter.freq)) : (n.filter.type === 'highpass' ? 20 : 22000));
-    // EQ (3band)
-    const eOn = master && audioFx.eq.on;
-    set(n.eqLow.gain, eOn ? audioFx.eq.low : 0);
-    set(n.eqMid.gain, eOn ? audioFx.eq.mid : 0);
-    set(n.eqHigh.gain, eOn ? audioFx.eq.high : 0);
-    // COMP
-    const cOn = master && audioFx.comp.on;
-    set(n.comp.threshold, cOn ? audioFx.comp.threshold : 0);
-    set(n.comp.ratio, cOn ? Math.max(1, audioFx.comp.ratio) : 1);
-    // ECHO
-    const ecOn = master && audioFx.echo.on;
-    set(n.delay.delayTime, Math.max(0.01, Math.min(2.0, audioFx.echo.time)));
-    set(n.feedback.gain, ecOn ? Math.max(0, Math.min(0.9, audioFx.echo.feedback)) : 0);
-    set(n.echoWet.gain, ecOn ? Math.max(0, Math.min(1, audioFx.echo.mix)) : 0);
-  }, [audioFx]);
+  // 6-3: サウンドエフェクトのパラメータを反映(無効時は素通しになる値)
+  useEffect(() => { engine.applyFx(audioFx); }, [audioFx]);
 
   // lite: エフェクト無効時はエフェクトラック(FILTER/EQ/COMP/ECHO)を経路から外し、マスター → destination 直結にする。
   //   無効時も各ノードは「素通しの値」で常時接続されており、音声スレッドで処理コストが掛かっていたため。
   const fxBypassActive = lite.fxBypass && !audioFx.enabled;
   const fxBypassActiveRef = useRef(fxBypassActive);
   fxBypassActiveRef.current = fxBypassActive;
-  useEffect(() => {
-    const n = fxNodesRef.current, g = gainNodeRef.current, ac = audioContextRef.current;
-    if (!n || !g || !ac) return; // AudioContext 生成前(生成時に fxBypassActiveRef を見て接続する)
-    try { g.disconnect(); } catch { /* 未接続 */ }
-    g.connect(fxBypassActive ? ac.destination : n.filter);
-  }, [fxBypassActive]);
+  useEffect(() => { engine.setFxBypass(fxBypassActive); }, [fxBypassActive]);
 
   const [muteDebugAutoPlay, setMuteDebugAutoPlay] = useState(true);
   const muteDebugAutoPlayRef = useLatestRef(muteDebugAutoPlay);
@@ -216,18 +183,12 @@ export default function BmsViewer() {
   // レーン1本(鍵)の幅(px)。キャンバス幅をこれ×盤面単位数で決めるので、盤面ぴったりになる。
   const [laneWidthPx, setLaneWidthPx] = useStoredState('bms_lane_width', 44, num(v => v >= 20 && v <= 72));
 
-  const audioContextRef = useRef(null);
-  const gainNodeRef = useRef(null);
-  const audioBuffersRef = useRef(new Map());
   const imageAssetsRef = useRef(new Map()); 
-  const schedulerTimerRef = useRef(null);
-  const nextNoteIndexRef = useRef(0);        
-  const activeNodesRef = useRef([]);        
-  const startTimeRef = useRef(0);
   const pauseTimeRef = useRef(0);
   const animationRef = useRef(null);
   const canvasRef = useRef(null);
   const [renderer] = useState(() => new LaneRenderer()); // 譜面キャンバスの描画(キャッシュ込み)
+  const [engine] = useState(() => new AudioEngine());     // 音声(AudioContext・エフェクト・発音予約・時計)
   const rendererRef = useRef(renderer);
   const keyHitSoundBufferRef = useRef(null);
   const scratchHitSoundBufferRef = useRef(null);
@@ -246,11 +207,6 @@ export default function BmsViewer() {
   const currentMeasureRef = useRef(-1);
   const longAudioProgressRefs = useRef(new Map());
   const missLayerTimerRef = useRef(null); 
-  const polyphonyHistoryRef = useRef([]);
-  const maxPolyRef = useRef(0);
-  const nextSoundIdRef = useRef(1); // 音源ログ/ノードの一意ID(React key・killedIds Set用)。Math.random()の衝突を避ける
-  const polyphonyRef = useRef(0);   // 現在の同時発音数(scheduleAudioが毎tick更新、表示は100msブロックで間引き)
-  const droppedSoundsRef = useRef(0); // 予約が間に合わず鳴らせなかった音の数(曲ロード/停止でリセット)
   const hudLastRef = useRef({});    // HUDに最後に push した値。変化時のみ setState するための比較用
   const canvasRectRef = useRef(null);   // canvas の CSS サイズ(ResizeObserver でキャッシュ、毎フレーム getBoundingClientRect しない)
   const laneVisualRef = useRef(new Array(MAX_LANES).fill(null)); // 各レーンの見た目 active 状態。変化時のみ DOM 書き込み
@@ -329,27 +285,6 @@ export default function BmsViewer() {
   const renderLoopRef = useRef(null);
   const scheduleAudioRef = useRef(null);
 
-  // --- 描画・判定用の滑らかな時計 ---
-  // ★軽量化/カクつき対策: AudioContext.currentTime は音声処理ブロック単位(Windows では 10〜20ms 程度)でしか進まず、
-  //   60fps の描画と周期が合わないため、そのまま使うとフレームごとのスクロール量がばらついてカクついて見える。
-  //   performance.now() で補間する。currentTime は「ブロック開始時刻」で実時刻より 0〜1ブロック遅れるので、
-  //   (currentTime - perf) の最大値を実際のオフセットとみなし、時計のドリフトにはゆっくり減衰させて追従する。
-  const smoothClockRef = useRef({ off: null, lastNow: 0 });
-  const resetSmoothClock = () => { smoothClockRef.current = { off: null, lastNow: 0 }; };
-  const readAudioClock = () => {
-      const ac = audioContextRef.current;
-      if (!ac) return 0;
-      const c = ac.currentTime;
-      const s = smoothClockRef.current;
-      if (ac.state !== 'running') { s.off = null; return c; } // 停止中の音声時計は進まないので補間しない
-      const now = performance.now() / 1000;
-      const sample = c - now;
-      if (s.off === null || Math.abs(sample - s.off) > 0.1) s.off = sample;   // 初回・一時停止明け・大きな乱れは即同期
-      else if (sample > s.off) s.off = sample;
-      else s.off -= Math.min(0.1, Math.max(0, now - s.lastNow)) * 0.002;   // 2ms/秒で減衰(音声時計とのドリフト追従)
-      s.lastNow = now;
-      return now + s.off;
-  };
   const lastRenderTsRef = useRef(0);
   const _renderTick = (ts) => {
       animationRef.current = null;
@@ -433,7 +368,7 @@ export default function BmsViewer() {
   }, [parsedSong?.mode, playSide, laneWidthPx]);
 
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
-  useEffect(() => { volumeRef.current = volume; if (gainNodeRef.current) gainNodeRef.current.gain.value = volume; }, [volume]);
+  useEffect(() => { volumeRef.current = volume; engine.setVolume(volume); }, [volume]);
   useEffect(() => { boardOpacityRef.current = boardOpacity; }, [boardOpacity]); 
   useEffect(() => {
       isInputDebugModeRef.current = isInputDebugMode;
@@ -770,17 +705,16 @@ export default function BmsViewer() {
 
   const resetGameStatus = () => {
     stopPlayback(true);
-    if (audioContextRef.current) activeNodesRef.current.forEach(n => { try { n.node.stop(); n.node.disconnect(); } catch(e){} });
-    activeNodesRef.current = []; activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]); releaseImageAssets();
+    engine.stopAll(); activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]); releaseImageAssets();
     lastBgaKeyRef.current = {};
     setParsedSong(null); setDisplayObjects([]); setCurrentBackBga(null); setCurrentLayerBga(null); setCurrentPoorBga(null); setStageFileImage(null);
     setShowMissLayer(false); setCurrentMeasureLines([]); 
     scratchAngleRef.current = 0; lastFrameTimeRef.current = 0; lastScratchTimeRef.current = 0; lastScratchTypeRef.current = 'REVERSE'; scratchDirectionRef.current = -1;
     activeInputLanesRef.current.clear(); isShiftHeldRef.current = false; isCtrlHeldRef.current = false; setHasVideo(false); setPlayBgaVideo(true);
-    polyphonyHistoryRef.current = []; maxPolyRef.current = 0;
+    engine.resetStats();
   };
 
-  const resetAllState = () => { resetGameStatus(); audioBuffersRef.current.clear(); setBmsList([]); };
+  const resetAllState = () => { resetGameStatus(); engine.buffers.clear(); setBmsList([]); };
 
   // オートプレイ用: M キーで「ミス」をシミュレート。デバッグ入力/プレイモードの有無に関わらず常時受け付ける。
   //   (メインのキー入力リスナーは isInputDebugMode || playMode のときしか張られないため、専用に用意する)
@@ -801,10 +735,9 @@ export default function BmsViewer() {
       activeInputLanesRef.current.add(lane);
       setLaneActive(lane, true);
 
-      if ((isInputDebugModeRef.current || playModeRef.current) && parsedSong && audioContextRef.current) {
-          const ctxTime = audioContextRef.current.currentTime;
+      if ((isInputDebugModeRef.current || playModeRef.current) && parsedSong && engine.ctx) {
           const bmsTime = isPlayingRef.current
-              ? (readAudioClock() - startTimeRef.current) // 描画と同じ補間済みの時計で判定する
+              ? (engine.songTime()) // 描画と同じ補間済みの時計で判定する
               : pauseTimeRef.current;
 
           if (playModeRef.current) judgeLaneInput(lane, bmsTime, isScr, scDir);
@@ -870,30 +803,9 @@ export default function BmsViewer() {
           if (soundToPlay !== null) {
               const wavName = parsedSong.header.wavs[soundToPlay];
               if (wavName) {
-                  const buffer = audioBuffersRef.current.get(wavName.toLowerCase());
-                  if (buffer) {
-                      const src = audioContextRef.current.createBufferSource();
-                      src.buffer = buffer;
-                      // ★音量はマスター(gainNodeRef = volume)で掛かるので、ここでは掛けない。
-                      //   以前は個別の GainNode にも volume を掛けていたため volume² になり、
-                      //   自分で鳴らすキー音だけ BGM より小さく聞こえていた(オート再生側と同じ経路に揃える)。
-                      src.connect(gainNodeRef.current);
-                      // ★活プレイの音抜け対策: 以前は activeDebugSoundsRef (無制限) に積んでいたため、
-                      //   自動再生と違って同時発音数の上限が掛からず、密な自己プレイで同時発音が
-                      //   膨れ上がって音声処理が詰まり、途中で音が途切れる原因になっていた。
-                      //   scheduleAudio と同じ activeNodesRef に載せ、同じ MAX_SHORT_POLYPHONY 上限
-                      //   (超過時は古いものから停止)を効かせるようにする。
-                      const nodeData = { node: src, startTime: ctxTime, endTime: ctxTime + buffer.duration, isLong: false, id: nextSoundIdRef.current++ };
-                      activeNodesRef.current.push(nodeData);
-                      src.onended = () => {
-                          // ★リーク対策: 終了したノードは必ず切断する。
-                          try { src.disconnect(); } catch (e) {}
-                          const a = activeNodesRef.current;
-                          const k = a.indexOf(nodeData);
-                          if (k !== -1) a.splice(k, 1);
-                      };
-                      src.start(0);
-                  }
+                  // 同時発音数の上限(MAX_SHORT_POLYPHONY)の対象にするため、オート再生と同じノード管理で鳴らす
+                  const buffer = engine.buffers.get(wavName.toLowerCase());
+                  if (buffer) engine.playNow(buffer);
               }
           }
       }
@@ -907,8 +819,8 @@ export default function BmsViewer() {
       if (playModeRef.current && isPlayingRef.current) { // 一時停止中に離しても判定しない(再開後も保持中のまま)
           const a = activeLnRef.current[lane];
           if (a && !(a.dir && scDir && scDir !== a.dir)) {
-              const cur = isPlayingRef.current && audioContextRef.current
-                  ? readAudioClock() - startTimeRef.current : pauseTimeRef.current;
+              const cur = isPlayingRef.current && engine.ctx
+                  ? engine.songTime() : pauseTimeRef.current;
               finishLn(lane, cur - judgeOffsetRef.current / 1000);
           }
       }
@@ -984,41 +896,17 @@ export default function BmsViewer() {
   }, [isInputDebugMode, playMode, playSide]);
 
   useEffect(() => {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    audioContextRef.current = new AudioContext({ latencyHint: 'interactive' });
-    const ac = audioContextRef.current;
-    gainNodeRef.current = ac.createGain();
-    gainNodeRef.current.gain.value = volume;
-
-    // 6-3: エフェクトラック。マスターゲイン → FILTER → EQ(3band) → COMP → destination(dry)
-    //      COMP → DELAY → echoWet → destination、DELAY → feedback → DELAY (ECHO)
-    const filter = ac.createBiquadFilter();  filter.type = 'lowpass'; filter.frequency.value = 22000;
-    const eqLow = ac.createBiquadFilter();   eqLow.type = 'lowshelf';  eqLow.frequency.value = 250;  eqLow.gain.value = 0;
-    const eqMid = ac.createBiquadFilter();   eqMid.type = 'peaking';   eqMid.frequency.value = 1000; eqMid.Q.value = 0.9; eqMid.gain.value = 0;
-    const eqHigh = ac.createBiquadFilter();  eqHigh.type = 'highshelf'; eqHigh.frequency.value = 4000; eqHigh.gain.value = 0;
-    const comp = ac.createDynamicsCompressor();
-    comp.threshold.value = 0; comp.ratio.value = 1; comp.knee.value = 30; comp.attack.value = 0.003; comp.release.value = 0.25;
-    const delay = ac.createDelay(2.0); delay.delayTime.value = DEFAULT_AUDIO_FX.echo.time;
-    const feedback = ac.createGain(); feedback.gain.value = 0;
-    const echoWet = ac.createGain(); echoWet.gain.value = 0;
-
-    gainNodeRef.current.connect(fxBypassActiveRef.current ? ac.destination : filter); // lite: エフェクト経路のバイパス
-    filter.connect(eqLow); eqLow.connect(eqMid); eqMid.connect(eqHigh); eqHigh.connect(comp);
-    comp.connect(ac.destination);                 // dry
-    comp.connect(delay); delay.connect(feedback); feedback.connect(delay); // feedback ループ
-    delay.connect(echoWet); echoWet.connect(ac.destination);               // wet
-    fxNodesRef.current = { filter, eqLow, eqMid, eqHigh, comp, delay, feedback, echoWet };
-
-    const defaultHitSound = createHitSound(audioContextRef.current);
+    engine.init(volume, fxBypassActiveRef.current);
+    engine.applyFx(audioFx);
+    const defaultHitSound = engine.createHitSound();
     keyHitSoundBufferRef.current = defaultHitSound;
     scratchHitSoundBufferRef.current = defaultHitSound;
 
-    const resumeAudio = () => { if (audioContextRef.current?.state === 'suspended') audioContextRef.current.resume(); };
+    const resumeAudio = () => engine.resumeIfSuspended();
     window.addEventListener('click', resumeAudio);
     return () => {
       window.removeEventListener('click', resumeAudio);
-      if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current);
-      if (audioContextRef.current) audioContextRef.current.close();
+      engine.close();
       stopRenderLoop();
       releaseImageAssets();
     };
@@ -1059,10 +947,10 @@ export default function BmsViewer() {
 
 // ▼▼▼ 変更: 打鍵音のバリデーションと一時保存、適用ロジック ▼▼▼
   const validateAndDecodeAudio = async (file) => {
-    if (!file || !audioContextRef.current) return null;
+    if (!file || !engine.ctx) return null;
     try {
         const buf = await file.arrayBuffer();
-        const audioBuf = await audioContextRef.current.decodeAudioData(buf);
+        const audioBuf = await engine.decode(buf);
         // 負荷対策: 2.0秒以上のファイルはエラーを出して弾く
         if (audioBuf.duration >= 2.0) {
             alert(`ファイル「${file.name}」は長すぎます (${audioBuf.duration.toFixed(1)}秒)。\n負荷軽減のため、2.0秒未満の短い打鍵音を選択してください。`);
@@ -1119,8 +1007,8 @@ export default function BmsViewer() {
   };
 
   const handleKeyHitSoundReset = () => {
-    if (audioContextRef.current) {
-        const defaultSound = createHitSound(audioContextRef.current);
+    if (engine.ctx) {
+        const defaultSound = engine.createHitSound();
         setTempKeyHitSoundBuffer(null); setTempKeySoundName(null);
         keyHitSoundBufferRef.current = defaultSound; setCustomKeyHitSound(null);
         if (!isSeparateHitSound) {
@@ -1130,9 +1018,9 @@ export default function BmsViewer() {
   };
 
   const handleScratchHitSoundReset = () => {
-    if (audioContextRef.current) {
+    if (engine.ctx) {
         setTempScratchHitSoundBuffer(null); setTempScratchSoundName(null);
-        scratchHitSoundBufferRef.current = createHitSound(audioContextRef.current);
+        scratchHitSoundBufferRef.current = engine.createHitSound();
         setCustomScratchHitSound(null);
     }
   };
@@ -1166,8 +1054,7 @@ export default function BmsViewer() {
     setParsedSong(null); setDisplayObjects([]); setCurrentBackBga(null); setCurrentLayerBga(null); setCurrentPoorBga(null); setShowMissLayer(false);
     setCurrentMeasureLines([]); 
     scratchAngleRef.current = 0; lastScratchTimeRef.current = 0; lastScratchTypeRef.current = 'REVERSE'; scratchDirectionRef.current = -1; activeInputLanesRef.current.clear(); isShiftHeldRef.current = false; isCtrlHeldRef.current = false;
-    if (audioContextRef.current) activeNodesRef.current.forEach(n => { try { n.node.stop(); n.node.disconnect(); } catch(e){} });
-    activeNodesRef.current = []; activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]);
+    engine.stopAll(); activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]);
     // ★P4: デコード済み WAV / 画像はフォルダ内で使い回す(キャッシュのクリアは processFiles = 新フォルダ時のみ)
 
     setIsLoading(true); setLoadingProgress(0); setLoadingMessage('BMSファイルを解析中...');
@@ -1245,7 +1132,7 @@ export default function BmsViewer() {
       const queue = [];
       neededAudio.forEach(raw => {
         const key = raw.toLowerCase();
-        if (audioBuffersRef.current.has(key)) return; // ★P4: デコード済みはスキップ
+        if (engine.buffers.has(key)) return; // ★P4: デコード済みはスキップ
         const base = getBaseName(raw).toLowerCase(); const candidates = fileMap[base];
         if (candidates?.length) {
           let best = candidates[0]; const exact = candidates.find(c => c.name.toLowerCase() === key);
@@ -1260,8 +1147,8 @@ export default function BmsViewer() {
       for (let i = 0; i < queue.length; i += CONCURRENCY) {
         await Promise.all(queue.slice(i, i + CONCURRENCY).map(async (item) => {
           try {
-            const buf = await item.file.arrayBuffer(); const audioBuf = await audioContextRef.current.decodeAudioData(buf);
-            audioBuffersRef.current.set(item.key, audioBuf);
+            const buf = await item.file.arrayBuffer(); const audioBuf = await engine.decode(buf);
+            engine.buffers.set(item.key, audioBuf);
           } catch (e) {} finally { setLoadingProgress(Math.round((Math.min(i + CONCURRENCY, queue.length) / queue.length) * 100)); }
         }));
         if (isStale()) return; // 新しい譜面の読み込みが始まった(デコード済みの音はキャッシュに残るので無駄にはならない)
@@ -1273,14 +1160,14 @@ export default function BmsViewer() {
       parsed.objects.forEach(obj => {
           const filename = parsed.header.wavs[obj.value];
           if (filename) {
-              const buffer = audioBuffersRef.current.get(filename.toLowerCase());
+              const buffer = engine.buffers.get(filename.toLowerCase());
               if (buffer) {
                   const endTime = obj.time + buffer.duration; if (endTime > calculatedMaxDuration) calculatedMaxDuration = endTime;
                   if (buffer.duration > maxSoundDuration) maxSoundDuration = buffer.duration;
               }
           }
       });
-      maxSoundDurationRef.current = maxSoundDuration;
+      engine.maxSoundDuration = maxSoundDuration;
       const lasts = new Array(MAX_LANES).fill(null);
       parsed.objects.forEach(obj => {
           if (obj.isNote && obj.laneIndex >= 0 && obj.laneIndex < MAX_LANES) {
@@ -1296,149 +1183,48 @@ export default function BmsViewer() {
       resetJudge(); recentDeltasRef.current = []; // 曲ロード時はオート調整用データもクリア
       lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); 
       setCurrentMeasureLines([]); 
-      lastStateUpdateRef.current = 0; droppedSoundsRef.current = 0; // 次の renderLoop フレームで HUD を即更新させる
+      lastStateUpdateRef.current = 0; engine.stats.dropped = 0; // 次の renderLoop フレームで HUD を即更新させる
       setLoadingMessage('準備完了'); setIsLoading(false);
     } catch (e) { console.error(e); if (!isStale()) setIsLoading(false); }
   };
 
 
+  // 発音予約(audio/AudioEngine.js の先読みスケジューラ)。どの音を鳴らすか・モニター表示はここで決める。
   const scheduleAudio = () => {
-      if (!parsedSong || !isPlayingRef.current || !audioContextRef.current) return;
-      const ctx = audioContextRef.current; const currentTime = ctx.currentTime; const scheduleUntil = currentTime + LOOKAHEAD; 
-      let index = nextNoteIndexRef.current;
-      const objects = displayObjects;
-      
-      activeNodesRef.current = activeNodesRef.current.filter(n => n.endTime > currentTime);
-      const shortNodes = activeNodesRef.current.filter(n => !n.isLong);
-      if (shortNodes.length > MAX_SHORT_POLYPHONY) {
-          const sortedShorts = shortNodes.sort((a, b) => a.startTime - b.startTime);
-          const toKill = sortedShorts.slice(0, shortNodes.length - MAX_SHORT_POLYPHONY);
-          toKill.forEach(n => { try { n.node.stop(); } catch(e){} });
-          const killedIds = new Set(toKill.map(n => n.id));
-          activeNodesRef.current = activeNodesRef.current.filter(n => !killedIds.has(n.id));
-      }
-      const currentPolyCount = activeNodesRef.current.length;
-      // ★軽量化: 40Hz の setState をやめ、値は ref に記録するだけ。表示は renderLoop の 100ms ブロックで間引く。
-      polyphonyRef.current = currentPolyCount;
-      if (currentPolyCount > maxPolyRef.current) maxPolyRef.current = currentPolyCount;
-      // ★修正+軽量化: 平均算出用の履歴を積む。無限に伸びないよう一定数でキャップする
-      polyphonyHistoryRef.current.push(currentPolyCount);
-      if (polyphonyHistoryRef.current.length > 400) polyphonyHistoryRef.current.shift();
-      // 途中からの開始直後の1回だけ、開始地点より前に鳴り始めた音を途中から鳴らす(startPlayback で立てる)
-      const midStart = midStartPendingRef.current;
-      midStartPendingRef.current = false;
-      // 途中再生の開始時刻。「今」を読んでから start() するまでに時計が進むとその分 BGM が遅れるため、
-      // 少し先の時刻を開始時刻にして、その時刻に対応する位置から再生する(サンプル精度で一致させる)。
-      const midStartAt = currentTime + 0.05;
-      while (index < objects.length) {
-          const obj = objects[index];
-          const absolutePlayTime = startTimeRef.current + obj.time;
-          if (absolutePlayTime > scheduleUntil) break;
-          const isMidStart = absolutePlayTime < currentTime - 0.1;
-          if (isMidStart && !midStart) {
-              // 予約が間に合わず捨てた音を数える(SOUND MONITOR の DROP に表示。0 以外なら処理落ちで音抜けしている)
-              if (parsedSong.header.wavs[obj.value]) droppedSoundsRef.current++;
-              index++; continue;
-          }
-
-          if (parsedSong.header.wavs[obj.value]) {
-              const buffer = audioBuffersRef.current.get(parsedSong.header.wavs[obj.value].toLowerCase());
-              // 途中再生の対象でも、開始時刻までに鳴り終わっている音は何もしない(ログにも載せない)
-              if (buffer && (!isMidStart || absolutePlayTime + buffer.duration > midStartAt + 0.01)) {
-                // ★P2: 音源を「キー音 / BGM(著しく長い) / バックサウンド」の排他3カテゴリに分類。
-                //   各カテゴリを別々のトグルで制御し、判定の重複をなくす。
-                const category = obj.isNote ? 'key'
-                    : (buffer.duration >= BGM_MIN_DURATION ? 'bgm' : 'back');
-                let shouldPlay = true;
-                if (category === 'key') {
-                    if (!playKeySoundsRef.current) shouldPlay = false;
-                    if (laneMuteRef.current[obj.laneIndex]) shouldPlay = false; // ★P5-2 レーンミュート
-                    if (isInputDebugModeRef.current && muteDebugAutoPlayRef.current) shouldPlay = false;
-                    if (playModeRef.current) shouldPlay = false; // 6-2 プレイモード: キー音はプレイヤー入力で鳴らす
-                } else if (category === 'bgm') {
-                    if (!playLongAudioRef.current) shouldPlay = false;   // 「BGMを再生」トグル
-                } else {
-                    if (!playBgSoundsRef.current) shouldPlay = false;    // 「バックサウンドを再生」トグル
-                }
-
-                const isBgm = category === 'bgm';        // BACKING TRACK パネルに載せるか
-                const isLong = buffer.duration > 10.0;   // ポリフォニー上限の対象外にするか(既存挙動を維持)
-                const item = {
-                    id: nextSoundIdRef.current++,
-                    name: obj.filename,
-                    startTime: obj.time,
-                    endTime: obj.time + buffer.duration,
-                    displayDuration: buffer.duration,
-                    isLong: isBgm,
-                    isMissing: false,
-                    isSkipped: false,
-                    isMuted: !shouldPlay
-                };
-                if (shouldPlay) {
-                    const src = ctx.createBufferSource();
-                    src.buffer = buffer;
-                    let fade = null;
-                    if (isMidStart) {
-                        // 途中再生: 波形の途中から急に鳴る「プツッ」を防ぐため 5ms でフェードイン
-                        fade = ctx.createGain();
-                        fade.gain.setValueAtTime(0, midStartAt);
-                        fade.gain.linearRampToValueAtTime(1, midStartAt + 0.005);
-                        src.connect(fade); fade.connect(gainNodeRef.current);
-                        src.start(midStartAt, midStartAt - absolutePlayTime);
-                    } else {
-                        src.connect(gainNodeRef.current);
-                        if (absolutePlayTime >= currentTime) src.start(absolutePlayTime);
-                        else { const offset = currentTime - absolutePlayTime;
-                        if (offset < buffer.duration) src.start(currentTime, offset); }
-                    }
-
-                    const endTime = absolutePlayTime + buffer.duration;
-                    const nodeData = { node: src, startTime: absolutePlayTime, endTime: endTime, isLong: isLong, id: item.id };
-                    activeNodesRef.current.push(nodeData);
-                    // ★リーク対策: 自然終了したノードは切断し、activeNodesRef からも除去する。
-                    src.onended = () => {
-                        try { src.disconnect(); if (fade) fade.disconnect(); } catch (e) {}
-                        const a = activeNodesRef.current;
-                        const k = a.indexOf(nodeData);
-                        if (k !== -1) a.splice(k, 1);
-                    };
-                }
-
-                if (shouldPlay || showMutedMonitorRef.current) {
-                    if (isBgm) {
-                        activeLongSoundsRef.current.push(item);
-                        setBackingTracks(prev => [...prev, item]);
-                    }
-                    else { 
-                        // ★軽量化: LogPanelはslice(-25)しか使わないのに、これまで曲の最初から最後まで無制限に配列が伸び続けていた
-                        // (密度の高い譜面だと数千件たまり、メモリ・GC負荷の原因になる)。直近100件だけ保持する。
-                        activeShortSoundsRef.current.push(item);
-                        if (activeShortSoundsRef.current.length > 100) activeShortSoundsRef.current.shift();
-                    }
-                }
-              }
-          }
-          // 途中再生の対象(開始地点より前のノーツ)では打鍵音を鳴らさない
-          if (obj.isNote && !isMidStart && !laneMuteRef.current[obj.laneIndex] && !playModeRef.current) { // ★P5-2 ミュート / 6-2 プレイモードは打鍵音を鳴らさない
-               const hitTime = Math.max(currentTime, absolutePlayTime);
-               const hitMeta = laneMetaRef.current[obj.laneIndex];
-               const buffer = (hitMeta && hitMeta.isScratch) ? scratchHitSoundBufferRef.current : keyHitSoundBufferRef.current;
-
-               if (buffer) {
-                   const src = ctx.createBufferSource();
-                   src.buffer = buffer;
-                   const gain = ctx.createGain();
-                   gain.gain.value = 0.6 * hitSoundVolumeRef.current;
-                   src.connect(gain);
-                   gain.connect(gainNodeRef.current);
-                   // ★リーク対策: 打鍵音の src / gain を終了時に切断(GainNode は自動解放されない)。
-                   src.onended = () => { try { src.disconnect(); gain.disconnect(); } catch (e) {} };
-                   src.start(hitTime);
-               }
-          }
-          index++;
-      }
-      nextNoteIndexRef.current = index;
+      if (!parsedSong || !isPlayingRef.current || !engine.ctx) return;
+      const wavs = parsedSong.header.wavs;
+      engine.schedule(displayObjects,
+        // WAV 定義が無ければ undefined、定義はあるが未読込なら null
+        (obj) => { const name = wavs[obj.value]; return name ? (engine.buffers.get(name.toLowerCase()) || null) : undefined; },
+        {
+          // ★P2: 音源を「キー音 / BGM(著しく長い) / バックサウンド」の排他3カテゴリに分類し、別々のトグルで制御
+          classify: (obj, buffer) => {
+            if (obj.isNote) {
+              const play = playKeySoundsRef.current
+                && !laneMuteRef.current[obj.laneIndex]                                   // ★P5-2 レーンミュート
+                && !(isInputDebugModeRef.current && muteDebugAutoPlayRef.current)
+                && !playModeRef.current;                                                  // 6-2 プレイモード: キー音はプレイヤー入力で鳴らす
+              return { play, isBgm: false };
+            }
+            if (buffer.duration >= BGM_MIN_DURATION) return { play: playLongAudioRef.current, isBgm: true }; // 「BGMを再生」
+            return { play: playBgSoundsRef.current, isBgm: false };                                            // 「バックサウンドを再生」
+          },
+          // モニター表示: BGM は BACKING TRACK、それ以外は SOUND MONITOR(直近100件だけ保持)
+          onItem: (item, { play, isBgm }) => {
+            if (!play && !showMutedMonitorRef.current) return;
+            if (isBgm) { activeLongSoundsRef.current.push(item); setBackingTracks(prev => [...prev, item]); }
+            else {
+              activeShortSoundsRef.current.push(item);
+              if (activeShortSoundsRef.current.length > 100) activeShortSoundsRef.current.shift();
+            }
+          },
+          // 打鍵音(★P5-2 ミュート / 6-2 プレイモードでは鳴らさない)
+          hitSound: (obj) => {
+            if (laneMuteRef.current[obj.laneIndex] || playModeRef.current) return null;
+            const isScratch = laneMetaRef.current[obj.laneIndex]?.isScratch;
+            return { buffer: isScratch ? scratchHitSoundBufferRef.current : keyHitSoundBufferRef.current, gain: 0.6 * hitSoundVolumeRef.current };
+          },
+        });
   };
   // setInterval が常に最新の scheduleAudio クロージャを呼ぶようにする(displayObjects/parsedSong の stale 化を防ぐ)
   scheduleAudioRef.current = scheduleAudio;
@@ -1446,17 +1232,14 @@ export default function BmsViewer() {
   useEffect(() => { rendererRef.current.prepareReadyText(); }, []); // READY/GO を事前生成(初回描画時のヒッチ回避)
 
   // 指定時刻(offset 秒)へ「位置」を同期する。startPlayback とシークの軽い処理から共用。
-  //  - startTimeRef(再生中の描画基準時刻)
-  //  - nextNoteIndexRef(スケジューラ開始位置)
+  //  - 曲の時刻と AudioContext 時刻の対応(再生中のみ) / スケジューラ開始位置
   //  - BGA の各インデックスと、その時点で表示すべき BGA フレーム(変化時のみ setState)
   const applySeekPosition = (offset) => {
-    if (isPlayingRef.current && audioContextRef.current) {
-      startTimeRef.current = audioContextRef.current.currentTime - offset;
-    }
+    if (isPlayingRef.current) engine.alignSongTime(offset);
     if (!parsedSong) return;
     // 開始地点より前に鳴り始め、まだ鳴っているはずの音(途中再生の対象)まで遡れるよう、最長の音源の長さ分も戻る
-    const lookBack = Math.max(parsedSong.maxLNDuration || 20.0, maxSoundDurationRef.current);
-    nextNoteIndexRef.current = findStartIndex(displayObjects, offset - lookBack);
+    const lookBack = Math.max(parsedSong.maxLNDuration || 20.0, engine.maxSoundDuration);
+    engine.nextIndex = findStartIndex(displayObjects, offset - lookBack);
 
     const syncBga = (arr, idxRef, setter, keyProp) => {
       if (!arr) return;
@@ -1496,18 +1279,18 @@ export default function BmsViewer() {
         setTimeout(() => alert("未実装：この形式（9K/pop'n など）の再生はまだサポートされていません。"), 10);
         return;
     }
-    if (audioContextRef.current.state === 'suspended') audioContextRef.current.resume();
+    engine.resumeIfSuspended();
     
-    stopAudioNodes(); activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]);
+    engine.stopAll(); activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]);
     const offset = pauseTimeRef.current;
     if (offset === 0) resetJudge(); // 頭からのプレイは判定リセット(途中再開はスコア維持)
     // 途中からの開始: 一時停止→再開なら常に、シーク後なら設定に従って、開始地点より前に鳴り始めた音を途中から鳴らす
     const fromSeek = seekedSinceStartRef.current;
     seekedSinceStartRef.current = false;
-    midStartPendingRef.current = offset > 0 && (!fromSeek || resumeAudioOnSeekRef.current);
-    resetSmoothClock(); // 一時停止中は音声時計が止まる(suspend)ことがあるため補間をやり直す
+    engine.midStartPending = offset > 0 && (!fromSeek || resumeAudioOnSeekRef.current);
+    engine.resetClock(); // 一時停止中は音声時計が止まる(suspend)ことがあるため補間をやり直す
     setIsPlaying(true); isPlayingRef.current = true; lastFrameTimeRef.current = performance.now();
-    applySeekPosition(offset); // startTimeRef / nextNoteIndexRef / BGA インデックス・フレームを同期
+    applySeekPosition(offset); // 曲の時刻 / スケジューラ開始位置 / BGA インデックス・フレームを同期
 
     if (showReady && offset === 0) {
         setReadyAnimState('READY');
@@ -1515,23 +1298,14 @@ export default function BmsViewer() {
     } else {
         setReadyAnimState(null);
     }
-    if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current);
-    schedulerTimerRef.current = setInterval(() => { if (scheduleAudioRef.current) scheduleAudioRef.current(); }, SCHEDULE_INTERVAL);
+    engine.startScheduler(() => { if (scheduleAudioRef.current) scheduleAudioRef.current(); });
     stopRenderLoop();
     scheduleRenderLoop();
   };
 
-  const stopAudioNodes = () => {
-      activeNodesRef.current.forEach(n => {
-          try { n.node.stop(); n.node.disconnect(); } catch(e){}
-      });
-      activeNodesRef.current = [];
-      if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current);
-  };
-
   const pausePlayback = () => {
-    setIsPlaying(false); isPlayingRef.current = false; stopAudioNodes();
-    pauseTimeRef.current = readAudioClock() - startTimeRef.current; // 描画と同じ時計(一時停止時に表示が巻き戻らない)
+    setIsPlaying(false); isPlayingRef.current = false; engine.stopAll();
+    pauseTimeRef.current = engine.songTime(); // 描画と同じ時計(一時停止時に表示が巻き戻らない)
     setReadyAnimState(null);
     stopRenderLoop();
     if (isInputDebugModeRef.current || playModeRef.current) scheduleRenderLoop();
@@ -1540,7 +1314,7 @@ export default function BmsViewer() {
   const stopPlayback = (reset = true) => {
     const wasPlaying = isPlayingRef.current;
     setIsPlaying(false); isPlayingRef.current = false;
-    stopAudioNodes();
+    engine.stopAll();
     // 6-2-b: プレイモードで判定が発生していれば、停止後の Tab 表示用にスナップショット
     if (reset && playModeRef.current && notesDoneRef.current > 0) lastRunRef.current = buildResultData(false);
     if (reset) {
@@ -1555,7 +1329,7 @@ export default function BmsViewer() {
             setBackingTracks([]); activeLongSoundsRef.current = [];
         }
 
-        pauseTimeRef.current = 0; seekedSinceStartRef.current = false; droppedSoundsRef.current = 0; setPlaybackTimeDisplay(0); comboRef.current = 0; hudLastRef.current = {}; lastBgaKeyRef.current = {};
+        pauseTimeRef.current = 0; seekedSinceStartRef.current = false; engine.stats.dropped = 0; setPlaybackTimeDisplay(0); comboRef.current = 0; hudLastRef.current = {}; lastBgaKeyRef.current = {};
         resetJudge();
         lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); 
         if (parsedSong) displayObjects.forEach(o => o.processed = false);
@@ -1596,7 +1370,7 @@ export default function BmsViewer() {
     pauseTimeRef.current = val;
     seekedSinceStartRef.current = true;
     // ★シーク時は在再生中の音源(ロングBGMを含む)を必ず停止する。isPlaying に依存せず毎回止めて音の重なりを防ぐ。
-    stopAudioNodes();
+    engine.stopAll();
 
     // --- 軽い処理: 毎 onChange 実行(描画が毎フレーム参照するため) ---
     // オートプレイのコンボ = ここまでに通過したノーツ総数。0クリアせず再計算する。
@@ -1615,7 +1389,7 @@ export default function BmsViewer() {
     if (playModeRef.current) { resetJudge(); comboRef.current = 0; notesDoneRef.current = 0; } // シーク = その地点から仕切り直し
     hudLastRef.current = {}; lastStateUpdateRef.current = 0; // スクラブ中も HUD(imperative)を追従させる
     clearActiveLanes();
-    // 位置の同期(startTimeRef / nextNoteIndexRef / BGA インデックス・フレーム)は必ず同期実行する。
+    // 位置の同期(曲の時刻 / スケジューラ開始位置 / BGA インデックス・フレーム)は必ず同期実行する。
     // 遅延させると描画の再生位置と processed フラグがズレ、ノーツが消えたり BGA が空回りする。
     applySeekPosition(val);
     scheduleRenderLoop(); // 停止中でもスクラブ位置を描き直す
@@ -1741,7 +1515,7 @@ export default function BmsViewer() {
       if (v.width > 0 && v.height > 0) canvasRectRef.current = v; // 0 サイズはキャッシュせず次フレーム再測定
       return v;
     })();
-    const rawTime = isPlayingRef.current && audioContextRef.current ? readAudioClock() - startTimeRef.current : pauseTimeRef.current;
+    const rawTime = isPlayingRef.current && engine.ctx ? engine.songTime() : pauseTimeRef.current;
     // ★曲の長さで頭打ちにする。以前は終端を過ぎても時刻が進み続け、時間表示が「183.00 / 182.12」のように
     //   曲長を超えたり、動画BGAが終端を越えた位置へ同期されて表示が乱れる原因になっていた。
     const currentTime = duration > 0 ? Math.min(rawTime, duration) : rawTime;
@@ -1749,12 +1523,6 @@ export default function BmsViewer() {
     const bgaTime = currentTime + 0.05;
 
     if (parsedSong) {
-        // ★重大バグ修正: ここで activeNodesRef をフィルタしていたが、
-        //   n.endTime は「AudioContext の絶対時刻」なのに currentTime は「曲の相対時刻」で、時間軸が不一致だった。
-        //   セッション開始直後や長い曲の後半へシークして startTimeRef が小さい/負になると、
-        //   まだ鳴っている音源(ロングBGM含む)が activeNodesRef から誤って除去され、
-        //   stopAudioNodes() が止められなくなって「シークのたびにロング音源が重なる」原因になっていた。
-        //   activeNodesRef の掃除は scheduleAudio() 側(絶対時刻で正しく比較)に一本化する。
         // ★BGA の進行: 以前は1フレームにつき1オブジェクトしか進めなかったため、フレームレートより細かい
         //   コマ送りBGAや同時刻の複数切り替えがあると、どんどん表示が遅れていった。
         //   時刻に達したオブジェクトをすべて消化し、そのうち「最後に有効だったもの」だけを setState する。
@@ -1777,8 +1545,6 @@ export default function BmsViewer() {
         advanceBga(parsedSong.layerBgaObjects, nextLayerBgaIndexRef, setCurrentLayerBga, true);
         advanceBga(parsedSong.poorBgaObjects, nextPoorBgaIndexRef, setCurrentPoorBga, false);
 
-        // ★軽量化: activeNodesRef のフィルタは scheduleAudio() 側で毎tick行っているため、
-        // ここ(renderLoop、毎フレーム)での重複フィルタ処理は削除
 
         // 2. 再生時間の表示更新：解析用に毎フレーム実行する（高精度維持）
         // ここをif文の外に出すことで、滑らかな数値変化に戻ります
@@ -1815,13 +1581,10 @@ export default function BmsViewer() {
             //   これで定BPM再生中の BmsViewer 本体の再レンダリングは「小節が変わったとき(〜0.5Hz)」だけになる。
 
             // POLY / M POLY / AVG POLY → LogPanel(imperative)
-            let avgPoly = H.avgPoly || 0;
-            if (polyphonyHistoryRef.current.length > 0) {
-                const sum = polyphonyHistoryRef.current.reduce((a, b) => a + b, 0);
-                avgPoly = Math.round(sum / polyphonyHistoryRef.current.length);
-            }
-            if (polyphonyRef.current !== H.poly || maxPolyRef.current !== H.maxPoly || avgPoly !== H.avgPoly || droppedSoundsRef.current !== H.dropped) {
-                H.poly = polyphonyRef.current; H.maxPoly = maxPolyRef.current; H.avgPoly = avgPoly; H.dropped = droppedSoundsRef.current;
+            const st = engine.stats;
+            const avgPoly = engine.averagePoly();
+            if (st.poly !== H.poly || st.maxPoly !== H.maxPoly || avgPoly !== H.avgPoly || st.dropped !== H.dropped) {
+                H.poly = st.poly; H.maxPoly = st.maxPoly; H.avgPoly = avgPoly; H.dropped = st.dropped;
                 logPanelRef.current?.updatePoly(H.poly, H.maxPoly, H.avgPoly, H.dropped);
             }
             // レーン別ノーツ数 → ControllerPanel(imperative)。comboRef を dirty シグナルに。
@@ -1902,7 +1665,7 @@ export default function BmsViewer() {
 
         // ★曲長ちょうどで終了する。duration は「全オブジェクトの発音終了時刻」の最大値なので、
         //   この時点で譜面由来の音はすべて鳴り終わっている。以前は +0.5 秒の余白に加え、
-        //   activeNodesRef が空になる(onended 待ち)まで待っていたため、表示上の曲長より 1 秒近く延びていた。
+        //   発音中のノードが無くなる(onended 待ち)まで待っていたため、表示上の曲長より 1 秒近く延びていた。
         const isFinished = duration > 0 && rawTime >= duration;
         if (isFinished && isPlayingRef.current) {
             if (playModeRef.current) setPlayResult(buildResultData(true)); // 完走リザルト(stopPlayback の resetJudge 前に確定)
