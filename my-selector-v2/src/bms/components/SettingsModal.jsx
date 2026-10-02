@@ -1,7 +1,7 @@
 // src/bms/components/SettingsModal.jsx
 import React, { memo, useState, useEffect, useRef } from 'react';
-import { Settings, X, ChevronsUp, RotateCw, Film, Flag, Music, Layers, Speaker, EyeOff, FileX, Keyboard, FolderOpen, FileArchive, ChevronDown, Gamepad2, RotateCcw, SlidersHorizontal } from 'lucide-react';
-import { VISIBILITY_MODES, LANE_LAYOUTS, MODE_LABELS, DEFAULT_KEYMAPS, DEFAULT_GAMEPAD_MAPS, DEFAULT_GAMEPAD_SCRATCH_ALT, DEFAULT_AUDIO_FX, keyCodeLabel } from '../constants';
+import { Settings, X, ChevronsUp, RotateCw, Film, Flag, Music, Layers, Speaker, EyeOff, FileX, Keyboard, FolderOpen, FileArchive, ChevronDown, Gamepad2, RotateCcw, SlidersHorizontal, Gauge } from 'lucide-react';
+import { VISIBILITY_MODES, LANE_LAYOUTS, MODE_LABELS, DEFAULT_KEYMAPS, DEFAULT_GAMEPAD_MAPS, DEFAULT_GAMEPAD_SCRATCH_ALT, DEFAULT_AUDIO_FX, DEFAULT_LITE_MODE, LITE_MODE_ITEMS, keyCodeLabel } from '../constants';
 
 // キー割り当て設定(6-1-d)。表示・保存のみ。手動プレイの判定入力接続は P6-2。
 function KeyMapSection({ mode, keyMaps, setKeyMaps }) {
@@ -330,6 +330,49 @@ const FxSubHead = ({ name, checked, disabled, onChange }) => (
     </label>
 );
 
+// lite モード(低スペック機向け)。親スイッチを ON にすると詳細項目が展開される。
+function LiteModeSection({ liteMode, setLiteMode }) {
+    const lm = liteMode || DEFAULT_LITE_MODE;
+    const on = !!lm.enabled;
+    const activeCount = LITE_MODE_ITEMS.filter(it => lm[it.key]).length;
+    return (
+        <div className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50">
+            <div className="text-xs text-blue-400 mb-3 font-bold uppercase tracking-wider border-b border-blue-900/30 pb-2 flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2"><Gauge size={14} /> lite モード(低スペック機向け)</span>
+                {on && (
+                    <button
+                        onClick={() => setLiteMode({ ...DEFAULT_LITE_MODE, enabled: true })}
+                        className="text-[10px] font-bold text-blue-300 hover:text-white flex items-center gap-1 bg-black/40 border border-blue-900/50 rounded px-2 py-1 transition">
+                        <RotateCcw size={11} /> 既定に戻す
+                    </button>
+                )}
+            </div>
+            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer border border-transparent hover:border-blue-500/30">
+                <div className="flex flex-col">
+                    <span className="text-sm">lite モードを有効にする</span>
+                    <span className="text-[10px] text-blue-400/60">見た目・演出を少し落として動作を軽くします。この設定はこのPC(ブラウザ)にだけ保存されます</span>
+                </div>
+                <input type="checkbox" checked={on} onChange={e => setLiteMode({ ...lm, enabled: e.target.checked })} className="accent-blue-500 w-4 h-4 shrink-0 ml-2" />
+            </label>
+
+            {on && (
+                <div className="mt-2 space-y-1">
+                    <div className="text-[10px] text-blue-400/60 px-1">有効な項目: {activeCount} / {LITE_MODE_ITEMS.length}</div>
+                    {LITE_MODE_ITEMS.map(it => (
+                        <label key={it.key} className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer border border-transparent hover:border-blue-500/30">
+                            <div className="flex flex-col">
+                                <span className="text-[13px]">{it.label}</span>
+                                <span className="text-[10px] text-blue-400/60">{it.desc}</span>
+                            </div>
+                            <input type="checkbox" checked={!!lm[it.key]} onChange={e => setLiteMode({ ...lm, [it.key]: e.target.checked })} className="accent-blue-500 w-4 h-4 shrink-0 ml-2" />
+                        </label>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 function AudioFxSection({ audioFx, setAudioFx }) {
     const fx = audioFx || {};
     const patch = (k, v) => setAudioFx({ ...fx, [k]: { ...(fx[k] || {}), ...v } });
@@ -572,6 +615,7 @@ const SettingsModal = ({
     playMode, setPlayMode,
     judgeOffset, setJudgeOffset, suggestJudgeOffset,
     audioFx, setAudioFx,
+    liteMode, setLiteMode,
     missLayerEnabled, setMissLayerEnabled,
     bgaBehindChart, setBgaBehindChart,
     bgaSidePanel, setBgaSidePanel,
@@ -935,6 +979,9 @@ const SettingsModal = ({
 
                     {/* サウンドエフェクト (共通・6-3) */}
                     <div hidden={!showSound}><AudioFxSection audioFx={audioFx} setAudioFx={setAudioFx} /></div>
+
+                    {/* lite モード (システム) */}
+                    <div hidden={!showSystem}><LiteModeSection liteMode={liteMode} setLiteMode={setLiteMode} /></div>
 
                     {/* 詳細設定1 (システム・デバッグ) */}
                     <details hidden={!showSystem} className="bg-[#0f172a] p-4 rounded-lg border border-blue-900/50 mt-2 group" open={!isMobile}>

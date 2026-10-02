@@ -166,5 +166,25 @@ export const DEFAULT_AUDIO_FX = {
   echo: { on: false, time: 0.3, feedback: 0.35, mix: 0.25 }, // 秒 / 0..0.9 / 0..1
 };
 
+// lite モード(低スペック機向け)。enabled が親スイッチで、各項目は enabled のときだけ効く。
+// いずれも「見た目・演出と引き換えに軽くする」もの(不具合修正系の軽量化はモードに関係なく常に有効)。
+export const DEFAULT_LITE_MODE = {
+  enabled: false,
+  lowRes: true,         // 描画解像度を等倍(devicePixelRatio=1)に落とす
+  fpsCap: true,         // 描画を 60fps に制限(120/144Hz の画面向け)
+  noDupVideo: true,     // 背面/サイドBGA表示中は左のプレビューで動画を再生しない
+  simpleEffects: true,  // ノーツ通過時の光るグラデーション・ボタンの発光を簡易化
+  quietMonitors: true,  // SOUND MONITOR 等のログ更新を間引き、密度グラフのスクロールを即時に
+  fxBypass: true,       // サウンドエフェクト無効時はエフェクト処理を経路から外す
+};
+export const LITE_MODE_ITEMS = [
+  { key: 'lowRes', label: '描画解像度を下げる', desc: '高解像度(125%/150%表示など)の画面でも等倍で描画。効果: 大' },
+  { key: 'fpsCap', label: '60fps に制限', desc: '120Hz/144Hz の画面で描画回数を抑える。効果: 中〜大' },
+  { key: 'noDupVideo', label: '動画BGAの二重再生をしない', desc: '背面/サイドBGA表示中は左のプレビューで動画を再生しない。効果: 大(動画BGAの譜面)' },
+  { key: 'simpleEffects', label: 'ノーツ・ボタンの演出を簡易化', desc: '光るグラデーションや発光を省略。効果: 中(高密度譜面)' },
+  { key: 'quietMonitors', label: 'モニター表示の更新を減らす', desc: 'SOUND MONITOR 等の更新を間引く。効果: 小〜中' },
+  { key: 'fxBypass', label: '未使用のエフェクト処理を外す', desc: 'サウンドエフェクト無効時に音声経路から外す。効果: 小' },
+];
+
 // BGAのデフォルト不透明度
 export const DEFAULT_BGA_OPACITY = 0.5;

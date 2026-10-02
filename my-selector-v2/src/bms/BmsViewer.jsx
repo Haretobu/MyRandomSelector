@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
-import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, DEFAULT_GAMEPAD_MAPS, DEFAULT_GAMEPAD_SCRATCH_ALT, JUDGE_WINDOWS, judgeRankIndex, djLevel, DEFAULT_AUDIO_FX } from './constants';
+import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, DEFAULT_GAMEPAD_MAPS, DEFAULT_GAMEPAD_SCRATCH_ALT, JUDGE_WINDOWS, judgeRankIndex, djLevel, DEFAULT_AUDIO_FX, DEFAULT_LITE_MODE } from './constants';
 import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, shuffleLanes, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 import { createLiveStore, useLiveStore } from './logic/liveStore';
@@ -107,7 +107,7 @@ export default function BmsViewer() {
   // ★軽量化: 再生中に高頻度で変わる表示用の値は useState ではなくストアに置く(liveStore.js 参照)。
   //   setter 名は従来のまま残し、呼び出し側はそのまま使えるようにしている。
   const [live] = useState(() => createLiveStore({
-    backBga: null, layerBga: null, poorBga: null, showMiss: false, measure: 0, measureLines: [],
+    backBga: null, layerBga: null, poorBga: null, showMiss: false, measure: 0, measureLines: [], quietMonitors: false,
   }));
   const setCurrentMeasureLines = (v) => live.set({ measureLines: v });
   // ↓ P1-e で imperative 更新に移行。値は未使用、setter は互換のため no-op で残す。
@@ -261,6 +261,33 @@ export default function BmsViewer() {
     } catch { /* privacy mode */ }
     return DEFAULT_AUDIO_FX;
   });
+  // lite モード(低スペック機向け)。localStorage 永続(PC ごとに別設定にできる)。
+  const [liteMode, setLiteMode] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('bms_lite_mode') || 'null');
+      if (saved && typeof saved === 'object') return { ...DEFAULT_LITE_MODE, ...saved };
+    } catch { /* privacy mode */ }
+    return DEFAULT_LITE_MODE;
+  });
+  // 実際に効いている項目(親スイッチ ON かつ項目 ON)。renderLoop 等から読むため ref にも持つ。
+  const lite = {
+    lowRes: liteMode.enabled && liteMode.lowRes,
+    fpsCap: liteMode.enabled && liteMode.fpsCap,
+    noDupVideo: liteMode.enabled && liteMode.noDupVideo,
+    simpleEffects: liteMode.enabled && liteMode.simpleEffects,
+    quietMonitors: liteMode.enabled && liteMode.quietMonitors,
+    fxBypass: liteMode.enabled && liteMode.fxBypass,
+  };
+  const liteRef = useRef(lite);
+  liteRef.current = lite;
+  useEffect(() => {
+    try { localStorage.setItem('bms_lite_mode', JSON.stringify(liteMode)); } catch { /* privacy mode */ }
+    // 描画の静的キャッシュ(板・グラデーション)を作り直させる
+    boardLayerRef.current.key = ''; gradCacheRef.current.key = '';
+    laneVisualRef.current.fill(null); // ボタンの発光スタイルを次フレームで書き直させる
+    live.set({ quietMonitors: liteRef.current.quietMonitors }); // 密度グラフ(ストア購読)用
+    scheduleRenderLoop();
+  }, [liteMode]);
   const fxNodesRef = useRef(null); // { filter, eqLow, eqMid, eqHigh, comp, delay, feedback, echoWet }
   // 6-3: サウンドエフェクトのパラメータを Web Audio ノードへ反映。無効時は素通しになる値に。
   useEffect(() => {
@@ -290,6 +317,18 @@ export default function BmsViewer() {
     set(n.feedback.gain, ecOn ? Math.max(0, Math.min(0.9, audioFx.echo.feedback)) : 0);
     set(n.echoWet.gain, ecOn ? Math.max(0, Math.min(1, audioFx.echo.mix)) : 0);
   }, [audioFx]);
+
+  // lite: エフェクト無効時はエフェクトラック(FILTER/EQ/COMP/ECHO)を経路から外し、マスター → destination 直結にする。
+  //   無効時も各ノードは「素通しの値」で常時接続されており、音声スレッドで処理コストが掛かっていたため。
+  const fxBypassActive = lite.fxBypass && !audioFx.enabled;
+  const fxBypassActiveRef = useRef(fxBypassActive);
+  fxBypassActiveRef.current = fxBypassActive;
+  useEffect(() => {
+    const n = fxNodesRef.current, g = gainNodeRef.current, ac = audioContextRef.current;
+    if (!n || !g || !ac) return; // AudioContext 生成前(生成時に fxBypassActiveRef を見て接続する)
+    try { g.disconnect(); } catch { /* 未接続 */ }
+    g.connect(fxBypassActive ? ac.destination : n.filter);
+  }, [fxBypassActive]);
 
   const [muteDebugAutoPlay, setMuteDebugAutoPlay] = useState(true);
   const muteDebugAutoPlayRef = useRef(true);
@@ -460,8 +499,15 @@ export default function BmsViewer() {
       s.lastNow = now;
       return now + s.off;
   };
-  const _renderTick = () => {
+  const lastRenderTsRef = useRef(0);
+  const _renderTick = (ts) => {
       animationRef.current = null;
+      // lite: 60fps 制限。120/144Hz の画面では間のフレームを描かずに次の rAF を待つ
+      //   (3.5ms の余裕で 60Hz 画面のフレーム揺れでは間引かれないようにしている)
+      if (liteRef.current.fpsCap) {
+          if (ts - lastRenderTsRef.current < 1000 / 60 - 3.5) { scheduleRenderLoop(); return; }
+          lastRenderTsRef.current = ts;
+      }
       if (renderLoopRef.current) renderLoopRef.current();
   };
   const scheduleRenderLoop = () => {
@@ -683,15 +729,16 @@ export default function BmsViewer() {
       const meta = laneMetaRef.current[idx];
       if (!meta) return;
       const col = meta.color;
+      const glow = !liteRef.current.simpleEffects; // lite: box-shadow の発光(再描画コストが大きい)を省略
       const ctrlEl = controllerRefs.current[idx];
       if (ctrlEl) {
           // 即時反映(transition なし)。密譜面で「光りかけて消える」のを防ぐ。
           if (meta.isScratch) {
-             ctrlEl.style.boxShadow = active ? `0 0 20px ${col}` : 'none';
+             ctrlEl.style.boxShadow = active && glow ? `0 0 20px ${col}` : 'none';
              ctrlEl.style.borderColor = active ? col : '#1e293b';
           } else {
              ctrlEl.style.background = active ? col : '#0b0f1a';
-             ctrlEl.style.boxShadow = active ? `0 0 14px ${col}` : 'none';
+             ctrlEl.style.boxShadow = active && glow ? `0 0 14px ${col}` : 'none';
              ctrlEl.style.borderColor = active ? col : (meta.color + '88');
           }
       }
@@ -699,7 +746,7 @@ export default function BmsViewer() {
       if (kbEl && kbEl !== ctrlEl) {
           kbEl.style.background = active ? col : '#0f172a';
           kbEl.style.color = active ? '#0b0f1a' : (meta.isScratch ? '#fca5a5' : '#93a0be');
-          kbEl.style.boxShadow = active ? `0 0 8px ${col}` : 'none';
+          kbEl.style.boxShadow = active && glow ? `0 0 8px ${col}` : 'none';
       }
   };
   const clearActiveLanes = () => { for(let i=0; i<MAX_LANES; i++) { if (laneVisualRef.current[i] !== false) { laneVisualRef.current[i] = false; setLaneActive(i, false); } } };
@@ -1165,7 +1212,7 @@ export default function BmsViewer() {
     const feedback = ac.createGain(); feedback.gain.value = 0;
     const echoWet = ac.createGain(); echoWet.gain.value = 0;
 
-    gainNodeRef.current.connect(filter);
+    gainNodeRef.current.connect(fxBypassActiveRef.current ? ac.destination : filter); // lite: エフェクト経路のバイパス
     filter.connect(eqLow); eqLow.connect(eqMid); eqMid.connect(eqHigh); eqHigh.connect(comp);
     comp.connect(ac.destination);                 // dry
     comp.connect(delay); delay.connect(feedback); feedback.connect(delay); // feedback ループ
@@ -1854,7 +1901,8 @@ export default function BmsViewer() {
     // ★BGA修正: alpha:trueにして、canvasの透明部分から背面のBGAレイヤーが透けるようにする
     if (!ctxRef.current) ctxRef.current = canvas.getContext('2d', { alpha: true });
     const ctx = ctxRef.current;
-    const dpr = window.devicePixelRatio || 1;
+    // lite: 描画解像度を等倍に(150%表示なら描画ピクセル数が約半分になる。代わりに少しぼやける)
+    const dpr = liteRef.current.lowRes ? 1 : (window.devicePixelRatio || 1);
     // ★軽量化: getBoundingClientRect() はレイアウト強制。ResizeObserver のキャッシュを使い、
     //   未取得の初回のみ実測する。
     const rect = canvasRectRef.current || (() => {
@@ -2135,6 +2183,7 @@ export default function BmsViewer() {
     ctx.drawImage(bl.canvas, 0, 0, width, height);
 
     const currentActiveLanes = _activeLanesScratch; currentActiveLanes.fill(false); // ★軽量化: 毎フレームの配列割り当てを排除
+    const simpleFx = liteRef.current.simpleEffects;
 
     if (parsedSong) {
         const currentBeat = getBeatFromTime(parsedSong.timePoints, currentTime);
@@ -2215,10 +2264,12 @@ export default function BmsViewer() {
                 const yEnd = JUDGE_Y - (endBeatDelta / visibleDuration * BASE_JUDGE_Y);
                 if (beatDelta <= 0 && endBeatDelta > 0) {
                     currentActiveLanes[obj.laneIndex] = true;
-                    if (mAlpha !== 1) ctx.globalAlpha = mAlpha;
-                    ctx.fillStyle = gc.ln[obj.laneIndex];   // ★キャッシュ済みグラデーション
-                    ctx.fillRect(x, JUDGE_Y - 300, w, 300);
-                    if (mAlpha !== 1) ctx.globalAlpha = 1;
+                    if (!simpleFx) { // lite: LN 押下中の光るグラデーションを省略
+                        if (mAlpha !== 1) ctx.globalAlpha = mAlpha;
+                        ctx.fillStyle = gc.ln[obj.laneIndex];   // ★キャッシュ済みグラデーション
+                        ctx.fillRect(x, JUDGE_Y - 300, w, 300);
+                        if (mAlpha !== 1) ctx.globalAlpha = 1;
+                    }
                 }
                 const drawBottom = Math.min(JUDGE_Y, yBase);
                 const drawTop = yEnd;
@@ -2239,9 +2290,11 @@ export default function BmsViewer() {
                         // ★軽量化: グラデーションはレーン単位でキャッシュ済み。フェードは globalAlpha で。
                         ctx.globalAlpha = alpha;
                         ctx.fillStyle = '#ffffff'; ctx.fillRect(x, JUDGE_Y - 5, w, 10);
-                        ctx.globalAlpha = alpha * 0.6;
-                        ctx.fillStyle = gc.hit[obj.laneIndex];
-                        ctx.fillRect(x, JUDGE_Y - 200, w, 200);
+                        if (!simpleFx) { // lite: 判定ラインから伸びる光のグラデーションを省略(白い線だけ残す)
+                            ctx.globalAlpha = alpha * 0.6;
+                            ctx.fillStyle = gc.hit[obj.laneIndex];
+                            ctx.fillRect(x, JUDGE_Y - 200, w, 200);
+                        }
                         ctx.globalAlpha = 1;
                     }
                     continue;
@@ -2464,6 +2517,7 @@ export default function BmsViewer() {
         playMode={playMode} setPlayMode={setPlayMode}
         judgeOffset={judgeOffset} setJudgeOffset={setJudgeOffset} suggestJudgeOffset={sSuggestJudgeOffset}
         audioFx={audioFx} setAudioFx={setAudioFx}
+        liteMode={liteMode} setLiteMode={setLiteMode}
         missLayerEnabled={missLayerEnabled} setMissLayerEnabled={setMissLayerEnabled}
         bgaBehindChart={bgaBehindChart} setBgaBehindChart={setBgaBehindChart}
         bgaSidePanel={bgaSidePanel} setBgaSidePanel={setBgaSidePanel}
@@ -2521,7 +2575,7 @@ export default function BmsViewer() {
                             ? `${playOption}/${playOption2}${dpFlip ? ' F' : ''}`
                             : playOption}
                         live={live} isPlaying={isPlaying}
-                        playBgaVideo={playBgaVideo} readyAnimState={readyAnimState}
+                        playBgaVideo={playBgaVideo && !(lite.noDupVideo && (bgaBehindChart || bgaSidePanel))} readyAnimState={readyAnimState}
                         totalNotes={totalNotes}
                      />
 
@@ -2563,6 +2617,7 @@ export default function BmsViewer() {
                     isPlaying={isPlaying}
                     lanes={parsedSong?.lanes}
                     mode={parsedSong?.mode}
+                    quiet={lite.quietMonitors}
                  />
              </div>
             );

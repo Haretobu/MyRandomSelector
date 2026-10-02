@@ -9,6 +9,7 @@ const BAR_GAP = 1; // バー間の隙間(px)
 const DensityGraph = ({ parsedSong, live }) => {
     const scrollRef = useRef(null);
     const currentMeasure = useLiveStore(live, s => s.measure);
+    const quiet = useLiveStore(live, s => s.quietMonitors); // lite: なめらかスクロールをやめて即時に
 
     const { bars, maxDensity } = useMemo(() => {
         if (!parsedSong) return { bars: [], maxDensity: 0 };
@@ -57,9 +58,9 @@ const DensityGraph = ({ parsedSong, live }) => {
     useEffect(() => {
         if (scrollRef.current && currentMeasure >= 0) {
             const scrollPos = (currentMeasure * (BAR_W + BAR_GAP)) - (scrollRef.current.clientWidth / 2);
-            scrollRef.current.scrollTo({ left: scrollPos, behavior: 'smooth' });
+            scrollRef.current.scrollTo({ left: scrollPos, behavior: quiet ? 'auto' : 'smooth' });
         }
-    }, [currentMeasure]);
+    }, [currentMeasure, quiet]);
 
     if (!parsedSong) return null;
     const cur = bars[currentMeasure];

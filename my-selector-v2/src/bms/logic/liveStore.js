@@ -24,5 +24,6 @@ export function createLiveStore(initial) {
 
 // selector は state の一部(プリミティブ or 参照が安定した値)を返すこと
 export function useLiveStore(store, selector) {
-    return useSyncExternalStore(store.subscribe, () => selector(store.get()));
+    const get = () => selector(store.get());
+    return useSyncExternalStore(store.subscribe, get, get); // 3つ目はサーバー描画用(ブラウザでは使われない)
 }

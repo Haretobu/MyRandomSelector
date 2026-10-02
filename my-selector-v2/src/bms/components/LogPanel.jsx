@@ -3,7 +3,7 @@ import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect, me
 
 const DEFAULT_LANES = [{index:0,kind:'scratch',side:0},{index:1,kind:'key',side:0},{index:2,kind:'key',side:0},{index:3,kind:'key',side:0},{index:4,kind:'key',side:0},{index:5,kind:'key',side:0},{index:6,kind:'key',side:0},{index:7,kind:'key',side:0}];
 
-const LogPanel = forwardRef(({ backingTracks, activeShortSoundsRef, lastPlayedSoundPerLaneRef, longAudioProgressRefs, isPlaying, lanes, mode }, ref) => {
+const LogPanel = forwardRef(({ backingTracks, activeShortSoundsRef, lastPlayedSoundPerLaneRef, longAudioProgressRefs, isPlaying, lanes, mode, quiet = false }, ref) => {
     const polyRef = useRef(null);      // POLY 数値の span
     const maxPolyRef = useRef(null);   // M POLY 数値の span
     const dropRef = useRef(null);      // DROP(予約が間に合わず鳴らせなかった音の数)の span
@@ -39,11 +39,12 @@ const LogPanel = forwardRef(({ backingTracks, activeShortSoundsRef, lastPlayedSo
     }));
 
     // 流れるログ(SOUND MONITOR / LANE LOG)を ~8Hz で再描画。memo により親の再レンダリングとは独立。
+    // lite(quiet)時は 1Hz に間引く。
     useEffect(() => {
         if (!isPlaying) return;
-        const id = setInterval(() => force(n => (n + 1) & 1023), 120);
+        const id = setInterval(() => force(n => (n + 1) & 1023), quiet ? 1000 : 120);
         return () => clearInterval(id);
-    }, [isPlaying]);
+    }, [isPlaying, quiet]);
 
     const shorts = (activeShortSoundsRef.current || []).slice(-maxRows);
     const laneLog = lastPlayedSoundPerLaneRef.current || [];
