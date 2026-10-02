@@ -1367,6 +1367,13 @@ export default function BmsViewer() {
   // レーン領域(キャンバス)の幅 = 盤面ぴったり。余った幅はサイドBGA等に回る。
   const canvasBoardW = parsedSong ? Math.ceil(boardUnitsFor(parsedSong, is2P) * laneWidthPx + 28) : 460;
 
+  // 設定画面「入力」タブの設定一式(値が変わったときだけ作り直し、SettingsModal の memo を効かせる)
+  const inputSettings = React.useMemo(() => ({
+    keyMaps, setKeyMaps, gamepadEnabled, setGamepadEnabled, gamepadName,
+    gamepadMaps, setGamepadMaps, gamepadScratchAlt, setGamepadScratchAlt,
+    gamepadAxisDelta, setGamepadAxisDelta, gamepadAxisReleaseMs, setGamepadAxisReleaseMs,
+  }), [keyMaps, gamepadEnabled, gamepadName, gamepadMaps, gamepadScratchAlt, gamepadAxisDelta, gamepadAxisReleaseMs]);
+
   // 子(ControlBar / SettingsModal)の React.memo を効かせるための、参照が安定したハンドラ群
   const sHandleFileSelect = useEvent(handleFileSelect);
   const sHandleZipSelect = useEvent(handleZipSelect);
@@ -1406,12 +1413,7 @@ export default function BmsViewer() {
         showAbortedMonitor={showAbortedMonitor} setShowAbortedMonitor={setShowAbortedMonitor} scratchRotationEnabled={scratchRotationEnabled} setScratchRotationEnabled={setScratchRotationEnabled}
         isInputDebugMode={isInputDebugMode} setIsInputDebugMode={setIsInputDebugMode}
         muteDebugAutoPlay={muteDebugAutoPlay} setMuteDebugAutoPlay={setMuteDebugAutoPlay}
-        keyMaps={keyMaps} setKeyMaps={setKeyMaps}
-        gamepadEnabled={gamepadEnabled} setGamepadEnabled={setGamepadEnabled} gamepadName={gamepadName}
-        gamepadAxisDelta={gamepadAxisDelta} setGamepadAxisDelta={setGamepadAxisDelta}
-        gamepadAxisReleaseMs={gamepadAxisReleaseMs} setGamepadAxisReleaseMs={setGamepadAxisReleaseMs}
-        gamepadMaps={gamepadMaps} setGamepadMaps={setGamepadMaps}
-        gamepadScratchAlt={gamepadScratchAlt} setGamepadScratchAlt={setGamepadScratchAlt}
+        input={inputSettings}
         playMode={playMode} setPlayMode={setPlayMode}
         judgeOffset={judgeOffset} setJudgeOffset={setJudgeOffset} suggestJudgeOffset={sSuggestJudgeOffset}
         judgeSystem={judgeSystem} setJudgeSystem={setJudgeSystem} judgeCfg={judgeCfg}
