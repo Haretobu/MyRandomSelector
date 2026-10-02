@@ -2,94 +2,39 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
-import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, DEFAULT_GAMEPAD_MAPS, DEFAULT_GAMEPAD_SCRATCH_ALT, djLevel, DEFAULT_AUDIO_FX, DEFAULT_LITE_MODE } from './constants';
-import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, shuffleLanes, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
+import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, DEFAULT_GAMEPAD_MAPS, DEFAULT_GAMEPAD_SCRATCH_ALT, djLevel, DEFAULT_AUDIO_FX, DEFAULT_LITE_MODE } from './constants';
+import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, guessDifficulty, extractZipFiles, getBaseName } from './logic/utils';
 import { parseBMS } from './logic/parser';
-import { createLiveStore, useLiveStore } from './logic/liveStore';
+import { createLiveStore } from './logic/liveStore';
 import { buildJudgeConfig, classifyJudge, resolveLnRelease } from './logic/judge';
+import { useStoredState, useLatestRef, BOOL, oneOf, num, mergedJson } from './hooks/useStoredState';
 
 import SettingsModal from './components/SettingsModal';
 import ControllerPanel from './components/ControllerPanel';
 import InfoPanel from './components/InfoPanel';
 import LogPanel from './components/LogPanel';
 import ControlBar from './components/ControlBar';
-import BgaLayer from './components/BgaLayer';
 import BgaStage from './components/BgaStage';
 import ResultModal from './components/ResultModal';
+import MobileBgaLayers, { BgaPlaceholder } from './components/MobileBgaLayers';
+import { MAX_LANES, DEFAULT_LANES, displayLanes, boardUnitsFor, layoutLanes, laneNoteColor, laneBgColor } from './render/laneLayout';
+import { useEvent } from './hooks/useEvent';
+import { applyLaneOptions } from './logic/laneOptions';
 
-// ★軽量化: renderLoop 毎フレームの割り当てを避けるためのモジュールスコープ定数/再利用バッファ
-const MAX_LANES = 16;                // 0=1P皿,1-7=1P鍵 / 8=2P皿,9-15=2P鍵 (PMS は 0-8)
-const SIDE_GAP_UNITS = 0.7;          // DP の 1P/2P 間の隙間 (KEY_W 単位)
-const LANE_GAP_UNITS = 0.05;
-const SCRATCH_UNITS = 1.5;
-
-// 参照が安定した関数を返す(常に最新の実装を呼ぶ)。子の React.memo を効かせるために使う。
-function useEvent(fn) {
-  const ref = useRef(fn);
-  ref.current = fn;
-  return useRef((...a) => ref.current(...a)).current;
-}
+// ★軽量化: renderLoop 毎フレームの割り当てを避けるための再利用バッファ
 const _activeLanesScratch = new Array(MAX_LANES).fill(false); // renderLoop 内でのみ同期利用
 const _laneXScratch = new Array(MAX_LANES).fill(0);   // laneX[index] = 板内での左端X (BOARD_X相対)
 const _laneWScratch = new Array(MAX_LANES).fill(0);   // laneW[index] = レーン幅
-const DEFAULT_LANES = LANE_LAYOUTS.SP7;
 
-// 盤面の「レーン単位数」(皿=SCRATCH_UNITS, 鍵=1.0, 隙間を加算)。renderLoop の totalU と同じ計算。
-// キャンバス幅 = boardUnits × レーン幅px + 余白、でモード別に盤面ぴったりのサイズを出す。
-function boardUnitsFor(parsedSong, is2P) {
-  let lns = parsedSong?.lanes || DEFAULT_LANES;
-  const mode = parsedSong?.mode || 'SP7';
-  if (is2P && (mode === 'SP7' || mode === 'SP5')) {
-    const keys = lns.filter(l => l.kind === 'key');
-    const scr = lns.find(l => l.kind === 'scratch');
-    lns = scr ? [...keys, scr] : keys;
-  }
-  let u = 0;
-  for (let i = 0; i < lns.length; i++) {
-    if (i > 0) u += (lns[i].side !== lns[i - 1].side ? SIDE_GAP_UNITS : LANE_GAP_UNITS);
-    u += (lns[i].kind === 'scratch' ? SCRATCH_UNITS : 1.0);
-  }
-  return u;
-}
-
-// レーンの見た目の色を返す。lane = { index, kind, side }
-function laneKeyNum(lane) { return lane.side === 0 ? lane.index : lane.index - 8; } // 1..7
-function laneNoteColor(lane, pmsColors) {
-  if (pmsColors) return pmsColors[lane.index] || '#f1f5f9';
-  if (lane.kind === 'scratch') return '#ef4444';
-  return (laneKeyNum(lane) % 2 === 0) ? '#3b82f6' : '#f1f5f9';
-}
-function laneBgColor(lane, lOpacity, isMobile, pms) {
-  if (pms) return isMobile ? `rgba(20, 20, 28, ${lOpacity})` : '#12121c';
-  if (lane.kind === 'scratch') return isMobile ? `rgba(15, 23, 42, ${lOpacity})` : '#0f172a';
-  const dark = laneKeyNum(lane) % 2 === 0;
-  return dark ? `rgba(15, 23, 42, ${lOpacity})` : `rgba(30, 41, 59, ${lOpacity})`;
-}
-
-// スマホ用の背景BGA。BGA の値はストアから購読する(BmsViewer 本体を再レンダリングさせないため)。
-function MobileBgaLayers({ live, isPlaying, playBgaVideo, opacity, backRef, layerRef, poorRef }) {
-  const back = useLiveStore(live, s => s.backBga);
-  const layer = useLiveStore(live, s => s.layerBga);
-  const poor = useLiveStore(live, s => s.poorBga);
-  const showMiss = useLiveStore(live, s => s.showMiss);
-  return (
-    <div className="absolute inset-0 z-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none" style={{ opacity }}>
-      <BgaLayer ref={backRef} bgaState={back} zIndex={0} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} />
-      <BgaLayer ref={layerRef} bgaState={layer} zIndex={10} blendMode="screen" isPlaying={isPlaying} isVideoEnabled={playBgaVideo} />
-      {showMiss && poor && (
-        <div className="absolute inset-0 w-full h-full z-50 bg-black/50 flex items-center justify-center">
-          <BgaLayer ref={poorRef} bgaState={poor} zIndex={50} isPlaying={isPlaying} isVideoEnabled={playBgaVideo} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// サイドBGAパネルの「BGA」プレースホルダ(BGA が無いときだけ表示)
-function BgaPlaceholder({ live }) {
-  const hasBga = useLiveStore(live, s => !!(s.backBga || s.layerBga));
-  return hasBga ? null : <div className="text-blue-900/40 text-xs font-bold tracking-widest pointer-events-none">BGA</div>;
-}
+// localStorage の設定値マージ: モード別の設定(キー割り当て等)は、モードごとに既定値へ保存値を重ねる
+const mergePerMode = (defaults, saved) =>
+  Object.fromEntries(Object.keys(defaults).map(m => [m, { ...defaults[m], ...(saved[m] || {}) }]));
+const mergeAudioFx = (d, s) => ({
+  ...d, ...s,
+  filter: { ...d.filter, ...(s.filter || {}) }, eq: { ...d.eq, ...(s.eq || {}) },
+  comp: { ...d.comp, ...(s.comp || {}) }, echo: { ...d.echo, ...(s.echo || {}) },
+});
+const GAMEPAD_SCRATCH_ALT_DEFAULTS = Object.fromEntries(Object.keys(DEFAULT_GAMEPAD_MAPS).map(m => [m, { ...DEFAULT_GAMEPAD_SCRATCH_ALT }]));
 
 export default function BmsViewer() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
@@ -111,8 +56,6 @@ export default function BmsViewer() {
     backBga: null, layerBga: null, poorBga: null, showMiss: false, measure: 0, measureLines: [], quietMonitors: false,
   }));
   const setCurrentMeasureLines = (v) => live.set({ measureLines: v });
-  // ↓ P1-e で imperative 更新に移行。値は未使用、setter は互換のため no-op で残す。
-  const setCurrentMeasureNotes = () => {};
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackTimeDisplay, setPlaybackTimeDisplay] = useState(0); 
   const [duration, setDuration] = useState(0);
@@ -142,14 +85,8 @@ export default function BmsViewer() {
   const showMissLayerRef = useRef(false);
   const setShowMissLayer = (v) => { showMissLayerRef.current = v; live.set({ showMiss: v }); };
   // ミスレイヤー(POOR BGA)の有効/無効。オート=Mキー / 自己プレイ=空POOR以外のPOOR・BAD で発動。localStorage 永続。
-  const [missLayerEnabled, setMissLayerEnabled] = useState(() => {
-    try { const v = localStorage.getItem('bms_miss_layer'); return v === null ? true : v === '1'; } catch { return true; }
-  });
-  const missLayerEnabledRef = useRef(true);
-  useEffect(() => {
-    missLayerEnabledRef.current = missLayerEnabled;
-    try { localStorage.setItem('bms_miss_layer', missLayerEnabled ? '1' : '0'); } catch { /* privacy mode */ }
-  }, [missLayerEnabled]);
+  const [missLayerEnabled, setMissLayerEnabled] = useStoredState('bms_miss_layer', true, BOOL);
+  const missLayerEnabledRef = useLatestRef(missLayerEnabled);
   const setCurrentMeasure = (v) => live.set({ measure: v });
   const [playSide, setPlaySide] = useState('1P');
   const [playOption, setPlayOption] = useState('OFF');    // 1P / 左サイド / 9K 全体
@@ -160,11 +97,7 @@ export default function BmsViewer() {
   const [comboPos, setComboPos] = useState('CENTER');
   const [totalNotes, setTotalNotes] = useState(0);
   const [laneMute, setLaneMute] = useState(() => new Array(MAX_LANES).fill(false)); // レーンごとミュート(0=SC, 1-7=鍵盤)
-  const laneMuteRef = useRef(laneMute);
-  useEffect(() => { laneMuteRef.current = laneMute; }, [laneMute]);
-  // ↓ P1-e で imperative 更新へ移行。値は未使用、setter は互換のため no-op で残す。
-  const setPolyphonyCount = () => {}, setMaxPolyphonyCount = () => {}, setAveragePolyphony = () => {};
-  const setRealtimeBpm = () => {}, setNextBpmInfo = () => {}, setCombo = () => {}, setNoteCounts = () => {};
+  const laneMuteRef = useLatestRef(laneMute);
   const [currentBpm, setCurrentBpm] = useState(130); 
   const [showReady, setShowReady] = useState(true);
   const [readyAnimState, setReadyAnimState] = useState(null); 
@@ -174,14 +107,8 @@ export default function BmsViewer() {
   const [playLongAudio, setPlayLongAudio] = useState(true);
   // シーク後に「シーク地点より前に鳴り始めた音(長いBGM等)」を途中から再生するか。
   // OFF = beatoraja 式(鳴らさない)。一時停止→再開はこの設定に関係なく常に続きから再生する。localStorage 永続。
-  const [resumeAudioOnSeek, setResumeAudioOnSeek] = useState(() => {
-    try { const v = localStorage.getItem('bms_resume_audio_on_seek'); return v === null ? true : v === '1'; } catch { return true; }
-  });
-  const resumeAudioOnSeekRef = useRef(true);
-  useEffect(() => {
-    resumeAudioOnSeekRef.current = resumeAudioOnSeek;
-    try { localStorage.setItem('bms_resume_audio_on_seek', resumeAudioOnSeek ? '1' : '0'); } catch { /* privacy mode */ }
-  }, [resumeAudioOnSeek]);
+  const [resumeAudioOnSeek, setResumeAudioOnSeek] = useStoredState('bms_resume_audio_on_seek', true, BOOL);
+  const resumeAudioOnSeekRef = useLatestRef(resumeAudioOnSeek);
   const seekedSinceStartRef = useRef(false);  // 前回の再生開始以降にシークしたか(再開が「シーク」か「一時停止からの復帰」かの判別用)
   const midStartPendingRef = useRef(false);   // 次の scheduleAudio 1回だけ、開始地点より前に鳴り始めた音を途中から鳴らす
   const maxSoundDurationRef = useRef(0);      // 読み込んだ音源のうち最長の長さ(秒)。途中再生の探索範囲に使う
@@ -190,91 +117,28 @@ export default function BmsViewer() {
   const [playMode, setPlayMode] = useState(false); // 6-2: プレイモード(自分の入力で判定)
   const [playResult, setPlayResult] = useState(null); // 6-2-b: 完走リザルト(モーダル表示用)
   // 判定方式: 'BMS'(beatoraja 準拠・#RANK で拡縮) / 'IIDX'(固定幅)。localStorage 永続。
-  const [judgeSystem, setJudgeSystem] = useState(() => {
-    try { return localStorage.getItem('bms_judge_system') === 'IIDX' ? 'IIDX' : 'BMS'; } catch { return 'BMS'; }
-  });
-  useEffect(() => { try { localStorage.setItem('bms_judge_system', judgeSystem); } catch { /* privacy mode */ } }, [judgeSystem]);
-  const [judgeOffset, setJudgeOffset] = useState(() => { // 6-2-c: 判定オフセット(ms)
-    try { const v = Number(localStorage.getItem('bms_judge_offset')); return Number.isFinite(v) ? v : 0; } catch { return 0; }
-  });
-  useEffect(() => {
-    judgeOffsetRef.current = judgeOffset;
-    try { localStorage.setItem('bms_judge_offset', String(judgeOffset)); } catch { /* privacy mode */ }
-  }, [judgeOffset]);
-  // キー割り当て(6-1-d): モード別 lane index -> KeyboardEvent.code。localStorage 永続。
-  // ※ 手動プレイの判定入力への接続は P6-2 で実装。現状は表示・保存のみ。
-  const [keyMaps, setKeyMaps] = useState(() => {
-    let saved = {};
-    try { saved = JSON.parse(localStorage.getItem('bms_keymaps') || '{}') || {}; } catch { saved = {}; }
-    const merged = {};
-    for (const m of Object.keys(DEFAULT_KEYMAPS)) merged[m] = { ...DEFAULT_KEYMAPS[m], ...(saved[m] || {}) };
-    return merged;
-  });
-  useEffect(() => {
-    try { localStorage.setItem('bms_keymaps', JSON.stringify(keyMaps)); } catch { /* quota / privacy mode */ }
-  }, [keyMaps]);
+  const [judgeSystem, setJudgeSystem] = useStoredState('bms_judge_system', 'BMS', oneOf('BMS', 'IIDX'));
+  const [judgeOffset, setJudgeOffset] = useStoredState('bms_judge_offset', 0, num()); // 6-2-c: 判定オフセット(ms)
+  const judgeOffsetRef = useLatestRef(judgeOffset);
+  // キー割り当て(6-1-d): モード別 lane index -> KeyboardEvent.code。localStorage 永続(モード毎に既定値へマージ)。
+  const [keyMaps, setKeyMaps] = useStoredState('bms_keymaps', DEFAULT_KEYMAPS, mergedJson(DEFAULT_KEYMAPS, mergePerMode));
 
   // ゲームパッド入力(Gamepad API): 物理コントローラを直接認識する。Joy2Key等のキーボード変換を経由しないため、
   // スクラッチが押しっぱなしになってもブラウザのショートカットに干渉しない。
-  const [gamepadEnabled, setGamepadEnabled] = useState(() => {
-    try { return localStorage.getItem('bms_gamepad_enabled') === '1'; } catch { return false; }
-  });
-  useEffect(() => { try { localStorage.setItem('bms_gamepad_enabled', gamepadEnabled ? '1' : '0'); } catch { /* privacy mode */ } }, [gamepadEnabled]);
-  const [gamepadMaps, setGamepadMaps] = useState(() => {
-    let saved = {};
-    try { saved = JSON.parse(localStorage.getItem('bms_gamepad_maps') || '{}') || {}; } catch { saved = {}; }
-    const merged = {};
-    for (const m of Object.keys(DEFAULT_GAMEPAD_MAPS)) merged[m] = { ...DEFAULT_GAMEPAD_MAPS[m], ...(saved[m] || {}) };
-    return merged;
-  });
-  useEffect(() => { try { localStorage.setItem('bms_gamepad_maps', JSON.stringify(gamepadMaps)); } catch { /* quota / privacy mode */ } }, [gamepadMaps]);
-  const [gamepadScratchAlt, setGamepadScratchAlt] = useState(() => {
-    let saved = {};
-    try { saved = JSON.parse(localStorage.getItem('bms_gamepad_scratch_alt') || '{}') || {}; } catch { saved = {}; }
-    const merged = {};
-    for (const m of Object.keys(DEFAULT_GAMEPAD_MAPS)) merged[m] = { ...DEFAULT_GAMEPAD_SCRATCH_ALT, ...(saved[m] || {}) };
-    return merged;
-  });
-  useEffect(() => { try { localStorage.setItem('bms_gamepad_scratch_alt', JSON.stringify(gamepadScratchAlt)); } catch { /* quota / privacy mode */ } }, [gamepadScratchAlt]);
+  const [gamepadEnabled, setGamepadEnabled] = useStoredState('bms_gamepad_enabled', false, BOOL);
+  const [gamepadMaps, setGamepadMaps] = useStoredState('bms_gamepad_maps', DEFAULT_GAMEPAD_MAPS, mergedJson(DEFAULT_GAMEPAD_MAPS, mergePerMode));
+  const [gamepadScratchAlt, setGamepadScratchAlt] = useStoredState('bms_gamepad_scratch_alt', GAMEPAD_SCRATCH_ALT_DEFAULTS, mergedJson(GAMEPAD_SCRATCH_ALT_DEFAULTS, mergePerMode));
   const [gamepadName, setGamepadName] = useState(null); // 接続中のコントローラ名(表示用)
   // 軸(皿が軸として来る機種)の感度。機種によって1フレームあたりの変化量が大きく違うため調整可能にする。
-  const [gamepadAxisDelta, setGamepadAxisDelta] = useState(() => {
-    try { const v = Number(localStorage.getItem('bms_gamepad_axis_delta')); return v > 0 ? v : 0.0015; } catch { return 0.0015; }
-  });
-  useEffect(() => { try { localStorage.setItem('bms_gamepad_axis_delta', String(gamepadAxisDelta)); } catch { /* privacy mode */ } }, [gamepadAxisDelta]);
-  const [gamepadAxisReleaseMs, setGamepadAxisReleaseMs] = useState(() => {
-    try { const v = Number(localStorage.getItem('bms_gamepad_axis_release_ms')); return v >= 20 ? v : 90; } catch { return 90; }
-  });
-  useEffect(() => { try { localStorage.setItem('bms_gamepad_axis_release_ms', String(gamepadAxisReleaseMs)); } catch { /* privacy mode */ } }, [gamepadAxisReleaseMs]);
-  const gamepadAxisDeltaRef = useRef(0.0015);
-  useEffect(() => { gamepadAxisDeltaRef.current = gamepadAxisDelta; }, [gamepadAxisDelta]);
-  const gamepadAxisReleaseMsRef = useRef(90);
-  useEffect(() => { gamepadAxisReleaseMsRef.current = gamepadAxisReleaseMs; }, [gamepadAxisReleaseMs]);
+  const [gamepadAxisDelta, setGamepadAxisDelta] = useStoredState('bms_gamepad_axis_delta', 0.0015, num(v => v > 0));
+  const [gamepadAxisReleaseMs, setGamepadAxisReleaseMs] = useStoredState('bms_gamepad_axis_release_ms', 90, num(v => v >= 20));
+  const gamepadAxisDeltaRef = useLatestRef(gamepadAxisDelta);
+  const gamepadAxisReleaseMsRef = useLatestRef(gamepadAxisReleaseMs);
 
-  // 6-3: サウンドエフェクト設定(EQ/ECHO/COMP/FILTER)。localStorage 永続。
-  const [audioFx, setAudioFx] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('bms_audio_fx') || 'null');
-      if (saved && typeof saved === 'object') {
-        return {
-          ...DEFAULT_AUDIO_FX, ...saved,
-          filter: { ...DEFAULT_AUDIO_FX.filter, ...(saved.filter || {}) },
-          eq: { ...DEFAULT_AUDIO_FX.eq, ...(saved.eq || {}) },
-          comp: { ...DEFAULT_AUDIO_FX.comp, ...(saved.comp || {}) },
-          echo: { ...DEFAULT_AUDIO_FX.echo, ...(saved.echo || {}) },
-        };
-      }
-    } catch { /* privacy mode */ }
-    return DEFAULT_AUDIO_FX;
-  });
+  // 6-3: サウンドエフェクト設定(EQ/ECHO/COMP/FILTER)。localStorage 永続(各エフェクト単位で既定値へマージ)。
+  const [audioFx, setAudioFx] = useStoredState('bms_audio_fx', DEFAULT_AUDIO_FX, mergedJson(DEFAULT_AUDIO_FX, mergeAudioFx));
   // lite モード(低スペック機向け)。localStorage 永続(PC ごとに別設定にできる)。
-  const [liteMode, setLiteMode] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('bms_lite_mode') || 'null');
-      if (saved && typeof saved === 'object') return { ...DEFAULT_LITE_MODE, ...saved };
-    } catch { /* privacy mode */ }
-    return DEFAULT_LITE_MODE;
-  });
+  const [liteMode, setLiteMode] = useStoredState('bms_lite_mode', DEFAULT_LITE_MODE, mergedJson(DEFAULT_LITE_MODE));
   // 実際に効いている項目(親スイッチ ON かつ項目 ON)。renderLoop 等から読むため ref にも持つ。
   const lite = {
     lowRes: liteMode.enabled && liteMode.lowRes,
@@ -337,7 +201,7 @@ export default function BmsViewer() {
   }, [fxBypassActive]);
 
   const [muteDebugAutoPlay, setMuteDebugAutoPlay] = useState(true);
-  const muteDebugAutoPlayRef = useRef(true);
+  const muteDebugAutoPlayRef = useLatestRef(muteDebugAutoPlay);
   const [showSettings, setShowSettings] = useState(false);
   
   const [showMutedMonitor, setShowMutedMonitor] = useState(true);
@@ -347,24 +211,14 @@ export default function BmsViewer() {
   const [hasVideo, setHasVideo] = useState(false);
 
   // PC の BGA 表示位置(要望: 背面 / サイド を個別トグル)。localStorage 永続。
-  const lsBool = (k, def) => { try { const v = localStorage.getItem(k); return v === null ? def : v === '1'; } catch { return def; } };
-  const [bgaBehindChart, setBgaBehindChart] = useState(() => lsBool('bms_bga_behind', false));
-  const [bgaSidePanel, setBgaSidePanel] = useState(() => lsBool('bms_bga_side', false));
-  const [bgaSidePos, setBgaSidePos] = useState(() => {
-    try { return localStorage.getItem('bms_bga_side_pos') === 'right' ? 'right' : 'left'; } catch { return 'left'; }
-  });
-  useEffect(() => { try { localStorage.setItem('bms_bga_behind', bgaBehindChart ? '1' : '0'); } catch {} }, [bgaBehindChart]);
-  useEffect(() => { try { localStorage.setItem('bms_bga_side', bgaSidePanel ? '1' : '0'); } catch {} }, [bgaSidePanel]);
-  useEffect(() => { try { localStorage.setItem('bms_bga_side_pos', bgaSidePos); } catch {} }, [bgaSidePos]);
+  const [bgaBehindChart, setBgaBehindChart] = useStoredState('bms_bga_behind', false, BOOL);
+  const [bgaSidePanel, setBgaSidePanel] = useStoredState('bms_bga_side', false, BOOL);
+  const [bgaSidePos, setBgaSidePos] = useStoredState('bms_bga_side_pos', 'left', oneOf('left', 'right'));
   const pcBehindBgaRef = useRef(null);
   const pcSideBgaRef = useRef(null);
-  const bgaSidePanelRef = useRef(bgaSidePanel);
-  useEffect(() => { bgaSidePanelRef.current = bgaSidePanel; }, [bgaSidePanel]);
+  const bgaSidePanelRef = useLatestRef(bgaSidePanel);
   // レーン1本(鍵)の幅(px)。キャンバス幅をこれ×盤面単位数で決めるので、盤面ぴったりになる。
-  const [laneWidthPx, setLaneWidthPx] = useState(() => {
-    try { const v = Number(localStorage.getItem('bms_lane_width')); return v >= 20 && v <= 72 ? v : 44; } catch { return 44; }
-  });
-  useEffect(() => { try { localStorage.setItem('bms_lane_width', String(laneWidthPx)); } catch {} }, [laneWidthPx]);
+  const [laneWidthPx, setLaneWidthPx] = useStoredState('bms_lane_width', 44, num(v => v >= 20 && v <= 72));
 
   const audioContextRef = useRef(null);
   const gainNodeRef = useRef(null);
@@ -424,23 +278,21 @@ export default function BmsViewer() {
   const isShiftHeldRef = useRef(false);
   const isCtrlHeldRef = useRef(false);
 
-  const hiSpeedRef = useRef(hiSpeed);
+  const hiSpeedRef = useLatestRef(hiSpeed);
   const isPlayingRef = useRef(isPlaying);
-  const playKeySoundsRef = useRef(playKeySounds);
-  const playBgSoundsRef = useRef(playBgSounds);
-  const playLongAudioRef = useRef(playLongAudio);
-  const scratchRotationEnabledRef = useRef(scratchRotationEnabled);
-  const comboPosRef = useRef(comboPos);
+  const playKeySoundsRef = useLatestRef(playKeySounds);
+  const playBgSoundsRef = useLatestRef(playBgSounds);
+  const playLongAudioRef = useLatestRef(playLongAudio);
+  const scratchRotationEnabledRef = useLatestRef(scratchRotationEnabled);
   const volumeRef = useRef(volume);
-  const hitSoundVolumeRef = useRef(hitSoundVolume);
-  const readyAnimStateRef = useRef(null); 
+  const hitSoundVolumeRef = useLatestRef(hitSoundVolume);
+  const readyAnimStateRef = useLatestRef(readyAnimState); 
   const isInputDebugModeRef = useRef(isInputDebugMode);
   const playModeRef = useRef(playMode);
   // 6-2 判定用
   const judgeRef = useRef({ pg: 0, gr: 0, gd: 0, bd: 0, poor: 0, epoor: 0, combo: 0, maxCombo: 0, exScore: 0, fast: 0, slow: 0 });
   const lastJudgeRef = useRef({ kind: '', deltaMs: 0, t: 0 }); // 直近判定(キャンバス表示・フェード用)
   const judgeCfgRef = useRef(buildJudgeConfig('BMS', 'SP7', null)); // 判定幅一式(判定方式・#RANK・モードから作る)
-  const judgeOffsetRef = useRef(0);        // 判定オフセット(ms)
   const recentDeltasRef = useRef([]);      // 6-2-c: 直近の生Δms(オフセット非適用)。オート調整の中央値算出用
   const scratchDirRef = useRef({ 0: null, 8: null }); // サイド別・直近の皿入力方向('A'|'B')
   const scratchKeyDirRef = useRef({});     // KeyboardEvent.code -> 'A'(順) | 'B'(逆)
@@ -450,19 +302,18 @@ export default function BmsViewer() {
   const notesDoneRef = useRef(0);          // 通過/判定済みノーツ数(NOTES 表示。コンボとは別)
   const showLiveResultRef = useRef(false); // 6-2-b: Tab 押下中の成績オーバーレイ
   const lastRunRef = useRef(null);         // 6-2-b: 直近の走行スナップショット(停止後の Tab 表示用)
-  const playSideRef = useRef(playSide);
-  const showMutedMonitorRef = useRef(showMutedMonitor);
-  const showAbortedMonitorRef = useRef(showAbortedMonitor);
-  const monitorUpdateIntervalRef = useRef(monitorUpdateInterval);
-  const visibilityModeRef = useRef(visibilityMode);
-  const suddenPlusValRef = useRef(suddenPlusVal);
-  const hiddenPlusValRef = useRef(hiddenPlusVal);
-  const liftValRef = useRef(liftVal);
+  const playSideRef = useLatestRef(playSide);
+  const showMutedMonitorRef = useLatestRef(showMutedMonitor);
+  const showAbortedMonitorRef = useLatestRef(showAbortedMonitor);
+  const visibilityModeRef = useLatestRef(visibilityMode);
+  const suddenPlusValRef = useLatestRef(suddenPlusVal);
+  const hiddenPlusValRef = useLatestRef(hiddenPlusVal);
+  const liftValRef = useLatestRef(liftVal);
   const isMobileRef = useRef(isMobile);
   const lastNotesByLaneRef = useRef(new Array(MAX_LANES).fill(null)); 
   
   const boardOpacityRef = useRef(boardOpacity);
-  const laneOpacityRef = useRef(laneOpacity);
+  const laneOpacityRef = useLatestRef(laneOpacity);
 
   const timeSliderRef = useRef(null);
 
@@ -588,31 +439,13 @@ export default function BmsViewer() {
     if (r.width > 0 && r.height > 0) canvasRectRef.current = { width: r.width, height: r.height };
   }, [parsedSong?.mode, playSide, laneWidthPx]);
 
-  useEffect(() => { hiSpeedRef.current = hiSpeed; }, [hiSpeed]);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
-  useEffect(() => { playKeySoundsRef.current = playKeySounds; }, [playKeySounds]);
-  useEffect(() => { playBgSoundsRef.current = playBgSounds; }, [playBgSounds]);
-  useEffect(() => { playLongAudioRef.current = playLongAudio; }, [playLongAudio]);
-  useEffect(() => { scratchRotationEnabledRef.current = scratchRotationEnabled; }, [scratchRotationEnabled]);
-  useEffect(() => { comboPosRef.current = comboPos; }, [comboPos]);
   useEffect(() => { volumeRef.current = volume; if (gainNodeRef.current) gainNodeRef.current.gain.value = volume; }, [volume]);
-  useEffect(() => { hitSoundVolumeRef.current = hitSoundVolume; }, [hitSoundVolume]);
-  useEffect(() => { readyAnimStateRef.current = readyAnimState; }, [readyAnimState]);
-  useEffect(() => { playSideRef.current = playSide; }, [playSide]);
-  useEffect(() => { showMutedMonitorRef.current = showMutedMonitor; }, [showMutedMonitor]);
-  useEffect(() => { showAbortedMonitorRef.current = showAbortedMonitor; }, [showAbortedMonitor]);
-  useEffect(() => { monitorUpdateIntervalRef.current = monitorUpdateInterval; }, [monitorUpdateInterval]);
-  useEffect(() => { visibilityModeRef.current = visibilityMode; }, [visibilityMode]);
-  useEffect(() => { suddenPlusValRef.current = suddenPlusVal; }, [suddenPlusVal]);
-  useEffect(() => { hiddenPlusValRef.current = hiddenPlusVal; }, [hiddenPlusVal]);
-  useEffect(() => { liftValRef.current = liftVal; }, [liftVal]);
   useEffect(() => { boardOpacityRef.current = boardOpacity; }, [boardOpacity]); 
-  useEffect(() => { laneOpacityRef.current = laneOpacity; }, [laneOpacity]);
   useEffect(() => {
       isInputDebugModeRef.current = isInputDebugMode;
       if (isInputDebugMode) scheduleRenderLoop();
   }, [isInputDebugMode]);
-  useEffect(() => { muteDebugAutoPlayRef.current = muteDebugAutoPlay; }, [muteDebugAutoPlay]);
   useEffect(() => {
       playModeRef.current = playMode;
       if (playMode) { resetJudge(); scheduleRenderLoop(); }
@@ -680,8 +513,7 @@ export default function BmsViewer() {
     gamepadButtonDirRef.current = dir;
   }, [gamepadMaps, gamepadScratchAlt, parsedSong]);
 
-  const gamepadEnabledRef = useRef(false);
-  useEffect(() => { gamepadEnabledRef.current = gamepadEnabled; }, [gamepadEnabled]);
+  const gamepadEnabledRef = useLatestRef(gamepadEnabled);
   const gamepadIndexRef = useRef(null);       // 使用する gamepad の index (navigator.getGamepads() 内)
   const gamepadPrevPressedRef = useRef({});   // ボタン番号 → 前フレームの押下状態
   // 軸番号 → { last: 前フレームの値, dir: '+'|'-'|null(現在有効な方向), t: 最後に動きを検知した時刻 }
@@ -724,8 +556,7 @@ export default function BmsViewer() {
     };
   }, []);
 
-  const displayObjectsRef = useRef([]); // window イベントハンドラから最新の displayObjects を読むため
-  useEffect(() => { displayObjectsRef.current = displayObjects; }, [displayObjects]);
+  const displayObjectsRef = useLatestRef(displayObjects); // window イベントハンドラから最新の displayObjects を読むため
 
   const laneMetaRef = useRef([]); // [index] = { isScratch, color } (parsedSong.lanes から)
   useEffect(() => {
@@ -774,7 +605,7 @@ export default function BmsViewer() {
   const triggerMiss = () => {
       if (!missLayerEnabledRef.current) return;
       comboRef.current = 0;
-      setCombo(0);
+      
       flashMissLayer();
   };
 
@@ -931,52 +762,13 @@ export default function BmsViewer() {
       };
   };
 
-  // 6-1-e: レーンオプションをモード別に適用。
+  // 6-1-e: レーンオプションをモード別に適用し、表示用の配置(state)も更新する。
   //   opt1 = 1P/左サイド(9K は全体)、opt2 = 2P/右サイド(DP のみ)、flip = 左右サイド入れ替え(DP のみ)。
   const applyOptions = (objects, opt1, opt2 = 'OFF', flip = false) => {
-    const mode = parsedSong?.mode || 'SP7';
-    const lanes = parsedSong?.lanes || DEFAULT_LANES;
-    const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
-
-    // --- 9K (pop'n): 皿なし・9ボタン(index 0-8)全体に opt1 を適用 (OFF/MIRROR/RANDOM/S-RANDOM) ---
-    if (mode === 'PMS9') {
-        const idx = [0, 1, 2, 3, 4, 5, 6, 7, 8];
-        const map = shuffleLanes(idx, opt1);
-        setCurrentLaneOrder(opt1 === 'S-RANDOM' ? 'S' : idx.map(i => map[i]));
-        setLaneOrder2(null);
-        return objects.map(o => ({
-            ...o, processed: false,
-            laneIndex: o.isNote
-                ? (opt1 === 'S-RANDOM' ? rand(idx) : (map[o.laneIndex] ?? o.laneIndex))
-                : o.laneIndex,
-        }));
-    }
-
-    // --- SP / DP ---
-    const keys1 = lanes.filter(l => l.kind === 'key' && l.side === 0).map(l => l.index).sort((a, b) => a - b);
-    const keys2 = lanes.filter(l => l.kind === 'key' && l.side === 1).map(l => l.index).sort((a, b) => a - b);
-    const isDP = keys2.length > 0;
-    const map1 = shuffleLanes(keys1, opt1);
-    const map2 = isDP ? shuffleLanes(keys2, opt2) : {};
-
-    setCurrentLaneOrder(opt1 === 'S-RANDOM' ? 'S' : keys1.map(i => map1[i]));
-    setLaneOrder2(isDP ? (opt2 === 'S-RANDOM' ? 'S' : keys2.map(i => map2[i])) : null);
-
-    const doFlip = isDP && flip;
-    return objects.map(o => {
-        if (!o.isNote) return { ...o, processed: false };
-        let li = o.laneIndex;
-        // FLIP: サイド全体(鍵+皿)を入れ替えてから、そのサイドのオプションを適用
-        if (doFlip) {
-            if (li === 0) li = 8;
-            else if (li === 8) li = 0;
-            else if (li >= 1 && li <= 7) li += 8;
-            else if (li >= 9 && li <= 15) li -= 8;
-        }
-        if (li >= 1 && li <= 7) li = (opt1 === 'S-RANDOM') ? rand(keys1) : (map1[li] ?? li);
-        else if (li >= 9 && li <= 15) li = (opt2 === 'S-RANDOM') ? rand(keys2) : (map2[li] ?? li);
-        return { ...o, processed: false, laneIndex: li };
-    });
+    const r = applyLaneOptions(objects, parsedSong, opt1, opt2, flip);
+    setCurrentLaneOrder(r.order1);
+    setLaneOrder2(r.order2);
+    return r.objects;
   };
 
   const toggleMute = () => {
@@ -989,10 +781,10 @@ export default function BmsViewer() {
     activeNodesRef.current = []; activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]); releaseImageAssets();
     lastBgaKeyRef.current = {};
     setParsedSong(null); setDisplayObjects([]); setCurrentBackBga(null); setCurrentLayerBga(null); setCurrentPoorBga(null); setStageFileImage(null);
-    setShowMissLayer(false); setNextBpmInfo(null); setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: 0 });
+    setShowMissLayer(false); setCurrentMeasureLines([]); 
     scratchAngleRef.current = 0; lastFrameTimeRef.current = 0; lastScratchTimeRef.current = 0; lastScratchTypeRef.current = 'REVERSE'; scratchDirectionRef.current = -1;
     activeInputLanesRef.current.clear(); isShiftHeldRef.current = false; isCtrlHeldRef.current = false; setHasVideo(false); setPlayBgaVideo(true);
-    setPolyphonyCount(0); setMaxPolyphonyCount(0); setAveragePolyphony(0); polyphonyHistoryRef.current = []; maxPolyRef.current = 0;
+    polyphonyHistoryRef.current = []; maxPolyRef.current = 0;
   };
 
   const resetAllState = () => { resetGameStatus(); audioBuffersRef.current.clear(); setBmsList([]); };
@@ -1379,7 +1171,7 @@ export default function BmsViewer() {
     if (isPlayingRef.current) stopPlayback(true);
     lastBgaKeyRef.current = {};
     setParsedSong(null); setDisplayObjects([]); setCurrentBackBga(null); setCurrentLayerBga(null); setCurrentPoorBga(null); setShowMissLayer(false);
-    setNextBpmInfo(null); setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: 0 });
+    setCurrentMeasureLines([]); 
     scratchAngleRef.current = 0; lastScratchTimeRef.current = 0; lastScratchTypeRef.current = 'REVERSE'; scratchDirectionRef.current = -1; activeInputLanesRef.current.clear(); isShiftHeldRef.current = false; isCtrlHeldRef.current = false;
     if (audioContextRef.current) activeNodesRef.current.forEach(n => { try { n.node.stop(); n.node.disconnect(); } catch(e){} });
     activeNodesRef.current = []; activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]);
@@ -1402,7 +1194,7 @@ export default function BmsViewer() {
               alert(`警告：この pms は未対応のチャンネル（${parsed.unmappedPmsChannels.join(', ')}）を使用しています。一部のノーツが表示・再生されません。`);
       }, 100);
       const diffInfo = guessDifficulty(parsed.header, bmsFile.name);
-      setDifficultyInfo(diffInfo); setRealtimeBpm(parsed.header.bpm); realtimeBpmRef.current = parsed.header.bpm; setCurrentBpm(parsed.header.bpm);
+      setDifficultyInfo(diffInfo); realtimeBpmRef.current = parsed.header.bpm; setCurrentBpm(parsed.header.bpm);
 
       const neededAudio = new Set(); const neededImages = new Set();
       parsed.objects.forEach(o => { if (parsed.header.wavs[o.value]) neededAudio.add(parsed.header.wavs[o.value]); });
@@ -1507,10 +1299,10 @@ export default function BmsViewer() {
       });
       lastNotesByLaneRef.current = lasts;
       setDuration(calculatedMaxDuration); setParsedSong(parsed); setTotalNotes(parsed.totalNotes);
-      setPlaybackTimeDisplay(0); pauseTimeRef.current = 0; setCombo(0); comboRef.current = 0; hudLastRef.current = {};
+      setPlaybackTimeDisplay(0); pauseTimeRef.current = 0; comboRef.current = 0; hudLastRef.current = {};
       resetJudge(); recentDeltasRef.current = []; // 曲ロード時はオート調整用データもクリア
-      lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(MAX_LANES).fill(0));
-      setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsed.avgDensity });
+      lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); 
+      setCurrentMeasureLines([]); 
       lastStateUpdateRef.current = 0; droppedSoundsRef.current = 0; // 次の renderLoop フレームで HUD を即更新させる
       setLoadingMessage('準備完了'); setIsLoading(false);
     } catch (e) { console.error(e); if (!isStale()) setIsLoading(false); }
@@ -1787,13 +1579,13 @@ export default function BmsViewer() {
             setBackingTracks([]); activeLongSoundsRef.current = [];
         }
 
-        pauseTimeRef.current = 0; seekedSinceStartRef.current = false; droppedSoundsRef.current = 0; setPlaybackTimeDisplay(0); setCombo(0); comboRef.current = 0; hudLastRef.current = {}; lastBgaKeyRef.current = {};
+        pauseTimeRef.current = 0; seekedSinceStartRef.current = false; droppedSoundsRef.current = 0; setPlaybackTimeDisplay(0); comboRef.current = 0; hudLastRef.current = {}; lastBgaKeyRef.current = {};
         resetJudge();
-        lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(MAX_LANES).fill(0));
+        lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); 
         if (parsedSong) displayObjects.forEach(o => o.processed = false);
-        setCurrentMeasureLines([]); setCurrentMeasureNotes({ processed: 0, total: 0, average: parsedSong?.avgDensity || 0 });
-        currentMeasureRef.current = -1; lastStateUpdateRef.current = 0; setRealtimeBpm(parsedSong?.header.bpm || 130); realtimeBpmRef.current = parsedSong?.header.bpm || 130; setReadyAnimState(null);
-        setCurrentLayerBga(null); setCurrentPoorBga(null); setShowMissLayer(false); setNextBpmInfo(null);
+        setCurrentMeasureLines([]); 
+        currentMeasureRef.current = -1; lastStateUpdateRef.current = 0; realtimeBpmRef.current = parsedSong?.header.bpm || 130; setReadyAnimState(null);
+        setCurrentLayerBga(null); setCurrentPoorBga(null); setShowMissLayer(false); 
         scratchAngleRef.current = 0; lastScratchTimeRef.current = 0; lastScratchTypeRef.current = 'REVERSE';
         scratchDirectionRef.current = -1;
         activeInputLanesRef.current.clear(); isShiftHeldRef.current = false; isCtrlHeldRef.current = false;
@@ -2119,30 +1911,9 @@ export default function BmsViewer() {
     const isPmsMode = mode === 'PMS9';
 
     // --- レーンレイアウト (モード可変) ---
-    let lanesArr = parsedSong?.lanes || DEFAULT_LANES;
-    if (is2P && (mode === 'SP7' || mode === 'SP5')) {
-        // SP 2P: 鍵は左→右のまま、皿だけ右側へ
-        const keys = lanesArr.filter(l => l.kind === 'key');
-        const scr = lanesArr.find(l => l.kind === 'scratch');
-        lanesArr = scr ? [...keys, scr] : keys;
-    }
-    let totalU = 0;
-    for (let i = 0; i < lanesArr.length; i++) {
-        if (i > 0) totalU += (lanesArr[i].side !== lanesArr[i - 1].side ? SIDE_GAP_UNITS : LANE_GAP_UNITS);
-        totalU += (lanesArr[i].kind === 'scratch' ? SCRATCH_UNITS : 1.0);
-    }
-    const KEY_W = Math.max(7, Math.min(72, (width - 24) / totalU));
+    const lanesArr = displayLanes(parsedSong, is2P);
     const laneX = _laneXScratch, laneW = _laneWScratch;
-    laneW.fill(0);
-    let cx = 0;
-    for (let i = 0; i < lanesArr.length; i++) {
-        if (i > 0) cx += KEY_W * (lanesArr[i].side !== lanesArr[i - 1].side ? SIDE_GAP_UNITS : LANE_GAP_UNITS);
-        const w = KEY_W * (lanesArr[i].kind === 'scratch' ? SCRATCH_UNITS : 1.0);
-        laneX[lanesArr[i].index] = cx; laneW[lanesArr[i].index] = w;
-        cx += w;
-    }
-    const BOARD_W = cx;
-    const BOARD_X = (width - BOARD_W) / 2;
+    const { keyW: KEY_W, boardW: BOARD_W, boardX: BOARD_X } = layoutLanes(lanesArr, width, laneX, laneW);
 
     // ★軽量化: ノーツ演出のグラデーション/色はレーン単位で使い回す。ジオメトリが変わったときだけ再構築。
     const gradKey = `${JUDGE_Y}|${KEY_W}|${Math.round(BOARD_X)}|${mode}|${is2P}`;
