@@ -22,6 +22,9 @@ import { useEvent } from './hooks/useEvent';
 import { LaneRenderer } from './render/LaneRenderer';
 import { AudioEngine } from './audio/AudioEngine';
 import { PlayJudge } from './game/PlayJudge';
+import { buildLaneMap } from './input/laneMaps';
+import { GamepadInput, useGamepadConnection } from './input/GamepadInput';
+import { useLaneKeyboard } from './input/useLaneKeyboard';
 import { applyLaneOptions } from './logic/laneOptions';
 
 // localStorage の設定値マージ: モード別の設定(キー割り当て等)は、モードごとに既定値へ保存値を重ねる
@@ -244,7 +247,6 @@ export default function BmsViewer() {
   const playModeRef = useRef(playMode);
   // 6-2 判定用
   const scratchDirRef = useRef({ 0: null, 8: null }); // サイド別・直近の皿入力方向('A'|'B')
-  const scratchKeyDirRef = useRef({});     // KeyboardEvent.code -> 'A'(順) | 'B'(逆)
   const scratchImpulseRef = useRef({ 0: { dir: 0, t: 0 }, 8: { dir: 0, t: 0 } }); // プレイモードの皿回転インパルス
   const lastGameKeyTimeRef = useRef(0);    // プレイモード: 直近のゲームキー入力時刻(Space誤爆抑制用)
   const notesDoneRef = useRef(0);          // 通過/判定済みノーツ数(NOTES 表示。コンボとは別)
@@ -389,99 +391,16 @@ export default function BmsViewer() {
   judge.setConfig(judgeCfg);
   judge.setOffset(judgeOffset);
 
-  // キー入力の「KeyboardEvent.code → laneIndex」逆引き表(現在モードのキー割り当てに追従)。
-  // 皿は既定キー(Shift)='A' 方向、DEFAULT_SCRATCH_ALT(Ctrl)='B' 方向として交互押し判定に使う。
-  const debugKeyLaneRef = useRef({});
-  useEffect(() => {
-    const m = keyMaps[parsedSong?.mode] || keyMaps.SP7 || {};
-    const rev = {};
-    const dir = {};
-    for (const idx of Object.keys(m)) {
-      const li = Number(idx);
-      rev[m[idx]] = li;
-      if (li === 0 || li === 8) dir[m[idx]] = 'A';
-    }
-    for (const idx of Object.keys(DEFAULT_SCRATCH_ALT)) {
-      const li = Number(idx);
-      if (m[li] === undefined) continue; // そのモードに該当サイドの皿が無い(SP/9K)
-      const code = DEFAULT_SCRATCH_ALT[idx];
-      if (rev[code] === undefined) rev[code] = li;
-      dir[code] = 'B';
-    }
-    debugKeyLaneRef.current = rev;
-    scratchKeyDirRef.current = dir;
-  }, [keyMaps, parsedSong]);
-
-  // ゲームパッドの「ボタン番号 → laneIndex」逆引き表。keyMaps と同じ考え方(scratchAlt = もう一方向)。
-  const gamepadButtonLaneRef = useRef({});
-  const gamepadButtonDirRef = useRef({});
-  useEffect(() => {
-    const mode = parsedSong?.mode || 'SP7';
-    const m = gamepadMaps[mode] || {};
-    const alt = gamepadScratchAlt[mode] || {};
-    const rev = {};
-    const dir = {};
-    for (const idx of Object.keys(m)) {
-      const btn = m[idx];
-      if (btn === null || btn === undefined) continue;
-      const li = Number(idx);
-      rev[btn] = li;
-      if (li === 0 || li === 8) dir[btn] = 'A';
-    }
-    for (const idx of Object.keys(alt)) {
-      const btn = alt[idx];
-      if (btn === null || btn === undefined) continue;
-      const li = Number(idx);
-      if (m[li] === undefined) continue; // そのモードに該当サイドの皿が無い
-      if (rev[btn] === undefined) rev[btn] = li;
-      dir[btn] = 'B';
-    }
-    gamepadButtonLaneRef.current = rev;
-    gamepadButtonDirRef.current = dir;
-  }, [gamepadMaps, gamepadScratchAlt, parsedSong]);
-
+  // 入力 → レーンの逆引き表(現在モードの割り当てに追従)。皿は割り当てキー='A' 方向、もう一方のキー='B' 方向。
+  const inputMode = parsedSong?.mode || 'SP7';
+  const keyLanes = React.useMemo(() => buildLaneMap(keyMaps[inputMode] || keyMaps.SP7, DEFAULT_SCRATCH_ALT), [keyMaps, inputMode]);
+  const keyLanesRef = useLatestRef(keyLanes);
+  const padLanes = React.useMemo(() => buildLaneMap(gamepadMaps[inputMode], gamepadScratchAlt[inputMode]), [gamepadMaps, gamepadScratchAlt, inputMode]);
+  const padLanesRef = useLatestRef(padLanes);
+  // ゲームパッド(input/GamepadInput.js)。接続中のコントローラ名は設定画面に表示する。
   const gamepadEnabledRef = useLatestRef(gamepadEnabled);
-  const gamepadIndexRef = useRef(null);       // 使用する gamepad の index (navigator.getGamepads() 内)
-  const gamepadPrevPressedRef = useRef({});   // ボタン番号 → 前フレームの押下状態
-  // 軸番号 → { last: 前フレームの値, dir: '+'|'-'|null(現在有効な方向), t: 最後に動きを検知した時刻 }
-  // ★皿が軸として来る機種(ターンテーブルはバネで中央に戻らないため、絶対値のしきい値だけでは
-  //   「静止位置が0でない機種」で押しっぱなし判定になってしまう)向けに、絶対位置ではなく
-  //   フレーム間の変化量(動いているか)で押下/離しを判定する。
-  const gamepadAxisStateRef = useRef({});
-
-  // ゲームパッドの接続/切断を検知し、使う対象(先に繋がったもの)を決める。表示名は設定画面用。
-  useEffect(() => {
-    const pickFirst = () => {
-      const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-      for (const p of pads) { if (p) return p; }
-      return null;
-    };
-    const onConnect = (e) => { gamepadIndexRef.current = e.gamepad.index; setGamepadName(e.gamepad.id); };
-    const onDisconnect = (e) => {
-      if (gamepadIndexRef.current === e.gamepad.index) {
-        const next = pickFirst();
-        gamepadIndexRef.current = next ? next.index : null;
-        setGamepadName(next ? next.id : null);
-      }
-    };
-    window.addEventListener('gamepadconnected', onConnect);
-    window.addEventListener('gamepaddisconnected', onDisconnect);
-    const already = pickFirst(); // ページを開く前から繋がっていた場合
-    if (already) { gamepadIndexRef.current = already.index; setGamepadName(already.id); }
-    // ★フォールバック: 一部のUSB変換器/ドライバでは gamepadconnected イベントが確実に発火せず、
-    //   ページ再読み込み後にボタンを押しても接続扱いにならないことがある。イベントだけに頼らず、
-    //   1秒おきに navigator.getGamepads() を直接見て検知する(未接続→接続 の変化を拾う保険)。
-    const pollId = setInterval(() => {
-      if (gamepadIndexRef.current != null) return; // 既に何か繋がっていれば何もしない
-      const p = pickFirst();
-      if (p) { gamepadIndexRef.current = p.index; setGamepadName(p.id); }
-    }, 1000);
-    return () => {
-      window.removeEventListener('gamepadconnected', onConnect);
-      window.removeEventListener('gamepaddisconnected', onDisconnect);
-      clearInterval(pollId);
-    };
-  }, []);
+  const [gamepad] = useState(() => new GamepadInput());
+  useGamepadConnection(gamepad, setGamepadName);
 
   const displayObjectsRef = useLatestRef(displayObjects); // window イベントハンドラから最新の displayObjects を読むため
 
@@ -601,7 +520,7 @@ export default function BmsViewer() {
     const onKey = (e) => {
       if (e.repeat || e.code !== 'KeyM') return;
       if (playModeRef.current) return;                            // プレイモードは自前の判定でミスを出す
-      if (debugKeyLaneRef.current['KeyM'] !== undefined) return;  // M が判定レーンに割り当て済みなら無効
+      if (keyLanesRef.current.lane['KeyM'] !== undefined) return; // M が判定レーンに割り当て済みなら無効
       triggerMiss();                                              // 中で missLayerEnabled を判定
     };
     window.addEventListener('keydown', onKey);
@@ -703,70 +622,6 @@ export default function BmsViewer() {
   const handleLaneDownRef = useRef(handleLaneDown); handleLaneDownRef.current = handleLaneDown;
   const handleLaneUpRef = useRef(handleLaneUp); handleLaneUpRef.current = handleLaneUp;
 
-  useEffect(() => {
-    if (!isInputDebugMode && !playMode) { activeInputLanesRef.current.clear(); clearActiveLanes(); return; }
-    // ★ゲームパッド用: 有効化した瞬間、既に押されている(皿を回している最中など)ボタンを
-    //   先に「押されている」として記録しておく。空の状態から始めると、有効化した瞬間に
-    //   押しっぱなしのボタンを「新しく押された」と誤検知して勝手にレーンが反応してしまう。
-    if (navigator.getGamepads) {
-        const prev = gamepadPrevPressedRef.current;
-        navigator.getGamepads().forEach(pad => {
-            if (!pad) return;
-            for (let i = 0; i < pad.buttons.length; i++) {
-                prev[i] = pad.buttons[i].pressed || pad.buttons[i].value > 0.5;
-            }
-        });
-    }
-    // 軸(皿が軸として来る機種)の状態はリセットするだけでよい。次のポーリングで各軸の
-    // 現在値を基準(last)として記録し直すので、静止位置がどこであっても誤発火しない。
-    gamepadAxisStateRef.current = {};
-    const handleKeyDown = (e) => {
-        if (e.repeat) return;
-        // プレイモード中: Space はブラウザ既定のボタン発火を止めて自前でトグル。
-        //   直近2秒以内にゲームキーを叩いていたら無効(誤爆防止)、2秒アイドルで一時停止/再開が効く。
-        if (playModeRef.current && (e.code === 'Space' || e.code === 'Enter')) {
-            e.preventDefault();
-            if (performance.now() - lastGameKeyTimeRef.current >= 2000) {
-                if (isPlayingRef.current) pausePlayback(); else startPlayback();
-            }
-            return;
-        }
-        // Tab 押下中: 成績オーバーレイを表示(フォーカス移動は無効化)
-        if (playModeRef.current && e.code === 'Tab') {
-            e.preventDefault();
-            showLiveResultRef.current = true;
-            scheduleRenderLoop();
-            return;
-        }
-        const rev = debugKeyLaneRef.current;
-        // 皿の手動回転用フラグ(Shift=逆回転 / Ctrl=高速)。キー割り当てで皿=Shift のときは lane も付く。
-        // ★物理コントローラ対策: スクラッチが「押しっぱなし」になる機種だと、Shift/Ctrl が押されたまま
-        //   別のレーンキーを叩いた瞬間にブラウザ/OSのショートカット(Ctrl+F 等)が暴発してしまう。
-        //   ここで割り当て済みキーは必ず preventDefault し、ブラウザ側に既定動作をさせない。
-        if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { isShiftHeldRef.current = true; e.preventDefault(); }
-        else if (e.code === 'ControlLeft' || e.code === 'ControlRight') { isCtrlHeldRef.current = true; e.preventDefault(); }
-        let lane = rev[e.code];
-        if (lane === undefined) lane = -1;
-        if (lane !== -1) {
-            e.preventDefault();
-            const isScr = (lane === 0 || lane === 8);
-            const scDir = scratchKeyDirRef.current[e.code];
-            handleLaneDownRef.current(lane, isScr, scDir);
-        }
-    };
-    const handleKeyUp = (e) => {
-        if (playModeRef.current && (e.code === 'Space' || e.code === 'Enter')) { e.preventDefault(); return; }
-        if (e.code === 'Tab') { showLiveResultRef.current = false; e.preventDefault(); return; }
-        if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') isShiftHeldRef.current = false;
-        else if (e.code === 'ControlLeft' || e.code === 'ControlRight') isCtrlHeldRef.current = false;
-        const lane = debugKeyLaneRef.current[e.code];
-        if (lane === undefined) return;
-        handleLaneUpRef.current(lane, scratchKeyDirRef.current[e.code]);
-    };
-    window.addEventListener('keydown', handleKeyDown); window.addEventListener('keyup', handleKeyUp);
-    scheduleRenderLoop();
-    return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); };
-  }, [isInputDebugMode, playMode, playSide]);
 
   useEffect(() => {
     engine.init(volume, fxBypassActiveRef.current);
@@ -1315,58 +1170,10 @@ export default function BmsViewer() {
     if (!canvasRef.current) return;
     const now = performance.now(); const dt = (now - lastFrameTimeRef.current) / 1000; lastFrameTimeRef.current = now;
 
-    // ゲームパッド(物理コントローラ)のポーリング。Gamepad API はイベント通知が無く、
-    // 毎フレーム navigator.getGamepads() で状態を読んで前フレームとの差分から press/release を作る。
-    // キーボードと同じく isInputDebugMode/playMode のときだけ有効(通常のオート再生視聴中は無視)。
-    if (gamepadEnabledRef.current && gamepadIndexRef.current != null && (isInputDebugModeRef.current || playModeRef.current) && navigator.getGamepads) {
-        const pad = navigator.getGamepads()[gamepadIndexRef.current];
-        if (pad) {
-            const prev = gamepadPrevPressedRef.current;
-            const laneMap = gamepadButtonLaneRef.current;
-            const dirMap = gamepadButtonDirRef.current;
-            for (let bi = 0; bi < pad.buttons.length; bi++) {
-                const pressed = pad.buttons[bi].pressed || pad.buttons[bi].value > 0.5;
-                const was = !!prev[bi];
-                if (pressed !== was) {
-                    const lane = laneMap[bi];
-                    if (lane !== undefined) {
-                        if (pressed) handleLaneDownRef.current(lane, lane === 0 || lane === 8, dirMap[bi]);
-                        else handleLaneUpRef.current(lane, dirMap[bi]);
-                    }
-                    prev[bi] = pressed;
-                }
-            }
-            // ★「Unknown Gamepad」等の非標準機種では、スクラッチがボタンではなく軸(axis)として
-            //   来ることがある(設定画面の GamepadMapSection と同じ仕組み。"a<軸番号><符号>" キーで参照)。
-            //   ターンテーブルはバネで中央(0)に戻らない機種があり、絶対値のしきい値だけで
-            //   press/release を決めると「静止位置が0でない」場合に押しっぱなしのまま戻らなくなる。
-            //   そのため絶対位置ではなく、フレーム間で値が動いているかどうかで判定する。
-            // ★機種によって1フレームあたりの変化量の大きさが大きく異なるため、設定画面で調整可能にしてある。
-            const AXIS_DELTA = gamepadAxisDeltaRef.current;      // これ以上の変化があれば「回転中」とみなす
-            const AXIS_RELEASE_MS = gamepadAxisReleaseMsRef.current; // この時間動きが無ければ「離した」とみなす
-            const axisState = gamepadAxisStateRef.current;
-            for (let ai = 0; ai < pad.axes.length; ai++) {
-                const v = pad.axes[ai];
-                let st = axisState[ai];
-                if (!st) { axisState[ai] = { last: v, dir: null, t: now }; continue; } // 初回は基準値の記録のみ
-                const delta = v - st.last;
-                st.last = v;
-                if (Math.abs(delta) > AXIS_DELTA) {
-                    const dir = delta > 0 ? '+' : '-';
-                    st.t = now;
-                    if (st.dir !== dir) {
-                        if (st.dir) { const l = laneMap[`a${ai}${st.dir}`]; if (l !== undefined) handleLaneUpRef.current(l, dirMap[`a${ai}${st.dir}`]); }
-                        const lane = laneMap[`a${ai}${dir}`];
-                        if (lane !== undefined) handleLaneDownRef.current(lane, lane === 0 || lane === 8, dirMap[`a${ai}${dir}`]);
-                        st.dir = dir;
-                    }
-                } else if (st.dir && (now - st.t) > AXIS_RELEASE_MS) {
-                    const l = laneMap[`a${ai}${st.dir}`];
-                    if (l !== undefined) handleLaneUpRef.current(l, dirMap[`a${ai}${st.dir}`]);
-                    st.dir = null;
-                }
-            }
-        }
+    // ゲームパッドのポーリング(毎フレーム)。キーボードと同じく isInputDebugMode/playMode のときだけ有効。
+    if (gamepadEnabledRef.current && (isInputDebugModeRef.current || playModeRef.current)) {
+        gamepad.poll(now, padLanesRef.current, gamepadAxisDeltaRef.current, gamepadAxisReleaseMsRef.current,
+            (lane, isScr, dir) => handleLaneDownRef.current(lane, isScr, dir), (lane, dir) => handleLaneUpRef.current(lane, dir));
     }
     const canvas = canvasRef.current;
     const renderer = rendererRef.current;
@@ -1622,6 +1429,24 @@ export default function BmsViewer() {
   };
   // rAF ループが常に最新の renderLoop クロージャを呼ぶようにする(古い state を掴み続けるのを軽減)
   renderLoopRef.current = renderLoop;
+
+  // ===== キーボード入力(input/useLaneKeyboard.js)。デバッグ用キー入力 / プレイモードのときだけ有効 =====
+  // ★常に最新のハンドラを呼ぶ(以前はリスナーを張った時点の startPlayback 等を掴んだままだったため、
+  //   プレイモードを ON にしてから譜面を読み込むと Space で再生が始まらなかった)。
+  const inputActive = isInputDebugMode || playMode;
+  useEffect(() => { if (!inputActive) { activeInputLanesRef.current.clear(); clearActiveLanes(); } }, [inputActive]);
+  useLaneKeyboard(inputActive, {
+    keys: keyLanes, playMode,
+    onLaneDown: handleLaneDown, onLaneUp: handleLaneUp,
+    // プレイモード中の Space / Enter: 直近2秒以内にゲームキーを叩いていたら無効(誤爆防止)、2秒アイドルで一時停止/再開
+    onTogglePlay: () => {
+      if (performance.now() - lastGameKeyTimeRef.current < 2000) return;
+      if (isPlayingRef.current) pausePlayback(); else startPlayback();
+    },
+    onLiveResult: (show) => { showLiveResultRef.current = show; if (show) scheduleRenderLoop(); },
+    onModifier: (name, held) => { if (name === 'shift') isShiftHeldRef.current = held; else isCtrlHeldRef.current = held; },
+    onActivate: () => { gamepad.snapshot(); scheduleRenderLoop(); }, // 押しっぱなしのボタンを新規押下と誤検知しないように
+  });
 
   const is2P = playSide === '2P';
   // レーン領域(キャンバス)の幅 = 盤面ぴったり。余った幅はサイドBGA等に回る。
