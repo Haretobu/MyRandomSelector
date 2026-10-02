@@ -2,11 +2,11 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
-import { VISIBILITY_MODES, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, DEFAULT_GAMEPAD_MAPS, DEFAULT_GAMEPAD_SCRATCH_ALT, djLevel, DEFAULT_AUDIO_FX, DEFAULT_LITE_MODE } from './constants';
+import { VISIBILITY_MODES, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, DEFAULT_GAMEPAD_MAPS, DEFAULT_GAMEPAD_SCRATCH_ALT, DEFAULT_AUDIO_FX, DEFAULT_LITE_MODE } from './constants';
 import { findStartIndex, getBpmFromTime, guessDifficulty, extractZipFiles, getBaseName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 import { createLiveStore } from './logic/liveStore';
-import { buildJudgeConfig, classifyJudge, resolveLnRelease } from './logic/judge';
+import { buildJudgeConfig } from './logic/judge';
 import { useStoredState, useLatestRef, BOOL, oneOf, num, mergedJson } from './hooks/useStoredState';
 
 import SettingsModal from './components/SettingsModal';
@@ -21,6 +21,7 @@ import { MAX_LANES, DEFAULT_LANES, boardUnitsFor, laneNoteColor } from './render
 import { useEvent } from './hooks/useEvent';
 import { LaneRenderer } from './render/LaneRenderer';
 import { AudioEngine } from './audio/AudioEngine';
+import { PlayJudge } from './game/PlayJudge';
 import { applyLaneOptions } from './logic/laneOptions';
 
 // localStorage の設定値マージ: モード別の設定(キー割り当て等)は、モードごとに既定値へ保存値を重ねる
@@ -114,7 +115,6 @@ export default function BmsViewer() {
   // 判定方式: 'BMS'(beatoraja 準拠・#RANK で拡縮) / 'IIDX'(固定幅)。localStorage 永続。
   const [judgeSystem, setJudgeSystem] = useStoredState('bms_judge_system', 'BMS', oneOf('BMS', 'IIDX'));
   const [judgeOffset, setJudgeOffset] = useStoredState('bms_judge_offset', 0, num()); // 6-2-c: 判定オフセット(ms)
-  const judgeOffsetRef = useLatestRef(judgeOffset);
   // キー割り当て(6-1-d): モード別 lane index -> KeyboardEvent.code。localStorage 永続(モード毎に既定値へマージ)。
   const [keyMaps, setKeyMaps] = useStoredState('bms_keymaps', DEFAULT_KEYMAPS, mergedJson(DEFAULT_KEYMAPS, mergePerMode));
 
@@ -189,6 +189,9 @@ export default function BmsViewer() {
   const canvasRef = useRef(null);
   const [renderer] = useState(() => new LaneRenderer()); // 譜面キャンバスの描画(キャッシュ込み)
   const [engine] = useState(() => new AudioEngine());     // 音声(AudioContext・エフェクト・発音予約・時計)
+  // プレイモードの判定。判定が1つ確定するたびに、HUD のコンボ/ノーツ数を同期し、BAD/POOR でミスレイヤーを出す。
+  const onJudgeRef = useRef(null);
+  const [judge] = useState(() => new PlayJudge({ onJudge: (kind, j) => onJudgeRef.current?.(kind, j) }));
   const rendererRef = useRef(renderer);
   const keyHitSoundBufferRef = useRef(null);
   const scratchHitSoundBufferRef = useRef(null);
@@ -240,14 +243,9 @@ export default function BmsViewer() {
   const isInputDebugModeRef = useRef(isInputDebugMode);
   const playModeRef = useRef(playMode);
   // 6-2 判定用
-  const judgeRef = useRef({ pg: 0, gr: 0, gd: 0, bd: 0, poor: 0, epoor: 0, combo: 0, maxCombo: 0, exScore: 0, fast: 0, slow: 0 });
-  const lastJudgeRef = useRef({ kind: '', deltaMs: 0, t: 0 }); // 直近判定(キャンバス表示・フェード用)
-  const judgeCfgRef = useRef(buildJudgeConfig('BMS', 'SP7', null)); // 判定幅一式(判定方式・#RANK・モードから作る)
-  const recentDeltasRef = useRef([]);      // 6-2-c: 直近の生Δms(オフセット非適用)。オート調整の中央値算出用
   const scratchDirRef = useRef({ 0: null, 8: null }); // サイド別・直近の皿入力方向('A'|'B')
   const scratchKeyDirRef = useRef({});     // KeyboardEvent.code -> 'A'(順) | 'B'(逆)
   const scratchImpulseRef = useRef({ 0: { dir: 0, t: 0 }, 8: { dir: 0, t: 0 } }); // プレイモードの皿回転インパルス
-  const activeLnRef = useRef(new Array(MAX_LANES).fill(null)); // プレイモード: 判定成立中の LN
   const lastGameKeyTimeRef = useRef(0);    // プレイモード: 直近のゲームキー入力時刻(Space誤爆抑制用)
   const notesDoneRef = useRef(0);          // 通過/判定済みノーツ数(NOTES 表示。コンボとは別)
   const showLiveResultRef = useRef(false); // 6-2-b: Tab 押下中の成績オーバーレイ
@@ -388,7 +386,8 @@ export default function BmsViewer() {
     () => buildJudgeConfig(judgeSystem, parsedSong?.mode || 'SP7', parsedSong?.header),
     [judgeSystem, parsedSong]
   );
-  judgeCfgRef.current = judgeCfg;
+  judge.setConfig(judgeCfg);
+  judge.setOffset(judgeOffset);
 
   // キー入力の「KeyboardEvent.code → laneIndex」逆引き表(現在モードのキー割り当てに追従)。
   // 皿は既定キー(Shift)='A' 方向、DEFAULT_SCRATCH_ALT(Ctrl)='B' 方向として交互押し判定に使う。
@@ -537,157 +536,37 @@ export default function BmsViewer() {
       flashMissLayer();
   };
 
-  // ===== 6-2 判定 =====
+  // ===== 6-2 判定(game/PlayJudge.js) =====
+  onJudgeRef.current = (kind, j) => {
+      comboRef.current = j.combo;
+      notesDoneRef.current = j.notesDone;
+      if (kind === 'bd' || kind === 'poor') flashMissLayer(); // 自己プレイ: 空POOR以外の POOR / BAD でミスレイヤー
+  };
   const resetJudge = () => {
-      judgeRef.current = { pg: 0, gr: 0, gd: 0, bd: 0, poor: 0, epoor: 0, combo: 0, maxCombo: 0, exScore: 0, fast: 0, slow: 0 };
-      lastJudgeRef.current = { kind: '', deltaMs: 0, t: 0 };
+      judge.reset(); // 直近のずれ(オフセット推奨用)は残す。曲ロード時のみクリア
       scratchDirRef.current = { 0: null, 8: null };
-      activeLnRef.current = new Array(MAX_LANES).fill(null);
       comboRef.current = 0;
       notesDoneRef.current = 0;
-      // recentDeltasRef は残す(直近走行のタイミングをオート調整で使えるように。曲ロード時のみクリア)
   };
-
   // 6-2-c: 直近の判定タイミングから推奨オフセットを算出(中央値)。設定画面から呼ぶ。
-  const suggestJudgeOffset = () => {
-      const arr = recentDeltasRef.current;
-      if (arr.length < 10) return { n: arr.length, value: 0 };
-      const sorted = [...arr].sort((a, b) => a - b);
-      const m = sorted.length % 2
-          ? sorted[(sorted.length - 1) / 2]
-          : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
-      return { n: arr.length, value: Math.round(m) };
-  };
-
-  // 直近判定を記録し、コンボ / EX SCORE / FAST-SLOW を更新。kind: 'pg'|'gr'|'gd'|'bd'|'poor'|'epoor'
-  const pushJudge = (kind, deltaMs) => {
-      const j = judgeRef.current;
-      j[kind] = (j[kind] || 0) + 1;
-      if (kind !== 'epoor') notesDoneRef.current++; // 空POOR はノーツを消費しない
-      if (kind === 'pg' || kind === 'gr' || kind === 'gd') {
-          comboRef.current++;
-          if (comboRef.current > j.maxCombo) j.maxCombo = comboRef.current;
-          if (kind === 'pg') j.exScore += 2;
-          else if (kind === 'gr') j.exScore += 1;
-      } else if (kind === 'bd' || kind === 'poor') {
-          comboRef.current = 0;
-          flashMissLayer(); // 自己プレイ: 空POOR以外の POOR / BAD でミスレイヤー
-      } // epoor(空POOR) はコンボ非切断・ミスレイヤーなし
-      j.combo = comboRef.current;
-      if ((kind === 'gr' || kind === 'gd' || kind === 'bd') && deltaMs !== 0) {
-          if (deltaMs < 0) j.fast++; else j.slow++;
-      }
-      lastJudgeRef.current = { kind, deltaMs: Math.round(deltaMs), t: performance.now() };
-  };
-
-  // レーンの判定幅(鍵盤 / 皿で別。判定方式・#RANK・モードから buildJudgeConfig で作ったもの)
-  const laneWindow = (lane) => (laneMetaRef.current[lane]?.isScratch ? judgeCfgRef.current.scratch : judgeCfgRef.current.note);
+  const suggestJudgeOffset = () => judge.suggestOffset();
+  // 6-2-b: 成績データ(リザルト / Tab オーバーレイ / InfoPanel 共通)
+  const buildResultData = (finished) => judge.result(parsedSong, finished);
 
   // プレイモード: 皿の回転インパルスを与える。scDir 'A'→順(-1) / 'B'→逆(+1)。
   const doScratchSpin = (lane, scDir) => {
       scratchImpulseRef.current[lane] = { dir: scDir === 'B' ? 1 : -1, t: performance.now() };
   };
 
-  // ===== LN 判定(beatoraja の既定「LN モード」準拠) =====
-  //   ・LN 1本 = 1ノーツ。判定は1回だけ。
-  //   ・始点を押した時点では判定を出さず、始点の判定を覚えておく(activeLnRef)。
-  //   ・終点まで押し続けたら、終点の時刻に「始点の判定」を確定。
-  //   ・途中で離したら「始点」と「離した時刻 vs 終点(LN終端の判定幅)」の悪い方。BAD 以下なら BAD。
-  //   ・皿 LN も同じ(押し続けて離す)。始点を取ったキー(方向)を離したときだけ離したとみなす。
-  //   ・始点を逃したら POOR 1回(見逃し)。始点が BAD なら BAD 1回で LN は終了(保持しない)。
-  // 保持中の LN を確定させる。releaseT = 離した時刻(終点まで押し続けた場合は null)
-  const finishLn = (lane, releaseT) => {
-      const a = activeLnRef.current[lane];
-      if (!a) return;
-      activeLnRef.current[lane] = null;
-      if (releaseT === null) { pushJudge(a.startKind, a.startDelta); return; }
-      const earlyMs = ((a.ln.endTime ?? a.ln.time) - releaseT) * 1000; // 正 = 終点より早く離した
-      const cfg = judgeCfgRef.current;
-      const r = resolveLnRelease(a.startKind, a.startDelta, earlyMs, laneMetaRef.current[lane]?.isScratch ? cfg.lnScratchEnd : cfg.lnEnd);
-      pushJudge(r.kind, r.delta);
-  };
-
-  // プレイモード: 1回のキー/皿入力を判定。
-  //   通常ノーツ: 最寄りの未処理ノーツを bd 窓内で判定。皿はどちらの方向でも可。
-  //   LN: 上の「LN 判定」参照。
+  // プレイモード: 1回のキー/皿入力を判定(皿は回転演出も)
   const judgeLaneInput = (lane, bmsTime, isScratch, scDir) => {
       const objs = displayObjectsRef.current;
       if (!playModeRef.current || !isPlayingRef.current || !objs.length) return;
-      const w = laneWindow(lane);
-      const ep = judgeCfgRef.current.epoor;
-      const t = bmsTime - judgeOffsetRef.current / 1000;
-
       if (isScratch) {
           if (scDir) scratchDirRef.current[lane] = scDir;
           doScratchSpin(lane, scDir);
       }
-      // LN 保持中の押し直し(皿の別方向キーなど)は何もしない(beatoraja の「押し直し」と同じく判定なし)
-      if (activeLnRef.current[lane]) return;
-
-      // このレーンのノーツを探す。
-      //   target: BAD 窓(早 bdEarly / 遅 bdLate)内で最寄りの未処理ノーツ = 判定対象
-      //   nearAny: 空POOR 範囲(ノーツより ep.early ms 早い〜ep.late ms 遅い)にノーツ(処理済み可)が居るか
-      let target = null, best = Infinity;
-      let nearAny = false;
-      const c = findStartIndex(objs, t - ep.late / 1000 - 0.05);
-      for (let i = Math.max(0, c - 4); i < objs.length; i++) {
-          const o = objs[i];
-          if (o.time > t + ep.early / 1000 + 0.05) break;
-          if (!o.isNote || o.laneIndex !== lane) continue;
-          const dMs = (t - o.time) * 1000; // 負 = ノーツより早く押した
-          if (dMs < 0 ? -dMs <= ep.early : dMs <= ep.late) nearAny = true;
-          const inBad = dMs < 0 ? -dMs <= w.bdEarly : dMs <= w.bdLate;
-          if (!o.processed && inBad && Math.abs(dMs) < best) { best = Math.abs(dMs); target = o; }
-      }
-
-      if (!target) {
-          // 判定対象なし。空POOR 範囲にノーツが居る(=二度押し / BAD より外した)場合のみ空POOR。
-          //   完全な空白(近くにノーツなし)は無反応。
-          if (nearAny) pushJudge('epoor', 0);
-          return;
-      }
-
-      const deltaMs = (t - target.time) * 1000; // 負=FAST(早い) / 正=SLOW(遅い)
-      const kind = classifyJudge(deltaMs, w) || 'bd';
-      target.processed = true;
-      noteCountsRef.current[lane]++;
-      // LN の始点が PG/GR/GD なら判定は保留して「保持中」に(離した時 / 終点で1回だけ確定)。BAD はその場で確定。
-      const holdLn = target.type === 'long' && kind !== 'bd';
-      if (holdLn) activeLnRef.current[lane] = { ln: target, startKind: kind, startDelta: deltaMs, dir: isScratch ? (scDir || null) : null };
-      else pushJudge(kind, deltaMs);
-
-      // 6-2-c: オート調整用に生Δ(オフセット非適用)を記録。近い判定だけ(GOOD 以内)採用。
-      if (kind === 'pg' || kind === 'gr' || kind === 'gd') {
-          const arr = recentDeltasRef.current;
-          arr.push(deltaMs + judgeOffsetRef.current);
-          if (arr.length > 60) arr.shift();
-      }
-  };
-
-  // 見逃し(ノーツ / LN 始点が BAD 窓の遅れ側を未処理で通過) → POOR 1回
-  const judgeMissNote = (obj, kind = 'poor') => {
-      obj.processed = true;
-      pushJudge(kind, 0);
-  };
-
-  // 6-2-b: 現在の judgeRef から成績データを作る(リザルト / Tab オーバーレイ / InfoPanel 共通)
-  const buildResultData = (finished) => {
-      const j = judgeRef.current;
-      const total = parsedSong?.totalNotes || 0;
-      const maxEx = total * 2;
-      const rate = maxEx ? j.exScore / maxEx : 0;
-      return {
-          finished,
-          title: parsedSong?.header?.title || '',
-          keyMode: parsedSong?.keyMode || '—',
-          level: parsedSong?.header?.playlevel || '—',
-          exScore: j.exScore, maxEx,
-          djLevel: djLevel(rate), rate,
-          pg: j.pg, gr: j.gr, gd: j.gd, bd: j.bd, poor: j.poor, epoor: j.epoor,
-          maxCombo: j.maxCombo, fast: j.fast, slow: j.slow,
-          judged: notesDoneRef.current, total,
-          offset: judgeOffsetRef.current,
-      };
+      if (judge.press(objs, lane, bmsTime, isScratch, scDir)) noteCountsRef.current[lane]++;
   };
 
   // 6-1-e: レーンオプションをモード別に適用し、表示用の配置(state)も更新する。
@@ -815,15 +694,9 @@ export default function BmsViewer() {
   const handleLaneUp = (lane, scDir) => {
       activeInputLanesRef.current.delete(lane);
       setLaneActive(lane, false);
-      // プレイモード: LN を保持中に離した → 始点と離しタイミングの悪い方で確定(上の「LN 判定」参照)
-      if (playModeRef.current && isPlayingRef.current) { // 一時停止中に離しても判定しない(再開後も保持中のまま)
-          const a = activeLnRef.current[lane];
-          if (a && !(a.dir && scDir && scDir !== a.dir)) {
-              const cur = isPlayingRef.current && engine.ctx
-                  ? engine.songTime() : pauseTimeRef.current;
-              finishLn(lane, cur - judgeOffsetRef.current / 1000);
-          }
-      }
+      // プレイモード: LN を保持中に離した → 始点と離しタイミングの悪い方で確定(game/PlayJudge.js の「LN 判定」参照)
+      // 一時停止中に離しても判定しない(再開後も保持中のまま)
+      if (playModeRef.current && isPlayingRef.current) judge.release(lane, engine.songTime(), !!laneMetaRef.current[lane]?.isScratch, scDir);
   };
   // handleKeyDown/handleKeyUp は限られた依存配列の useEffect 内に留まるため、
   // 常に最新の handleLaneDown/handleLaneUp を呼べるよう ref 経由にする(renderLoopRef と同じパターン)。
@@ -1180,7 +1053,7 @@ export default function BmsViewer() {
       lastNotesByLaneRef.current = lasts;
       setDuration(calculatedMaxDuration); setParsedSong(parsed); setTotalNotes(parsed.totalNotes);
       setPlaybackTimeDisplay(0); pauseTimeRef.current = 0; comboRef.current = 0; hudLastRef.current = {};
-      resetJudge(); recentDeltasRef.current = []; // 曲ロード時はオート調整用データもクリア
+      resetJudge(); judge.clearRecent(); // 曲ロード時はオフセット推奨用データもクリア
       lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); 
       setCurrentMeasureLines([]); 
       lastStateUpdateRef.current = 0; engine.stats.dropped = 0; // 次の renderLoop フレームで HUD を即更新させる
@@ -1412,15 +1285,8 @@ export default function BmsViewer() {
         const timeDelta = obj.time - currentTime;
         const isScr = !!laneMetaRef.current[obj.laneIndex]?.isScratch;
         if (play) {
-            // 見逃し: BAD 窓の遅れ側(bdLate)を未処理で越えたら POOR
-            const bdSec = (isScr ? judgeCfgRef.current.scratch : judgeCfgRef.current.note).bdLate / 1000;
-            if (!obj.processed) {
-                if (isPlayingRef.current && timeDelta < -bdSec) judgeMissNote(obj, 'poor');
-            } else if (obj.type === 'long' && activeLnRef.current[obj.laneIndex]?.ln === obj) {
-                // LN を終点まで押し続けた → 始点の判定で確定(キー・皿共通。beatoraja の LN モード)
-                const endT = obj.endTime ?? obj.time;
-                if (isPlayingRef.current && currentTime - judgeOffsetRef.current / 1000 >= endT) finishLn(obj.laneIndex, null);
-            }
+            // 見逃し POOR / LN を終点まで押し続けたら確定(game/PlayJudge.js)
+            if (isPlayingRef.current) judge.tickNote(obj, currentTime, isScr);
         } else if (!obj.processed) {
             obj.processed = true;
             comboRef.current++; notesDoneRef.current++; noteCountsRef.current[obj.laneIndex]++; lastPlayedSoundPerLaneRef.current[obj.laneIndex] = obj.filename;
@@ -1682,7 +1548,7 @@ export default function BmsViewer() {
     const height = rect.height;
     const mode = parsedSong?.mode || 'SP7';
     const isPmsMode = mode === 'PMS9';
-    const lj = lastJudgeRef.current;
+    const lj = judge.last;
     const judgeAge = now - lj.t;
     const activeLanes = renderer.draw({
         width, height, dpr, song: parsedSong, objects: displayObjects, currentTime, now,
