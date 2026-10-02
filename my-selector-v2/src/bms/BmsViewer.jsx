@@ -1023,7 +1023,8 @@ export default function BmsViewer() {
         obj.processed = obj.time < val;
         if (obj.isNote && obj.processed) {
             passedNotes++;
-            if (obj.laneIndex >= 0 && obj.laneIndex <= 7) noteCountsRef.current[obj.laneIndex]++;
+            // ★DP の 2P 側(レーン 8〜15)も数える(以前は 0〜7 だけで、シーク後に 2P 側の表示が 0 になっていた)
+            if (obj.laneIndex >= 0 && obj.laneIndex < MAX_LANES) noteCountsRef.current[obj.laneIndex]++;
         }
     }
     comboRef.current = passedNotes;
