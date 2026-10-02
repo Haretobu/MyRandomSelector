@@ -70,12 +70,16 @@ const LogPanel = forwardRef(({ backingTracks, activeShortSoundsRef, lastPlayedSo
 
              {/* SOUND MONITOR (再生中の短い音) */}
              <div className="bg-[#112233]/20 border border-blue-900/30 flex-1 p-2 relative overflow-hidden flex flex-col rounded-sm min-h-0">
-                 <div className="text-[10px] font-bold mb-1 border-b border-blue-900/30 flex justify-between items-center text-blue-300 shrink-0">
-                    <span>SOUND MONITOR</span>
-                    <div className="flex gap-2">
-                         <span className="text-blue-500/70 text-[8px]" title="処理落ちで予約が間に合わず鳴らせなかった音の数">DROP: <span ref={dropRef} className="text-white">0</span></span>
-                         <span className="text-blue-500/70 text-[8px]">M POLY: <span ref={maxPolyRef} className="text-white">0</span></span>
-                        <span className="text-blue-500/70">POLY: <span ref={polyRef} className="text-white">0</span></span>
+                 {/* ★見出しは2行で固定: 1行に全部並べると、M POLY などが3桁になったとき幅が足りず
+                     「SOUND MONITOR」が折り返して高さが変わっていた。数字は等幅・3桁分の幅を確保して位置がずれないようにする */}
+                 <div className="font-bold mb-1 border-b border-blue-900/30 text-blue-300 shrink-0 whitespace-nowrap">
+                    <div className="text-[10px] flex justify-between items-center">
+                        <span>SOUND MONITOR</span>
+                        <span className="text-blue-500/70">POLY: <span ref={polyRef} className="text-white inline-block min-w-[3ch] text-right tabular-nums">0</span></span>
+                    </div>
+                    <div className="text-[8px] leading-tight pb-0.5 flex justify-end gap-2 text-blue-500/70">
+                        <span title="処理落ちで予約が間に合わず鳴らせなかった音の数">DROP: <span ref={dropRef} className="text-white inline-block min-w-[3ch] text-right tabular-nums">0</span></span>
+                        <span>M POLY: <span ref={maxPolyRef} className="text-white inline-block min-w-[3ch] text-right tabular-nums">0</span></span>
                     </div>
                  </div>
                  <div ref={monitorListRef} className="flex-1 overflow-hidden flex flex-col justify-end text-[9px] space-y-0.5 font-mono">
