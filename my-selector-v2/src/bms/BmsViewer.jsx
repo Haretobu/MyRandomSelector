@@ -1399,6 +1399,14 @@ export default function BmsViewer() {
   const sHiSpeedChange = useEvent((v) => { setAutoHiSpeed(false); setHiSpeed(v); });
   const sSuggestJudgeOffset = useEvent(suggestJudgeOffset);
 
+  // 設定画面「プレイ」タブの設定一式(ハンドラは参照が安定した sXxx を使う)
+  const playSettings = React.useMemo(() => ({
+    laneMute, setLaneMute, playSide, setPlaySide, playOption, setPlayOption, playOption2, setPlayOption2, dpFlip, setDpFlip,
+    currentLaneOrder, laneOrder2, refreshRandom: sRefreshRandom,
+    playMode, setPlayMode, judgeOffset, setJudgeOffset, suggestJudgeOffset: sSuggestJudgeOffset, judgeSystem, setJudgeSystem, judgeCfg,
+  }), [laneMute, playSide, playOption, playOption2, dpFlip, currentLaneOrder, laneOrder2, sRefreshRandom,
+      playMode, judgeOffset, sSuggestJudgeOffset, judgeSystem, judgeCfg]);
+
   // 設定画面「音」タブの設定一式(ハンドラは参照が安定した sXxx を使う)
   const soundSettings = React.useMemo(() => ({
     audioFx, setAudioFx, hitSoundVolume, setHitSoundVolume, isSeparateHitSound, setIsSeparateHitSound,
@@ -1416,16 +1424,12 @@ export default function BmsViewer() {
         showSettings={showSettings} setShowSettings={setShowSettings} isMobile={isMobile}
         visibilityMode={visibilityMode} setVisibilityMode={setVisibilityMode}
         suddenPlusVal={suddenPlusVal} setSuddenPlusVal={setSuddenPlusVal} hiddenPlusVal={hiddenPlusVal} setHiddenPlusVal={setHiddenPlusVal} liftVal={liftVal} setLiftVal={setLiftVal}
-        playSide={playSide} setPlaySide={setPlaySide} playOption={playOption} setPlayOption={setPlayOption} currentLaneOrder={currentLaneOrder} refreshRandom={sRefreshRandom}
-        playOption2={playOption2} setPlayOption2={setPlayOption2} dpFlip={dpFlip} setDpFlip={setDpFlip} laneOrder2={laneOrder2}
         comboPos={comboPos} setComboPos={setComboPos}
         volume={volume} setVolume={setVolume} monitorUpdateInterval={monitorUpdateInterval} setMonitorUpdateInterval={setMonitorUpdateInterval}
         hasVideo={hasVideo} playBgaVideo={playBgaVideo} setPlayBgaVideo={setPlayBgaVideo}
         scratchRotationEnabled={scratchRotationEnabled} setScratchRotationEnabled={setScratchRotationEnabled}
         input={inputSettings}
-        playMode={playMode} setPlayMode={setPlayMode}
-        judgeOffset={judgeOffset} setJudgeOffset={setJudgeOffset} suggestJudgeOffset={sSuggestJudgeOffset}
-        judgeSystem={judgeSystem} setJudgeSystem={setJudgeSystem} judgeCfg={judgeCfg}
+        play={playSettings}
         sound={soundSettings}
         system={systemSettings}
         missLayerEnabled={missLayerEnabled} setMissLayerEnabled={setMissLayerEnabled}
@@ -1438,7 +1442,6 @@ export default function BmsViewer() {
         isPlaying={isPlaying} startPlayback={sStartPlayback} pausePlayback={sPausePlayback} stopPlayback={sStopPlayback}
         hiSpeed={hiSpeed} setHiSpeed={sHiSpeedChange} bgaOpacity={bgaOpacity} setBgaOpacity={setBgaOpacity}
         autoHiSpeed={autoHiSpeed} setAutoHiSpeed={setAutoHiSpeed} targetGreen={targetGreen} setTargetGreen={setTargetGreen}
-        laneMute={laneMute} setLaneMute={setLaneMute}
         laneOpacity={laneOpacity} setLaneOpacity={setLaneOpacity}
         boardOpacity={boardOpacity} setBoardOpacity={setBoardOpacity}
         parsedSong={parsedSong}
