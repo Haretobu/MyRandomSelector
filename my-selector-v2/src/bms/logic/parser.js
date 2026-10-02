@@ -5,6 +5,8 @@ import { decodeBmsText, parseInt36 } from './utils';
 // ★軽量化: 正規表現はループ内で毎回リテラル評価せず、モジュール定数として1回だけ生成する
 const RE_MEASURE_LEN = /^#\d{3}02$/;      // 小節長変更チャンネル (#xxx02)
 const RE_CHANNEL_LINE = /^#\d{5}$/;       // 小節データ行 (#mmmcc)
+// 制御構文 (#RANDOM / #SETRANDOM / #IF / #ELSEIF / #ELSE / #ENDIF(#END IF) / #ENDRANDOM)。値は省略可。
+const RE_CONTROL = /^#(SETRANDOM|RANDOM|ELSEIF|ELSE|ENDIF|END\s+IF|ENDRANDOM|IF)(?:\s+(-?\d+))?\s*$/i;
 
 export const parseBMS = async (file) => {
     const isPms = /\.pms$/i.test(file.name);
@@ -21,8 +23,64 @@ export const parseBMS = async (file) => {
     const unmappedPmsCh = new Set();
     const RE_PMS_PLAYFIELD_CH = /^[1256][1-9]$/;
 
-    for (const line of lines) {
+    // ===== #RANDOM / #IF 制御構文 =====
+    // randomStack: 現在有効な乱数値のスタック(#RANDOM / #SETRANDOM で積み、#ENDRANDOM で降ろす)
+    // ifStack: { active: このブロックの行を読むか, matched: 同じ #IF 系列で既に成立した分岐があるか,
+    //            parentActive: 外側が有効か, randDepth: #IF 開始時点の randomStack の深さ }
+    // ★#ENDRANDOM を書かない譜面が多いため、#IF ブロック内で宣言された #RANDOM は #ENDIF で破棄する
+    //   (そうしないと内側の乱数が外側の #IF の比較に使われてしまう)。
+    const randomStack = [];
+    const ifStack = [];
+    const randomSelections = []; // 実際に選ばれた乱数 { max, value } (表示・デバッグ用)
+    const isActive = () => ifStack.length === 0 || ifStack[ifStack.length - 1].active;
+    const currentRandom = () => (randomStack.length ? randomStack[randomStack.length - 1] : null);
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim(); // #IF ブロック内はインデントされていることが多い
       if (!line.startsWith('#')) continue;
+
+      const ctl = RE_CONTROL.exec(line);
+      if (ctl) {
+        const cmd = ctl[1].toUpperCase().replace(/\s+/g, '');
+        const n = ctl[2] !== undefined ? parseInt(ctl[2], 10) : NaN;
+        const top = ifStack[ifStack.length - 1];
+        if (cmd === 'RANDOM' || cmd === 'SETRANDOM') {
+          if (!isActive()) { randomStack.push(null); continue; } // 無効ブロック内でも対応を取るため積む
+          let v;
+          if (cmd === 'SETRANDOM') v = Number.isFinite(n) ? n : null;
+          else {
+            const max = Number.isFinite(n) && n >= 1 ? n : 1;
+            v = Math.floor(Math.random() * max) + 1;
+            randomSelections.push({ max, value: v });
+          }
+          randomStack.push(v);
+        } else if (cmd === 'ENDRANDOM') {
+          const minDepth = top ? top.randDepth : 0; // 外側の #IF より前に宣言された乱数は降ろさない
+          if (randomStack.length > minDepth) randomStack.pop();
+        } else if (cmd === 'IF') {
+          const parentActive = isActive();
+          const cond = parentActive && Number.isFinite(n) && currentRandom() === n;
+          ifStack.push({ active: cond, matched: cond, parentActive, randDepth: randomStack.length });
+        } else if (cmd === 'ELSEIF') {
+          if (!top) continue;
+          if (top.matched) top.active = false;
+          else {
+            top.active = top.parentActive && Number.isFinite(n) && currentRandom() === n;
+            top.matched = top.active;
+          }
+        } else if (cmd === 'ELSE') {
+          if (!top) continue;
+          top.active = top.parentActive && !top.matched;
+          top.matched = true;
+        } else { // ENDIF
+          if (!top) continue;
+          ifStack.pop();
+          randomStack.length = Math.min(randomStack.length, top.randDepth);
+        }
+        continue;
+      }
+      if (!isActive()) continue;
+
       let key = "", value = "";
       const sp = line.indexOf(' '); const cl = line.indexOf(':');
       if (sp !== -1 && (cl === -1 || sp < cl)) { key = line.substring(0, sp); value = line.substring(sp + 1); }
@@ -264,5 +322,5 @@ export const parseBMS = async (file) => {
     // 9K: 標準チャンネル(11-15/22-25/LN 51-55/62-65)以外を使う .pms は一部ノーツが欠ける
     const unmappedPmsChannels = [...unmappedPmsCh].sort();
 
-    return { header, objects: resolvedObjects, backBgaObjects, layerBgaObjects, poorBgaObjects, barLines, timePoints, totalTime: lastObjTime + 2.0, rawLinesByMeasure, totalNotes: noteCount, notesPerMeasure, scratchPerMeasure, avgDensity, maxLNDuration, isSupportedMode, unmappedPmsChannels, bpmRange, keyMode, mode, lanes };
+    return { header, objects: resolvedObjects, backBgaObjects, layerBgaObjects, poorBgaObjects, barLines, timePoints, totalTime: lastObjTime + 2.0, rawLinesByMeasure, totalNotes: noteCount, notesPerMeasure, scratchPerMeasure, avgDensity, maxLNDuration, isSupportedMode, unmappedPmsChannels, randomSelections, bpmRange, keyMode, mode, lanes };
   };
