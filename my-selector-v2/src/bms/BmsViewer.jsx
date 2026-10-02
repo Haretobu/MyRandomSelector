@@ -141,6 +141,19 @@ export default function BmsViewer() {
   const [playKeySounds, setPlayKeySounds] = useState(true);
   const [playBgSounds, setPlayBgSounds] = useState(true);      
   const [playLongAudio, setPlayLongAudio] = useState(true);
+  // シーク後に「シーク地点より前に鳴り始めた音(長いBGM等)」を途中から再生するか。
+  // OFF = beatoraja 式(鳴らさない)。一時停止→再開はこの設定に関係なく常に続きから再生する。localStorage 永続。
+  const [resumeAudioOnSeek, setResumeAudioOnSeek] = useState(() => {
+    try { const v = localStorage.getItem('bms_resume_audio_on_seek'); return v === null ? true : v === '1'; } catch { return true; }
+  });
+  const resumeAudioOnSeekRef = useRef(true);
+  useEffect(() => {
+    resumeAudioOnSeekRef.current = resumeAudioOnSeek;
+    try { localStorage.setItem('bms_resume_audio_on_seek', resumeAudioOnSeek ? '1' : '0'); } catch { /* privacy mode */ }
+  }, [resumeAudioOnSeek]);
+  const seekedSinceStartRef = useRef(false);  // 前回の再生開始以降にシークしたか(再開が「シーク」か「一時停止からの復帰」かの判別用)
+  const midStartPendingRef = useRef(false);   // 次の scheduleAudio 1回だけ、開始地点より前に鳴り始めた音を途中から鳴らす
+  const maxSoundDurationRef = useRef(0);      // 読み込んだ音源のうち最長の長さ(秒)。途中再生の探索範囲に使う
   const [scratchRotationEnabled, setScratchRotationEnabled] = useState(true);
   const [isInputDebugMode, setIsInputDebugMode] = useState(false);
   const [playMode, setPlayMode] = useState(false); // 6-2: プレイモード(自分の入力で判定)
@@ -1351,13 +1364,18 @@ export default function BmsViewer() {
       }
       
       let calculatedMaxDuration = parsed.totalTime;
+      let maxSoundDuration = 0;
       parsed.objects.forEach(obj => {
           const filename = parsed.header.wavs[obj.value];
           if (filename) {
               const buffer = audioBuffersRef.current.get(filename.toLowerCase());
-              if (buffer) { const endTime = obj.time + buffer.duration; if (endTime > calculatedMaxDuration) calculatedMaxDuration = endTime; }
+              if (buffer) {
+                  const endTime = obj.time + buffer.duration; if (endTime > calculatedMaxDuration) calculatedMaxDuration = endTime;
+                  if (buffer.duration > maxSoundDuration) maxSoundDuration = buffer.duration;
+              }
           }
       });
+      maxSoundDurationRef.current = maxSoundDuration;
       const lasts = new Array(MAX_LANES).fill(null);
       parsed.objects.forEach(obj => {
           if (obj.isNote && obj.laneIndex >= 0 && obj.laneIndex < MAX_LANES) {
@@ -1401,15 +1419,23 @@ export default function BmsViewer() {
       // ★修正+軽量化: 平均算出用の履歴を積む。無限に伸びないよう一定数でキャップする
       polyphonyHistoryRef.current.push(currentPolyCount);
       if (polyphonyHistoryRef.current.length > 400) polyphonyHistoryRef.current.shift();
+      // 途中からの開始直後の1回だけ、開始地点より前に鳴り始めた音を途中から鳴らす(startPlayback で立てる)
+      const midStart = midStartPendingRef.current;
+      midStartPendingRef.current = false;
+      // 途中再生の開始時刻。「今」を読んでから start() するまでに時計が進むとその分 BGM が遅れるため、
+      // 少し先の時刻を開始時刻にして、その時刻に対応する位置から再生する(サンプル精度で一致させる)。
+      const midStartAt = currentTime + 0.05;
       while (index < objects.length) {
           const obj = objects[index];
           const absolutePlayTime = startTimeRef.current + obj.time;
           if (absolutePlayTime > scheduleUntil) break;
-          if (absolutePlayTime < currentTime - 0.1) { index++; continue; }
+          const isMidStart = absolutePlayTime < currentTime - 0.1;
+          if (isMidStart && !midStart) { index++; continue; }
 
           if (parsedSong.header.wavs[obj.value]) {
               const buffer = audioBuffersRef.current.get(parsedSong.header.wavs[obj.value].toLowerCase());
-              if (buffer) {
+              // 途中再生の対象でも、開始時刻までに鳴り終わっている音は何もしない(ログにも載せない)
+              if (buffer && (!isMidStart || absolutePlayTime + buffer.duration > midStartAt + 0.01)) {
                 // ★P2: 音源を「キー音 / BGM(著しく長い) / バックサウンド」の排他3カテゴリに分類。
                 //   各カテゴリを別々のトグルで制御し、判定の重複をなくす。
                 const category = obj.isNote ? 'key'
@@ -1441,17 +1467,28 @@ export default function BmsViewer() {
                 };
                 if (shouldPlay) {
                     const src = ctx.createBufferSource();
-                    src.buffer = buffer; src.connect(gainNodeRef.current);
-                    if (absolutePlayTime >= currentTime) src.start(absolutePlayTime);
-                    else { const offset = currentTime - absolutePlayTime;
-                    if (offset < buffer.duration) src.start(currentTime, offset); }
+                    src.buffer = buffer;
+                    let fade = null;
+                    if (isMidStart) {
+                        // 途中再生: 波形の途中から急に鳴る「プツッ」を防ぐため 5ms でフェードイン
+                        fade = ctx.createGain();
+                        fade.gain.setValueAtTime(0, midStartAt);
+                        fade.gain.linearRampToValueAtTime(1, midStartAt + 0.005);
+                        src.connect(fade); fade.connect(gainNodeRef.current);
+                        src.start(midStartAt, midStartAt - absolutePlayTime);
+                    } else {
+                        src.connect(gainNodeRef.current);
+                        if (absolutePlayTime >= currentTime) src.start(absolutePlayTime);
+                        else { const offset = currentTime - absolutePlayTime;
+                        if (offset < buffer.duration) src.start(currentTime, offset); }
+                    }
 
                     const endTime = absolutePlayTime + buffer.duration;
                     const nodeData = { node: src, startTime: absolutePlayTime, endTime: endTime, isLong: isLong, id: item.id };
                     activeNodesRef.current.push(nodeData);
                     // ★リーク対策: 自然終了したノードは切断し、activeNodesRef からも除去する。
                     src.onended = () => {
-                        try { src.disconnect(); } catch (e) {}
+                        try { src.disconnect(); if (fade) fade.disconnect(); } catch (e) {}
                         const a = activeNodesRef.current;
                         const k = a.indexOf(nodeData);
                         if (k !== -1) a.splice(k, 1);
@@ -1472,7 +1509,8 @@ export default function BmsViewer() {
                 }
               }
           }
-          if (obj.isNote && !laneMuteRef.current[obj.laneIndex] && !playModeRef.current) { // ★P5-2 ミュート / 6-2 プレイモードは打鍵音を鳴らさない
+          // 途中再生の対象(開始地点より前のノーツ)では打鍵音を鳴らさない
+          if (obj.isNote && !isMidStart && !laneMuteRef.current[obj.laneIndex] && !playModeRef.current) { // ★P5-2 ミュート / 6-2 プレイモードは打鍵音を鳴らさない
                const hitTime = Math.max(currentTime, absolutePlayTime);
                const hitMeta = laneMetaRef.current[obj.laneIndex];
                const buffer = (hitMeta && hitMeta.isScratch) ? scratchHitSoundBufferRef.current : keyHitSoundBufferRef.current;
@@ -1524,7 +1562,9 @@ export default function BmsViewer() {
       startTimeRef.current = audioContextRef.current.currentTime - offset;
     }
     if (!parsedSong) return;
-    nextNoteIndexRef.current = findStartIndex(displayObjects, offset - (parsedSong.maxLNDuration || 20.0));
+    // 開始地点より前に鳴り始め、まだ鳴っているはずの音(途中再生の対象)まで遡れるよう、最長の音源の長さ分も戻る
+    const lookBack = Math.max(parsedSong.maxLNDuration || 20.0, maxSoundDurationRef.current);
+    nextNoteIndexRef.current = findStartIndex(displayObjects, offset - lookBack);
 
     const syncBga = (arr, idxRef, setter, keyProp) => {
       if (!arr) return;
@@ -1569,6 +1609,10 @@ export default function BmsViewer() {
     stopAudioNodes(); activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]);
     const offset = pauseTimeRef.current;
     if (offset === 0) resetJudge(); // 頭からのプレイは判定リセット(途中再開はスコア維持)
+    // 途中からの開始: 一時停止→再開なら常に、シーク後なら設定に従って、開始地点より前に鳴り始めた音を途中から鳴らす
+    const fromSeek = seekedSinceStartRef.current;
+    seekedSinceStartRef.current = false;
+    midStartPendingRef.current = offset > 0 && (!fromSeek || resumeAudioOnSeekRef.current);
     setIsPlaying(true); isPlayingRef.current = true; lastFrameTimeRef.current = performance.now();
     applySeekPosition(offset); // startTimeRef / nextNoteIndexRef / BGA インデックス・フレームを同期
 
@@ -1618,7 +1662,7 @@ export default function BmsViewer() {
             setBackingTracks([]); activeLongSoundsRef.current = [];
         }
 
-        pauseTimeRef.current = 0; setPlaybackTimeDisplay(0); setCombo(0); comboRef.current = 0; hudLastRef.current = {}; lastBgaKeyRef.current = {};
+        pauseTimeRef.current = 0; seekedSinceStartRef.current = false; setPlaybackTimeDisplay(0); setCombo(0); comboRef.current = 0; hudLastRef.current = {}; lastBgaKeyRef.current = {};
         resetJudge();
         lastPlayedSoundPerLaneRef.current.fill(null); noteCountsRef.current.fill(0); setNoteCounts(new Array(MAX_LANES).fill(0));
         if (parsedSong) displayObjects.forEach(o => o.processed = false);
@@ -1657,6 +1701,7 @@ export default function BmsViewer() {
   const handleSeek = (e) => {
     const val = parseFloat(e.target.value);
     pauseTimeRef.current = val;
+    seekedSinceStartRef.current = true;
     // ★シーク時は在再生中の音源(ロングBGMを含む)を必ず停止する。isPlaying に依存せず毎回止めて音の重なりを防ぐ。
     stopAudioNodes();
 
@@ -2359,7 +2404,9 @@ export default function BmsViewer() {
         volume={volume} setVolume={setVolume} monitorUpdateInterval={monitorUpdateInterval} setMonitorUpdateInterval={setMonitorUpdateInterval}
         hasVideo={hasVideo} playBgaVideo={playBgaVideo} setPlayBgaVideo={setPlayBgaVideo} hitSoundVolume={hitSoundVolume} setHitSoundVolume={setHitSoundVolume}
         showReady={showReady} setShowReady={setShowReady} playKeySounds={playKeySounds} setPlayKeySounds={setPlayKeySounds} playLongAudio={playLongAudio} setPlayLongAudio={setPlayLongAudio}
-        playBgSounds={playBgSounds} setPlayBgSounds={setPlayBgSounds} showMutedMonitor={showMutedMonitor} setShowMutedMonitor={setShowMutedMonitor}
+        playBgSounds={playBgSounds} setPlayBgSounds={setPlayBgSounds}
+        resumeAudioOnSeek={resumeAudioOnSeek} setResumeAudioOnSeek={setResumeAudioOnSeek}
+        showMutedMonitor={showMutedMonitor} setShowMutedMonitor={setShowMutedMonitor}
         showAbortedMonitor={showAbortedMonitor} setShowAbortedMonitor={setShowAbortedMonitor} scratchRotationEnabled={scratchRotationEnabled} setScratchRotationEnabled={setScratchRotationEnabled}
         isInputDebugMode={isInputDebugMode} setIsInputDebugMode={setIsInputDebugMode}
         muteDebugAutoPlay={muteDebugAutoPlay} setMuteDebugAutoPlay={setMuteDebugAutoPlay}

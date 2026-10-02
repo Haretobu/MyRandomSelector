@@ -561,6 +561,7 @@ const SettingsModal = ({
     hasVideo, playBgaVideo, setPlayBgaVideo, hitSoundVolume, setHitSoundVolume,
     showReady, setShowReady, playKeySounds, setPlayKeySounds, playLongAudio, setPlayLongAudio,
     playBgSounds, setPlayBgSounds, showMutedMonitor, setShowMutedMonitor,
+    resumeAudioOnSeek, setResumeAudioOnSeek,
     showAbortedMonitor, setShowAbortedMonitor, scratchRotationEnabled, setScratchRotationEnabled,
     isInputDebugMode, setIsInputDebugMode,
     muteDebugAutoPlay, setMuteDebugAutoPlay,
@@ -957,6 +958,15 @@ const SettingsModal = ({
                             <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
                                 <div className="flex items-center gap-3"><Speaker className="text-blue-400" size={18}/><span className="text-sm">バックサウンドを再生</span></div>
                                  <input type="checkbox" checked={playBgSounds} onChange={e=>setPlayBgSounds(e.target.checked)} className="accent-blue-500"/>
+                            </label>
+                            <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
+                                <div className="flex items-center gap-3"><Music className="text-blue-400" size={18}/>
+                                    <div className="flex flex-col">
+                                        <span className="text-sm">シーク後も鳴っている音を途中から再生</span>
+                                        <span className="text-[10px] text-blue-400/60">OFF = beatoraja 式(シーク地点より前に始まった音は鳴らさない)。一時停止→再開は常に続きから再生</span>
+                                    </div>
+                                </div>
+                                <input type="checkbox" checked={resumeAudioOnSeek} onChange={e=>setResumeAudioOnSeek(e.target.checked)} className="accent-blue-500"/>
                             </label>
                             <div className="border-t border-blue-900/30 my-2"></div>
                              <label className="flex items-center justify-between bg-black/20 p-2 rounded cursor-pointer hover:bg-black/40 transition border border-transparent hover:border-blue-500/30">
