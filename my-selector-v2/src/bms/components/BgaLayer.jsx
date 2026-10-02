@@ -13,20 +13,35 @@ const BgaLayer = forwardRef(({ bgaState, zIndex, blendMode = 'normal', opacity =
                 const startTime = bgaState.startTime || 0;
                 // 動画内での再生位置を計算
                 const targetTime = Math.max(0, currentTime - startTime);
+                const now = performance.now();
+
+                // ★動画の尺を越えた区間: 最終フレームで止めておく。
+                //   以前は終端に達した(ended → paused)動画に毎フレーム play() を呼んでいたが、
+                //   ended な動画への play() は仕様上「先頭に巻き戻して再生」になるため、
+                //   先頭へ戻る → 終端へシーク → また ended … を繰り返して BGA がちらついていた。
+                const vd = video.duration;
+                if (Number.isFinite(vd) && targetTime >= vd - 0.05) {
+                    if (!video.paused) video.pause();
+                    if (!video.ended && vd - video.currentTime > 0.1 && now - lastSyncRef.current > 250) {
+                        lastSyncRef.current = now;
+                        video.currentTime = vd;
+                    }
+                    return;
+                }
+
+                // ★軽量化: 毎フレーム video.currentTime= を代入するとデコーダが詰まって重い。
+                //   ズレの許容を 0.3s に広げ、実際のシークは最大 ~4Hz に間引く。
+                //   ended 状態からの復帰(シークで巻き戻した等)は play() より先に即シークし、先頭再生を挟まない。
+                if ((video.ended || now - lastSyncRef.current > 250) && Math.abs(video.currentTime - targetTime) > 0.3) {
+                    lastSyncRef.current = now;
+                    video.currentTime = targetTime;
+                }
 
                 // 再生中なら再生、停止中なら停止
                 if (isPlaying) {
                     if (video.paused) video.play().catch(() => {});
                 } else {
                     if (!video.paused) video.pause();
-                }
-
-                // ★軽量化: 毎フレーム video.currentTime= を代入するとデコーダが詰まって重い。
-                //   ズレの許容を 0.3s に広げ、実際のシークは最大 ~4Hz に間引く。
-                const now = performance.now();
-                if (now - lastSyncRef.current > 250 && Math.abs(video.currentTime - targetTime) > 0.3) {
-                    lastSyncRef.current = now;
-                    video.currentTime = targetTime;
                 }
             }
         }
@@ -49,7 +64,8 @@ const BgaLayer = forwardRef(({ bgaState, zIndex, blendMode = 'normal', opacity =
         if (bgaState?.type === 'video' && videoRef.current) {
             const video = videoRef.current;
             if (isPlaying) {
-                video.play().catch(() => {});
+                // 終端に達した動画への play() は先頭からの再生になるため、ここでは触らない(syncTime に任せる)
+                if (!video.ended) video.play().catch(() => {});
             } else {
                 video.pause(); // 時間は維持したまま停止
             }

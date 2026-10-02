@@ -1761,7 +1761,10 @@ export default function BmsViewer() {
     if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) { canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr; ctx.scale(dpr, dpr); }
     else ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const currentTime = isPlayingRef.current && audioContextRef.current ? audioContextRef.current.currentTime - startTimeRef.current : pauseTimeRef.current;
+    const rawTime = isPlayingRef.current && audioContextRef.current ? audioContextRef.current.currentTime - startTimeRef.current : pauseTimeRef.current;
+    // ★曲の長さで頭打ちにする。以前は終端を過ぎても時刻が進み続け、時間表示が「183.00 / 182.12」のように
+    //   曲長を超えたり、動画BGAが終端を越えた位置へ同期されて表示が乱れる原因になっていた。
+    const currentTime = duration > 0 ? Math.min(rawTime, duration) : rawTime;
 
     const bgaTime = currentTime + 0.05;
 
@@ -1935,7 +1938,10 @@ export default function BmsViewer() {
             lastStateUpdateRef.current = now; // 時間更新タイミングを記録
         }
 
-        const isFinished = currentTime > duration + 0.5 && activeNodesRef.current.length === 0;
+        // ★曲長ちょうどで終了する。duration は「全オブジェクトの発音終了時刻」の最大値なので、
+        //   この時点で譜面由来の音はすべて鳴り終わっている。以前は +0.5 秒の余白に加え、
+        //   activeNodesRef が空になる(onended 待ち)まで待っていたため、表示上の曲長より 1 秒近く延びていた。
+        const isFinished = duration > 0 && rawTime >= duration;
         if (isFinished && isPlayingRef.current) {
             if (playModeRef.current) setPlayResult(buildResultData(true)); // 完走リザルト(stopPlayback の resetJudge 前に確定)
             stopPlayback(true);
