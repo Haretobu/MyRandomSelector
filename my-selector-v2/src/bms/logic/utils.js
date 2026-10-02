@@ -76,15 +76,6 @@ export const shuffleArray = (array) => {
     return newArr;
 };
 
-export const generateLaneMap = (option) => {
-    let lanes = [1, 2, 3, 4, 5, 6, 7];
-    if (option === 'MIRROR') lanes = [7, 6, 5, 4, 3, 2, 1];
-    else if (option === 'RANDOM') lanes = shuffleArray(lanes);
-    else if (option === 'R-RANDOM') { const shift = Math.floor(Math.random() * 7);
-    for(let i=0; i<shift; i++) lanes.unshift(lanes.pop()); }
-    return [0, ...lanes];
-};
-
 // 6-1-e: 任意のレーン index 集合(1サイド/モード分)に OPTION を適用した「元index → 移動先index」マップ。
 //   laneIndices は左→右の元の並び。S-RANDOM は per-note なので呼び出し側で処理(ここでは identity)。
 export const shuffleLanes = (laneIndices, option) => {

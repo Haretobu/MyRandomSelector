@@ -796,8 +796,7 @@ export default function BmsViewer() {
       if (isStale()) return;
       setTimeout(() => {
           if (isStale()) return;
-          if (!parsed.isSupportedMode) alert("警告：この形式はまだ描画に対応していません。");
-          else if (parsed.unmappedPmsChannels && parsed.unmappedPmsChannels.length)
+          if (parsed.unmappedPmsChannels && parsed.unmappedPmsChannels.length)
               alert(`警告：この pms は未対応のチャンネル（${parsed.unmappedPmsChannels.join(', ')}）を使用しています。一部のノーツが表示・再生されません。`);
       }, 100);
       const diffInfo = guessDifficulty(parsed.header, bmsFile.name);
@@ -917,10 +916,6 @@ export default function BmsViewer() {
   const startPlayback = () => {
     if (!parsedSong || isLoading) return;
     applyHitSounds(tempKeyHitSoundBuffer, tempScratchHitSoundBuffer, isSeparateHitSound, tempKeySoundName, tempScratchSoundName);
-    if (!parsedSong.isSupportedMode) {
-        setTimeout(() => alert("未実装：この形式（9K/pop'n など）の再生はまだサポートされていません。"), 10);
-        return;
-    }
     engine.resumeIfSuspended();
     
     engine.stopAll(); activeShortSoundsRef.current = []; activeLongSoundsRef.current = []; setBackingTracks([]);

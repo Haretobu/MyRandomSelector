@@ -107,11 +107,6 @@ export const DJ_LEVEL_TABLE = [
 ];
 export const djLevel = (rate) => (DJ_LEVEL_TABLE.find(d => rate >= d.min) || DJ_LEVEL_TABLE[DJ_LEVEL_TABLE.length - 1]).label;
 
-export const KEY_CONFIG_ROWS = [
-    [{label:'Shift',keyIndex:0,width:'w-14',isScratch:true},{label:'S',keyIndex:2,width:'w-10'},{label:'D',keyIndex:4,width:'w-10'},{label:'F',keyIndex:6,width:'w-10'}],
-    [{label:'',keyIndex:-1,width:'w-14',isSpacer:true},{label:'Z',keyIndex:1,width:'w-10'},{label:'X',keyIndex:3,width:'w-10'},{label:'C',keyIndex:5,width:'w-10'},{label:'V',keyIndex:7,width:'w-10'}]
-];
-
 export const DIFFICULTY_MAP = {
     1:{label:'BEGINNER',color:'bg-green-600'},2:{label:'NORMAL',color:'bg-blue-600'},3:{label:'HYPER',color:'bg-yellow-500 text-black'},
     4:{label:'ANOTHER',color:'bg-red-600'},5:{label:'LEGGENDARIA',color:'bg-purple-600'} 
