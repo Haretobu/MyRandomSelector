@@ -17,26 +17,27 @@ function AutoHiSpeedSection({ autoHiSpeed, setAutoHiSpeed, targetGreen, setTarge
             <div className="flex items-center justify-between gap-2">
                 <button type="button" onClick={() => setOpen(o => !o)}
                     className="flex-1 flex items-center gap-2 text-xs text-blue-400 font-bold uppercase tracking-wider text-left">
-                    <ChevronsUp size={14} /> <span>HI-SPEED (グリーンナンバー固定)</span>
+                    <ChevronsUp size={14} /> <span>緑数字を維持 (フローティング HI-SPEED)</span>
                     <ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
                 </button>
                 <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
-                    <span className="text-[10px] text-blue-300">オート</span>
+                    <span className="text-[10px] text-blue-300">ON</span>
                     <input type="checkbox" checked={autoHiSpeed} onChange={e => setAutoHiSpeed(e.target.checked)} className="accent-blue-500 w-4 h-4"/>
                 </label>
             </div>
             {open && (
                 <div className="pt-3 mt-1 border-t border-blue-900/30">
                     <div className={`flex items-center gap-2 ${autoHiSpeed ? '' : 'opacity-40 pointer-events-none'}`}>
-                        <span className="text-[11px] text-blue-300 w-32 shrink-0">目標グリーンナンバー</span>
+                        <span className="text-[11px] text-blue-300 w-32 shrink-0">維持する緑数字</span>
                         <input type="number" min="60" max="1500" step="5" value={targetGreen}
                             onChange={e => setTargetGreen(Math.max(60, Math.min(1500, Number(e.target.value) || 300)))}
                             className="w-20 bg-black/50 border border-blue-500/30 rounded px-2 py-1 text-white text-sm text-center font-mono"/>
                         <span className="text-[11px] text-blue-500/70">ms</span>
                     </div>
                     <div className="text-[10px] text-blue-500/60 mt-2 leading-relaxed">
-                        現在 HI-SPEED: <span className="text-blue-300 font-mono">{hiSpeed}</span>（{autoHiSpeed ? '自動' : '手動'}）。
-                        HI-SPEED を手動で変えるとオートは OFF になります。
+                        現在 HI-SPEED: <span className="text-blue-300 font-mono">{hiSpeed}</span>（{autoHiSpeed ? '自動' : '手動'}）。<br />
+                        曲が変わっても、その曲の主BPM(最も長く続くBPM)で緑数字がこの値になるよう HI-SPEED を自動で合わせます(IIDX と同じ)。
+                        ON のまま HI-SPEED を変えると、その速さの緑数字が新しい維持値になります。曲中の BPM 変化(ソフラン)には追従しません。
                     </div>
                 </div>
             )}

@@ -28,6 +28,7 @@ import { buildLaneMap } from './input/laneMaps';
 import { GamepadInput, useGamepadConnection } from './input/GamepadInput';
 import { useLaneKeyboard } from './input/useLaneKeyboard';
 import { applyLaneOptions } from './logic/laneOptions';
+import { whiteNumber, greenNumber, hiSpeedForGreen, songBaseBpm } from './logic/greenNumber';
 
 // localStorage の設定値マージ: モード別の設定(キー割り当て等)は、モードごとに既定値へ保存値を重ねる
 const mergePerMode = (defaults, saved) =>
@@ -62,9 +63,10 @@ export default function BmsViewer() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackTimeDisplay, setPlaybackTimeDisplay] = useState(0); 
   const [duration, setDuration] = useState(0);
-  const [hiSpeed, setHiSpeed] = useState(2.0);
-  const [autoHiSpeed, setAutoHiSpeed] = useState(false);  // オートHI-SPEED(主BPMで緑数字を固定)。既定OFF
-  const [targetGreen, setTargetGreen] = useState(300);    // 目標グリーンナンバー(ms)
+  // HI-SPEED と「緑数字を維持」(IIDX のフローティング HI-SPEED)。どれも localStorage 永続。
+  const [hiSpeed, setHiSpeed] = useStoredState('bms_hi_speed', 2.0, num(v => v > 0 && v <= 20));
+  const [autoHiSpeed, setAutoHiSpeed] = useStoredState('bms_floating_hs', false, BOOL);   // ON = 曲が変わっても緑数字を維持
+  const [targetGreen, setTargetGreen] = useStoredState('bms_target_green', 300, num(v => v >= 60 && v <= 1500)); // 維持する緑数字(ms)
   const [volume, setVolume] = useState(0.8);
   const [lastVolume, setLastVolume] = useState(0.8);
   const [hitSoundVolume, setHitSoundVolume] = useState(1.0);
@@ -755,21 +757,13 @@ export default function BmsViewer() {
   const refreshRandom = () => { if (!parsedSong) return; stopPlayback(true); setDisplayObjects(applyOptions(parsedSong.objects, playOption, playOption2, dpFlip)); };
   useEffect(() => { if (parsedSong) setDisplayObjects(applyOptions(parsedSong.objects, playOption, playOption2, dpFlip)); }, [parsedSong, playOption, playOption2, dpFlip]);
 
-  // オートHI-SPEED: 主BPM(再生秒数が最長の区間)で目標グリーンナンバーになるよう HI-SPEED を自動設定。
-  // ロード時 / 目標green / SUD+・LIFT(白数字) / トグルON で再計算。手動変更時は sHiSpeedChange 側で auto を OFF にする。
+  // 緑数字を維持(IIDX のフローティング HI-SPEED): 曲ごとの主BPM(最も長く続く BPM)で、緑数字が目標値になるよう
+  //   HI-SPEED を自動設定する。曲のロード時 / 目標値 / レーンカバー(白数字)の変更時に再計算。
+  //   HI-SPEED を手で変えたときは、その速さの緑数字を新しい目標にする(sHiSpeedChange)。曲中の BPM 変化には追従しない。
   useEffect(() => {
     if (!autoHiSpeed || !parsedSong) return;
-    const mainBpm = parsedSong.bpmRange?.main || parsedSong.header.bpm || 130;
-    let white = 0;
-    if (visibilityMode === VISIBILITY_MODES.SUDDEN_PLUS || visibilityMode === VISIBILITY_MODES.SUD_HID_PLUS) white += suddenPlusVal;
-    if (visibilityMode === VISIBILITY_MODES.LIFT || visibilityMode === VISIBILITY_MODES.LIFT_SUD_PLUS) {
-      white += liftVal;
-      if (visibilityMode === VISIBILITY_MODES.LIFT_SUD_PLUS) white += suddenPlusVal;
-    }
-    white = Math.min(1000, Math.max(0, white));
-    const hs = (240000 * ((1000 - white) / 1000)) / (mainBpm * (targetGreen || 300));
-    const rounded = Math.max(0.1, Math.round(hs / 0.05) * 0.05);
-    setHiSpeed(Number(rounded.toFixed(2)));
+    const white = whiteNumber(visibilityMode, suddenPlusVal, liftVal);
+    setHiSpeed(hiSpeedForGreen(songBaseBpm(parsedSong), targetGreen, white));
   }, [autoHiSpeed, targetGreen, parsedSong, visibilityMode, suddenPlusVal, liftVal]);
   
   useEffect(() => { if (selectedBmsIndex >= 0 && bmsList[selectedBmsIndex]) loadBmsAndAudio(bmsList[selectedBmsIndex].file); }, [selectedBmsIndex, bmsList]);
@@ -1204,18 +1198,13 @@ export default function BmsViewer() {
                 const nextTp = parsedSong.timePoints.find(tp => tp.time > currentTime && tp.time <= futureTime && tp.bpm !== currentBpmVal);
                 const nextBpmKey = nextTp ? `${nextTp.bpm}_${currentBpmVal}` : null;
 
-                // MEASURE / BPM / 次BPM / WHT・GRN → InfoPanel(imperative)
-                if (processedInMeasure !== H.measProc || totalInMeasure !== H.measTotal || currentBpmVal !== H.bpm || nextBpmKey !== H.nextBpmKey) {
+                // MEASURE / BPM / 次BPM / WHT・GRN → InfoPanel(imperative)。HI-SPEED やレーンカバーが変わったときも更新する
+                const white = whiteNumber(visibilityModeRef.current, suddenPlusValRef.current, liftValRef.current);
+                const green = Math.round(greenNumber(currentBpmVal, hiSpeedRef.current, white));
+                if (processedInMeasure !== H.measProc || totalInMeasure !== H.measTotal || currentBpmVal !== H.bpm || nextBpmKey !== H.nextBpmKey
+                    || green !== H.green || white !== H.white) {
                     H.measProc = processedInMeasure; H.measTotal = totalInMeasure; H.bpm = currentBpmVal; H.nextBpmKey = nextBpmKey;
-                    const vm = visibilityModeRef.current;
-                    let white = 0;
-                    if (vm === VISIBILITY_MODES.SUDDEN_PLUS || vm === VISIBILITY_MODES.SUD_HID_PLUS) white += suddenPlusValRef.current;
-                    if (vm === VISIBILITY_MODES.LIFT || vm === VISIBILITY_MODES.LIFT_SUD_PLUS) {
-                        white += liftValRef.current;
-                        if (vm === VISIBILITY_MODES.LIFT_SUD_PLUS) white += suddenPlusValRef.current;
-                    }
-                    white = Math.min(1000, Math.max(0, white));
-                    const green = Math.round((240000 / ((currentBpmVal || 1) * (hiSpeedRef.current || 1))) * ((1000 - white) / 1000));
+                    H.green = green; H.white = white;
                     infoPanelRef.current?.updateStats({
                         measProc: processedInMeasure, measTotal: totalInMeasure,
                         dense: totalInMeasure >= parsedSong.avgDensity + 5,
@@ -1392,10 +1381,18 @@ export default function BmsViewer() {
   const sScratchHitUpload = useEvent(handleScratchHitSoundUpload);
   const sScratchHitReset = useEvent(handleScratchHitSoundReset);
   // HI-SPEED を手動で変更したらオートHI-SPEEDを OFF にする
-  const sHiSpeedChange = useEvent((v) => { setAutoHiSpeed(false); setHiSpeed(v); });
+  // HI-SPEED の手動変更。緑数字を維持中なら OFF にはせず、変更後の速さでの緑数字(主BPM 基準)を新しい目標にする
+  //   (IIDX のフローティング HI-SPEED と同じ。次の曲でもこの緑数字になる)。
+  const sHiSpeedChange = useEvent((v) => {
+    setHiSpeed(v);
+    if (autoHiSpeed && parsedSong && v > 0) {
+      const g = greenNumber(songBaseBpm(parsedSong), v, whiteNumber(visibilityMode, suddenPlusVal, liftVal));
+      setTargetGreen(Math.max(60, Math.min(1500, Math.round(g))));
+    }
+  });
   const sSuggestJudgeOffset = useEvent(suggestJudgeOffset);
 
-  // 設定画面「表示」タブの設定一式(HI-SPEED の手動変更はオートHI-SPEED を OFF にする sHiSpeedChange 経由)
+  // 設定画面「表示」タブの設定一式(HI-SPEED の手動変更は sHiSpeedChange 経由)
   const viewSettings = React.useMemo(() => ({
     visibilityMode, setVisibilityMode, suddenPlusVal, setSuddenPlusVal, hiddenPlusVal, setHiddenPlusVal, liftVal, setLiftVal,
     hasVideo, playBgaVideo, setPlayBgaVideo, missLayerEnabled, setMissLayerEnabled,

@@ -29,6 +29,8 @@ export function writeFixtures(dir) {
         '#00354:01000100', '#00456:01000001', '#00414:0001',
         '#00508:01', '#00509:0001', '#00515:01010101',
     ].join('\n') + '\n');
+    // BPM 150 の短い譜面(緑数字の維持のテスト用。test.bms の主BPM は 120)
+    fs.writeFileSync(path.join(song, 'fast.bms'), '#PLAYER 1\n#TITLE FAST\n#BPM 150\n#WAV01 key.wav\n#00111:01010101\n#00211:01\n');
     // DP: 1P 鍵1(2秒・3秒)/ 2P 鍵1(2秒)/ 2P 皿(3秒)/ 1P 鍵6(4秒)
     fs.writeFileSync(path.join(dp, 'key.wav'), key);
     fs.writeFileSync(path.join(dp, 'dp.bms'), '#PLAYER 3\n#TITLE DP\n#BPM 120\n#WAV01 key.wav\n#00111:01000100\n#00121:0100\n#00126:0001\n#00218:01\n');
