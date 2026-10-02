@@ -13,7 +13,7 @@ export const parseBMS = async (file) => {
     const laneMap = isPms ? PMS_LANE_MAP : LANE_MAP;
     const text = await decodeBmsText(file);
     const lines = text.split(/\r?\n/);
-    const header = { bpm: 130, wavs: {}, bmps: {}, bpms: {}, stops: {}, title: 'Unknown', artist: 'Unknown', genre: '', playlevel: '', rank: null, difficulty: null, stagefile: null, lnObj: null, player: 1 };
+    const header = { bpm: 130, wavs: {}, bmps: {}, bpms: {}, stops: {}, title: 'Unknown', artist: 'Unknown', genre: '', playlevel: '', rank: null, defexrank: null, difficulty: null, stagefile: null, lnObj: null, player: 1 };
     let rawObjects = [];
     const measureLen = {}; const rawLinesByMeasure = {}; const notesPerMeasure = {}; const scratchPerMeasure = {};
     let maxMeasureIndex = 0;
@@ -92,6 +92,7 @@ export const parseBMS = async (file) => {
       else if (key === '#GENRE') header.genre = value;
       else if (key === '#PLAYLEVEL') header.playlevel = value;
       else if (key === '#RANK') header.rank = parseInt(value);
+      else if (key === '#DEFEXRANK') header.defexrank = parseFloat(value); // 判定幅の倍率を直接指定(beatoraja: RANK 2 を 100 とする%)
       else if (key === '#DIFFICULTY') header.difficulty = parseInt(value);
       else if (key === '#STAGEFILE') header.stagefile = value;
       else if (key === '#BPM') header.bpm = parseFloat(value) || 130;

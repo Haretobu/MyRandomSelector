@@ -2,11 +2,11 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { FolderOpen, Settings, Play, Pause, ChevronFirst } from 'lucide-react';
 
-import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, DEFAULT_GAMEPAD_MAPS, DEFAULT_GAMEPAD_SCRATCH_ALT, JUDGE_WINDOWS, judgeRankIndex, djLevel, DEFAULT_AUDIO_FX, DEFAULT_LITE_MODE } from './constants';
+import { VISIBILITY_MODES, LOOKAHEAD, SCHEDULE_INTERVAL, MAX_SHORT_POLYPHONY, MOBILE_BREAKPOINT, DEFAULT_BGA_OPACITY, BGM_MIN_DURATION, LANE_LAYOUTS, PMS_LANE_COLORS, DEFAULT_KEYMAPS, DEFAULT_SCRATCH_ALT, DEFAULT_GAMEPAD_MAPS, DEFAULT_GAMEPAD_SCRATCH_ALT, djLevel, DEFAULT_AUDIO_FX, DEFAULT_LITE_MODE } from './constants';
 import { findStartIndex, getBeatFromTime, getBpmFromTime, createHitSound, shuffleLanes, guessDifficulty, extractZipFiles, getBaseName, getFileName } from './logic/utils';
 import { parseBMS } from './logic/parser';
 import { createLiveStore, useLiveStore } from './logic/liveStore';
-import { resolveLnRelease } from './logic/judge';
+import { buildJudgeConfig, classifyJudge, resolveLnRelease } from './logic/judge';
 
 import SettingsModal from './components/SettingsModal';
 import ControllerPanel from './components/ControllerPanel';
@@ -189,6 +189,11 @@ export default function BmsViewer() {
   const [isInputDebugMode, setIsInputDebugMode] = useState(false);
   const [playMode, setPlayMode] = useState(false); // 6-2: プレイモード(自分の入力で判定)
   const [playResult, setPlayResult] = useState(null); // 6-2-b: 完走リザルト(モーダル表示用)
+  // 判定方式: 'BMS'(beatoraja 準拠・#RANK で拡縮) / 'IIDX'(固定幅)。localStorage 永続。
+  const [judgeSystem, setJudgeSystem] = useState(() => {
+    try { return localStorage.getItem('bms_judge_system') === 'IIDX' ? 'IIDX' : 'BMS'; } catch { return 'BMS'; }
+  });
+  useEffect(() => { try { localStorage.setItem('bms_judge_system', judgeSystem); } catch { /* privacy mode */ } }, [judgeSystem]);
   const [judgeOffset, setJudgeOffset] = useState(() => { // 6-2-c: 判定オフセット(ms)
     try { const v = Number(localStorage.getItem('bms_judge_offset')); return Number.isFinite(v) ? v : 0; } catch { return 0; }
   });
@@ -434,7 +439,7 @@ export default function BmsViewer() {
   // 6-2 判定用
   const judgeRef = useRef({ pg: 0, gr: 0, gd: 0, bd: 0, poor: 0, epoor: 0, combo: 0, maxCombo: 0, exScore: 0, fast: 0, slow: 0 });
   const lastJudgeRef = useRef({ kind: '', deltaMs: 0, t: 0 }); // 直近判定(キャンバス表示・フェード用)
-  const judgeRankRef = useRef(2);          // JUDGE_WINDOWS の添字(#RANK 由来)
+  const judgeCfgRef = useRef(buildJudgeConfig('BMS', 'SP7', null)); // 判定幅一式(判定方式・#RANK・モードから作る)
   const judgeOffsetRef = useRef(0);        // 判定オフセット(ms)
   const recentDeltasRef = useRef([]);      // 6-2-c: 直近の生Δms(オフセット非適用)。オート調整の中央値算出用
   const scratchDirRef = useRef({ 0: null, 8: null }); // サイド別・直近の皿入力方向('A'|'B')
@@ -617,7 +622,12 @@ export default function BmsViewer() {
       //   その間引きが一度も実行されないまま表示が残ることがあった。ここで即座に隠す。
       else { hudLastRef.current.scoreHidden = true; infoPanelRef.current?.updateScore(null); }
   }, [playMode]);
-  useEffect(() => { judgeRankRef.current = judgeRankIndex(parsedSong?.header?.rank); }, [parsedSong]);
+  // 判定幅一式を作り直す(曲のロード時 / 判定方式の変更時)。設定画面の判定幅表示にも使う。
+  const judgeCfg = React.useMemo(
+    () => buildJudgeConfig(judgeSystem, parsedSong?.mode || 'SP7', parsedSong?.header),
+    [judgeSystem, parsedSong]
+  );
+  judgeCfgRef.current = judgeCfg;
 
   // キー入力の「KeyboardEvent.code → laneIndex」逆引き表(現在モードのキー割り当てに追従)。
   // 皿は既定キー(Shift)='A' 方向、DEFAULT_SCRATCH_ALT(Ctrl)='B' 方向として交互押し判定に使う。
@@ -811,15 +821,8 @@ export default function BmsViewer() {
       lastJudgeRef.current = { kind, deltaMs: Math.round(deltaMs), t: performance.now() };
   };
 
-  // |Δ|(ms) と #RANK から判定種別を返す。bd を超えたら null(範囲外)。
-  const classifyDelta = (absMs) => {
-      const w = JUDGE_WINDOWS[judgeRankRef.current] || JUDGE_WINDOWS[2];
-      if (absMs <= w.pg) return 'pg';
-      if (absMs <= w.gr) return 'gr';
-      if (absMs <= w.gd) return 'gd';
-      if (absMs <= w.bd) return 'bd';
-      return null;
-  };
+  // レーンの判定幅(鍵盤 / 皿で別。判定方式・#RANK・モードから buildJudgeConfig で作ったもの)
+  const laneWindow = (lane) => (laneMetaRef.current[lane]?.isScratch ? judgeCfgRef.current.scratch : judgeCfgRef.current.note);
 
   // プレイモード: 皿の回転インパルスを与える。scDir 'A'→順(-1) / 'B'→逆(+1)。
   const doScratchSpin = (lane, scDir) => {
@@ -840,7 +843,8 @@ export default function BmsViewer() {
       activeLnRef.current[lane] = null;
       if (releaseT === null) { pushJudge(a.startKind, a.startDelta); return; }
       const earlyMs = ((a.ln.endTime ?? a.ln.time) - releaseT) * 1000; // 正 = 終点より早く離した
-      const r = resolveLnRelease(a.startKind, a.startDelta, earlyMs, !!laneMetaRef.current[lane]?.isScratch);
+      const cfg = judgeCfgRef.current;
+      const r = resolveLnRelease(a.startKind, a.startDelta, earlyMs, laneMetaRef.current[lane]?.isScratch ? cfg.lnScratchEnd : cfg.lnEnd);
       pushJudge(r.kind, r.delta);
   };
 
@@ -850,8 +854,8 @@ export default function BmsViewer() {
   const judgeLaneInput = (lane, bmsTime, isScratch, scDir) => {
       const objs = displayObjectsRef.current;
       if (!playModeRef.current || !isPlayingRef.current || !objs.length) return;
-      const w = JUDGE_WINDOWS[judgeRankRef.current] || JUDGE_WINDOWS[2];
-      const bd = w.bd / 1000;
+      const w = laneWindow(lane);
+      const ep = judgeCfgRef.current.epoor;
       const t = bmsTime - judgeOffsetRef.current / 1000;
 
       if (isScratch) {
@@ -861,29 +865,31 @@ export default function BmsViewer() {
       // LN 保持中の押し直し(皿の別方向キーなど)は何もしない(beatoraja の「押し直し」と同じく判定なし)
       if (activeLnRef.current[lane]) return;
 
-      // このレーンの最寄りノーツ(処理済み含む)を探す。EPOOR_RANGE 内にノーツが居るかで空POORを判定する。
-      const EPOOR_RANGE = 0.5;
-      let target = null, best = Infinity;      // bd 窓内の未処理ノーツ(=判定対象)
-      let nearAny = null, nearBest = Infinity; // EPOOR_RANGE 内の最寄り(処理済み可)
-      const c = findStartIndex(objs, t - EPOOR_RANGE - 0.05);
+      // このレーンのノーツを探す。
+      //   target: BAD 窓(早 bdEarly / 遅 bdLate)内で最寄りの未処理ノーツ = 判定対象
+      //   nearAny: 空POOR 範囲(ノーツより ep.early ms 早い〜ep.late ms 遅い)にノーツ(処理済み可)が居るか
+      let target = null, best = Infinity;
+      let nearAny = false;
+      const c = findStartIndex(objs, t - ep.late / 1000 - 0.05);
       for (let i = Math.max(0, c - 4); i < objs.length; i++) {
           const o = objs[i];
-          if (o.time > t + EPOOR_RANGE + 0.05) break;
+          if (o.time > t + ep.early / 1000 + 0.05) break;
           if (!o.isNote || o.laneIndex !== lane) continue;
-          const d = Math.abs(o.time - t);
-          if (d < nearBest) { nearBest = d; nearAny = o; }
-          if (!o.processed && d <= bd && d < best) { best = d; target = o; }
+          const dMs = (t - o.time) * 1000; // 負 = ノーツより早く押した
+          if (dMs < 0 ? -dMs <= ep.early : dMs <= ep.late) nearAny = true;
+          const inBad = dMs < 0 ? -dMs <= w.bdEarly : dMs <= w.bdLate;
+          if (!o.processed && inBad && Math.abs(dMs) < best) { best = Math.abs(dMs); target = o; }
       }
 
       if (!target) {
-          // 判定対象なし。近くにノーツが居る(=二度押し / BAD より外した)場合のみ空POOR。
+          // 判定対象なし。空POOR 範囲にノーツが居る(=二度押し / BAD より外した)場合のみ空POOR。
           //   完全な空白(近くにノーツなし)は無反応。
-          if (nearAny && nearBest <= EPOOR_RANGE) pushJudge('epoor', 0);
+          if (nearAny) pushJudge('epoor', 0);
           return;
       }
 
       const deltaMs = (t - target.time) * 1000; // 負=FAST(早い) / 正=SLOW(遅い)
-      const kind = classifyDelta(Math.abs(deltaMs)) || 'bd';
+      const kind = classifyJudge(deltaMs, w) || 'bd';
       target.processed = true;
       noteCountsRef.current[lane]++;
       // LN の始点が PG/GR/GD なら判定は保留して「保持中」に(離した時 / 終点で1回だけ確定)。BAD はその場で確定。
@@ -2232,7 +2238,8 @@ export default function BmsViewer() {
             //   timeline 由来の triggerMiss は廃止 (MISS は入力プレイ時のみ)。
             // プレイモード: 見逃し(BAD窓の遅れ側を越えて未処理)→ POOR。LN の後始末もここで。
             if (playModeRef.current) {
-                const bdSec = (JUDGE_WINDOWS[judgeRankRef.current] || JUDGE_WINDOWS[2]).bd / 1000;
+                // 見逃し: BAD 窓の遅れ側(bdLate)を未処理で越えたら POOR
+                const bdSec = (gc.isScr[obj.laneIndex] ? judgeCfgRef.current.scratch : judgeCfgRef.current.note).bdLate / 1000;
                 if (!obj.processed) {
                     if (isPlayingRef.current && timeDelta < -bdSec) judgeMissNote(obj, 'poor');
                 } else if (obj.type === 'long' && activeLnRef.current[obj.laneIndex]?.ln === obj) {
@@ -2524,6 +2531,7 @@ export default function BmsViewer() {
         gamepadScratchAlt={gamepadScratchAlt} setGamepadScratchAlt={setGamepadScratchAlt}
         playMode={playMode} setPlayMode={setPlayMode}
         judgeOffset={judgeOffset} setJudgeOffset={setJudgeOffset} suggestJudgeOffset={sSuggestJudgeOffset}
+        judgeSystem={judgeSystem} setJudgeSystem={setJudgeSystem} judgeCfg={judgeCfg}
         audioFx={audioFx} setAudioFx={setAudioFx}
         liteMode={liteMode} setLiteMode={setLiteMode}
         missLayerEnabled={missLayerEnabled} setMissLayerEnabled={setMissLayerEnabled}

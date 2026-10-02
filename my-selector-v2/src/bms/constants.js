@@ -92,22 +92,7 @@ export const DEFAULT_GAMEPAD_MAPS = Object.fromEntries(
 // 皿の逆回転用ボタン(物理ターンテーブルが2ボタン式の場合のもう一方向)。DEFAULT_SCRATCH_ALT と同じ形。
 export const DEFAULT_GAMEPAD_SCRATCH_ALT = { 0: null, 8: null };
 
-// 判定ウィンドウ(6-2-a)。#RANK 0..3 別、片側 ms。beatoraja 準拠の近似値。
-// pg=PGREAT, gr=GREAT, gd=GOOD, bd=BAD(これを超えて遅れると見逃しPOOR / 空打ちは空POOR)。
-export const JUDGE_WINDOWS = [
-    { pg: 15, gr: 33, gd: 53,  bd: 120 }, // RANK 0 VERY HARD
-    { pg: 18, gr: 40, gd: 70,  bd: 120 }, // RANK 1 HARD
-    { pg: 21, gr: 60, gd: 120, bd: 200 }, // RANK 2 NORMAL (既定)
-    { pg: 25, gr: 75, gd: 150, bd: 250 }, // RANK 3 EASY
-];
-// #RANK ヘッダ値 → JUDGE_WINDOWS の添字(0..3)。未指定は NORMAL(2)。
-export const judgeRankIndex = (rank) => {
-    // ★Number(null) / Number('') は 0(VERY HARD)になってしまうため、未指定は明示的に NORMAL にする
-    if (rank === null || rank === undefined || rank === '') return 2;
-    const r = Number(rank);
-    if (!Number.isFinite(r)) return 2;
-    return Math.max(0, Math.min(3, r));
-};
+// 判定幅は logic/judge.js(判定方式 BMS / IIDX、#RANK による拡縮)を参照。
 
 // DJ LEVEL: EX SCORE 率 → ランク(6-2-b で表示)。
 export const DJ_LEVEL_TABLE = [

@@ -518,7 +518,7 @@ function AutoHiSpeedSection({ autoHiSpeed, setAutoHiSpeed, targetGreen, setTarge
 }
 
 // プレイモード設定ブロック(折りたたみ、有効化で自動展開)
-function PlayModeSection({ playMode, setPlayMode, judgeOffset, setJudgeOffset, suggestJudgeOffset }) {
+function PlayModeSection({ playMode, setPlayMode, judgeOffset, setJudgeOffset, suggestJudgeOffset, judgeSystem, setJudgeSystem, judgeCfg }) {
     const [open, setOpen] = useState(!!playMode);
     const prevRef = useRef(!!playMode);
     useEffect(() => {
@@ -545,6 +545,42 @@ function PlayModeSection({ playMode, setPlayMode, judgeOffset, setJudgeOffset, s
                         自分の入力で判定します（オートプレイ判定を止める）。キー割り当てで操作。判定・コンボ・EX SCORE・DJ LEVEL・FAST/SLOW を表示。完走でリザルト、途中は Tab 長押しで成績表示。<br />
                         皿は割り当てキー（既定 Shift）と Ctrl の2キー。LN は鍵盤・皿とも押し続けて終点で離す（beatoraja の LN モード準拠・1本 = 1ノーツ）。皿 LN は最初に押した方のキーを押し続ける。<br />
                         ※「デバッグ用キー入力」とは別機能です（併用可）。
+                    </div>
+
+                    {/* 判定方式 (BMS = beatoraja 準拠 / IIDX) */}
+                    <div className="mt-3 pt-3 border-t border-blue-900/30">
+                        <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-[12px] font-bold text-blue-300">判定方式</span>
+                            <div className="flex gap-1">
+                                {[['BMS', 'BMS (beatoraja)'], ['IIDX', 'IIDX']].map(([id, label]) => (
+                                    <button key={id} onClick={() => setJudgeSystem(id)}
+                                        className={`text-[10px] font-bold px-2 py-1 rounded border transition ${judgeSystem === id
+                                            ? 'bg-blue-600/40 border-blue-400 text-white'
+                                            : 'bg-black/40 border-blue-900/50 text-blue-300 hover:text-white'}`}>
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="text-[10px] text-blue-500/60 leading-relaxed mb-1.5">
+                            {judgeSystem === 'IIDX'
+                                ? 'beatmania IIDX 相当の固定幅（#RANK は無視）。BAD は公式値が無いため推定値です。'
+                                : 'beatoraja と同じ計算。譜面の #RANK / #DEFEXRANK で判定幅が変わります（未指定は NORMAL）。'}
+                        </div>
+                        {judgeCfg && (
+                            <div className="bg-black/30 rounded p-2 font-mono text-[10px] text-blue-200 grid grid-cols-[52px_repeat(4,1fr)] gap-x-2 gap-y-0.5">
+                                <span className="text-blue-500/70">{judgeCfg.system === 'BMS' ? `${Math.round(judgeCfg.rate)}%` : ''}</span>
+                                <span className="text-[#22d3ee]">PG</span><span className="text-[#fde047]">GR</span><span className="text-[#4ade80]">GD</span><span className="text-[#fb923c]">BD</span>
+                                {[['鍵盤', judgeCfg.note], ['皿', judgeCfg.scratch]].map(([lbl, w]) => (
+                                    <React.Fragment key={lbl}>
+                                        <span className="text-blue-400/80">{lbl}</span>
+                                        <span>±{+w.pg.toFixed(1)}</span><span>±{+w.gr.toFixed(1)}</span><span>±{+w.gd.toFixed(1)}</span>
+                                        <span>{w.bdEarly === w.bdLate ? `±${+w.bdEarly.toFixed(1)}` : `-${+w.bdEarly.toFixed(0)}/+${+w.bdLate.toFixed(0)}`}</span>
+                                    </React.Fragment>
+                                ))}
+                            </div>
+                        )}
+                        <div className="text-[9px] text-blue-500/50 mt-1">単位 ms。BD は 早(-) / 遅(+)。読み込み中の譜面の値です。</div>
                     </div>
 
                     {/* 判定オフセット (6-2-c) */}
@@ -614,6 +650,7 @@ const SettingsModal = ({
     gamepadAxisDelta, setGamepadAxisDelta, gamepadAxisReleaseMs, setGamepadAxisReleaseMs,
     playMode, setPlayMode,
     judgeOffset, setJudgeOffset, suggestJudgeOffset,
+    judgeSystem, setJudgeSystem, judgeCfg,
     audioFx, setAudioFx,
     liteMode, setLiteMode,
     missLayerEnabled, setMissLayerEnabled,
@@ -974,7 +1011,8 @@ const SettingsModal = ({
 
                     {/* プレイモード (PC のみ・6-2・折りたたみ) */}
                     {!isMobile && showPlay && (
-                        <PlayModeSection playMode={playMode} setPlayMode={setPlayMode} judgeOffset={judgeOffset} setJudgeOffset={setJudgeOffset} suggestJudgeOffset={suggestJudgeOffset} />
+                        <PlayModeSection playMode={playMode} setPlayMode={setPlayMode} judgeOffset={judgeOffset} setJudgeOffset={setJudgeOffset} suggestJudgeOffset={suggestJudgeOffset}
+                            judgeSystem={judgeSystem} setJudgeSystem={setJudgeSystem} judgeCfg={judgeCfg} />
                     )}
 
                     {/* サウンドエフェクト (共通・6-3) */}
